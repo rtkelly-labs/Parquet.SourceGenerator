@@ -99,8 +99,16 @@ public sealed class ParquetSerializerOptions
     public int RowGroupSize { get; set; } = 50_000;
 
     /// <summary>
-    /// Gets or sets the maximum degree of parallelism for parallel row group reading (default is -1, using Environment.ProcessorCount).
+    /// Gets or sets the maximum degree of parallelism for parallel row group reading (default is -1,
+    /// using <c>Environment.ProcessorCount</c>).
     /// </summary>
+    /// <remarks>
+    /// Applies to <c>ReadParquetParallelAsync</c> over a <c>ReadOnlyMemory&lt;byte&gt;</c>, where
+    /// each worker gets its own reader over its own view of the buffer. The <c>Stream</c> overload
+    /// reads sequentially and ignores this: a stream cannot be shared between readers. An explicit
+    /// <c>maxDegreeOfParallelism</c> argument takes precedence over this value, and the effective
+    /// worker count is capped at the file's row-group count.
+    /// </remarks>
     public int MaxDegreeOfParallelism { get; set; } = -1;
 
     /// <summary>
