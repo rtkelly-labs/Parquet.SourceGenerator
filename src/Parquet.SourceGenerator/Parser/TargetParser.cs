@@ -31,7 +31,18 @@ public static class TargetParser
     /// <summary>
     /// Parses a Roslyn syntax context and returns a value-equatable <see cref="TargetParserResult"/> containing the target model and diagnostics.
     /// </summary>
-    public static TargetParserResult GetTargetModel(GeneratorSyntaxContext context)
+    public static TargetParserResult GetTargetModel(GeneratorSyntaxContext context) =>
+        GetTargetModel(context, ParquetApiLevel.V6);
+
+    /// <summary>
+    /// Parses a Roslyn syntax context for a specific Parquet.Net API generation.
+    /// </summary>
+    /// <param name="context">The syntax context to parse.</param>
+    /// <param name="apiLevel">
+    /// Which backend will consume the model. This narrows the accepted member types — see
+    /// <see cref="ParquetApiLevel"/>.
+    /// </param>
+    public static TargetParserResult GetTargetModel(GeneratorSyntaxContext context, ParquetApiLevel apiLevel)
     {
         SyntaxNode node = context.Node;
         if (node is not TypeDeclarationSyntax typeDeclaration)
@@ -223,6 +234,21 @@ public static class TargetParser
                 continue;
             }
 
+            // Rule PARQ011: the type has a representation in Parquet.Net 6 but not in the 4.x/5.x
+            // API. Reported separately from PARQ006 because the answer is different: the member is
+            // fine, the backend is not, and the fix is to use the v6 package rather than to change
+            // the type.
+            if (apiLevel == ParquetApiLevel.V4 && !IsSupportedOnClassicApi(underlyingType))
+            {
+                Location classicLoc = member.Locations.FirstOrDefault() ?? typeDeclaration.Identifier.GetLocation();
+                diagnostics.Add(new DiagnosticInfo(
+                    DiagnosticDescriptors.TypeUnsupportedOnClassicApi,
+                    classicLoc,
+                    new[] { member.Name, memberType.ToDisplayString(), className }));
+                rejectedAnyMember = true;
+                continue;
+            }
+
             // Rule PARQ007: the read path materialises through an object initializer, so every
             // column needs a reachable setter. Without this the failure was CS0200/CS0191 reported
             // against generated source, with nothing pointing at the declaration responsible.
@@ -384,6 +410,29 @@ public static class TargetParser
         "Parquet.File.Values.Primitives.BigDecimal",
         "Parquet.File.Values.Primitives.Interval",
     };
+
+    /// <summary>
+    /// Types in Parquet.Net 6's supported set that the 4.x/5.x line has no encoder for.
+    /// </summary>
+    /// <remarks>
+    /// Taken from the difference between <c>SchemaEncoder.SupportedTypes</c> in 6.0.3 and in 4.25.0.
+    /// <c>DateOnly</c> and <c>TimeOnly</c> are deliberately absent: 4.25.0 guards them behind
+    /// <c>NET6_0_OR_GREATER</c>, and a consumer old enough to miss them cannot name the types either,
+    /// so the compiler has already rejected such a member before this rule is reached.
+    /// </remarks>
+    private static readonly HashSet<string> ClassicApiUnsupportedTypes = new(StringComparer.Ordinal)
+    {
+        "System.ReadOnlyMemory<byte>",
+        "System.ReadOnlyMemory<char>",
+        "Parquet.File.Values.Primitives.BigDecimal",
+    };
+
+    /// <summary>
+    /// Whether a member type has a column representation in the Parquet.Net 4.x/5.x API.
+    /// </summary>
+    private static bool IsSupportedOnClassicApi(ITypeSymbol underlyingType) =>
+        !ClassicApiUnsupportedTypes.Contains(
+            underlyingType.WithNullableAnnotation(NullableAnnotation.None).ToDisplayString());
 
     /// <summary>
     /// Classifies a member's Parquet field kind, returning false when the type has no representation.
