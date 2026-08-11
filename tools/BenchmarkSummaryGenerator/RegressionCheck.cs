@@ -100,8 +100,8 @@ public static class RegressionCheck
         double allocationTolerance = DefaultAllocationTolerance,
         double timeTolerance = DefaultTimeTolerance)
     {
-        if (baseline is null) throw new ArgumentNullException(nameof(baseline));
-        if (current is null) throw new ArgumentNullException(nameof(current));
+        ArgumentNullException.ThrowIfNull(baseline);
+        ArgumentNullException.ThrowIfNull(current);
 
         Dictionary<(string, int), BenchmarkMeasurement> baselineByKey =
             baseline.ToDictionary(m => (m.Method, m.Count));
@@ -220,7 +220,7 @@ public static class RegressionCheck
     /// </summary>
     public static IReadOnlyList<BenchmarkMeasurement> ParseCsv(IReadOnlyList<string> lines)
     {
-        if (lines is null) throw new ArgumentNullException(nameof(lines));
+        ArgumentNullException.ThrowIfNull(lines);
         if (lines.Count <= 1) return Array.Empty<BenchmarkMeasurement>();
 
         string[] headers = Program.ParseCsvLine(lines[0]);
@@ -410,7 +410,7 @@ public static class RegressionCheck
     /// </summary>
     public static string WriteBaseline(IReadOnlyList<BenchmarkMeasurement> measurements)
     {
-        if (measurements is null) throw new ArgumentNullException(nameof(measurements));
+        ArgumentNullException.ThrowIfNull(measurements);
 
         var builder = new StringBuilder();
         builder.AppendLine("{");
@@ -446,7 +446,7 @@ public static class RegressionCheck
     /// </summary>
     public static string BuildReport(IReadOnlyList<BenchmarkComparison> comparisons)
     {
-        if (comparisons is null) throw new ArgumentNullException(nameof(comparisons));
+        ArgumentNullException.ThrowIfNull(comparisons);
 
         var builder = new StringBuilder();
         builder.AppendLine("## 📈 Benchmark Regression Check");
@@ -508,7 +508,7 @@ public static class RegressionCheck
     /// </summary>
     public static bool HasFailures(IReadOnlyList<BenchmarkComparison> comparisons, bool failOnTime)
     {
-        if (comparisons is null) throw new ArgumentNullException(nameof(comparisons));
+        ArgumentNullException.ThrowIfNull(comparisons);
 
         return comparisons.Any(c =>
             c.Kind == RegressionKind.AllocationRegression ||
