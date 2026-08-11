@@ -1,7 +1,7 @@
 extern alias V5Generator;
 
 using System;
-using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Reflection;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -200,7 +200,7 @@ public class V5EmitterTests
             }
             """;
 
-        IReadOnlyList<Diagnostic> diagnostics = RunV5Generator(source);
+        ImmutableArray<Diagnostic> diagnostics = RunV5Generator(source);
 
         Assert.DoesNotContain(diagnostics, d => d.Id == DiagnosticDescriptors.TypeUnsupportedOnClassicApi.Id);
         Assert.DoesNotContain(diagnostics, d => d.Id == DiagnosticDescriptors.UnsupportedPropertyType.Id);
@@ -242,7 +242,9 @@ public class V5EmitterTests
         return count;
     }
 
-    private static IReadOnlyList<Diagnostic> RunV5Generator(string source)
+    // Returns the driver's ImmutableArray rather than IReadOnlyList: CA1859 is an error under
+    // -warnaserror, and widening to the interface here buys nothing.
+    private static ImmutableArray<Diagnostic> RunV5Generator(string source)
     {
         SyntaxTree syntaxTree = CSharpSyntaxTree.ParseText(source);
         var references = new[]
