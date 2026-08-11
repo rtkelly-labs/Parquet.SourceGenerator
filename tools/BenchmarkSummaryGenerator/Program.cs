@@ -25,6 +25,12 @@ public static class Program
             return 0;
         }
 
+        string? baselinePath = OptionValue(args, "--baseline");
+        if (baselinePath is not null)
+        {
+            return RunRegressionCheck(resultsDir, baselinePath, args);
+        }
+
         string headlineTable = BuildHeadlineTable(resultsDir);
 
         if (updateReadme && !string.IsNullOrEmpty(headlineTable))
@@ -45,6 +51,92 @@ public static class Program
         }
 
         return 0;
+    }
+
+    /// <summary>
+    /// Compares a benchmark run against the committed baseline, or refreshes that baseline.
+    /// </summary>
+    /// <returns>0 when the run is acceptable, 1 when it regressed.</returns>
+    private static int RunRegressionCheck(string resultsDir, string baselinePath, string[] args)
+    {
+        IReadOnlyList<BenchmarkMeasurement> current = RegressionCheck.ReadResults(resultsDir);
+
+        if (current.Count == 0)
+        {
+            // Not a pass. A filter that matched nothing, or a run that crashed before exporting,
+            // would otherwise be indistinguishable from a clean result.
+            Console.Error.WriteLine($"No benchmark results found in '{resultsDir}'. Nothing to compare.");
+            return 1;
+        }
+
+        if (args.Contains("--update-baseline"))
+        {
+            WriteBaselineFile(baselinePath, current);
+            Console.WriteLine($"Baseline updated with {current.Count} measurement(s): {baselinePath}");
+            return 0;
+        }
+
+        IReadOnlyList<BenchmarkMeasurement> baseline = RegressionCheck.ReadBaseline(baselinePath);
+
+        if (baseline.Count == 0)
+        {
+            // First run bootstraps rather than failing: there is nothing to regress against, and
+            // demanding a baseline before one can exist would make the check impossible to adopt.
+            WriteBaselineFile(baselinePath, current);
+            Console.WriteLine($"No baseline at '{baselinePath}' — recorded this run as the baseline ({current.Count} measurements).");
+            Console.WriteLine("Commit it, and subsequent runs will be compared against it.");
+            return 0;
+        }
+
+        double allocationTolerance = ParseTolerance(args, "--alloc-tolerance", RegressionCheck.DefaultAllocationTolerance);
+        double timeTolerance = ParseTolerance(args, "--time-tolerance", RegressionCheck.DefaultTimeTolerance);
+        bool failOnTime = args.Contains("--fail-on-time");
+
+        IReadOnlyList<BenchmarkComparison> comparisons =
+            RegressionCheck.Compare(baseline, current, allocationTolerance, timeTolerance);
+
+        string report = RegressionCheck.BuildReport(comparisons);
+        Console.WriteLine(report);
+
+        string? reportPath = OptionValue(args, "--report");
+        if (reportPath is not null)
+        {
+            File.WriteAllText(reportPath, report, Encoding.UTF8);
+        }
+
+        return RegressionCheck.HasFailures(comparisons, failOnTime) ? 1 : 0;
+    }
+
+    private static void WriteBaselineFile(string path, IReadOnlyList<BenchmarkMeasurement> measurements)
+    {
+        string? directory = Path.GetDirectoryName(path);
+        if (!string.IsNullOrEmpty(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        File.WriteAllText(path, RegressionCheck.WriteBaseline(measurements), Encoding.UTF8);
+    }
+
+    /// <summary>
+    /// Reads a <c>--name value</c> option.
+    /// </summary>
+    private static string? OptionValue(string[] args, string name)
+    {
+        int index = Array.IndexOf(args, name);
+        return index >= 0 && index + 1 < args.Length && !args[index + 1].StartsWith("--", StringComparison.Ordinal)
+            ? args[index + 1]
+            : null;
+    }
+
+    private static double ParseTolerance(string[] args, string name, double fallback)
+    {
+        string? raw = OptionValue(args, name);
+        return raw is not null &&
+               double.TryParse(raw, NumberStyles.Any, CultureInfo.InvariantCulture, out double value) &&
+               value >= 0
+            ? value
+            : fallback;
     }
 
     private static string BuildHeadlineTable(string resultsDir)
@@ -261,7 +353,10 @@ public static class Program
         return match.Success && double.TryParse(match.Groups[1].Value, NumberStyles.Any, CultureInfo.InvariantCulture, out double val) ? val : null;
     }
 
-    private static string[] ParseCsvLine(string line)
+    /// <summary>
+    /// Splits one CSV line, honouring quoted fields. Shared with <see cref="RegressionCheck"/>.
+    /// </summary>
+    internal static string[] ParseCsvLine(string line)
     {
         var result = new List<string>();
         bool inQuotes = false;

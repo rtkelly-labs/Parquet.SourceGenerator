@@ -149,13 +149,42 @@ public class ScalingDeserializationBenchmark
     }
 
     /// <summary>
-    /// Source generator parallel deserializer — multi-core object instantiation across row groups.
+    /// Source generator array-backed deserializer over a <c>Stream</c>. Reads row groups
+    /// sequentially — a stream cannot be shared between readers — and materialises into a pre-sized
+    /// array rather than a growing list.
     /// </summary>
     [Benchmark]
     public async Task<List<ScaleEvent>> SourceGeneratorReadParallelAsync()
     {
         using var stream = new MemoryStream(_parquetBytes);
         return await ScaleEventParquetExtensions.ReadParquetParallelAsync(stream);
+    }
+
+    /// <summary>
+    /// Source generator sequential deserializer over a byte buffer — no stream wrapper allocation.
+    /// </summary>
+    [Benchmark]
+    public async Task<List<ScaleEvent>> SourceGeneratorReadBufferAsync()
+    {
+        return await ScaleEventParquetExtensions.ReadParquetAsync(new ReadOnlyMemory<byte>(_parquetBytes));
+    }
+
+    /// <summary>
+    /// Source generator genuinely parallel deserializer: one reader and one stream per worker over
+    /// the same buffer, so decode parallelises rather than just materialisation.
+    /// </summary>
+    /// <remarks>
+    /// This is the benchmark the regression gate exists for. Each worker builds its own stream over
+    /// the buffer, so any change that makes that construction copy — rather than view — the bytes
+    /// multiplies the file size by the worker count. That is invisible in a correctness test and
+    /// obvious in the allocation column here.
+    /// </remarks>
+    [Benchmark]
+    public async Task<List<ScaleEvent>> SourceGeneratorReadParallelBufferAsync()
+    {
+        return await ScaleEventParquetExtensions.ReadParquetParallelAsync(
+            new ReadOnlyMemory<byte>(_parquetBytes),
+            maxDegreeOfParallelism: 4);
     }
 
     /// <summary>

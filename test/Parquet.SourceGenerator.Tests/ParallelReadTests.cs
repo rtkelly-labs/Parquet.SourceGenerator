@@ -6,6 +6,8 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using Parquet.SourceGenerator.Emitter;
+using Parquet.SourceGenerator.Models;
 using Xunit;
 
 namespace Parquet.SourceGenerator.Tests;
@@ -170,8 +172,10 @@ public sealed class ParallelReadTests
     /// overload exists to avoid. The buffer is now normalised to an array once, up front.
     /// </summary>
     /// <remarks>
-    /// This asserts the path reads correctly rather than counting copies; the copy count is not
-    /// observable from here. Correctness through this path was untested altogether before.
+    /// This one asserts the path reads correctly. The copy count itself is pinned by
+    /// <see cref="EmittedParallelReaderNormalisesTheBufferOnceRatherThanPerWorker"/> against the
+    /// emitted source, and measured by the <c>SourceGeneratorReadParallelBufferAsync</c> benchmark,
+    /// whose allocation figure the regression gate watches.
     /// </remarks>
     [Fact]
     public async Task NonArrayBackedBufferStillReadsCorrectly()
@@ -190,6 +194,52 @@ public sealed class ParallelReadTests
 
         Assert.Equal(400, read.Count);
         Assert.Equal(Enumerable.Range(1, 400), read.Select(r => r.Id));
+    }
+
+    /// <summary>
+    /// Pins the copy count in the emitted source, where it is deterministic.
+    /// </summary>
+    /// <remarks>
+    /// A runtime assertion would have to measure process-wide allocations, which the rest of the
+    /// suite pollutes because xUnit runs classes in parallel — so it would be flaky in exactly the
+    /// way that gets a test deleted. The emitted source says the same thing without the noise:
+    /// the buffer is normalised once, and every downstream call takes the normalised value.
+    /// </remarks>
+    [Fact]
+    public void EmittedParallelReaderNormalisesTheBufferOnceRatherThanPerWorker()
+    {
+        var model = new TargetClassModel(
+            Namespace: "TestNamespace",
+            ClassName: "TestEntity",
+            Properties: new EquatableArray<PropertyModel>(new[]
+            {
+                new PropertyModel("Id", "id", "int", null, null, 1, null, null, PropertyKind.Primitive, false),
+            }));
+
+        string source = CodeEmitter.EmitSource(model);
+
+        // Normalised exactly once, from the caller's buffer.
+        Assert.Contains("MemoryMarshal.TryGetArray(parquetBytes, out _)", source);
+        Assert.Equal(1, Occurrences(source, "var sourceBytes ="));
+
+        // The probe reads through the normalised value, and both worker dispatch sites — the
+        // single-threaded branch and the Task.Run loop — hand it on rather than the original.
+        Assert.Equal(1, Occurrences(source, "CreateBufferStream(sourceBytes)"));
+        Assert.Equal(2, Occurrences(source, "ReadRowGroupsIntoAsync(sourceBytes,"));
+        Assert.Equal(0, Occurrences(source, "ReadRowGroupsIntoAsync(parquetBytes,"));
+    }
+
+    private static int Occurrences(string haystack, string needle)
+    {
+        int count = 0;
+        for (int i = haystack.IndexOf(needle, StringComparison.Ordinal);
+             i >= 0;
+             i = haystack.IndexOf(needle, i + needle.Length, StringComparison.Ordinal))
+        {
+            count++;
+        }
+
+        return count;
     }
 
     /// <summary>
