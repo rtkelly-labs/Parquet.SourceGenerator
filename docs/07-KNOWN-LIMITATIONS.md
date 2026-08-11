@@ -139,6 +139,11 @@ The shape of the implementation:
   calling thread and the "parallel" loop would be sequential.
 - Worker count is `min(requested, rowGroupCount)`, so a single-row-group file takes a branch that
   stays on the calling thread rather than paying for a thread-pool hop and a second reader.
+- The buffer is normalised to an array once, up front. `CreateBufferStream` copies whenever the
+  memory is not array-backed, and every worker calls it — so without this a `MemoryManager`-owned or
+  native buffer was copied once per worker plus once for the probe, materialising the file N+1 times.
+  That is exactly the allocation profile the buffer overload exists to avoid. Array-backed buffers,
+  which is what `File.ReadAllBytes` and `MemoryStream.ToArray` produce, pay nothing for the check.
 
 The tests deliberately assert ordering, completeness and equivalence with the sequential reader
 rather than a wall-clock speedup, which would be flaky on a loaded or single-core runner.

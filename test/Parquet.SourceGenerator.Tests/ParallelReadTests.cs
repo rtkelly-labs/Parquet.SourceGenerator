@@ -1,7 +1,9 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
@@ -159,6 +161,57 @@ public sealed class ParallelReadTests
 
         Assert.Equal(400, read.Count);
         Assert.Equal(Enumerable.Range(1, 400), read.Select(r => r.Id));
+    }
+
+    /// <summary>
+    /// A buffer that is not array-backed takes <c>CreateBufferStream</c>'s copying fallback. Because
+    /// every worker builds its own stream, that fallback ran once per worker plus once for the probe
+    /// — the whole file materialised N+1 times, which is precisely the allocation profile the buffer
+    /// overload exists to avoid. The buffer is now normalised to an array once, up front.
+    /// </summary>
+    /// <remarks>
+    /// This asserts the path reads correctly rather than counting copies; the copy count is not
+    /// observable from here. Correctness through this path was untested altogether before.
+    /// </remarks>
+    [Fact]
+    public async Task NonArrayBackedBufferStillReadsCorrectly()
+    {
+        byte[] bytes = await WriteAsync(rowCount: 400, rowGroupSize: 50);
+        using var owner = new NonArrayBackedBuffer(bytes);
+        ReadOnlyMemory<byte> memory = owner.Memory;
+
+        Assert.False(
+            MemoryMarshal.TryGetArray(memory, out _),
+            "The buffer must not be array-backed, or this test exercises the wrong branch.");
+
+        List<ParallelRow> read = await ParallelRowParquetExtensions.ReadParquetParallelAsync(
+            memory,
+            maxDegreeOfParallelism: 4);
+
+        Assert.Equal(400, read.Count);
+        Assert.Equal(Enumerable.Range(1, 400), read.Select(r => r.Id));
+    }
+
+    /// <summary>
+    /// Memory owned by a <see cref="MemoryManager{T}"/> reports <c>false</c> from
+    /// <c>MemoryMarshal.TryGetArray</c>, which is the only way to reach the copying fallback.
+    /// </summary>
+    private sealed class NonArrayBackedBuffer : MemoryManager<byte>
+    {
+        private readonly byte[] _bytes;
+
+        public NonArrayBackedBuffer(byte[] bytes) => _bytes = bytes;
+
+        public override Span<byte> GetSpan() => _bytes;
+
+        // The read path needs only TryGetArray and ToArray, neither of which pins.
+        public override MemoryHandle Pin(int elementIndex = 0) => throw new NotSupportedException();
+
+        public override void Unpin() => throw new NotSupportedException();
+
+        protected override void Dispose(bool disposing)
+        {
+        }
     }
 
     [Fact]

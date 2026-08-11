@@ -760,13 +760,24 @@ public static class CodeEmitter
         builder.AppendLine("        options ??= global::Parquet.SourceGenerator.ParquetSerializerOptions.Default;");
         builder.AppendLine("        var formatOptions = BuildFormatOptions(options);");
         builder.AppendLine();
+        // Every worker below builds its own stream over this buffer, and CreateBufferStream copies
+        // whenever the memory is not array-backed. Left alone, a buffer from a MemoryManager or from
+        // native memory would therefore be copied once per worker plus once for the probe — the file
+        // materialised N+1 times, which for a large file is exactly the allocation profile the
+        // buffer overload exists to avoid. Normalising once here makes every one of those calls take
+        // the no-copy path. Array-backed buffers, which is what File.ReadAllBytes and
+        // MemoryStream.ToArray give you, pay nothing for this check.
+        builder.AppendLine("        var sourceBytes = global::System.Runtime.InteropServices.MemoryMarshal.TryGetArray(parquetBytes, out _)");
+        builder.AppendLine("            ? parquetBytes");
+        builder.AppendLine("            : new global::System.ReadOnlyMemory<byte>(parquetBytes.ToArray());");
+        builder.AppendLine();
         // One cheap footer read decides the layout. Row counts come from row-group metadata, so this
         // probe does not touch column data — but it has to happen before the result array can be
         // sized, and it has to happen once rather than once per worker.
         builder.AppendLine("        int rowGroupCount;");
         builder.AppendLine("        int totalRows = 0;");
         builder.AppendLine("        int[] rowOffsets;");
-        builder.AppendLine("        using (var probeStream = CreateBufferStream(parquetBytes))");
+        builder.AppendLine("        using (var probeStream = CreateBufferStream(sourceBytes))");
         builder.AppendLine("        {");
         builder.AppendLine("            await using var probe = await global::Parquet.ParquetReader.CreateAsync(probeStream, formatOptions, cancellationToken: cancellationToken);");
         builder.AppendLine("            rowGroupCount = probe.RowGroupCount;");
@@ -795,7 +806,7 @@ public static class CodeEmitter
         builder.AppendLine("        {");
         // Staying on the calling thread when there is nothing to divide avoids paying a thread-pool
         // hop and a second reader for a single-row-group file, which is the common small-file case.
-        builder.AppendLine("            await ReadRowGroupsIntoAsync(parquetBytes, formatOptions, resultArray, rowOffsets, cursor, rowGroupCount, cancellationToken);");
+        builder.AppendLine("            await ReadRowGroupsIntoAsync(sourceBytes, formatOptions, resultArray, rowOffsets, cursor, rowGroupCount, cancellationToken);");
         builder.AppendLine("        }");
         builder.AppendLine("        else");
         builder.AppendLine("        {");
@@ -806,7 +817,7 @@ public static class CodeEmitter
         // so an async method invoked directly would run to completion on the calling thread and the
         // "parallel" loop would be sequential. Task.Run is what puts each worker on its own thread.
         builder.AppendLine("                workers[w] = global::System.Threading.Tasks.Task.Run(");
-        builder.AppendLine("                    () => ReadRowGroupsIntoAsync(parquetBytes, formatOptions, resultArray, rowOffsets, cursor, rowGroupCount, cancellationToken),");
+        builder.AppendLine("                    () => ReadRowGroupsIntoAsync(sourceBytes, formatOptions, resultArray, rowOffsets, cursor, rowGroupCount, cancellationToken),");
         builder.AppendLine("                    cancellationToken);");
         builder.AppendLine("            }");
         builder.AppendLine();
