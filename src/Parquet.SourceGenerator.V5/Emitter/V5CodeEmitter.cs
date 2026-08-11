@@ -482,20 +482,15 @@ public static class V5CodeEmitter
     /// </remarks>
     private static string GetColumnElementType(PropertyModel prop)
     {
-        switch (prop.Kind)
+        string enumUnderlying = prop.EnumUnderlyingTypeName ?? "int";
+
+        return prop.Kind switch
         {
-            case PropertyKind.ByteArray:
-                return "byte[]";
-            case PropertyKind.Enum:
-            {
-                string underlying = prop.EnumUnderlyingTypeName ?? "int";
-                return prop.IsNullable ? underlying + "?" : underlying;
-            }
-            case PropertyKind.Guid:
-                return prop.IsNullable ? "global::System.Guid?" : "global::System.Guid";
-            default:
-                return IsReferenceTypeColumn(prop) ? prop.TypeName.TrimEnd('?') : prop.TypeName;
-        }
+            PropertyKind.ByteArray => "byte[]",
+            PropertyKind.Enum => prop.IsNullable ? enumUnderlying + "?" : enumUnderlying,
+            PropertyKind.Guid => prop.IsNullable ? "global::System.Guid?" : "global::System.Guid",
+            _ => IsReferenceTypeColumn(prop) ? prop.TypeName.TrimEnd('?') : prop.TypeName,
+        };
     }
 
     /// <summary>
