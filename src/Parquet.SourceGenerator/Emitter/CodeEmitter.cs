@@ -192,20 +192,42 @@ public static class CodeEmitter
         // List fast path
         builder.AppendLine($"            if (chunk is global::System.Collections.Generic.List<{model.ClassName}> listItems)");
         builder.AppendLine("            {");
-        builder.AppendLine("                for (int i = 0; i < count; i++)");
+        builder.AppendLine("                if (count >= 10_000 && global::System.Environment.ProcessorCount > 1)");
         builder.AppendLine("                {");
-        builder.AppendLine($"                    var item = listItems[i];");
-        EmitPropertyAssignments(builder, model, "buffer_", prefix: "                    ");
+        builder.AppendLine("                    global::System.Threading.Tasks.Parallel.For(0, count, i =>");
+        builder.AppendLine("                    {");
+        builder.AppendLine("                        var item = listItems[i];");
+        builder.Append(GetParallelPropertyAssignments(model, "buffer_", "                        "));
+        builder.AppendLine("                    });");
+        builder.AppendLine("                }");
+        builder.AppendLine("                else");
+        builder.AppendLine("                {");
+        builder.AppendLine("                    for (int i = 0; i < count; i++)");
+        builder.AppendLine("                    {");
+        builder.AppendLine("                        var item = listItems[i];");
+        EmitPropertyAssignments(builder, model, "buffer_", prefix: "                        ");
+        builder.AppendLine("                    }");
         builder.AppendLine("                }");
         builder.AppendLine("            }");
 
         // Array fast path
         builder.AppendLine($"            else if (chunk is {model.ClassName}[] arrayItems)");
         builder.AppendLine("            {");
-        builder.AppendLine("                for (int i = 0; i < count; i++)");
+        builder.AppendLine("                if (count >= 10_000 && global::System.Environment.ProcessorCount > 1)");
         builder.AppendLine("                {");
-        builder.AppendLine($"                    var item = arrayItems[i];");
-        EmitPropertyAssignments(builder, model, "buffer_", prefix: "                    ");
+        builder.AppendLine("                    global::System.Threading.Tasks.Parallel.For(0, count, i =>");
+        builder.AppendLine("                    {");
+        builder.AppendLine("                        var item = arrayItems[i];");
+        builder.Append(GetParallelPropertyAssignments(model, "buffer_", "                        "));
+        builder.AppendLine("                    });");
+        builder.AppendLine("                }");
+        builder.AppendLine("                else");
+        builder.AppendLine("                {");
+        builder.AppendLine("                    for (int i = 0; i < count; i++)");
+        builder.AppendLine("                    {");
+        builder.AppendLine("                        var item = arrayItems[i];");
+        EmitPropertyAssignments(builder, model, "buffer_", prefix: "                        ");
+        builder.AppendLine("                    }");
         builder.AppendLine("                }");
         builder.AppendLine("            }");
 
@@ -938,6 +960,18 @@ public static class CodeEmitter
             string writeExpr = GetWriteExpression(prop, $"item.{prop.Name}");
             builder.AppendLine($"{prefix}{bufPrefix}{i}[i] = {writeExpr};");
         }
+    }
+
+    private static string GetParallelPropertyAssignments(TargetClassModel model, string bufPrefix, string prefix)
+    {
+        var sb = new StringBuilder();
+        for (int i = 0; i < model.Properties.Length; i++)
+        {
+            PropertyModel prop = model.Properties[i];
+            string writeExpr = GetWriteExpression(prop, $"item.{prop.Name}");
+            sb.AppendLine($"{prefix}{bufPrefix}{i}[i] = {writeExpr};");
+        }
+        return sb.ToString();
     }
 
     private static void EmitPropertyAssignmentsIndexed(StringBuilder builder, TargetClassModel model, string bufPrefix, string prefix)
