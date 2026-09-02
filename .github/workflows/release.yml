@@ -89,19 +89,25 @@ jobs:
           version="${{ steps.version.outputs.version }}"
           cd nupkgs
           gen="Parquet.SourceGenerator.${version}.nupkg"
+          genlegacy="Parquet.SourceGenerator.Legacy.${version}.nupkg"
           attrs="Parquet.SourceGenerator.Attributes.${version}.nupkg"
 
-          test -f "$gen"   || { echo "FAIL: $gen not produced"; ls -la; exit 1; }
-          test -f "$attrs" || { echo "FAIL: $attrs not produced"; ls -la; exit 1; }
+          test -f "$gen"       || { echo "FAIL: $gen not produced"; ls -la; exit 1; }
+          test -f "$genlegacy" || { echo "FAIL: $genlegacy not produced"; ls -la; exit 1; }
+          test -f "$attrs"     || { echo "FAIL: $attrs not produced"; ls -la; exit 1; }
 
           unzip -Z1 "$gen" | grep -q '^analyzers/dotnet/cs/Parquet\.SourceGenerator\.dll$' \
             || { echo "FAIL: generator missing from analyzers/dotnet/cs/"; exit 1; }
-          if unzip -Z1 "$gen" | grep -q '^lib/'; then
+          unzip -Z1 "$genlegacy" | grep -q '^analyzers/dotnet/cs/Parquet\.SourceGenerator\.Legacy\.dll$' \
+            || { echo "FAIL: Legacy generator missing from analyzers/dotnet/cs/"; exit 1; }
+          if unzip -Z1 "$gen" | grep -q '^lib/' || unzip -Z1 "$genlegacy" | grep -q '^lib/'; then
             echo "FAIL: generator package contains lib/ entries; it must be analyzer-only:"
-            unzip -Z1 "$gen" | grep '^lib/'; exit 1
+            exit 1
           fi
           unzip -p "$gen" '*.nuspec' | grep -q 'id="Parquet.SourceGenerator.Attributes"' \
             || { echo "FAIL: generator .nuspec does not depend on the Attributes package"; exit 1; }
+          unzip -p "$genlegacy" '*.nuspec' | grep -q 'id="Parquet.SourceGenerator.Attributes"' \
+            || { echo "FAIL: Legacy generator .nuspec does not depend on the Attributes package"; exit 1; }
           for tfm in netstandard2.0 netstandard2.1 net8.0 net9.0; do
             unzip -Z1 "$attrs" | grep -q "^lib/$tfm/Parquet\.SourceGenerator\.Attributes\.dll$" \
               || { echo "FAIL: attributes package missing lib/$tfm"; exit 1; }
