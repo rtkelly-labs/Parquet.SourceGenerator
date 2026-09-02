@@ -41,8 +41,8 @@ This is early work. Treat the API as evolving.
 | `DateTimeOffset` | **Unsupported** — Parquet.Net has no representation for it; reported as `PARQ006`. Use `DateTime` plus a separate offset column |
 | Positional records (`record Person(int Id, string Name)`) | **Unsupported** — the reader needs a parameterless constructor; reported as `PARQ008`. Declare columns as settable members instead |
 | Nested and generic target types | **Unsupported** — reported as `PARQ009` / `PARQ010` |
-| `ReadParquetParallelAsync` | Reads row groups **sequentially**. One `ParquetReader` over one `Stream` cannot be read concurrently, so real decode parallelism needs a reader and stream per worker. `maxDegreeOfParallelism` is accepted but not honoured |
-| .NET Framework (net472) | **Unsupported.** Parquet.Net 5 and 6 ship `net8.0`/`net10.0` only; 4.25.0 is the last release with a `netstandard2.0` asset |
+| `ReadParquetParallelAsync(Stream)` | Reads row groups **sequentially**. One `ParquetReader` over one `Stream` cannot be read concurrently, and an arbitrary `Stream` cannot be shared between readers — so `maxDegreeOfParallelism` is not honoured on this overload. Pass a `ReadOnlyMemory<byte>` instead for real parallelism |
+| .NET Framework (net472) | Supported through the separate **`Parquet.SourceGenerator.V5`** package against Parquet.Net 4.x/5.x. The main package targets Parquet.Net 6, which ships `net8.0`/`net10.0` only |
 
 > A full audit of behavioural gaps, with a remediation plan, is in
 > [docs/07-KNOWN-LIMITATIONS.md](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/07-KNOWN-LIMITATIONS.md).
@@ -73,14 +73,16 @@ Zero-reflection C# source generation vs **`ParquetSerializer` v6** reflection ba
 - **Row-group streaming**: `WriteParquetBatchedAsync` writes in fixed-size row groups, so large
   sequences never need to be materialized in full.
 - **`IAsyncEnumerable<T>` streaming**: stream items straight into chunked row groups.
-- **Array-backed reader**: `ReadParquetParallelAsync` materialises into a single pre-sized array
-  indexed by row-group offset. It reads row groups *sequentially* — see
-  [Known limitations](#known-limitations).
+- **Parallel reader**: `ReadParquetParallelAsync` materialises into a single pre-sized array indexed
+  by row-group offset. Given a `ReadOnlyMemory<byte>` it decodes row groups concurrently — one
+  `ParquetReader` over one stream per worker, groups claimed dynamically so uneven sizes do not
+  leave workers idle. Given a `Stream` it reads sequentially; see
+  [Known limitations](#known-limitations) for why.
 - **Type support**: `Guid`, `DateTime`, `TimeSpan`, `Enum`, `decimal`, `byte[]`, `string`,
   primitives, and `Nullable<T>`.
 - **Nullability-aware schemas**: under `#nullable enable`, `string` writes a required column and
   `string?` an optional one, so the required/optional distinction survives into the file.
-- **Compile-time diagnostics**: `PARQ001`–`PARQ010` (see below) — unsupported types, unassignable
+- **Compile-time diagnostics**: `PARQ001`–`PARQ011` (see below) — unsupported types, unassignable
   members and unconstructable types are rejected at compile time rather than at runtime.
 
 ---
@@ -153,14 +155,17 @@ using var stream = File.OpenRead("events.parquet");
 // Sequential read
 List<UserEvent> events = await UserEventParquetExtensions.ReadParquetAsync(stream);
 
-// Array-backed read (sequential today; maxDegreeOfParallelism is not yet honoured)
+// Array-backed read over a Stream — sequential, because one Stream cannot feed several readers
 List<UserEvent> parallelEvents = await UserEventParquetExtensions.ReadParquetParallelAsync(stream);
 
 // Read from an in-memory byte buffer — every reader accepts one
 ReadOnlyMemory<byte> buffer = File.ReadAllBytes("events.parquet");
 List<UserEvent> memEvents = await UserEventParquetExtensions.ReadParquetAsync(buffer);
-List<UserEvent> memArray = await UserEventParquetExtensions.ReadParquetParallelAsync(buffer);
 await foreach (var e in UserEventParquetExtensions.ReadParquetStreamAsync(buffer)) { }
+
+// Genuinely parallel: each worker gets its own reader over its own view of the same bytes.
+// Row order matches the file. Omit the degree to use Environment.ProcessorCount.
+List<UserEvent> fast = await UserEventParquetExtensions.ReadParquetParallelAsync(buffer, maxDegreeOfParallelism: 8);
 ```
 
 ### Custom Configuration (`ParquetSerializerOptions`)
@@ -205,6 +210,7 @@ public string Username { get; init; } = string.Empty;
 | **`PARQ008`** | **Error** | Type has no accessible parameterless constructor, so the generated reader cannot construct it. Covers positional records. |
 | **`PARQ009`** | **Error** | Target type is nested. `[ParquetSerializable]` supports top-level types only. |
 | **`PARQ010`** | **Error** | Target type is generic. The emitted schema is a single static field and cannot vary by type argument. |
+| **`PARQ011`** | **Error** | *(`Parquet.SourceGenerator.V5` only)* Member type is supported by Parquet.Net 6 but not by the 4.x/5.x API — `ReadOnlyMemory<byte>`, `ReadOnlyMemory<char>`, `BigDecimal`. Use the main package, or change the member's type. |
 
 ---
 

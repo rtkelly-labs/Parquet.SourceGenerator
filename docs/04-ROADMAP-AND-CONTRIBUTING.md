@@ -26,7 +26,7 @@
 ### Phase 3: Nullability, Complex Types & Diagnostics ✅
 - [x] Support nullable primitives (`int?`, `DateTime?`, `double?`).
 - [x] Honour nullable *reference* annotations, so `string` and `string?` differ in the schema.
-- [x] Implement Roslyn compiler diagnostics `PARQ001`–`PARQ010`.
+- [x] Implement Roslyn compiler diagnostics `PARQ001`–`PARQ011`.
 - [x] Support custom decimal precision/scale (`[ParquetDecimal]`) and timestamp units (`[ParquetTimestamp]`).
 - [x] Collect inherited members from base types declared in source.
 - [ ] Support nested collections (`List<T>`, arrays) and nested POCO structs (`StructField`).
@@ -44,10 +44,47 @@
 - [x] Publish to NuGet.org (`0.0.1`).
 - [ ] Cut a `1.0.0` release. Blocked on the API-shaping items in the limitations audit.
 
-### Phase 6: Broader Runtime Support
-- [ ] `Parquet.SourceGenerator.V4` — a `DataColumn`-based emitter covering Parquet.Net 4.x and 5.x,
-      and with it `netstandard2.0` / net472 consumers. See limitations 1.1–1.3.
-- [ ] Genuine parallel reading, built on the buffer overloads. See limitations 2.1.
+### Phase 6: Broader Runtime Support ✅
+- [x] `Parquet.SourceGenerator.V5` — a `DataColumn`-based emitter covering Parquet.Net 4.x and 5.x,
+      and with it `netstandard2.0` / net472 consumers. See limitations 1.1–1.3 and 6.
+- [x] Genuine parallel reading, built on the buffer overloads. See limitations 2.1.
+
+### Phase 7: Measurement
+- [x] Benchmark regression detection. Runs compare against `benchmarks/baseline.json`; allocated
+      bytes is the gate, wall-clock is reported only. See "Benchmark regression gate" below.
+- [x] Benchmarks for the buffer read paths, including the genuinely parallel one — the allocation
+      column is what would catch a per-worker buffer copy returning.
+- [ ] **Run the benchmarks and commit the baseline.** Nothing has been measured yet: the gate
+      exists but has no baseline to compare against, and two performance changes have shipped
+      unmeasured — removing the per-row-group `List.Capacity` reallocation (limitations 2.2) and the
+      parallel reader (limitations 2.1). The published README table predates both, so it describes a
+      build that no longer exists. Until a run happens, both improvements are reasoned, not measured.
+- [ ] Add a classic-backend row to the comparison. `DataColumn` allocates its own arrays, so the
+      V5 package should not inherit the main package's allocation figures — and nobody has checked
+      how far apart they are.
+
+#### Benchmark regression gate
+
+Dispatch `benchmarks.yml`. It runs BenchmarkDotNet, then compares the results against
+`benchmarks/baseline.json`:
+
+| Input | Effect |
+|:---|:---|
+| _(none)_ | Compare against the baseline. Fails on an allocation regression. |
+| `update_baseline` | Record this run as the new baseline instead, for review in the generated PR. |
+| `fail_on_time` | Also fail on wall-clock regressions. Only meaningful on a quiet machine. |
+
+**Allocated bytes is the gate; wall-clock is reported but does not fail.** That split is deliberate.
+Allocation counts on a fixed input are near-deterministic — the same code allocates the same bytes
+on any machine — so a change in them is a real change in what the code does. Wall-clock on a shared
+runner moves tens of percent between runs of identical code, and a gate nobody can act on is a gate
+that ends up switched off.
+
+The first run with no baseline records one and passes, rather than failing for the absence of a file
+it is about to create. The comparison logic is unit-tested in `BenchmarkRegressionTests` — unit
+normalisation, threshold arithmetic and baseline round-tripping are ordinary logic, and testing them
+in the normal CI run means a broken gate surfaces there rather than the next time someone dispatches
+the benchmark workflow.
 
 ---
 

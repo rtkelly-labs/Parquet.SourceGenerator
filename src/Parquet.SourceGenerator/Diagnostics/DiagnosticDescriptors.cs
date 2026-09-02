@@ -144,4 +144,20 @@ public static class DiagnosticDescriptors
         category: "ParquetSourceGenerator",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
+
+    /// <summary>
+    /// PARQ011: The member's type is supported by Parquet.Net 6 but not by the 4.x/5.x API.
+    /// </summary>
+    /// <remarks>
+    /// Reported only by the classic (v4/v5) backend. It is deliberately distinct from PARQ006: the
+    /// member is perfectly representable in Parquet, just not by the API generation this package
+    /// targets, so the fix is to switch packages rather than to change the model.
+    /// </remarks>
+    public static readonly DiagnosticDescriptor TypeUnsupportedOnClassicApi = new(
+        id: "PARQ011",
+        title: "Property type is not supported by the Parquet.Net 4.x/5.x API",
+        messageFormat: "The member '{0}' on type '{2}' has type '{1}', which Parquet.Net 6 supports but the 4.x/5.x API does not. Use the Parquet.SourceGenerator package instead, or change its type",
+        category: "ParquetSourceGenerator",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
 }

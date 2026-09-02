@@ -23,7 +23,7 @@ public sealed class ParquetLegacyIncrementalGenerator : IIncrementalGenerator
         IncrementalValuesProvider<TargetParserResult> targets = context.SyntaxProvider
             .CreateSyntaxProvider(
                 predicate: static (s, _) => IsTargetSyntax(s),
-                transform: static (ctx, _) => TargetParser.GetTargetModel(ctx));
+                transform: static (ctx, _) => TargetParser.GetTargetModel(ctx, ParquetApiLevel.V4));
 
         // 2. Register source output emission & diagnostic reporting
         context.RegisterSourceOutput(targets, static (spc, result) =>

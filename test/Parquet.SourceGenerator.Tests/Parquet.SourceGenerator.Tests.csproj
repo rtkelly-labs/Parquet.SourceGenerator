@@ -37,6 +37,13 @@
     <ProjectReference Include="..\..\src\Parquet.SourceGenerator.Legacy\Parquet.SourceGenerator.Legacy.csproj"
                       ReferenceOutputAssembly="true"
                       Aliases="LegacyGenerator" />
+    <!--
+      The benchmark regression check is the one piece of the performance story that can be verified
+      without running benchmarks: unit parsing, threshold arithmetic and baseline round-tripping are
+      ordinary logic. Testing them here means a broken gate fails the normal CI run rather than
+      being discovered the next time someone dispatches the benchmark workflow.
+    -->
+    <ProjectReference Include="..\..\tools\BenchmarkSummaryGenerator\BenchmarkSummaryGenerator.csproj" />
   </ItemGroup>
 
 </Project>
