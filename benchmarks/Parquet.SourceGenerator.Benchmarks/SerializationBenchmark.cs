@@ -246,8 +246,6 @@ internal static class Program
 {
     private static void Main(string[] args)
     {
-        BenchmarkRunner.Run<ScalingSerializationBenchmark>(args: args);
-        BenchmarkRunner.Run<ScalingDeserializationBenchmark>(args: args);
-        BenchmarkRunner.Run<GuidInterchangeBenchmark>(args: args);
+        BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args);
     }
 }
