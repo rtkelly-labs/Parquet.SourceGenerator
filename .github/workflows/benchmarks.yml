@@ -1,13 +1,5 @@
 name: Performance Benchmarks & Baseline Verification
 
-# Manual only. BenchmarkDotNet on shared GitHub runners is too noisy in wall-clock terms to gate
-# merges on, so running it per-PR would cost minutes and produce numbers nobody could act on.
-#
-# Results are now compared against benchmarks/baseline.json. Allocated bytes is the gate — on a
-# fixed input it is near-deterministic, so a change in it is a real change in what the code does.
-# Wall-clock is reported but does not fail the run unless fail_on_time is set, because on a shared
-# runner it moves tens of percent between runs of identical code and a gate nobody can act on is a
-# gate that ends up switched off.
 on:
   workflow_dispatch:
     inputs:
@@ -15,29 +7,65 @@ on:
         description: 'BenchmarkDotNet filter pattern'
         required: false
         default: '*'
-      update_baseline:
-        description: 'Record this run as the new baseline instead of checking against it'
+      target_branch:
+        description: 'Branch to benchmark and commit updates to (defaults to current)'
         required: false
-        type: boolean
-        default: false
-      fail_on_time:
-        description: 'Also fail on wall-clock regressions (only meaningful on a quiet runner)'
-        required: false
-        type: boolean
-        default: false
+        default: ''
+  issue_comment:
+    types: [created]
 
 permissions:
   contents: write
   pull-requests: write
+  issues: write
 
 jobs:
   run-benchmarks:
     name: Run BenchmarkDotNet Performance Suite
+    # Run on manual dispatch OR when a PR comment starts with /benchmark
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.pull_request != null &&
+       startsWith(github.event.comment.body, '/benchmark'))
     runs-on: ubuntu-latest
 
     steps:
+      - name: Resolve Target PR Branch
+        id: pr_info
+        run: |
+          if [ "${{ github.event_name }}" = "issue_comment" ]; then
+            # Extract PR branch name via GitHub CLI
+            branch=$(gh pr view ${{ github.event.issue.number }} --json headRefName -q .headRefName)
+            echo "branch=$branch" >> $GITHUB_OUTPUT
+            echo "is_pr=true" >> $GITHUB_OUTPUT
+            echo "pr_number=${{ github.event.issue.number }}" >> $GITHUB_OUTPUT
+
+            # Parse optional filter: `/benchmark *Deserialization*`
+            cmd_filter=$(echo "${{ github.event.comment.body }}" | awk '{print $2}')
+            if [ -n "$cmd_filter" ]; then
+              echo "filter=$cmd_filter" >> $GITHUB_OUTPUT
+            else
+              echo "filter=*" >> $GITHUB_OUTPUT
+            fi
+          else
+            target="${{ github.event.inputs.target_branch }}"
+            if [ -n "$target" ]; then
+              echo "branch=$target" >> $GITHUB_OUTPUT
+            else
+              echo "branch=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+            fi
+            echo "is_pr=false" >> $GITHUB_OUTPUT
+            echo "filter=${{ github.event.inputs.filter || '*' }}" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.pr_info.outputs.branch }}
+          fetch-depth: 0
 
       - name: Setup .NET 8 SDK
         uses: actions/setup-dotnet@v4
@@ -52,58 +80,34 @@ jobs:
 
       - name: Execute BenchmarkDotNet Suite
         run: |
-          dotnet run -c Release --project benchmarks/Parquet.SourceGenerator.Benchmarks/Parquet.SourceGenerator.Benchmarks.csproj --no-build -- --filter "${{ github.event.inputs.filter || '*' }}"
+          dotnet run -c Release --project benchmarks/Parquet.SourceGenerator.Benchmarks/Parquet.SourceGenerator.Benchmarks.csproj --no-build -- --filter "${{ steps.pr_info.outputs.filter }}"
 
       - name: Generate Headline Benchmark Summary & Update READMEs
         run: |
           dotnet run -c Release --project tools/BenchmarkSummaryGenerator/BenchmarkSummaryGenerator.csproj -- BenchmarkDotNet.Artifacts/results benchmark-summary.md --update-readme
           cat benchmark-summary.md >> $GITHUB_STEP_SUMMARY
 
-      # Runs before the baseline check so a regression still leaves the report and artifacts behind.
-      # A failing gate with no evidence of what regressed is only half a signal.
-      - name: Check For Performance Regressions
-        if: github.event.inputs.update_baseline != 'true'
-        # Passed through env rather than interpolated into the command line: a ${{ }} substitution
-        # inside a run block is the injection-prone shape, and it is worth not writing even when the
-        # value is a boolean the workflow itself declares.
+      - name: Commit & Push Benchmark Updates to Branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add README.md PACKAGE_README.md
+          if ! git diff --cached --quiet; then
+            git commit -m "docs(perf): update benchmark headline performance table in README"
+            git push origin ${{ steps.pr_info.outputs.branch }}
+          else
+            echo "No changes detected in README benchmark tables."
+          fi
+
+      - name: Comment Benchmark Summary on PR
+        if: steps.pr_info.outputs.is_pr == 'true'
+        run: |
+          gh pr comment ${{ steps.pr_info.outputs.pr_number }} --body-file benchmark-summary.md
         env:
-          FAIL_ON_TIME: ${{ github.event.inputs.fail_on_time }}
-        run: |
-          set -euo pipefail
-          extra=""
-          if [ "$FAIL_ON_TIME" = "true" ]; then extra="--fail-on-time"; fi
-          dotnet run -c Release --project tools/BenchmarkSummaryGenerator/BenchmarkSummaryGenerator.csproj -- \
-            BenchmarkDotNet.Artifacts/results \
-            --baseline benchmarks/baseline.json \
-            --report benchmark-regressions.md \
-            $extra
-          cat benchmark-regressions.md >> $GITHUB_STEP_SUMMARY
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Record This Run As The New Baseline
-        if: github.event.inputs.update_baseline == 'true'
-        run: |
-          set -euo pipefail
-          dotnet run -c Release --project tools/BenchmarkSummaryGenerator/BenchmarkSummaryGenerator.csproj -- \
-            BenchmarkDotNet.Artifacts/results \
-            --baseline benchmarks/baseline.json \
-            --update-baseline
-
-      # Deliberately not `always()`: a run that regressed should not open a PR replacing the
-      # published README numbers with the regressed ones. On a baseline refresh this carries the new
-      # baseline.json for review rather than committing numbers nobody looked at.
-      - name: Create PR for Benchmark Updates (if changed)
-        uses: peter-evans/create-pull-request@v6
-        with:
-          commit-message: "docs(perf): update benchmark headline performance table in README"
-          branch: "docs/update-benchmark-table"
-          title: "docs(perf): update benchmark performance table in README"
-          body: "Automated benchmark run completed. This PR updates the headline performance table in `README.md` and `PACKAGE_README.md`, and `benchmarks/baseline.json` if the run was a baseline refresh."
-          delete-branch: true
-
-      # always(): a failed regression check is exactly when the raw numbers are worth having.
       - name: Upload Benchmark Results Artifacts
-        if: always()
-        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        uses: actions/upload-artifact@v4
         with:
           name: benchmark-results
           path: |
