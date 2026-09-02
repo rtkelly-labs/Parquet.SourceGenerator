@@ -183,22 +183,22 @@ jobs:
             -p:GeneratorPackageVersion="$version" \
             -p:RestorePackagesPath="$RUNNER_TEMP/consumption-packages-legacy-net9"
 
-      # .NET Framework support is the entire reason the V5 package exists, and until now nothing in
+      # .NET Framework support is the entire reason the Legacy package exists, and until now nothing in
       # CI compiled it — the project declared net472 but every step above pins --framework to a
       # modern TFM, so the target was never built. Compiling is as far as a Linux runner can go
       # (executing net472 needs Windows or Mono), but it is what catches the failures that actually
       # occur here: generated code using a language feature net472's default LangVersion rejects, or
       # an API that only exists on .NET 6+.
-      - name: Verify V5 Package Consumption Compiles on .NET Framework 4.7.2
+      - name: Verify Legacy Package Consumption Compiles on .NET Framework 4.7.2
         run: |
           set -euo pipefail
           version=$(ls artifacts/Parquet.SourceGenerator.[0-9]*.nupkg \
             | sed -E 's/.*Parquet\.SourceGenerator\.([0-9][^/]*)\.nupkg/\1/')
-          dotnet build test/PackageConsumptionV5/PackageConsumptionV5.csproj \
+          dotnet build test/PackageConsumptionLegacy/PackageConsumptionLegacy.csproj \
             --framework net472 \
             --configuration Release \
             -p:GeneratorPackageVersion="$version" \
-            -p:RestorePackagesPath="$RUNNER_TEMP/consumption-packages-v5-net472"
+            -p:RestorePackagesPath="$RUNNER_TEMP/consumption-packages-legacy-net472"
 
       - name: Upload Test Coverage Artifacts
         uses: actions/upload-artifact@v4
