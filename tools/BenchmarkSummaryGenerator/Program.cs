@@ -191,6 +191,7 @@ public static class Program
             new Scenario("File Serialization (Write)", "ReflectionParquetSerializerV6Write", "SourceGeneratorWriteAsync", 100_000),
             new Scenario("Streaming Batched Write", "ReflectionParquetSerializerV6Write", "SourceGeneratorWriteBatchedAsync", 100_000),
             new Scenario("File Deserialization (Read)", "ReflectionParquetSerializerV6Read", "SourceGeneratorReadAsync", 100_000),
+            new Scenario("Parallel Deserialization (Read)", "ReflectionParquetSerializerV6Read", "SourceGeneratorReadParallelBufferAsync", 100_000),
             new Scenario("Streaming Read (IAsyncEnumerable)", "ReflectionParquetSerializerV6Read", "SourceGeneratorReadStreamAsync", 100_000),
             new Scenario("Guid Serialization", "ReflectionParquetSerializerGuidWrite", "SourceGeneratorGuidWriteAsync", 100_000),
         };
