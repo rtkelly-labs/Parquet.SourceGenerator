@@ -129,10 +129,15 @@ public static class TargetParser
                 bool hasColAttr = member
                     .GetAttributes()
                     .Any(a =>
-                        a.AttributeClass?.ToDisplayString() == ColumnAttributeFullName
-                        || a.AttributeClass?.ToDisplayString()
-                            == "Parquet.Attributes.ParquetColumnAttribute"
-                    );
+                    {
+                        string? fullName = a.AttributeClass?.ToDisplayString();
+                        string? name = a.AttributeClass?.Name;
+                        return fullName == ColumnAttributeFullName
+                            || fullName == "Parquet.Attributes.ParquetColumnAttribute"
+                            || fullName == "Parquet.Serialization.Attributes.ParquetColumnAttribute"
+                            || fullName == "System.Text.Json.Serialization.JsonPropertyNameAttribute"
+                            || name is "ParquetColumnAttribute" or "ParquetColumn" or "JsonPropertyNameAttribute" or "JsonPropertyName";
+                    });
 
                 if (hasColAttr)
                 {
@@ -161,17 +166,50 @@ public static class TargetParser
 
             bool isIgnored = member
                 .GetAttributes()
-                .Any(a => a.AttributeClass?.ToDisplayString() == IgnoreAttributeFullName);
+                .Any(a =>
+                {
+                    string? fullName = a.AttributeClass?.ToDisplayString();
+                    string? name = a.AttributeClass?.Name;
+                    return fullName == IgnoreAttributeFullName
+                        || fullName == "Parquet.Attributes.ParquetIgnoreAttribute"
+                        || fullName == "Parquet.Serialization.Attributes.ParquetIgnoreAttribute"
+                        || fullName == "System.Text.Json.Serialization.JsonIgnoreAttribute"
+                        || name is "ParquetIgnoreAttribute" or "ParquetIgnore" or "JsonIgnoreAttribute" or "JsonIgnore";
+                });
             if (isIgnored)
                 continue;
 
             AttributeData? columnAttr = member
                 .GetAttributes()
                 .FirstOrDefault(a =>
-                    a.AttributeClass?.ToDisplayString() == ColumnAttributeFullName
-                    || a.AttributeClass?.ToDisplayString()
-                        == "Parquet.Attributes.ParquetColumnAttribute"
-                );
+                {
+                    string? fullName = a.AttributeClass?.ToDisplayString();
+                    string? name = a.AttributeClass?.Name;
+                    return fullName == ColumnAttributeFullName
+                        || fullName == "Parquet.Attributes.ParquetColumnAttribute"
+                        || fullName == "Parquet.Serialization.Attributes.ParquetColumnAttribute"
+                        || name is "ParquetColumnAttribute" or "ParquetColumn";
+                });
+
+            AttributeData? jsonPropertyAttr = member
+                .GetAttributes()
+                .FirstOrDefault(a =>
+                {
+                    string? fullName = a.AttributeClass?.ToDisplayString();
+                    string? name = a.AttributeClass?.Name;
+                    return fullName == "System.Text.Json.Serialization.JsonPropertyNameAttribute"
+                        || name is "JsonPropertyNameAttribute" or "JsonPropertyName";
+                });
+
+            AttributeData? jsonOrderAttr = member
+                .GetAttributes()
+                .FirstOrDefault(a =>
+                {
+                    string? fullName = a.AttributeClass?.ToDisplayString();
+                    string? name = a.AttributeClass?.Name;
+                    return fullName == "System.Text.Json.Serialization.JsonPropertyOrderAttribute"
+                        || name is "JsonPropertyOrderAttribute" or "JsonPropertyOrder";
+                });
 
             string columnName = member.Name;
             int order = -1;
@@ -202,6 +240,30 @@ public static class TargetParser
                 }
             }
 
+            // Fallback to JsonPropertyNameAttribute if column name was not explicitly specified via ParquetColumn
+            if (columnName == member.Name && jsonPropertyAttr is not null)
+            {
+                if (
+                    jsonPropertyAttr.ConstructorArguments.Length > 0
+                    && jsonPropertyAttr.ConstructorArguments[0].Value is string jsonColName
+                )
+                {
+                    columnName = jsonColName;
+                }
+            }
+
+            // Fallback to JsonPropertyOrderAttribute if order was not explicitly specified via ParquetColumn
+            if (order == -1 && jsonOrderAttr is not null)
+            {
+                if (
+                    jsonOrderAttr.ConstructorArguments.Length > 0
+                    && jsonOrderAttr.ConstructorArguments[0].Value is int jsonOrder
+                )
+                {
+                    order = jsonOrder;
+                }
+            }
+
             // Rule PARQ002: Duplicate column name check
             if (!seenColumnNames.Add(columnName))
             {
@@ -219,8 +281,14 @@ public static class TargetParser
             AttributeData? decimalAttr = member
                 .GetAttributes()
                 .FirstOrDefault(a =>
-                    a.AttributeClass?.ToDisplayString() == DecimalAttributeFullName
-                );
+                {
+                    string? fullName = a.AttributeClass?.ToDisplayString();
+                    string? name = a.AttributeClass?.Name;
+                    return fullName == DecimalAttributeFullName
+                        || fullName == "Parquet.Attributes.ParquetDecimalAttribute"
+                        || fullName == "Parquet.Serialization.Attributes.ParquetDecimalAttribute"
+                        || name is "ParquetDecimalAttribute" or "ParquetDecimal";
+                });
             int? precision = null;
             int? scale = null;
             if (decimalAttr is not null && decimalAttr.ConstructorArguments.Length >= 2)
@@ -258,8 +326,14 @@ public static class TargetParser
             AttributeData? timestampAttr = member
                 .GetAttributes()
                 .FirstOrDefault(a =>
-                    a.AttributeClass?.ToDisplayString() == TimestampAttributeFullName
-                );
+                {
+                    string? fullName = a.AttributeClass?.ToDisplayString();
+                    string? name = a.AttributeClass?.Name;
+                    return fullName == TimestampAttributeFullName
+                        || fullName == "Parquet.Attributes.ParquetTimestampAttribute"
+                        || fullName == "Parquet.Serialization.Attributes.ParquetTimestampAttribute"
+                        || name is "ParquetTimestampAttribute" or "ParquetTimestamp";
+                });
             string? timestampUnit = null;
             if (timestampAttr is not null && timestampAttr.ConstructorArguments.Length > 0)
                 timestampUnit = timestampAttr.ConstructorArguments[0].Value?.ToString();

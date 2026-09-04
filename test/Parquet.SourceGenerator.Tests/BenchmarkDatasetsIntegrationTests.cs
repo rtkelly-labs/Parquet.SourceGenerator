@@ -1,6 +1,8 @@
 using System;
 using System.IO;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
+using Parquet.Serialization;
 using Xunit;
 
 namespace Parquet.SourceGenerator.Tests;
@@ -8,139 +10,139 @@ namespace Parquet.SourceGenerator.Tests;
 [ParquetSerializable]
 public partial record TpchLineItemRecord
 {
-    [ParquetColumn("l_orderkey")]
+    [JsonPropertyName("l_orderkey")]
     public long? OrderKey { get; init; }
 
-    [ParquetColumn("l_partkey")]
+    [JsonPropertyName("l_partkey")]
     public long? PartKey { get; init; }
 
-    [ParquetColumn("l_suppkey")]
+    [JsonPropertyName("l_suppkey")]
     public long? SuppKey { get; init; }
 
-    [ParquetColumn("l_linenumber")]
+    [JsonPropertyName("l_linenumber")]
     public long? LineNumber { get; init; }
 
-    [ParquetColumn("l_quantity")]
+    [JsonPropertyName("l_quantity")]
     [ParquetDecimal(15, 2)]
     public decimal? Quantity { get; init; }
 
-    [ParquetColumn("l_extendedprice")]
+    [JsonPropertyName("l_extendedprice")]
     [ParquetDecimal(15, 2)]
     public decimal? ExtendedPrice { get; init; }
 
-    [ParquetColumn("l_discount")]
+    [JsonPropertyName("l_discount")]
     [ParquetDecimal(15, 2)]
     public decimal? Discount { get; init; }
 
-    [ParquetColumn("l_tax")]
+    [JsonPropertyName("l_tax")]
     [ParquetDecimal(15, 2)]
     public decimal? Tax { get; init; }
 
-    [ParquetColumn("l_returnflag")]
+    [JsonPropertyName("l_returnflag")]
     public string? ReturnFlag { get; init; }
 
-    [ParquetColumn("l_linestatus")]
+    [JsonPropertyName("l_linestatus")]
     public string? LineStatus { get; init; }
 
-    [ParquetColumn("l_shipdate")]
+    [JsonPropertyName("l_shipdate")]
     public DateTime? ShipDate { get; init; }
 
-    [ParquetColumn("l_commitdate")]
+    [JsonPropertyName("l_commitdate")]
     public DateTime? CommitDate { get; init; }
 
-    [ParquetColumn("l_receiptdate")]
+    [JsonPropertyName("l_receiptdate")]
     public DateTime? ReceiptDate { get; init; }
 
-    [ParquetColumn("l_shipinstruct")]
+    [JsonPropertyName("l_shipinstruct")]
     public string? ShipInstruct { get; init; }
 
-    [ParquetColumn("l_shipmode")]
+    [JsonPropertyName("l_shipmode")]
     public string? ShipMode { get; init; }
 
-    [ParquetColumn("l_comment")]
+    [JsonPropertyName("l_comment")]
     public string? Comment { get; init; }
 }
 
 [ParquetSerializable]
 public partial record AdultCensusRecord
 {
-    [ParquetColumn("age")]
+    [JsonPropertyName("age")]
     public long? Age { get; init; }
 
-    [ParquetColumn("workclass")]
+    [JsonPropertyName("workclass")]
     public string? Workclass { get; init; }
 
-    [ParquetColumn("fnlwgt")]
+    [JsonPropertyName("fnlwgt")]
     public long? Fnlwgt { get; init; }
 
-    [ParquetColumn("education")]
+    [JsonPropertyName("education")]
     public string? Education { get; init; }
 
-    [ParquetColumn("education.num")]
+    [JsonPropertyName("education.num")]
     public long? EducationNum { get; init; }
 
-    [ParquetColumn("marital.status")]
+    [JsonPropertyName("marital.status")]
     public string? MaritalStatus { get; init; }
 
-    [ParquetColumn("occupation")]
+    [JsonPropertyName("occupation")]
     public string? Occupation { get; init; }
 
-    [ParquetColumn("relationship")]
+    [JsonPropertyName("relationship")]
     public string? Relationship { get; init; }
 
-    [ParquetColumn("race")]
+    [JsonPropertyName("race")]
     public string? Race { get; init; }
 
-    [ParquetColumn("sex")]
+    [JsonPropertyName("sex")]
     public string? Sex { get; init; }
 
-    [ParquetColumn("capital.gain")]
+    [JsonPropertyName("capital.gain")]
     public long? CapitalGain { get; init; }
 
-    [ParquetColumn("capital.loss")]
+    [JsonPropertyName("capital.loss")]
     public long? CapitalLoss { get; init; }
 
-    [ParquetColumn("hours.per.week")]
+    [JsonPropertyName("hours.per.week")]
     public long? HoursPerWeek { get; init; }
 
-    [ParquetColumn("native.country")]
+    [JsonPropertyName("native.country")]
     public string? NativeCountry { get; init; }
 
-    [ParquetColumn("income")]
+    [JsonPropertyName("income")]
     public string? Income { get; init; }
 }
 
 [ParquetSerializable]
 public partial record DiamondRecord
 {
-    [ParquetColumn("carat")]
+    [JsonPropertyName("carat")]
     public double? Carat { get; init; }
 
-    [ParquetColumn("cut")]
+    [JsonPropertyName("cut")]
     public long? Cut { get; init; }
 
-    [ParquetColumn("color")]
+    [JsonPropertyName("color")]
     public long? Color { get; init; }
 
-    [ParquetColumn("clarity")]
+    [JsonPropertyName("clarity")]
     public long? Clarity { get; init; }
 
-    [ParquetColumn("depth")]
+    [JsonPropertyName("depth")]
     public double? Depth { get; init; }
 
-    [ParquetColumn("table")]
+    [JsonPropertyName("table")]
     public double? Table { get; init; }
 
-    [ParquetColumn("x")]
+    [JsonPropertyName("x")]
     public double? X { get; init; }
 
-    [ParquetColumn("y")]
+    [JsonPropertyName("y")]
     public double? Y { get; init; }
 
-    [ParquetColumn("z")]
+    [JsonPropertyName("z")]
     public double? Z { get; init; }
 
-    [ParquetColumn("price")]
+    [JsonPropertyName("price")]
     public double? Price { get; init; }
 }
 
@@ -303,6 +305,98 @@ public sealed class BenchmarkDatasetsIntegrationTests
             Assert.Equal(original[i].Workclass, roundtripped[i].Workclass);
             Assert.Equal(original[i].Education, roundtripped[i].Education);
             Assert.Equal(original[i].Income, roundtripped[i].Income);
+        }
+    }
+
+    [Fact]
+    public async Task ParquetSerializerDeserializesTpchLineitemDatasetIdenticalToSourceGenerator()
+    {
+        string filePath = Path.Combine(BenchmarkDataRoot, "tpch_lineitem_sf001.parquet");
+        await using var stream1 = System.IO.File.OpenRead(filePath);
+        var sgRecords = await TpchLineItemRecordParquetExtensions.ReadParquetAsync(stream1);
+
+        await using var stream2 = System.IO.File.OpenRead(filePath);
+        var reflectionResult = await ParquetSerializer.DeserializeAsync<TpchLineItemRecord>(stream2);
+        var refRecords = reflectionResult.Data;
+
+        Assert.Equal(sgRecords.Count, refRecords.Count);
+        for (int i = 0; i < 100; i++)
+        {
+            Assert.Equal(sgRecords[i].OrderKey, refRecords[i].OrderKey);
+            Assert.Equal(sgRecords[i].PartKey, refRecords[i].PartKey);
+            Assert.Equal(sgRecords[i].SuppKey, refRecords[i].SuppKey);
+            Assert.Equal(sgRecords[i].LineNumber, refRecords[i].LineNumber);
+            Assert.Equal(sgRecords[i].Quantity, refRecords[i].Quantity);
+            Assert.Equal(sgRecords[i].ExtendedPrice, refRecords[i].ExtendedPrice);
+            Assert.Equal(sgRecords[i].Discount, refRecords[i].Discount);
+            Assert.Equal(sgRecords[i].Tax, refRecords[i].Tax);
+            Assert.Equal(sgRecords[i].ReturnFlag, refRecords[i].ReturnFlag);
+            Assert.Equal(sgRecords[i].LineStatus, refRecords[i].LineStatus);
+            Assert.Equal(sgRecords[i].ShipDate, refRecords[i].ShipDate);
+            Assert.Equal(sgRecords[i].CommitDate, refRecords[i].CommitDate);
+            Assert.Equal(sgRecords[i].ReceiptDate, refRecords[i].ReceiptDate);
+            Assert.Equal(sgRecords[i].ShipInstruct, refRecords[i].ShipInstruct);
+            Assert.Equal(sgRecords[i].ShipMode, refRecords[i].ShipMode);
+            Assert.Equal(sgRecords[i].Comment, refRecords[i].Comment);
+        }
+    }
+
+    [Fact]
+    public async Task ParquetSerializerDeserializesAdultCensusIncomeDatasetIdenticalToSourceGenerator()
+    {
+        string filePath = Path.Combine(BenchmarkDataRoot, "adult_census_income.parquet");
+        await using var stream1 = System.IO.File.OpenRead(filePath);
+        var sgRecords = await AdultCensusRecordParquetExtensions.ReadParquetAsync(stream1);
+
+        await using var stream2 = System.IO.File.OpenRead(filePath);
+        var reflectionResult = await ParquetSerializer.DeserializeAsync<AdultCensusRecord>(stream2);
+        var refRecords = reflectionResult.Data;
+
+        Assert.Equal(sgRecords.Count, refRecords.Count);
+        for (int i = 0; i < 100; i++)
+        {
+            Assert.Equal(sgRecords[i].Age, refRecords[i].Age);
+            Assert.Equal(sgRecords[i].Workclass, refRecords[i].Workclass);
+            Assert.Equal(sgRecords[i].Fnlwgt, refRecords[i].Fnlwgt);
+            Assert.Equal(sgRecords[i].Education, refRecords[i].Education);
+            Assert.Equal(sgRecords[i].EducationNum, refRecords[i].EducationNum);
+            Assert.Equal(sgRecords[i].MaritalStatus, refRecords[i].MaritalStatus);
+            Assert.Equal(sgRecords[i].Occupation, refRecords[i].Occupation);
+            Assert.Equal(sgRecords[i].Relationship, refRecords[i].Relationship);
+            Assert.Equal(sgRecords[i].Race, refRecords[i].Race);
+            Assert.Equal(sgRecords[i].Sex, refRecords[i].Sex);
+            Assert.Equal(sgRecords[i].CapitalGain, refRecords[i].CapitalGain);
+            Assert.Equal(sgRecords[i].CapitalLoss, refRecords[i].CapitalLoss);
+            Assert.Equal(sgRecords[i].HoursPerWeek, refRecords[i].HoursPerWeek);
+            Assert.Equal(sgRecords[i].NativeCountry, refRecords[i].NativeCountry);
+            Assert.Equal(sgRecords[i].Income, refRecords[i].Income);
+        }
+    }
+
+    [Fact]
+    public async Task ParquetSerializerDeserializesDiamondsDatasetIdenticalToSourceGenerator()
+    {
+        string filePath = Path.Combine(BenchmarkDataRoot, "diamonds.parquet");
+        await using var stream1 = System.IO.File.OpenRead(filePath);
+        var sgRecords = await DiamondRecordParquetExtensions.ReadParquetAsync(stream1);
+
+        await using var stream2 = System.IO.File.OpenRead(filePath);
+        var reflectionResult = await ParquetSerializer.DeserializeAsync<DiamondRecord>(stream2);
+        var refRecords = reflectionResult.Data;
+
+        Assert.Equal(sgRecords.Count, refRecords.Count);
+        for (int i = 0; i < 100; i++)
+        {
+            Assert.Equal(sgRecords[i].Carat, refRecords[i].Carat);
+            Assert.Equal(sgRecords[i].Cut, refRecords[i].Cut);
+            Assert.Equal(sgRecords[i].Color, refRecords[i].Color);
+            Assert.Equal(sgRecords[i].Clarity, refRecords[i].Clarity);
+            Assert.Equal(sgRecords[i].Depth, refRecords[i].Depth);
+            Assert.Equal(sgRecords[i].Table, refRecords[i].Table);
+            Assert.Equal(sgRecords[i].X, refRecords[i].X);
+            Assert.Equal(sgRecords[i].Y, refRecords[i].Y);
+            Assert.Equal(sgRecords[i].Z, refRecords[i].Z);
+            Assert.Equal(sgRecords[i].Price, refRecords[i].Price);
         }
     }
 }
