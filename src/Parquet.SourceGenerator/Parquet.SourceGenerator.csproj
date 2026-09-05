@@ -30,19 +30,15 @@
     <ItemGroup>
         <PackageReference
             Include="Microsoft.CodeAnalysis.CSharp"
-            Version="4.0.1"
+            VersionOverride="4.0.1"
             PrivateAssets="all"
         />
         <PackageReference
             Include="Microsoft.CodeAnalysis.Analyzers"
-            Version="3.3.3"
+            VersionOverride="3.3.3"
             PrivateAssets="all"
         />
-        <PackageReference
-            Include="Microsoft.CodeAnalysis.PublicApiAnalyzers"
-            Version="3.3.4"
-            PrivateAssets="all"
-        />
+        <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" PrivateAssets="all" />
     </ItemGroup>
 
     <ItemGroup>

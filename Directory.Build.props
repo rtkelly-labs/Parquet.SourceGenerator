@@ -39,15 +39,11 @@
     <ItemGroup Condition="'$(IsPackable)' != 'false'">
         <None Include="$(MSBuildThisFileDirectory)PACKAGE_README.md" Pack="true" PackagePath="\" />
         <None Include="$(MSBuildThisFileDirectory)LICENSE" Pack="true" PackagePath="\" />
-        <PackageReference
-            Include="Microsoft.SourceLink.GitHub"
-            Version="10.0.400"
-            PrivateAssets="All"
-        />
+        <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="All" />
     </ItemGroup>
 
     <ItemGroup Condition="'$(IsTestProject)' != 'true'">
-        <PackageReference Include="Meziantou.Analyzer" Version="2.0.302" PrivateAssets="All">
+        <PackageReference Include="Meziantou.Analyzer" PrivateAssets="All">
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
     </ItemGroup>

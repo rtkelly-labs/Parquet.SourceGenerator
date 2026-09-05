@@ -14,6 +14,7 @@
             emitter, and ratchet it upward from the measured baseline rather than starting at a
             round number nothing has been checked against.
           -->
+          <Exclude>[BenchmarkSummaryGenerator]*,[Parquet.SourceGenerator.Tests]*,[Parquet.SourceGenerator.CLI]*,[Parquet.SourceGenerator.AotTest]*,[Parquet.SourceGenerator.SampleAot]*</Exclude>
           <ExcludeByAttribute>GeneratedCodeAttribute,CompilerGeneratedAttribute</ExcludeByAttribute>
         </Configuration>
       </DataCollector>
