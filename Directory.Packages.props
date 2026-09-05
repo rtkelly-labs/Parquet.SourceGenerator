@@ -1,0 +1,32 @@
+<Project>
+    <PropertyGroup>
+        <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+        <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+        <CentralPackageVersionOverrideEnabled>true</CentralPackageVersionOverrideEnabled>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <!-- Roslyn Compiler & Analyzer Dependencies -->
+        <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" />
+        <PackageVersion Include="Microsoft.CodeAnalysis.Analyzers" Version="3.3.4" />
+        <PackageVersion Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" Version="3.3.4" />
+        <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.400" />
+        <PackageVersion Include="Meziantou.Analyzer" Version="2.0.302" />
+
+        <!-- Runtime Dependencies -->
+        <PackageVersion Include="Parquet.Net" Version="6.0.3" />
+        <PackageVersion Include="System.Memory" Version="4.6.3" />
+
+        <!-- Test Framework & Coverage Dependencies -->
+        <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
+        <PackageVersion Include="xunit" Version="2.9.3" />
+        <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.0" />
+        <PackageVersion Include="coverlet.collector" Version="6.0.4" />
+        <PackageVersion Include="FsCheck.Xunit" Version="3.4.0" />
+
+        <!-- Benchmarks & Tooling Dependencies -->
+        <PackageVersion Include="BenchmarkDotNet" Version="0.14.0" />
+        <PackageVersion Include="CommandLineParser" Version="2.9.1" />
+        <PackageVersion Include="System.Text.Json" Version="8.0.5" />
+    </ItemGroup>
+</Project>

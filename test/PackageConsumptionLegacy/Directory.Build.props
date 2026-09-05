@@ -1,0 +1,8 @@
+<Project>
+    <!--
+    Intentionally empty, and intentionally NOT importing the repository's root
+    Directory.Build.props.
+
+    This project must compile the way an external consumer's legacy project would.
+  -->
+</Project>

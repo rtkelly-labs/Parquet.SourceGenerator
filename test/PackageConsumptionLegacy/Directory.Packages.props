@@ -1,0 +1,10 @@
+<Project>
+    <!--
+    PackageConsumptionLegacy simulates external legacy package consumers restoring against local nupkg feeds.
+    Disable Central Package Management so dynamic versioning (-p:GeneratorPackageVersion) behaves
+    identically to an end-user project.
+  -->
+    <PropertyGroup>
+        <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    </PropertyGroup>
+</Project>
