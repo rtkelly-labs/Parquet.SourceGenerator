@@ -133,7 +133,7 @@ that the underlying writer accepts.
 | PyArrow format setting 1.0 | Fixture coverage exists | Pin exact PyArrow version and validate both directions |
 | PyArrow format setting 2.6 | Fixture coverage exists | Pin exact PyArrow version and validate both directions |
 | PyArrow reading generated output | Verified in ExternalInterop CI | Pinned PyArrow canonical fixture and generated C# output |
-| DuckDB reading and writing supported flat schemas | Unverified | Required interoperability issue |
+| DuckDB reading and writing supported flat schemas | Verified in ExternalInterop CI | Pinned DuckDB CLI and generated canonical fixture |
 | Apache Parquet tooling | Unverified | Required conformance issue |
 | Older Parquet.Net output read by current generated code | Partially verified | Required version matrix |
 | Current generated output read by legacy consumers | Partially verified | Required version matrix |
