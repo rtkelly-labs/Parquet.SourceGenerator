@@ -180,15 +180,32 @@ jobs:
         if: steps.pr_info.outputs.commit_results == 'true'
         env:
           BRANCH: ${{ steps.pr_info.outputs.branch }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          RUN_ID: ${{ github.run_id }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add README.md PACKAGE_README.md
-          if ! git diff --cached --quiet; then
-            git commit -m "docs(perf): update benchmark headline performance table in README"
-            git push origin "$BRANCH"
-          else
+          if git diff --cached --quiet; then
             echo "No changes detected in README benchmark tables."
+            exit 0
+          fi
+          git commit -m "docs(perf): update benchmark headline performance table in README"
+          if [ "$BRANCH" = "$DEFAULT_BRANCH" ]; then
+            # Direct pushes to the default branch are blocked by branch protection
+            # (AGENTS.md rule 4), which silently failed every scheduled headline
+            # refresh until #188. Land through a PR instead, as BENCHMARKS.md always
+            # claimed this workflow does.
+            update_branch="perf/benchmark-headline-$RUN_ID"
+            git checkout -b "$update_branch"
+            git push origin "$update_branch"
+            gh pr create --repo "$REPO" --base "$DEFAULT_BRANCH" --head "$update_branch" \
+              --title "docs(perf): update benchmark headline performance table" \
+              --body "Automated headline refresh from [run $RUN_ID](https://github.com/$REPO/actions/runs/$RUN_ID). Per-class detailed reports are in the run's \`benchmark-results\` artifact."
+          else
+            git push origin "$BRANCH"
           fi
 
       - name: Comment Benchmark Summary on PR
