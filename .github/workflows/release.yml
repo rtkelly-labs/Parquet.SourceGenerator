@@ -1,14 +1,16 @@
 name: Release & Publish NuGet
 
+# CHANGELOG.md is the release authority: scripts/ParseChangelog.cs reads the version
+# and release notes from the first cut version section (`## [x.y.z] - YYYY-MM-DD`).
+# To release, merge a PR that moves [Unreleased] under such a heading, then dispatch
+# this workflow. There is deliberately no version input — a version that is not
+# described in the changelog cannot be published.
+
 on:
   workflow_dispatch:
     inputs:
-      version:
-        description: 'Version to release (e.g. 0.0.1 or 1.0.0-rc.1)'
-        required: true
-        type: string
       dry_run:
-        description: 'Pack and verify only — do not publish to NuGet or push tag'
+        description: 'Build, pack and verify only — no NuGet push, no GitHub release'
         required: false
         type: boolean
         default: false
@@ -17,40 +19,62 @@ permissions:
   contents: write
   id-token: write
 
-jobs:
-  publish:
-    name: Publish Packages to NuGet.org
-    runs-on: ubuntu-latest
+concurrency:
+  group: release
+  cancel-in-progress: false
 
+jobs:
+  prepare:
+    name: Resolve release from changelog
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.changelog.outputs.version }}
+      tag: ${{ steps.changelog.outputs.tag }}
+      is_prerelease: ${{ steps.changelog.outputs.is_prerelease }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Parse changelog (release mode)
+        id: changelog
+        run: |
+          dotnet run scripts/ParseChangelog.cs --release \
+            --notes-out "$RUNNER_TEMP/release-notes.md" \
+            --github-output "$GITHUB_OUTPUT"
+
+      - name: Refuse to re-release an existing tag
+        env:
+          TAG: ${{ steps.changelog.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ -n "$(git ls-remote --tags origin "refs/tags/$TAG")" ]; then
+            echo "::error::Tag $TAG already exists on origin; '$TAG' is already released. Cut a new version section instead."
+            exit 1
+          fi
+          echo "Tag $TAG is free."
+
+      - name: Upload release notes
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: release-info
+          path: ${{ runner.temp }}/release-notes.md
+          if-no-files-found: error
+
+  build:
+    name: Build & verify packages
+    needs: prepare
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
           lfs: true
-
-      - name: Parse and validate SemVer input
-        id: version
-        env:
-          VERSION_INPUT: ${{ inputs.version }}
-        run: |
-          python3 -c "
-          import os, sys, re
-          raw = os.environ.get('VERSION_INPUT', '')
-          ver = raw[1:] if raw.startswith('v') else raw
-          pattern = r'^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$'
-          m = re.match(pattern, ver)
-          if not m:
-              print(f'FAIL: \"{raw}\" is not a valid SemVer 2.0.0 version string', file=sys.stderr)
-              sys.exit(1)
-          is_prerelease = 'true' if m.group(4) is not None else 'false'
-          output_file = sys.argv[1]
-          with open(output_file, 'a') as f:
-              f.write(f'version={ver}\n')
-              f.write(f'tag=v{ver}\n')
-              f.write(f'is_prerelease={is_prerelease}\n')
-          print(f'SemVer OK: version={ver}, is_prerelease={is_prerelease}')
-          " "$GITHUB_OUTPUT"
 
       - name: Setup Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
@@ -82,7 +106,7 @@ jobs:
       - name: Build Solution (Release)
         run: |
           dotnet build Parquet.SourceGenertor.sln --configuration Release --no-restore \
-            -warnaserror -p:Version=${{ steps.version.outputs.version }}
+            -warnaserror -p:Version=${{ needs.prepare.outputs.version }}
 
       - name: Run Tests
         run: dotnet test Parquet.SourceGenertor.sln --configuration Release --no-build
@@ -114,12 +138,12 @@ jobs:
       - name: Pack All Packages
         run: |
           dotnet pack Parquet.SourceGenertor.sln --configuration Release --no-build \
-            --output ./artifacts -p:Version=${{ steps.version.outputs.version }}
+            --output ./artifacts -p:Version=${{ needs.prepare.outputs.version }}
 
       - name: Verify Package Layout
         run: |
           set -euo pipefail
-          version="${{ steps.version.outputs.version }}"
+          version="${{ needs.prepare.outputs.version }}"
           cd artifacts
           gen="Parquet.SourceGenerator.${version}.nupkg"
           genlegacy="Parquet.SourceGenerator.Legacy.${version}.nupkg"
@@ -150,7 +174,7 @@ jobs:
       - name: Verify Package Consumption (v6 & Legacy packages on .NET 8 & .NET 9)
         run: |
           set -euo pipefail
-          version="${{ steps.version.outputs.version }}"
+          version="${{ needs.prepare.outputs.version }}"
           echo "Consuming Parquet.SourceGenerator $version and Legacy from local feed"
           dotnet run --project test/PackageConsumption/PackageConsumption.csproj \
             --framework net8.0 \
@@ -179,22 +203,49 @@ jobs:
       - name: Verify Legacy Package Consumption Compiles on .NET Framework 4.7.2
         run: |
           set -euo pipefail
-          version="${{ steps.version.outputs.version }}"
+          version="${{ needs.prepare.outputs.version }}"
           dotnet build test/PackageConsumptionLegacy/PackageConsumptionLegacy.csproj \
             --framework net472 \
             --configuration Release \
             -p:GeneratorPackageVersion="$version" \
             -p:RestorePackagesPath="$RUNNER_TEMP/consumption-packages-legacy-net472"
 
+      - name: Upload Packages
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: nuget-packages
+          path: ./artifacts/*.nupkg
+          if-no-files-found: error
+
+  publish:
+    name: Publish packages
+    needs: [prepare, build]
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    # The release environment gives deployment history and a scoped-secrets namespace. It is
+    # not an approval gate: required reviewers are org-only, and GitHub forbids self-approval —
+    # solo, nothing can pause this job. The brake is the manual dispatch plus the build job.
+    environment: release
+    steps:
+      - name: Download Packages
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: nuget-packages
+          path: ./artifacts
+
+      - name: Download Release Notes
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-info
+          path: ./release-info
+
       - name: Login to NuGet via OIDC (Trusted Publishing)
-        if: ${{ !inputs.dry_run }}
         uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1
         id: login
         with:
           user: ${{ secrets.NUGET_USER || 'rtk_13' }}
 
       - name: Push to NuGet
-        if: ${{ !inputs.dry_run }}
         env:
           NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
         run: |
@@ -204,12 +255,13 @@ jobs:
             --skip-duplicate \
             --no-symbols
 
-      - name: Tag Release and Push Tag to GitHub (Full Releases Only)
-        if: ${{ !inputs.dry_run && steps.version.outputs.is_prerelease == 'false' }}
-        run: |
-          set -euo pipefail
-          tag="${{ steps.version.outputs.tag }}"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag "$tag"
-          git push origin "$tag"
+      # Prereleases land on NuGet.org only; the public GitHub release is reserved for
+      # full versions, so the releases page stays a list of things people should adopt.
+      - name: Create GitHub Release
+        if: ${{ needs.prepare.outputs.is_prerelease == 'false' }}
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          name: ${{ needs.prepare.outputs.version }}
+          body_path: ./release-info/release-notes.md
+          files: ./artifacts/*.nupkg

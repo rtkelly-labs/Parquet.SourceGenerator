@@ -69,6 +69,9 @@ jobs:
       - name: Verify Benchmark Data LFS Hydration & Provenance Integrity
         run: dotnet run scripts/VerifyProvenance.cs
 
+      - name: Verify Changelog Structure
+        run: dotnet run scripts/ParseChangelog.cs
+
       - name: Setup Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
@@ -89,16 +92,18 @@ jobs:
             exit 1
           fi
 
-      # `whitespace` only, deliberately. Plain `dotnet format` also runs its style and analyzer
-      # phases, which build a Roslyn workspace via MSBuildWorkspace — and MSBuildWorkspace does not
-      # execute source generators. It logs "Found project reference without a matching metadata
-      # reference" for the generator project and then reports CS1503 against every call into the
-      # generated *ParquetExtensions API, because in its view that API does not exist. Those errors
-      # are artifacts of the tool, not defects in the code.
+      # CSharpier is the ONLY C# layout formatter in this repo. `dotnet format whitespace` was
+      # retired from CI: its Roslyn formatter disagrees with CSharpier on layout (case-body and
+      # pattern-arm indentation, per dotnet/format#2262) and in workspace mode it policed nothing
+      # beyond .cs anyway. IDE0055 is disabled in .editorconfig so no Roslyn-based formatter —
+      # build, IDE, or CLI — fights CSharpier over .cs layout. Line endings for non-C# files are
+      # guaranteed by .gitattributes (eol=lf) plus the [*] hygiene keys in .editorconfig.
       #
-      # Style and analyzer rules are enforced instead by the build below, via
-      # EnforceCodeStyleInBuild plus -warnaserror, which uses the real compilation where generators
-      # do run.
+      # Do not reintroduce plain `dotnet format` either: its style/analyzer phases build a Roslyn
+      # workspace via MSBuildWorkspace, which does not execute source generators — it reports
+      # bogus CS1503 against every call into the generated *ParquetExtensions API. Non-layout
+      # style rules are enforced by the build below, via EnforceCodeStyleInBuild plus
+      # -warnaserror, which uses the real compilation where generators do run.
       - name: Restore local tools
         run: |
           # Workaround for dotnet/sdk #53783: cold tool-resolver cache can misattribute package commands on initial restore
@@ -106,9 +111,6 @@ jobs:
 
       - name: Verify C# Code Formatting (CSharpier)
         run: dotnet csharpier check .
-
-      - name: Verify C# Code Formatting (Whitespace)
-        run: dotnet format whitespace --verify-no-changes --verbosity diagnostic
 
       - name: Build solution (Release)
         run: dotnet build Parquet.SourceGenertor.sln --configuration Release --no-restore -warnaserror

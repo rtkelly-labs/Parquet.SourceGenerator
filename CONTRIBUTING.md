@@ -85,7 +85,9 @@ If you publish numbers anywhere, include the machine and runtime they came from.
 ## 📥 Submitting Pull Requests
 
 1. **Create a Feature Branch**: `git checkout -b feat/your-feature-name`
-2. **Code Style**: Ensure code adheres to `.editorconfig` rules (`dotnet format --verify-no-changes`).
+2. **Code Style**: CSharpier is the only C# formatter (`dotnet csharpier format .`, checked in CI
+   via `dotnet csharpier check .`). Do not run `dotnet format` on C# — its Roslyn formatter
+   conflicts with CSharpier and `IDE0055` is disabled in `.editorconfig` by design.
 3. **Tests**: The suite must pass cleanly (`dotnet test`).
 4. **PR Title**: Must follow Conventional Commits — CI validates it (`feat:`, `fix:`, `perf:`,
    `docs:`, `style:`, `refactor:`, `test:`, `chore:`, `ci:`, `build:`).
@@ -95,22 +97,35 @@ If you publish numbers anywhere, include the machine and runtime they came from.
 
 ## 🚀 Releasing
 
-Releases are initiated via GitHub Actions workflow dispatch (`release.yml`). The workflow parses and validates any valid SemVer 2.0.0 version string, builds, tests, packs, and publishes the packages to NuGet.org via Trusted Publishing.
+`CHANGELOG.md` is the release authority. There is deliberately no version input on the release
+workflow: a version that is not cut in the changelog cannot be published.
 
 To release:
-1. Go to **Actions** → **Release & Publish NuGet** → **Run workflow**.
-2. Input the version to release (e.g. `0.0.1` for a full release or `0.0.1-rc.1` for a pre-release).
 
-Alternatively, trigger via GitHub CLI:
+1. **Cut the release in a PR**: move everything under `[Unreleased]` into a new heading directly
+   below it — `## [x.y.z] - YYYY-MM-DD` (valid SemVer 2.0.0, ISO date required) — and leave a
+   fresh, empty `## [Unreleased]` on top. CI validates this structure via
+   `dotnet run scripts/ParseChangelog.cs`.
+2. **Merge** the PR to `main`, then trigger **Actions → Release & Publish NuGet → Run workflow**.
+   Optionally tick **dry run** to build, pack and verify without publishing anything.
+3. The workflow then, in order:
+   - parses the first cut version section — the source of both the version and the release
+     notes — and refuses to continue if its `v<version>` tag already exists;
+   - builds with that version and runs the full verification battery (tests, samples, native
+     AOT, package layout, package consumption on .NET 8/9/472);
+   - publishes to NuGet.org via Trusted Publishing (the `publish` job deploys to the `release`
+     environment; required reviewers are an org-only feature and GitHub forbids approving your
+     own deployment anyway, so on a solo project the real brake is the manual dispatch plus the
+     full verification battery in the `build` job — nothing publishes that was not built and
+     consumed from these packages);
+   - for **full releases**, creates the GitHub release `v<version>` with the changelog section
+     as its body and the `.nupkg` files attached; **prereleases** (e.g. `0.1.0-rc.1`) go to
+     NuGet.org only, with no tag and no GitHub release.
 
 ```bash
-gh workflow run release.yml -f version=0.0.1
+gh workflow run release.yml            # real release, version read from CHANGELOG.md
+gh workflow run release.yml -f dry_run=true   # rehearsal
 ```
-
-Two key behavior rules:
-
-- **SemVer 2.0.0 validation:** The workflow verifies inputs against the SemVer specification.
-- **Git tag creation:** Full releases (e.g. `0.0.1`) are automatically tagged and pushed to GitHub (`v0.0.1`). Pre-release builds (e.g. `0.0.1-rc.1`) deploy to NuGet.org but do **not** create or push git tags.
 
 ---
 

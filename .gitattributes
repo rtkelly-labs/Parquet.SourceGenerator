@@ -1,5 +1,7 @@
-# Auto-detect text files and perform LF normalization
-* text=auto
+# Auto-detect text files and normalize to LF in the repository AND on checkout.
+# This is the repo-wide line-ending guarantee now that `dotnet format whitespace`
+# no longer patrols it; .editorconfig mirrors end_of_line=lf for editors/CSharpier.
+* text=auto eol=lf
 
 # Git LFS tracking for benchmark datasets
 benchmarks/data/*.parquet filter=lfs diff=lfs merge=lfs -text

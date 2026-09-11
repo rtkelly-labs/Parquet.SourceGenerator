@@ -27,12 +27,19 @@ csharp_style_prefer_switch_expression = true:suggestion
 csharp_style_var_for_built_in_types = false:suggestion
 csharp_style_var_when_type_is_apparent = true:suggestion
 
-# Formatting
-dotnet_sort_system_directives_first = true:warning
-csharp_new_line_before_open_brace = all
-csharp_new_line_before_else = true
-csharp_new_line_before_catch = true
-csharp_new_line_before_finally = true
+# Formatting is owned by CSharpier (the only layout formatter; see ci.yml and CONTRIBUTING.md).
+# CSharpier reads exactly these keys from here: indent_style, indent_size, end_of_line (all set
+# in the [*] section above) and max_line_length below. The other entries in this block document
+# CSharpier's non-configurable behaviors so this file stays the single source of style truth.
+max_line_length = 100
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = false
+
+# IDE0055 is the Roslyn formatter's master switch. It drives `dotnet format whitespace`,
+# EnforceCodeStyleInBuild, and editor "Format Document" — all of which disagree with CSharpier
+# on layout (e.g. indentation of case bodies and pattern-matching arms). Killed here so no
+# Roslyn-based formatter ever reindents CSharpier output.
+dotnet_diagnostic.IDE0055.severity = none
 
 # Naming Conventions
 dotnet_naming_rule.interface_should_be_prefixed_with_i.severity = warning
