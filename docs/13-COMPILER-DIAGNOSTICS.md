@@ -60,6 +60,9 @@ This document details all diagnostic codes, their severity, rationale, and remed
   [ParquetColumn("alt_id")] public string AltId { get; init; }
   ```
 
+The deferred disabled-feature diagnostic is scoped with feature profiles in
+[document 37](37-DISABLED-FEATURE-DIAGNOSTIC-SCOPE-226.md).
+
 ---
 
 ### PARQ003: No Public Serializable Properties Found
