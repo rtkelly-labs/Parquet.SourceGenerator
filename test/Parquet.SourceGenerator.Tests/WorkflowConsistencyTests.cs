@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Parquet.SourceGenerator.Tools;
 using Shouldly;
 using Xunit;
 using IOFile = System.IO.File;
@@ -18,6 +20,7 @@ public sealed class WorkflowConsistencyTests
     private const string PythonGenerationStep =
         "- name: Generate Python Test Datasets (PyArrow v1 & v2)";
     private const string CSharpGenerationStep = "- name: Generate C# Test Datasets (Parquet.Net)";
+    private const string BaselineRelativePath = "benchmarks/baseline.json";
 
     [Fact]
     public void CiAndReleaseDelegateTheTestDataSequenceToOneSharedAction()
@@ -95,6 +98,94 @@ public sealed class WorkflowConsistencyTests
         installIndex.ShouldBeGreaterThanOrEqualTo(0);
         hostCheckIndex.ShouldBeGreaterThan(installIndex);
         runIndex.ShouldBeGreaterThan(hostCheckIndex);
+    }
+
+    /// <summary>
+    /// The regression gate has to be invoked to be a gate.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <c>RegressionCheck</c> only runs when the summary generator is passed <c>--baseline</c>.
+    /// Until #404 no workflow passed it, so the comparison logic, the allocation tolerance and the
+    /// unit tests around them gated nothing: any regression merged while the benchmark job
+    /// reported success. Unit tests on the comparison cannot catch that — only the wiring can.
+    /// </para>
+    /// <para>
+    /// The missing-baseline assertions guard the failure in #412 from the other direction: a check
+    /// run that finds no reference must stop, not record the run it was supposed to judge as the
+    /// new truth.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void BenchmarksWorkflowRunsTheGeneratorAsARegressionGate()
+    {
+        string root = FindRepositoryRoot();
+        string workflow = Read(root, ".github", "workflows", "benchmarks.yml");
+
+        workflow.ShouldContain($"BENCHMARK_BASELINE: {BaselineRelativePath}");
+        workflow.ShouldContain("- name: Benchmark Regression Gate");
+        Count(workflow, "--baseline \"$BENCHMARK_BASELINE\" --report")
+            .ShouldBe(
+                1,
+                "The gate must invoke the generator with --baseline and capture a report."
+            );
+
+        // A baseline that is absent, or present but empty, must stop the job rather than being
+        // bootstrapped from the very run under test.
+        workflow.ShouldContain("if [ ! -f \"$BENCHMARK_BASELINE\" ]; then");
+        workflow.ShouldContain("(.measurements // []) | length");
+        workflow.ShouldContain("contains no measurements");
+
+        // And a check run must not be able to rewrite the reference it is checking against.
+        workflow.ShouldContain("The regression check rewrote its own baseline");
+
+        // Recording a new baseline stays an explicit, separate dispatch.
+        Count(workflow, "--update-baseline")
+            .ShouldBe(1, "Only the explicit update_baseline dispatch may rewrite the baseline.");
+        workflow.ShouldContain("if: steps.pr_info.outputs.update_baseline == 'true'");
+        workflow.ShouldContain("if: steps.pr_info.outputs.update_baseline != 'true'");
+
+        int refreshIndex = workflow.IndexOf(
+            "- name: Record This Run As The New Regression Baseline",
+            StringComparison.Ordinal
+        );
+        int gateIndex = workflow.IndexOf(
+            "- name: Benchmark Regression Gate",
+            StringComparison.Ordinal
+        );
+        refreshIndex.ShouldBeGreaterThanOrEqualTo(0);
+        gateIndex.ShouldBeGreaterThan(refreshIndex);
+    }
+
+    /// <summary>
+    /// A committed baseline must carry measurements, because an empty one reads as "first run"
+    /// and lets the gate pass having compared nothing.
+    /// </summary>
+    [Fact]
+    public void CommittedBaselineIfPresentCarriesMeasurements()
+    {
+        string root = FindRepositoryRoot();
+        string path = Path.Combine(
+            root,
+            BaselineRelativePath.Replace('/', Path.DirectorySeparatorChar)
+        );
+
+        if (!IOFile.Exists(path))
+        {
+            // Not yet recorded: the workflow guard fails the job in that state, which is the
+            // behaviour under test in BenchmarksWorkflowRunsTheGeneratorAsARegressionGate.
+            return;
+        }
+
+        IReadOnlyList<BenchmarkMeasurement> baseline = RegressionCheck.ParseBaseline(
+            IOFile.ReadAllText(path)
+        );
+
+        baseline.Count.ShouldBeGreaterThan(
+            0,
+            $"'{BaselineRelativePath}' exists but records no measurements; the gate would pass vacuously."
+        );
+        baseline.ShouldAllBe(m => m.AllocatedBytes >= 0);
     }
 
     private static void AssertWorkflowDelegatesOnce(string workflow)

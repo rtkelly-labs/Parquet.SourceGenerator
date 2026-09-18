@@ -32,6 +32,11 @@ on:
         description: 'Branch to benchmark and commit updates to (defaults to current)'
         required: false
         default: ''
+      update_baseline:
+        description: 'Record this run as the new regression baseline instead of checking against it'
+        required: false
+        default: false
+        type: boolean
   issue_comment:
     types: [created]
 
@@ -53,6 +58,10 @@ jobs:
        startsWith(github.event.comment.body, '/benchmark'))
     runs-on: ubuntu-latest
 
+    env:
+      # The committed regression reference. The gate below refuses to pass without it.
+      BENCHMARK_BASELINE: benchmarks/baseline.json
+
     steps:
       - name: Resolve Target PR Branch and Execution Options
         id: pr_info
@@ -67,6 +76,7 @@ jobs:
           JOB_PRESET_INPUT: ${{ github.event.inputs.job_preset }}
           SCALE_INPUT: ${{ github.event.inputs.scale }}
           FILTER_INPUT: ${{ github.event.inputs.filter }}
+          UPDATE_BASELINE_INPUT: ${{ github.event.inputs.update_baseline }}
         run: |
           if [ "$EVENT_NAME" = "schedule" ]; then
             echo "branch=main" >> "$GITHUB_OUTPUT"
@@ -75,6 +85,9 @@ jobs:
             echo "job_flag=--job default" >> "$GITHUB_OUTPUT"
             echo "params_flag=" >> "$GITHUB_OUTPUT"
             echo "filter=*" >> "$GITHUB_OUTPUT"
+            # Refreshing the reference is never a side effect of a scheduled run: a regression
+            # would be recorded as the new truth and become invisible from then on (#412).
+            echo "update_baseline=false" >> "$GITHUB_OUTPUT"
           elif [ "$EVENT_NAME" = "issue_comment" ]; then
             # Extract PR branch name via GitHub CLI
             branch=$(gh pr view "$ISSUE_NUMBER" --repo "$REPO" --json headRefName -q .headRefName)
@@ -82,6 +95,8 @@ jobs:
             echo "is_pr=true" >> "$GITHUB_OUTPUT"
             echo "pr_number=$ISSUE_NUMBER" >> "$GITHUB_OUTPUT"
             echo "commit_results=false" >> "$GITHUB_OUTPUT"
+            # A PR comment can run the gate but never rewrite what it is gated against.
+            echo "update_baseline=false" >> "$GITHUB_OUTPUT"
 
             # Job preset choice: default to --job short unless --deep or --default is specified
             if echo "$COMMENT_BODY" | grep -q -- "--deep" || echo "$COMMENT_BODY" | grep -q -- "--default"; then
@@ -142,6 +157,12 @@ jobs:
             else
               echo "filter=*" >> "$GITHUB_OUTPUT"
             fi
+
+            if [ "$UPDATE_BASELINE_INPUT" = "true" ]; then
+              echo "update_baseline=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "update_baseline=false" >> "$GITHUB_OUTPUT"
+            fi
           fi
 
       - name: Checkout repository
@@ -176,6 +197,13 @@ jobs:
           dotnet run -c Release --project tools/BenchmarkSummaryGenerator/BenchmarkSummaryGenerator.csproj -- BenchmarkDotNet.Artifacts/results benchmark-summary.md --update-readme
           cat benchmark-summary.md >> $GITHUB_STEP_SUMMARY
 
+      - name: Record This Run As The New Regression Baseline
+        if: steps.pr_info.outputs.update_baseline == 'true'
+        run: |
+          dotnet run -c Release --project tools/BenchmarkSummaryGenerator/BenchmarkSummaryGenerator.csproj \
+            -- BenchmarkDotNet.Artifacts/results --baseline "$BENCHMARK_BASELINE" --update-baseline
+          echo "Baseline refreshed at $BENCHMARK_BASELINE - review the diff before merging." >> $GITHUB_STEP_SUMMARY
+
       - name: Commit & Push Benchmark Updates to Branch
         if: steps.pr_info.outputs.commit_results == 'true'
         env:
@@ -188,8 +216,11 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add README.md PACKAGE_README.md
+          if [ -f "$BENCHMARK_BASELINE" ]; then
+            git add "$BENCHMARK_BASELINE"
+          fi
           if git diff --cached --quiet; then
-            echo "No changes detected in README benchmark tables."
+            echo "No changes detected in README benchmark tables or baseline."
             exit 0
           fi
           git commit -m "docs(perf): update benchmark headline performance table in README"
@@ -218,6 +249,7 @@ jobs:
           gh pr comment "$PR_NUMBER" --repo "$REPO" --body-file benchmark-summary.md
 
       - name: Upload Benchmark Results Artifacts
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: benchmark-results
@@ -226,3 +258,43 @@ jobs:
             BenchmarkDotNet.Artifacts/results/*.html
             BenchmarkDotNet.Artifacts/results/*.md
             BenchmarkDotNet.Artifacts/results/*.json
+
+      # The point of the whole regression-check machinery: without this step
+      # RegressionCheck.cs, HasFailures and the allocation tolerance gate nothing (#404).
+      - name: Benchmark Regression Gate
+        if: steps.pr_info.outputs.update_baseline != 'true'
+        run: |
+          # A missing or empty baseline must fail rather than bootstrap itself green: the tool
+          # cannot tell "first ever run" from "somebody deleted the reference" (#412), and a run
+          # that records its own regressed numbers as the new truth hides them forever after.
+          if [ ! -f "$BENCHMARK_BASELINE" ]; then
+            echo "::error::No benchmark baseline at '$BENCHMARK_BASELINE'. Re-run this workflow via workflow_dispatch with update_baseline=true to record one, and commit the result."
+            exit 1
+          fi
+
+          measurements=$(jq '(.measurements // []) | length' "$BENCHMARK_BASELINE")
+          if [ -z "$measurements" ] || [ "$measurements" = "null" ] || [ "$measurements" -eq 0 ]; then
+            echo "::error::Baseline '$BENCHMARK_BASELINE' contains no measurements. Re-run with update_baseline=true to record one."
+            exit 1
+          fi
+          echo "Checking against $measurements baseline measurement(s)."
+
+          before=$(sha256sum "$BENCHMARK_BASELINE" | cut -d' ' -f1)
+
+          set +e
+          dotnet run -c Release --project tools/BenchmarkSummaryGenerator/BenchmarkSummaryGenerator.csproj \
+            -- BenchmarkDotNet.Artifacts/results --baseline "$BENCHMARK_BASELINE" --report benchmark-regression.md
+          status=$?
+          set -e
+
+          if [ -f benchmark-regression.md ]; then
+            cat benchmark-regression.md >> $GITHUB_STEP_SUMMARY
+          fi
+
+          after=$(sha256sum "$BENCHMARK_BASELINE" | cut -d' ' -f1)
+          if [ "$before" != "$after" ]; then
+            echo "::error::The regression check rewrote its own baseline. A check run must never modify '$BENCHMARK_BASELINE'."
+            exit 1
+          fi
+
+          exit $status

@@ -114,6 +114,32 @@ The GitHub Actions performance workflow (`.github/workflows/benchmarks.yml`) aut
 1. Runs BenchmarkDotNet across `ScalingSerializationBenchmark`, `ScalingDeserializationBenchmark`, and `GuidInterchangeBenchmark`.
 2. Executes the native .NET tool `tools/BenchmarkSummaryGenerator` to format a clean 4-row executive summary table.
 3. Automatically opens a Pull Request updating `README.md` and `PACKAGE_README.md` whenever performance baseline numbers change.
+4. Runs the same tool a second time as a **regression gate**, comparing the run against the committed baseline at `benchmarks/baseline.json` and failing the job on an allocation regression.
+
+### 📏 The regression baseline
+
+Allocated bytes is the gate; wall-clock is reported but does not fail the job. The reasoning is in
+the remarks on `RegressionCheck` — allocation counts on a fixed input are near-deterministic, CI
+wall-clock is not.
+
+```bash
+# What the gate runs (exits 1 on an allocation regression):
+dotnet run -c Release --project tools/BenchmarkSummaryGenerator/BenchmarkSummaryGenerator.csproj \
+  -- BenchmarkDotNet.Artifacts/results --baseline benchmarks/baseline.json --report benchmark-regression.md
+```
+
+The baseline is **only** recorded by dispatching the workflow with the `update_baseline` input set
+to true, which runs the tool with `--update-baseline` and commits the result. It is deliberately not
+a side effect of a check run: a gate that rewrites its own reference cannot tell a first run from a
+deleted one, and would silently enshrine the very regression it was meant to catch.
+
+For the same reason the gate refuses to run at all when `benchmarks/baseline.json` is missing or has
+no measurements — it fails the job and tells you to dispatch `update_baseline` rather than
+bootstrapping itself green.
+
+Optional flags: `--alloc-tolerance <fraction>` (default `0.05`), `--time-tolerance <fraction>`
+(default `0.50`) and `--fail-on-time`, which promotes wall-clock regressions to failures and is only
+meaningful on a quiet machine.
 
 ---
 
