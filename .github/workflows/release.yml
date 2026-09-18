@@ -15,9 +15,11 @@ on:
         type: boolean
         default: false
 
+# Least privilege by default: only the `publish` job — the one that exchanges the OIDC token at
+# nuget.org and creates the GitHub release — gets anything beyond read. The `build` job executes
+# repo code (MSBuild targets, tests, scripts), so it must never hold `id-token: write`.
 permissions:
-  contents: write
-  id-token: write
+  contents: read
 
 concurrency:
   group: release
@@ -27,11 +29,26 @@ jobs:
   prepare:
     name: Resolve release from changelog
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       version: ${{ steps.changelog.outputs.version }}
       tag: ${{ steps.changelog.outputs.tag }}
       is_prerelease: ${{ steps.changelog.outputs.is_prerelease }}
     steps:
+      # CHANGELOG.md is the release authority and it is cut by merging a PR (see the header
+      # comment), so the only ref a real release can legitimately describe is main. A dry run is
+      # deliberately still allowed from any ref — building and verifying a branch is the useful case.
+      - name: Refuse to release from a non-main ref
+        if: ${{ !inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::A real release may only be dispatched from main; got '$GITHUB_REF'. Merge the changelog cut to main first, or re-run this dispatch with dry_run enabled."
+            exit 1
+          fi
+          echo "Dispatched from main."
+
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -69,6 +86,9 @@ jobs:
     name: Build & verify packages
     needs: prepare
     runs-on: ubuntu-latest
+    # This job runs repo-controlled code. It gets read access and nothing else.
+    permissions:
+      contents: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -242,8 +262,13 @@ jobs:
   publish:
     name: Publish packages
     needs: [prepare, build]
-    if: ${{ !inputs.dry_run }}
+    # The ref condition repeats the hard failure in `prepare` as a second, structural brake: the
+    # push to nuget.org and the GitHub release can only ever run against main.
+    if: ${{ !inputs.dry_run && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # softprops/action-gh-release creates the tag and the GitHub release
+      id-token: write # NuGet/login exchanges the OIDC token (trusted publishing)
     # The release environment gives deployment history and a scoped-secrets namespace. It is
     # not an approval gate: required reviewers are org-only, and GitHub forbids self-approval —
     # solo, nothing can pause this job. The brake is the manual dispatch plus the build job.
