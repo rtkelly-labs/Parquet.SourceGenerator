@@ -20,6 +20,7 @@ string? inputPath = null;
 string? outputMarkdownPath = null;
 double minLineRate = 85.0;
 double minBranchRate = 70.0;
+int minPackages = 1;
 
 for (int i = 0; i < args.Length; i++)
 {
@@ -59,6 +60,18 @@ for (int i = 0; i < args.Length; i++)
             )
                 minBranchRate = mb;
             break;
+        case "--min-packages":
+            if (
+                i + 1 < args.Length
+                && int.TryParse(
+                    args[++i],
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out int mp
+                )
+            )
+                minPackages = mp;
+            break;
         case "--help":
         case "-h":
             Console.WriteLine("Usage: dotnet run scripts/CoverageSummary.cs -- [options]");
@@ -74,6 +87,9 @@ for (int i = 0; i < args.Length; i++)
             );
             Console.WriteLine(
                 "  --min-branch <percent>         Minimum required branch coverage percentage (default: 70.0)"
+            );
+            Console.WriteLine(
+                "  --min-packages <count>         Minimum number of shipping packages that must appear in the report (default: 1)"
             );
             return 0;
     }
@@ -91,7 +107,7 @@ if (string.IsNullOrEmpty(inputPath) || !File.Exists(inputPath))
 
 Console.WriteLine($"📄 Processing coverage report: {inputPath}");
 Console.WriteLine(
-    $"🎯 Target gate thresholds: Line >= {minLineRate:F2}%, Branch >= {minBranchRate:F2}%"
+    $"🎯 Target gate thresholds: Line >= {minLineRate:F2}%, Branch >= {minBranchRate:F2}%, Packages >= {minPackages}"
 );
 
 XDocument doc;
@@ -207,10 +223,35 @@ int totalLinesValid = sortedPackages.Sum(p => p.LinesValid);
 int totalBranchesCovered = sortedPackages.Sum(p => p.BranchesCovered);
 int totalBranchesValid = sortedPackages.Sum(p => p.BranchesValid);
 
-double totalLineRate =
-    totalLinesValid > 0 ? (double)totalLinesCovered / totalLinesValid * 100.0 : 100.0;
-double totalBranchRate =
-    totalBranchesValid > 0 ? (double)totalBranchesCovered / totalBranchesValid * 100.0 : 100.0;
+// An empty measurement is a failure, never a pass. A zero denominator previously
+// defaulted the rate to 100%, so an empty, filtered-out or attribute-less report
+// sailed through the gate having measured nothing at all.
+if (sortedPackages.Count < minPackages)
+{
+    Console.Error.WriteLine(
+        $"❌ Coverage report contains {sortedPackages.Count} shipping package(s), expected at least {minPackages} - refusing to pass. Check for an assembly rename or a stale report."
+    );
+    return 1;
+}
+
+if (totalLinesValid == 0)
+{
+    Console.Error.WriteLine(
+        "❌ No lines found in coverage report - refusing to pass. The report measured nothing."
+    );
+    return 1;
+}
+
+if (totalBranchesValid == 0)
+{
+    Console.Error.WriteLine(
+        "❌ No branches found in coverage report - refusing to pass. Condition-coverage data is missing."
+    );
+    return 1;
+}
+
+double totalLineRate = (double)totalLinesCovered / totalLinesValid * 100.0;
+double totalBranchRate = (double)totalBranchesCovered / totalBranchesValid * 100.0;
 
 bool totalPassed = totalLineRate >= minLineRate && totalBranchRate >= minBranchRate;
 
