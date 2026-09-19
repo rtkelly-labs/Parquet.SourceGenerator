@@ -1,13 +1,13 @@
 # 44 — Roslyn Generator Tooling Evaluation
 
-An assessment of the commonly recommended Roslyn incremental-generator tooling stack
-(polyfills, dependency bundling, test frameworks, syntax builders, author analyzers) against
-what this repository already does. Each verdict cites the file that decides it.
+An assessment of the commonly recommended Roslyn incremental-generator tooling stack — polyfills,
+dependency bundling, test frameworks, syntax builders, author analyzers — against what this
+repository already does.
 
-The short version: four of the five recommendation categories are already solved here, two of
-them more thoroughly than the off-the-shelf tool would manage. The value is concentrated in the
-two things the generic advice does *not* name — a stale author-analyzer pin and a pipeline node
-that retains `SemanticModel`.
+**Nearly all of it is already solved here, and two of the recommendations would be regressions.**
+Where a recommendation does land on something real, the 2026-09-18 full-repo review had already
+filed it, usually in more depth; this document defers to those issues rather than restating them.
+Two items were not in the backlog and are now #471 and #472.
 
 ---
 
@@ -17,13 +17,13 @@ that retains `SemanticModel`.
 |:---|:---|:---|
 | PolySharp | Skip | Only `IsExternalInit` is needed; already present in 8 lines |
 | Nullable (package) | Skip | No nullability attributes used anywhere in the generator |
-| ILRepack / Costura.Fody / Paket | Not applicable, and harmful if adopted | Generator has zero third-party runtime dependencies; `DebugType=embedded` |
+| ILRepack / Costura.Fody / Paket | Not applicable, and harmful if adopted | Zero third-party runtime dependencies; `DebugType=embedded` |
 | Microsoft.CodeAnalysis.CSharp.SourceGenerators.Testing | Skip | Duplicates existing suites; package last shipped at 1.1.4 |
 | Verify.SourceGenerators | Skip | `GoldenCodeGenRegressionTests` is a strict superset |
-| SyntaxFactory / `Microsoft.CodeAnalysis.CSharp.Workspaces` | Reject | Would churn every golden file; Workspaces is banned in analyzers |
+| SyntaxFactory / `Microsoft.CodeAnalysis.CSharp.Workspaces` | Reject | Workspaces must not be referenced from an analyzer (RS1038) |
 | Scriban | Reject | Reintroduces the bundling problem this repo does not have |
-| `IndentedTextWriter` / internal `CodeWriter` | **Adopt** | 1,348 literal-indent appends across 3,163 `AppendLine` calls |
-| Microsoft.CodeAnalysis.Analyzers (upgrade) | **Adopt** | Pinned at 3.3.3; every generator-author rule postdates it |
+| `IndentedTextWriter` / an indentation abstraction | Adopt — **already #439** | This doc adds only: no package reference needed |
+| Microsoft.CodeAnalysis.Analyzers (upgrade) | Adopt — **filed as #471** | Pinned at 3.3.3; every generator-author rule postdates it |
 | Roslynator.Analyzers | Optional | Overlaps Meziantou.Analyzer, already repo-wide |
 
 ---
@@ -32,207 +32,115 @@ that retains `SemanticModel`.
 
 `src/Parquet.SourceGenerator/Parquet.SourceGenerator.csproj` sets `LangVersion=latest` on
 `netstandard2.0`, and the single polyfill this needs already exists:
-
-```
-src/Parquet.SourceGenerator/IsExternalInit.cs   (8 lines, guarded by #if NETSTANDARD2_0)
-```
+`src/Parquet.SourceGenerator/IsExternalInit.cs`, 8 lines, guarded by `#if NETSTANDARD2_0`.
 
 A search across `src/Parquet.SourceGenerator` finds no use of `[NotNullWhen]`, `[MaybeNull]`,
 `[MemberNotNull]`, `required` members, `Index`/`Range`, or `[CallerArgumentExpression]`. PolySharp
 and Nullable are both source-only and low-risk, but they would be added to supply features the
-code does not use. The existing file is the cheaper form of the same thing.
+code does not use.
 
-**Revisit when:** the generator first wants `required` members (which needs both
-`RequiredMemberAttribute` and `CompilerFeatureRequired`, i.e. three hand-rolled files rather than
-one) or starts annotating nullability contracts on internal seams. At that point PolySharp
-replaces a growing `Polyfills/` folder rather than competing with one 8-line file.
+**Revisit when:** the generator first wants `required` members — that needs both
+`RequiredMemberAttribute` and `CompilerFeatureRequired`, so three hand-rolled files rather than
+one, which is where PolySharp starts winning.
 
 ## 2. Dependency bundling — not applicable
 
-The premise of ILRepack/Costura/Paket packaging advice is that the generator references
-third-party runtime assemblies the compiler will not resolve. This generator references only:
+The premise of ILRepack/Costura/Paket advice is that the generator references third-party runtime
+assemblies the compiler will not resolve. This generator references only:
 
 - `Microsoft.CodeAnalysis.CSharp` (`PrivateAssets="all"`, compiler-provided at runtime)
 - `Microsoft.CodeAnalysis.Analyzers`, `Microsoft.CodeAnalysis.PublicApiAnalyzers` (analyzers)
 - a `ProjectReference` to `Parquet.SourceGenerator.Attributes` that is deliberately *not*
-  `PrivateAssets="all"`, because it must flow to consumers as a package dependency — and which
-  the generator never binds to (`TargetParser` matches attributes by fully-qualified name).
+  `PrivateAssets="all"`, because it must flow to consumers as a package dependency — and which the
+  generator never binds to (`TargetParser` matches attributes by fully-qualified name)
 
-There is nothing to merge. Packaging into `analyzers/dotnet/cs` is already handled correctly by
-the `PackBuildOutputs` target with `IncludeBuildOutput=false` and the resulting NU5128 suppressed.
+There is nothing to merge. Packaging into `analyzers/dotnet/cs` is already handled by the
+`PackBuildOutputs` target with `IncludeBuildOutput=false` and the resulting NU5128 suppressed.
 
-Adopting ILRepack would be a regression, not a no-op: `Directory.Build.props` sets
+Adopting ILRepack would be a regression rather than a no-op: `Directory.Build.props` sets
 `DebugType=embedded` with SourceLink and `EmbedUntrackedSources`, and IL merging rewrites the
 assembly after those are embedded. The repo's own IL interrogation tooling
 (`docs/08-IL-INTERROGATION.md`, `scripts/InterrogateIL.cs`) would also be reading a rewritten
 assembly rather than the one the compiler produced.
 
-This is why the Scriban recommendation in §4 is rejected rather than merely declined: adopting a
-templating engine is what would *create* the bundling problem this section says does not exist.
+This is why Scriban is rejected in §4 rather than merely declined: adopting a templating engine is
+what would *create* the problem this section says does not exist.
 
 ## 3. Testing — already ahead of both suggestions
 
 `Microsoft.CodeAnalysis.CSharp.SourceGenerators.Testing` offers declarative expected-diagnostics
 and expected-generated-source assertions. Both are covered — `DiagnosticTests.cs` for the former,
 `GoldenCodeGenRegressionTests.cs` for the latter. The package's latest published version is
-**1.1.4**; it is not a moving target and would pin Roslyn test dependencies against the versions
-this repo deliberately controls.
+**1.1.4**; it would pin Roslyn test dependencies against versions this repo deliberately controls.
 
-`Verify.SourceGenerators` is the better-maintained option (latest 2.5.0) but would be a lateral
-move at best. The existing golden harness asserts four things per model, where a Verify snapshot
-asserts one:
+`Verify.SourceGenerators` is better maintained (latest 2.5.0) but would be a lateral move. The
+golden harness asserts more per model than a Verify snapshot does — byte-identical text, a syntax
+parse, and the `.api.txt` / `.api.shape.txt` / `.metrics.txt` companions that carry the API change
+contract from `docs/18-API-CHANGE-CONTRACT.md` — and five of the eight goldens additionally run
+`RunGeneratorsAndUpdateCompilation` and assert the bound compilation has no errors. It also already
+has the acceptance workflow Verify is usually adopted for (`UPDATE_GOLDEN_FILES=true`).
 
-1. emitted source is byte-identical to the checked-in `.g.cs`,
-2. the emitted source parses with zero syntax diagnostics,
-3. it compiles in-memory against Parquet.Net with zero errors,
-4. its `.api.txt` / `.api.shape.txt` / `.metrics.txt` companions match — the API change contract
-   gate from `docs/18-API-CHANGE-CONTRACT.md`.
+**On the gaps in that harness, see the backlog, not this document.** #413 covers the three goldens
+built from hand-typed models that are parsed but never bound — which also means they never exercise
+`TargetParser → emitter` end to end. #407 covers the self-healing baseline. Neither suggested
+package addresses either, and adopting Verify would not have caught them: a snapshot framework
+records what the emitter produced, it does not type-check it.
 
-It also already has the acceptance workflow Verify is usually adopted for
-(`UPDATE_GOLDEN_FILES=true`). Swapping in Verify would mean either losing (2)–(4) or running
-both harnesses.
+## 4. Emission — real, and already filed as #439
 
-**The gap the suggestions do point at, correctly:** `GoldenCodeGenRegressionTests` calls
-`CodeEmitter.EmitSource` directly — it emulates the generator rather than running
-`CSharpGeneratorDriver`. Hint-name construction, the Arrow reference gate and the configuration
-combine are covered by separate targeted tests (`HintNameCollisionTests`,
-`ArrowConditionalEmissionTests`, `GeneratorConfigurationTests`, `IncrementalityTests`) but never
-by the golden baselines. Nothing in either suggested package closes that; a driver-level golden
-case would.
+The recommendation to replace hand-threaded indentation with `IndentedTextWriter` is correct, and
+#439 has it with better evidence (89 whitespace literals, 337 `{indent}` splices, 6 string-arithmetic
+sites, 16-space literal default parameters) and the right conclusion, including the same rejection
+of a template engine and the same note that the golden files are the safety net for a
+byte-identical refactor. #439 is also the prerequisite for #434.
 
-## 4. Emission — the one clear adoption
+**The one thing this evaluation adds:** `System.CodeDom.Compiler.IndentedTextWriter` is present in
+the `netstandard2.0` reference assembly — verified by inspecting `build/netstandard2.0/ref/netstandard.dll`
+from `NETStandard.Library` 2.0.3. So #439's `IndentedWriter` can be built on it with **no package
+reference**, which matters given §2: an indentation abstraction that needed a NuGet dependency
+would drag the bundling problem in with it.
 
-This is where the generic advice lands on something real. Measured across
-`src/Parquet.SourceGenerator/Emitter/`:
-
-- 9,459 lines of emitter code
-- 3,163 `AppendLine` calls
-- **1,348** of them open with a hardcoded literal indent (`AppendLine("        ...`)
-- 9 files thread an `indent` string parameter through by hand, e.g.
-  `CompoundBuffers.EmitSingleWriteReturn(StringBuilder, LeafColumn, string indent, ...)`
-
-Indentation is therefore a value carried in two incompatible ways — literal prefixes and a
-threaded parameter — with no mechanism enforcing that a nested emitter receives the right one.
-
-**Recommended:** an internal `CodeWriter` wrapping `System.CodeDom.Compiler.IndentedTextWriter`
-with a `using (writer.Block())` scope. Verified available: `IndentedTextWriter` is present in the
-`netstandard2.0` reference assembly, so this adds **no package reference** and does not touch §2.
-
-**Not recommended:**
+On the alternatives the generic advice offers in place of #439's approach:
 
 - *SyntaxFactory / Workspaces.* `Microsoft.CodeAnalysis.CSharp.Workspaces` must not be referenced
-  from an analyzer assembly at all (this is what RS1038 in §5 exists to catch). Bare
-  `SyntaxFactory` without Workspaces cannot normalize whitespace usefully, and re-expressing 9,459
-  lines as AST construction would rewrite every golden file and every `.api.txt` baseline.
-- *Scriban.* See §2 — it is a third-party runtime dependency inside the analyzer. It would also
-  move emitted text out of C# and into embedded resources, where `docs/22-GENERATED-CODE-METRICS.md`
-  and the duplication gate in `docs/23-DUPLICATION.md` cannot see it.
+  from an analyzer assembly at all — RS1038 in §5 exists to catch exactly that. Bare `SyntaxFactory`
+  cannot normalize whitespace usefully, and re-expressing the emitters as AST construction would
+  rewrite every golden file and every `.api.txt` baseline.
+- *Scriban.* See §2. It would also move emitted text out of C# and into embedded resources, where
+  `docs/22-GENERATED-CODE-METRICS.md` and the duplication gate in `docs/23-DUPLICATION.md` cannot
+  see it.
 
-**Migration constraint:** the refactor must be byte-identical in output. Any whitespace drift
-re-baselines every file in `test/Parquet.SourceGenerator.Tests/GoldenFiles/` and obscures the
-one thing the golden files exist to show. The safe sequence is to introduce `CodeWriter` as a
-`StringBuilder` façade first, migrate one component at a time, and let the existing golden tests
-be the proof at each step.
+## 5. Author analyzers — filed as #471, plus a correction worth keeping
 
-## 5. Author analyzers — cheapest real win, plus one correction
+`Microsoft.CodeAnalysis.Analyzers` is pinned at **3.3.3** in the generator project against 3.3.4
+centrally and 5.9.0 published, which predates RS1035/RS1036/RS1038/RS1041 — every rule written for
+generator authors. Separately, `EnforceExtendedAnalyzerRules` is set on
+`tools/Parquet.SourceGenerator.ApiGates/` and not on the shipping generator. Details, and why this
+is distinct from #432, are in **#471**.
 
-### The pin is stale
+### The correction
 
-`src/Parquet.SourceGenerator/Parquet.SourceGenerator.csproj` carries:
-
-```xml
-<PackageReference Include="Microsoft.CodeAnalysis.Analyzers" VersionOverride="3.3.3" PrivateAssets="all" />
-```
-
-against `3.3.4` centrally and **5.9.0** currently on nuget.org. Version 3.3.3 predates the entire
-set of rules written for generator authors:
-
-| Rule | What it catches |
-|:---|:---|
-| RS1035 | Banned APIs inside a generator (`Environment`, file and network I/O, culture-sensitive calls) |
-| RS1036 | Analyzer banned-API enforcement not configured |
-| RS1038 | Compiler extension referencing Workspaces assemblies (see §4) |
-| RS1041 | Compiler extension not targeting `netstandard2.0` |
-
-Unlike the `Microsoft.CodeAnalysis.CSharp` pin, this package is build-time only and
-`PrivateAssets="all"`, so raising it **does not move the consumer compiler floor**. The repo
-already runs `Microsoft.CodeAnalysis.PublicApiAnalyzers` at 5.6.0, so the toolchain supports it.
-
-### `EnforceExtendedAnalyzerRules` is set on the wrong project
-
-It is currently set on `tools/Parquet.SourceGenerator.ApiGates/` and **not** on
-`src/Parquet.SourceGenerator/` — the assembly that actually ships as an analyzer. The gate is
-enabled for the internal API-contract analyzer and absent from the shipping generator.
-
-### Correction to the common claim
-
-The frequently repeated line that `Microsoft.CodeAnalysis.Analyzers` warns "against holding
+The frequently repeated claim that `Microsoft.CodeAnalysis.Analyzers` warns "against holding
 `ISymbol` or `Compilation` references inside incremental state pipelines" is **not accurate at any
 version**. No shipped Roslyn analyzer inspects incremental-pipeline lambda return types for
 retained symbols. RS1035/1036/1038/1041 are about banned APIs, references and target framework.
 
-This matters because it is the exact failure mode this repository currently has — see §6 — and
-upgrading the analyzers package will not surface it. Only review and a memory measurement will.
+This is worth recording because the repository has two live instances of exactly that failure mode
+— #395 (`GeneratorSyntaxContext` as a cached pipeline value) and #398 (`Location` inside
+`DiagnosticInfo`) — and it would be easy to assume the #471 upgrade closes them. It does not. Both
+were found by review, and nothing automated will find the next one.
 
 Roslynator.Analyzers is optional: its value here overlaps `Meziantou.Analyzer`, which
 `Directory.Build.props` already applies to every non-test project.
 
----
+## 6. The Roslyn floor — filed as #472
 
-## 6. The finding the tooling would not have caught
+Both #395 and #368 name `ForAttributeWithMetadataName` as the preferred fix, and #368 says it
+resolves the two together. Neither can take that path at the current 4.0.1 pin.
 
-`ParquetIncrementalGenerator.Initialize` registers the syntax provider's transform as an identity
-function:
-
-```csharp
-IncrementalValuesProvider<GeneratorSyntaxContext> targetNodes =
-    context.SyntaxProvider.CreateSyntaxProvider(
-        predicate: static (s, _) => IsTargetSyntax(s),
-        transform: static (ctx, _) => ctx
-    );
-```
-
-`GeneratorSyntaxContext` carries a `SemanticModel`, which roots the `Compilation` it came from.
-Because this is the output of a pipeline node, the driver stores those values in its state table
-and reuses them on the next run. Parsing to a value-equatable model happens one node later, after
-`.Combine(configuration)`.
-
-Two consequences:
-
-1. **Retention.** Cached entries from earlier compilations hold `SemanticModel` instances, and
-   through them their `Compilation`. In an IDE host the driver is long-lived, so this accumulates
-   rather than being collected between edits.
-2. **No useful equality.** `GeneratorSyntaxContext` is a struct with no `IEquatable<T>`, so the
-   driver falls back to `ValueType.Equals` — reflection-based field comparison in which the
-   `SemanticModel` reference differs on every compilation. The node can never report as cached.
-
-`IncrementalityTests` does not detect this, and is not wrong to pass: it asserts on
-`TrackedOutputSteps`, and the *outputs* genuinely are `Cached` because `TargetParserResult` is a
-correctly value-equatable record. The symptom is memory and repeated work, not wrong output.
-
-**Fix shape:** move parsing into the `transform` so the cached node holds `TargetParserResult`
-rather than `GeneratorSyntaxContext`. The obstacle is that parsing currently consumes
-`configuration.FeatureLevel`, which derives from `CompilationProvider` and so is only available
-after the combine. The resolution is to parse the full shape unconditionally in the transform and
-apply the feature-level restriction downstream on the value-equatable model, where it costs
-nothing to re-evaluate.
-
-**Before changing anything:** measure. `docs/09-PERFORMANCE-TRIAGE-DOTNET-DUMP.md` and
-`dotnet tool run dotnet-dump` are the tools already in the manifest for exactly this — a driver
-held across several edits, dumped, and inspected for retained `CSharpCompilation` instances. The
-mechanism above is established from the code; the magnitude is not, and this repository does not
-merge performance claims without numbers.
-
----
-
-## 7. Two corrections to existing documentation
-
-### `docs/28-BUILD-INCREMENTALITY-258.md` overstates the `WithTrackingName` limitation
-
-That document states: *"the shipping generator references Microsoft.CodeAnalysis.CSharp 4.0.1, and
-the test project uses 4.8.0. Both fail to compile that extension … with `CS1061`."*
-
-The second half is wrong. Inspecting the shipped assemblies directly:
+`docs/28-BUILD-INCREMENTALITY-258.md` records that `WithTrackingName` fails to compile at both
+4.0.1 and 4.8.0. Inspecting `lib/netstandard2.0/Microsoft.CodeAnalysis.dll` from the published
+`Microsoft.CodeAnalysis.Common` packages:
 
 | Microsoft.CodeAnalysis.Common | `WithTrackingName` | `ForAttributeWithMetadataName` |
 |:---|:---:|:---:|
@@ -240,56 +148,25 @@ The second half is wrong. Inspecting the shipped assemblies directly:
 | 4.3.0 | **present** | **present** |
 | 4.8.0 | **present** | **present** |
 
-Both live on `Microsoft.CodeAnalysis.IncrementalValueProviderExtensions` and
-`SyntaxValueProvider` from 4.3.0 onward. The constraint is solely the generator project's own
-4.0.1 pin — nothing about 4.8.0 blocks it.
-
-The document's *conclusion* stands unchanged: adding tracking names still requires raising the
-shipping Roslyn reference, which is still a consumer-compatibility decision. What changes is the
-price. One bump to 4.3.x buys both `WithTrackingName` (named pipeline stages, so
-`IncrementalityTests` can assert per-stage rather than only on outputs) and
-`ForAttributeWithMetadataName` (which replaces the hand-rolled `IsTargetSyntax` predicate with a
-compiler-side attribute index). The cost is that consumers below the 4.3 compiler — roughly
-VS 17.3 / .NET SDK 6.0.4xx — lose the generator. That belongs in
-`docs/14-COMPATIBILITY-MATRIX.md` as an explicit floor decision rather than being carried as a
-compile failure that is not actually a compile failure at 4.8.0.
-
-### `docs/03-INCREMENTAL-GENERATOR-PIPELINE.md` no longer describes the pipeline
-
-Section 1 of that document shows a two-step pipeline producing `ClassToGenerate?` with a `.Where`
-filter. The implemented pipeline has five nodes, a `GeneratorConfiguration` combine off
-`CompilationProvider`, a separately registered configuration-diagnostic output, and an
-Arrow-reference-gated third output. Section 2 names the value-equatable model
-`ClassToGenerate`; the type is `TargetClassModel`.
-
-The doc is also the natural home for the §6 rule it already half-states — it warns that "passing
-raw `ISymbol` or `SyntaxNode` references downstream breaks Roslyn's cache" while the code passes
-`GeneratorSyntaxContext`, which carries both.
+Both arrive in 4.3.0. Only the generator project's own `VersionOverride="4.0.1"` blocks them.
+`docs/28`'s conclusion stands — raising the reference is still a consumer-compatibility decision —
+but the price is one bump for three payoffs, not an unavailable API. Closed #258 records the
+opposite version fact. See **#472**.
 
 ---
 
-## 8. On the source of these recommendations
+## Summary for the backlog
 
-The recommendation list this evaluation responds to closes with a pointer to a walkthrough named
-only as "Incremental Source Generators with Roslyn", with no author, publisher or URL. It is not
-citable and was not consulted. Every claim checked above was verified against either this
-repository or the published packages; the two that did not survive verification are the analyzer
-capability in §5 and, independently, this repo's own `WithTrackingName` claim in §7.
+Nothing in the recommended tooling stack should be adopted as a package. What survives evaluation
+maps onto work already tracked:
 
----
+| Item | Where it lives |
+|:---|:---|
+| Indentation abstraction | #439 (prerequisite for #434) |
+| Analyzer package upgrade + `EnforceExtendedAnalyzerRules` | #471 |
+| Roslyn floor decision; `docs/28` correction | #472 (gates #395, #368) |
+| Pipeline retention of Roslyn objects | #395, #398 |
+| Golden coverage gaps | #413, #407 |
+| `docs/03` drift, `docs/INDEX.md` completeness | #464 |
 
-## Recommended order
-
-1. **Upgrade `Microsoft.CodeAnalysis.Analyzers`** in the generator project and set
-   `EnforceExtendedAnalyzerRules`. No consumer impact, fixes an inverted gate, and any new
-   diagnostics are worth seeing before the larger items. (§5)
-2. **Measure the `GeneratorSyntaxContext` retention**, then restructure the transform if the dump
-   confirms it. (§6)
-3. **Correct `docs/28` and `docs/03`.** Cheap, and `docs/28` currently misprices the Roslyn floor
-   decision. (§7)
-4. **Introduce `CodeWriter`**, migrating one emitter component at a time under the existing golden
-   tests. (§4)
-5. **Decide the Roslyn floor** — 4.0.1 or 4.3.x — as a compatibility-matrix entry. It gates
-   `ForAttributeWithMetadataName` and `WithTrackingName` together. (§7)
-
-Nothing in items 1–5 requires a new package reference.
+Of these, #471 is the only one with no consumer impact and no dependency on another decision.
