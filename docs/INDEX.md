@@ -220,6 +220,10 @@ The documentation is organized into three distinct tiers based on audience and i
        can pass vacuously, and what is open. Includes the line-by-line read of the `build` aggregate.
      - Read it before adding, renaming or removing a CI job; a gate outside `build` blocks nothing.
 
+28. **[44 - Roslyn Generator Tooling Evaluation](./44-GENERATOR-TOOLING-EVALUATION.md)**
+     - Verdicts on polyfills, dependency bundling, generator test frameworks, syntax builders, and author analyzers against what this repository already does.
+     - Records the stale `Microsoft.CodeAnalysis.Analyzers` pin, the `GeneratorSyntaxContext` retention in the pipeline, and corrections to documents 03 and 28.
+
 ---
 
 ## ⚡ Quick Summary of Intent
