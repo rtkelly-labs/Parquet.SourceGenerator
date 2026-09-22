@@ -262,7 +262,9 @@ public partial record Reading
 Defaults are lossless for every NodaTime value; narrower native mappings are opt-in per member
 and throw rather than truncate. Collections convert per element (`List<Instant>`, `LocalDate?[]`), and
 generic types need one adapter for every construction (`[ParquetTypeAdapter(typeof(Id<>), typeof(Guid))]`). Your own adapters register the same way —
-`[assembly: ParquetTypeAdapter(typeof(MoneyAdapter))]`. Design and rules:
+`[assembly: ParquetTypeAdapter(typeof(MoneyAdapter))]`. What can nest where, and how deep:
+[`docs/46-SERIALIZATION-SHAPES.md`](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/46-SERIALIZATION-SHAPES.md).
+Design and rules:
 [`docs/44-TYPE-ADAPTERS.md`](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/44-TYPE-ADAPTERS.md),
 [`docs/45-NODATIME.md`](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/45-NODATIME.md).
 

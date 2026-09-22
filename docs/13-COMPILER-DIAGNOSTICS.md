@@ -21,6 +21,9 @@ This document details all diagnostic codes, their severity, rationale, and remed
 | **[`PARQ009`](#parq009-nested-type-not-supported)** | **Error** | Nested types not supported | Target type is nested within another type. |
 | **[`PARQ010`](#parq010-generic-type-not-supported)** | **Error** | Generic types not supported | Target type is generic. |
 | **[`PARQ011`](#parq011-type-unsupported-on-classic-v5-api)** | **Error** | Unsupported on classic API | Member type is supported by Parquet.Net 6 but not by the 4.x/5.x API. |
+| **`PARQ012`** | **Error** | Nested type cycle | Nested types contain each other, so no finite column layout exists. See [46 §4](./46-SERIALIZATION-SHAPES.md#4-nested-types-groups). |
+| **`PARQ013`** | **Error** | Nesting too deep | More than six group levels below the row. See [46 §4](./46-SERIALIZATION-SHAPES.md#how-deep). |
+| **`PARQ014`** | **Error** | Ineligible sort key | A `[ParquetSortKey]` member cannot drive row-group pruning. |
 | **[`PARQ015`](#parq015-invalid-generator-feature-level)** | **Error** | Invalid generator feature level | `ParquetGeneratorFeatureLevel` is present but is not a defined level. |
 | **[`PARQ016`](#parq016-invalid-type-adapter)** | **Error** | Invalid type adapter | The adapter selected for a member is malformed or cannot serve that member. |
 | **[`PARQ017`](#parq017-ambiguous-type-adapter)** | **Error** | Ambiguous type adapter | More than one default adapter is registered for the member's type. |

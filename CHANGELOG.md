@@ -33,6 +33,10 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   nullable elements, and `[ParquetAdapter]` on the collection member selecting the element
   adapter. Plain `List<SomeStruct>` / `SomeStruct?[]` members now work too: value-type list
   elements were previously rejected.
+- **Serialization shapes reference** (`docs/46-SERIALIZATION-SHAPES.md`): every supported and
+  rejected model shape — leaves, nested types, lists and their element ladder, adapted types —
+  with the exact depth limits, worked examples and the Parquet schemas they produce. Each
+  statement is a case in `SerializationShapeMatrixTests`, so the page fails CI when it drifts.
 - **Adapted members inside custom types** (`docs/44-TYPE-ADAPTERS.md` §A.4c). A NodaTime (or any
   adapted) field of a nested `[ParquetSerializable]` type, of a list element type, or of an
   application surrogate converts inline where its parent is read and rebuilt — no shadow, no

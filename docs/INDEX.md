@@ -36,11 +36,15 @@ The documentation is organized into three distinct tiers based on audience and i
    - Serializing nested POCOs, struct fields, and collections (`List<T>`, arrays) without runtime reflection.
    - Backend-specific compatibility boundary and remaining parity work in [document 42](./42-NESTED-BACKEND-SCOPE-176.md).
 
-5. **[44 - Type Adapters](./44-TYPE-ADAPTERS.md)** and **[45 - NodaTime Adapter Package](./45-NODATIME.md)**
+5. **[46 - Serialization Shapes: What You Can Model, and How Deep](./46-SERIALIZATION-SHAPES.md)**
+   - Leaves, nested types, lists and adapted types; the exact depth limits, with examples and
+     the Parquet schema each one produces. Every statement is backed by a test case.
+
+6. **[44 - Type Adapters](./44-TYPE-ADAPTERS.md)** and **[45 - NodaTime Adapter Package](./45-NODATIME.md)**
    - Serializing domain types the generator does not map itself through compile-time adapters.
    - `Parquet.SourceGenerator.NodaTime`: lossless NodaTime storage and explicit native interop.
 
-6. **[Performance Benchmarks & Baselines](./BENCHMARKS.md)**
+7. **[Performance Benchmarks & Baselines](./BENCHMARKS.md)**
    - BenchmarkDotNet performance numbers, zero-boxing verification, and memory savings over reflection serializers.
 
 ---
