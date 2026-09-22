@@ -1,9 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using NodaTime;
 using Parquet.SourceGenerator.NodaTime.Adapters;
+
+[assembly: Parquet.SourceGenerator.ParquetTypeAdapter(
+    typeof(Parquet.SourceGenerator.AotTest.AotIdAdapter)
+)]
 
 namespace Parquet.SourceGenerator.AotTest;
 
@@ -20,7 +25,7 @@ public sealed partial record AotNodaRecord
     public Instant? MaybeAt { get; init; }
     public LocalDate Day { get; init; }
     public LocalTime Time { get; init; }
-    public Offset? Offset { get; init; }
+    public Offset? Off { get; init; }
     public Interval Window { get; init; }
     public Period Retention { get; init; } = Period.Zero;
     public ZonedDateTime Zoned { get; init; }
@@ -28,6 +33,46 @@ public sealed partial record AotNodaRecord
     [ParquetAdapter(typeof(InstantAsDateTimeMicrosecondsAdapter))]
     [ParquetTimestamp(ParquetTimestampUnit.Microseconds)]
     public Instant EventTime { get; init; }
+
+    // Adapted collection elements, converted inline per element.
+    public List<Instant> History { get; init; } = [];
+    public LocalTime?[]? Slots { get; init; }
+
+    // A generic adapter closed over two different constructions.
+    public AotId<AotNodaRecord> Key { get; init; }
+    public List<AotId<string>> Links { get; init; } = [];
+
+    public bool Equals(AotNodaRecord? other) =>
+        other is not null
+        && At == other.At
+        && MaybeAt == other.MaybeAt
+        && Day == other.Day
+        && Time == other.Time
+        && Off == other.Off
+        && Window == other.Window
+        && Retention.Equals(other.Retention)
+        && Zoned == other.Zoned
+        && EventTime == other.EventTime
+        && History.SequenceEqual(other.History)
+        && (
+            Slots is null
+                ? other.Slots is null
+                : other.Slots is not null && Slots.SequenceEqual(other.Slots)
+        )
+        && Key == other.Key
+        && Links.SequenceEqual(other.Links);
+
+    public override int GetHashCode() => At.GetHashCode();
+}
+
+public readonly record struct AotId<T>(Guid Value);
+
+[ParquetTypeAdapter(typeof(AotId<>), typeof(Guid))]
+public static class AotIdAdapter
+{
+    public static Guid ToStorage<T>(AotId<T> value) => value.Value;
+
+    public static AotId<T> FromStorage<T>(Guid value) => new(value);
 }
 
 internal static class NodaTimeChecks
@@ -43,7 +88,11 @@ internal static class NodaTimeChecks
                 MaybeAt = NodaConstants.UnixEpoch - Duration.FromNanoseconds(1),
                 Day = new LocalDate(2024, 2, 29).WithCalendar(CalendarSystem.Julian),
                 Time = LocalTime.MaxValue,
-                Offset = global::NodaTime.Offset.FromHoursAndMinutes(5, 45),
+                Off = Offset.FromHoursAndMinutes(5, 45),
+                History = [Instant.MinValue, NodaConstants.UnixEpoch],
+                Slots = [LocalTime.Noon, null],
+                Key = new AotId<AotNodaRecord>(Guid.NewGuid()),
+                Links = [new AotId<string>(Guid.NewGuid())],
                 Window = new Interval(NodaConstants.UnixEpoch, null),
                 Retention = Period.FromMinutes(90),
                 Zoned = london.AtLeniently(new LocalDateTime(2021, 10, 31, 1, 30)),
@@ -55,7 +104,7 @@ internal static class NodaTimeChecks
                 MaybeAt = null,
                 Day = new LocalDate(-9998, 1, 1),
                 Time = LocalTime.Midnight,
-                Offset = null,
+                Off = null,
                 Window = new Interval(null, null),
                 Retention = Period.Zero,
                 Zoned = NodaConstants.UnixEpoch.InUtc(),

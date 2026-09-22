@@ -192,6 +192,9 @@ This document details all diagnostic codes, their severity, rationale, and remed
   source or surrogate; a type mapped to itself; an unsupported `ContractVersion`; or a member the
   generated storage shadow cannot serve (`required`, no reachable setter, a name collision with
   `<Member>ParquetStorage`, a non-`partial` containing type).
+  For a generic adapter (`typeof(Id<>)`), also: an adapter class or conversion arity that does
+  not match the source, an open surrogate with a closed source, or a member type argument that
+  violates the adapter's generic constraints.
 - **Why**: A malformed adapter must fail at the member, not as broken generated C#.
 - **Remediation**: Fix the adapter as the message describes. See
   [44 - Type Adapters](./44-TYPE-ADAPTERS.md).
@@ -211,7 +214,9 @@ This document details all diagnostic codes, their severity, rationale, and remed
 - **Severity**: Error
 - **Cause**: The adapter's surrogate is neither a type the generator maps natively nor a class or
   struct whose members it can map as a group — or it is a group and the backend cannot emit
-  groups (the legacy Parquet.Net 4.x/5.x package, or feature level 1).
+  groups (the legacy Parquet.Net 4.x/5.x package, or feature level 1). For an adapted collection
+  element, also: an element group that itself contains a group, or a list where the backend or
+  position cannot carry one.
 - **Remediation**: Use a representable surrogate, or the Parquet.Net 6 package at feature level 2+.
 
 ### PARQ019: Adapter Registration for a Built-in Type Ignored

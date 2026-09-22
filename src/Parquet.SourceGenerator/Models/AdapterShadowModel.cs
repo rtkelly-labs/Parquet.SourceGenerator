@@ -45,3 +45,25 @@ internal sealed record AdapterShadowSet(
 
     public bool IsEmpty => Members.Length == 0;
 }
+
+/// <summary>
+/// The adapter applied to each element of a list member (docs/44 §A.4). Unlike a member-level
+/// adapter there is no shadow: the list emitter calls the conversions inline, once per element,
+/// so a collection is never copied to convert it. The element's own column model is the
+/// surrogate's; <see cref="DomainTypeName"/> is what the reconstructed collection holds.
+/// </summary>
+internal sealed record ElementAdapterModel(
+    string AdapterTypeName,
+    string ToStorageMethod,
+    string FromStorageMethod,
+    string DomainTypeName,
+    bool DomainIsValueType
+)
+{
+    /// <summary>The write-side call converting <paramref name="value"/> to storage.</summary>
+    public string ToStorage(string value) => $"{AdapterTypeName}.{ToStorageMethod}({value})";
+
+    /// <summary>The read-side call converting <paramref name="storage"/> back to the domain.</summary>
+    public string FromStorage(string storage) =>
+        $"{AdapterTypeName}.{FromStorageMethod}({storage})";
+}

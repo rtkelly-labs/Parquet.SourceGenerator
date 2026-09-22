@@ -1160,8 +1160,8 @@ public static partial class TargetParser
     /// </summary>
     /// <summary>
     /// M3b stack 2 scope for row-level lists under the pipeline dial: leaf elements (M3a) or
-    /// reference-POCO elements whose collectable members are all leaves. Value-type elements,
-    /// compound children inside elements, and lists inside compounds live in later stacks;
+    /// POCO elements — reference or value type — whose collectable members are all leaves.
+    /// Compound children inside elements, and lists inside compounds live in later stacks;
     /// the parser builds the full tree under its test dial regardless.
     /// </summary>
     private static bool ListElementShapeSupported(PropertyModel listModel)
@@ -1172,8 +1172,6 @@ public static partial class TargetParser
             return false;
         if (element.Kind != PropertyKind.Struct)
             return true;
-        if (element.CompoundIsValueType)
-            return false;
         foreach (PropertyModel child in element.Children)
         {
             if (child.Kind is PropertyKind.Struct or PropertyKind.List or PropertyKind.Map)
@@ -1310,7 +1308,13 @@ public static partial class TargetParser
                 var childSymbol = (INamedTypeSymbol)underlyingType;
                 string childName = GetNestedQualifiedTypeName(childSymbol);
 
-                if (childSymbol.TypeParameters.Length > 0)
+                // A generic [ParquetSerializable] child cannot be generated for (PARQ010). A closed
+                // construction of a generic surrogate (TaggedStorage<int>) is just a concrete
+                // group: its members are already substituted, so it is planned like any other.
+                bool closedSurrogate =
+                    inSurrogate
+                    && childSymbol.TypeArguments.All(a => a.TypeKind != TypeKind.TypeParameter);
+                if (childSymbol.TypeParameters.Length > 0 && !closedSurrogate)
                 {
                     diagnostics.Add(
                         new DiagnosticInfo(

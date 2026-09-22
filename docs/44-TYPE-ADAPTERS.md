@@ -664,6 +664,7 @@ Consequences worth knowing:
   target already must be; containing types are checked and reported as PARQ016).
 - The shadow name is `<Member>ParquetStorage`. A member already using that name is PARQ016.
 - `required` members cannot be adapted (the reader sets the shadow, not the required member).
+- Adapted collection *elements* need none of this: they convert inline (§A.4b).
 - Emitted public API that is named after columns — columnar batch fields, row-group statistics
   members, sort-key lookups — is named after the shadow and typed as the surrogate, because
   that is what those APIs actually carry.
@@ -703,16 +704,78 @@ asserts unrelated edits leave every generator step cached.
 - One hop only (§10): members *inside* a surrogate are never adapted, and nested classes and
   structs inside a surrogate are themselves planned as groups.
 - `Nullable<T>` source or surrogate types are refused (§7): the generator owns nulls.
-- Deferred, as §15 says: open generics, collection-level adapters (`List<Instant>` stays PARQ006),
-  context-dependent adapters, and project-wide overrides of a default.
+- A **closed construction of a generic surrogate** (`TaggedStorage<int>`) is a concrete group and
+  is planned like any other; open generic `[ParquetSerializable]` children remain PARQ010.
+- Deferred: context-dependent adapters, project-wide overrides of a default, adapters whose
+  *source* is itself a collection type, and adapted map values (maps are not in the v6 pipeline).
+
+### A.4a Generic adapters
+
+§15 deferred open generic adapters; they are implemented. A descriptor may name an **open
+generic source** — `typeof(Id<>)` — and then serves every closed construction of it:
+
+```csharp
+// Generic conversion methods of the source's arity...
+[ParquetTypeAdapter(typeof(Id<>), typeof(Guid))]
+public static class IdAdapter
+{
+    public static Guid ToStorage<T>(this Id<T> value) => value.Value;
+    public static Id<T> FromStorage<T>(this Guid value) => new(value);
+}
+
+// ...or a generic adapter class of that arity, with a same-arity open surrogate.
+[ParquetTypeAdapter(typeof(Tagged<>), typeof(TaggedStorage<>))]
+public static class TaggedAdapter<T>
+{
+    public static TaggedStorage<T> ToStorage(Tagged<T> value) => new(value.Value, value.Tag);
+    public static Tagged<T> FromStorage(TaggedStorage<T> value) => new(value.Value, value.Tag);
+}
+
+[assembly: ParquetTypeAdapter(typeof(IdAdapter))]
+[assembly: ParquetTypeAdapter(typeof(TaggedAdapter<>))]
+```
+
+For each member the resolver **closes** the descriptor over the member's type arguments — it
+constructs the adapter class or the conversion methods, constructs an open surrogate with the
+same arguments (a closed surrogate such as `Guid` is used as is), and validates the closed
+conversions exactly as a non-generic adapter's. Generic parameter constraints (`class`,
+`struct`, `unmanaged`, `new()`, base types and interfaces) are checked there too, so a
+violating type argument is PARQ016 at the member, never a compile error in generated code. The
+generated calls spell the construction out: `global::IdAdapter.ToStorage<global::Order>(...)`,
+`global::TaggedAdapter<int>.FromStorage(...)`.
+
+Lookup takes an exact registration first and the open definition second, so a closed adapter
+for one construction (`[ParquetTypeAdapter(typeof(Id<Special>), typeof(string))]`) specialises
+a generic default without ambiguity.
+
+### A.4b Adapted collection elements
+
+A list, array or other supported collection member (`T[]`, `List<T>`, `IList<T>`,
+`ICollection<T>`, `IReadOnlyCollection<T>`, `IReadOnlyList<T>`, `IEnumerable<T>`) whose element
+type `T` (or `T?`) resolves to an adapter is an ordinary list column of the surrogate. The list
+emitter converts **inline** — `ToStorage` per element as it shreds, `FromStorage` per element as
+it rebuilds the lane — so there is no shadow member and no per-row copy of the collection.
+Precedence is the same as for a member, applied to the element type: an explicit
+`[ParquetAdapter]` on the collection member whose source is the element type (this is how a
+built-in element type such as `DateTime` is re-stored), then the project's defaults, then
+packages'. Generic adapters apply to elements too (`List<Id<Order>>`).
+
+Element shapes, which follow the list emitter's own:
+
+- **Scalar surrogates** — any element surrogate the generator maps as a leaf.
+- **Group surrogates** of single-column members — reference or value type. Lifting the
+  value-type restriction here also made plain `List<SomeStruct>` / `SomeStruct?[]` members of
+  `[ParquetSerializable]` structs work; a non-nullable value-type element has no null rung.
+- **Not yet:** element groups that contain groups (e.g. `ZonedDateTime`, `Interval`,
+  `DateInterval` storage) and lists below the top level — PARQ018 names the reason.
 
 ### A.5 Diagnostics
 
 | Concept (§18) | ID |
 |---|---|
-| Malformed registration, missing / reversed / ambiguous conversion, bad signature, inaccessible adapter, wrong source type, unsupported contract version, self-cycle, unshadowable member | **PARQ016** |
+| Malformed registration, missing / reversed / ambiguous conversion, bad signature, inaccessible adapter, wrong source type, unsupported contract version, self-cycle, unshadowable member, generic arity mismatch, violated generic constraint | **PARQ016** |
 | Two defaults for one source type | **PARQ017** |
-| Unsupported surrogate (including groups on the legacy backend, collections) | **PARQ018** |
+| Unsupported surrogate (including groups on the legacy backend, element groups with nested groups, lists where lists are not emitted) | **PARQ018** |
 | Registration would override a built-in without explicit opt-in | **PARQ019** (warning) |
 
 All four are reported at the member that resolved to the adapter. See
@@ -724,5 +787,8 @@ All four are reported at the member that resolved to the adapter. See
   malformed shape, legacy scalar vs group surrogates, nested/struct/partial chains, generated-code
   compilation, incremental caching.
 - `NodaTimeAdapterRoundTripTests` — the §21 semantic categories through real emitted code.
+- `AdaptedCollectionRoundTripTests` — every collection shape with scalar and group surrogates,
+  nullable elements and collections, explicit element adapters, generic adapters closed per
+  member (including an exact specialisation), and unadapted value-type struct elements.
 - `test/Parquet.SourceGenerator.AotTest` — adapted members in a published native binary.
 - `test/PackageConsumption` — the packed generator discovering the packed NodaTime package.

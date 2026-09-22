@@ -74,23 +74,13 @@ public static partial class TargetParser
             );
         }
 
+        // No adapter for the member's own type: a collection member may still adapt its elements.
         if (resolution.Origin == AdapterOrigin.None)
-            return false;
+            return TryCollectAdaptedList(member, column, scope, sink);
 
         if (resolution.Ambiguity is { } competing)
         {
-            scope.Diagnostics.Add(
-                new DiagnosticInfo(
-                    DiagnosticDescriptors.AmbiguousTypeAdapter,
-                    member.Location,
-                    [
-                        member.Symbol.Name,
-                        scope.ClassName,
-                        member.UnderlyingType.ToDisplayString(),
-                        competing,
-                    ]
-                )
-            );
+            ReportAmbiguousAdapter(member, member.UnderlyingType, competing, scope);
             sink.RejectedAnyMember = true;
             return true;
         }
@@ -411,6 +401,20 @@ public static partial class TargetParser
 
         return type.TypeKind == TypeKind.Struct ? "struct" : "class";
     }
+
+    private static void ReportAmbiguousAdapter(
+        AdaptedMember member,
+        ITypeSymbol type,
+        string competing,
+        MemberScope scope
+    ) =>
+        scope.Diagnostics.Add(
+            new DiagnosticInfo(
+                DiagnosticDescriptors.AmbiguousTypeAdapter,
+                member.Location,
+                [member.Symbol.Name, scope.ClassName, type.ToDisplayString(), competing]
+            )
+        );
 
     private static void ReportInvalidAdapter(
         AdapterDescriptor adapter,

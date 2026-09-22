@@ -132,6 +132,12 @@ public sealed record PropertyModel(
     public bool CompoundIsValueType { get; init; }
 
     /// <summary>
+    /// List element models only: the adapter converting each element between its domain type
+    /// and the surrogate this model describes (docs/44 §A.4). Null for every other model.
+    /// </summary>
+    internal ElementAdapterModel? ElementAdapter { get; init; }
+
+    /// <summary>
     /// Backwards-compatible constructor overload without deduplication or encoding flag.
     /// </summary>
     public PropertyModel(

@@ -536,8 +536,13 @@ buffer cursor bounds with clean `InvalidDataException` reporting and safe `Array
 The adapter model ([document 44](./44-TYPE-ADAPTERS.md)) ships with the scope its design calls
 for, and these edges are deliberate rather than accidental:
 
-- **Collections of adapted types are not adapted.** `List<Instant>`, `Instant[]` and dictionary
-  values of adapted types still report PARQ006; collection-level adapters are deferred (§15).
+- **Adapted collection elements are top-level and flat.** `List<Instant>`, `Instant[]`,
+  `IReadOnlyList<LocalDate?>` and friends work (§A.4b), but an element whose group surrogate
+  contains another group (`ZonedDateTime`, `Interval`, `DateInterval`) is PARQ018, as are lists
+  inside nested types and adapted dictionary values — the same boundaries the list emitter has
+  for unadapted elements.
+- **Generic adapters close over the source's own type arguments.** A surrogate can be closed or
+  the same-arity open generic; it cannot be a bare type parameter (`Optional<T>` → `T`).
 - **One adapter hop.** A surrogate's own members are mapped by the ordinary rules and never
   through another adapter (§10).
 - **Group surrogates need Parquet.Net 6.** The legacy 4.x/5.x package supports scalar surrogates

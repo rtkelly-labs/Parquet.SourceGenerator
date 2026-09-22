@@ -507,10 +507,246 @@ public sealed class TypeAdapterDiagnosticTests
             );
     }
 
+    [Fact]
+    public void AdaptedCollectionElementsCompileForEveryCollectionShape()
+    {
+        GeneratorRun run = Run(
+            Registered
+                + ValidAdapter
+                + """
+
+                [ParquetSerializable]
+                public partial class Series
+                {
+                    public System.Collections.Generic.List<Temperature> A { get; init; } = new();
+                    public Temperature[]? B { get; init; }
+                    public System.Collections.Generic.IReadOnlyList<Temperature?> C { get; init; } = new System.Collections.Generic.List<Temperature?>();
+                    public System.Collections.Generic.IEnumerable<Temperature> D { get; init; } = new Temperature[0];
+                }
+                """
+        );
+
+        run.GeneratorDiagnostics.ShouldBeEmpty(string.Join("\n", run.GeneratorDiagnostics));
+        run.CompileErrors.ShouldBeEmpty(string.Join("\n", run.CompileErrors));
+        // Elements convert inline in the list emitter; no storage shadow is involved.
+        run.HasShadowFile.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void AnExplicitAdapterOnACollectionMemberAppliesToItsElements()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using Parquet.SourceGenerator;
+
+            [ParquetTypeAdapter(typeof(DateTime), typeof(long))]
+            public static class TicksAdapter
+            {
+                public static long ToStorage(DateTime value) => value.Ticks;
+                public static DateTime FromStorage(long value) => new(value, DateTimeKind.Utc);
+            }
+
+            [ParquetSerializable]
+            public partial class Row
+            {
+                [ParquetAdapter(typeof(TicksAdapter))]
+                public List<DateTime> Stamps { get; init; } = new();
+            }
+            """;
+
+        GeneratorRun run = Run(source);
+
+        run.GeneratorDiagnostics.ShouldBeEmpty(string.Join("\n", run.GeneratorDiagnostics));
+        run.CompileErrors.ShouldBeEmpty(string.Join("\n", run.CompileErrors));
+        run.SerializerSource.ShouldContain("global::TicksAdapter.ToStorage(el_");
+        run.SerializerSource.ShouldContain("global::TicksAdapter.FromStorage(");
+    }
+
+    [Fact]
+    public void AmbiguousElementDefaultsReportPARQ017()
+    {
+        const string second = """
+            [ParquetTypeAdapter(typeof(Temperature), typeof(float))]
+            public static class OtherAdapter
+            {
+                public static float ToStorage(Temperature v) => (float)v.Celsius;
+                public static Temperature FromStorage(float v) => new() { Celsius = v };
+            }
+
+            [ParquetSerializable]
+            public partial class Row { public Temperature[] Temps { get; init; } = new Temperature[0]; }
+            """;
+
+        GeneratorRun run = Run(
+            "using Parquet.SourceGenerator;\n"
+                + "[assembly: ParquetTypeAdapter(typeof(TemperatureAdapter))]\n"
+                + "[assembly: ParquetTypeAdapter(typeof(OtherAdapter))]\n"
+                + Types
+                + ValidAdapter
+                + second
+        );
+
+        run.Ids.ShouldBe([DiagnosticDescriptors.AmbiguousTypeAdapter.Id]);
+    }
+
+    [Fact]
+    public void ElementGroupsWithNestedGroupsAndLegacyListsReportPARQ018()
+    {
+        const string nested = """
+            using System.Collections.Generic;
+            using Parquet.SourceGenerator;
+
+            public sealed class Temperature { public double Celsius { get; init; } }
+            public readonly record struct Inner(double Celsius);
+            public readonly record struct Outer(Inner Reading, string Scale);
+
+            [ParquetTypeAdapter(typeof(Temperature), typeof(Outer))]
+            public static class NestedAdapter
+            {
+                public static Outer ToStorage(Temperature v) => new(new Inner(v.Celsius), "C");
+                public static Temperature FromStorage(Outer v) => new() { Celsius = v.Reading.Celsius };
+            }
+
+            [ParquetSerializable]
+            public partial class Row
+            {
+                [ParquetAdapter(typeof(NestedAdapter))]
+                public List<Temperature> Temps { get; init; } = new();
+            }
+            """;
+        GeneratorRun run = Run(nested);
+        run.Ids.ShouldBe([DiagnosticDescriptors.UnsupportedAdapterSurrogate.Id]);
+        run.GeneratorDiagnostics[0]
+            .GetMessage(System.Globalization.CultureInfo.InvariantCulture)
+            .ShouldContain("nested groups");
+
+        GeneratorRun legacy = Run(
+            Registered
+                + ValidAdapter
+                + "\n[ParquetSerializable] public partial class Row { public System.Collections.Generic.List<Temperature> Temps { get; init; } = new(); }",
+            legacy: true
+        );
+        legacy.Ids.ShouldBe([DiagnosticDescriptors.UnsupportedAdapterSurrogate.Id]);
+    }
+
+    [Fact]
+    public void GenericAdaptersCloseOverTheMemberTypeAndCompile()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using Parquet.SourceGenerator;
+
+            [assembly: ParquetTypeAdapter(typeof(IdAdapter))]
+            [assembly: ParquetTypeAdapter(typeof(BoxAdapter<>))]
+
+            public readonly record struct Id<T>(Guid Value);
+            public sealed class Box<T> { public T Value { get; init; } = default!; }
+            public readonly record struct BoxStorage<T>(T Value);
+            public sealed class Order;
+
+            [ParquetTypeAdapter(typeof(Id<>), typeof(Guid))]
+            public static class IdAdapter
+            {
+                public static Guid ToStorage<T>(Id<T> v) => v.Value;
+                public static Id<T> FromStorage<T>(Guid v) => new(v);
+            }
+
+            [ParquetTypeAdapter(typeof(Box<>), typeof(BoxStorage<>))]
+            public static class BoxAdapter<T>
+            {
+                public static BoxStorage<T> ToStorage(Box<T> v) => new(v.Value);
+                public static Box<T> FromStorage(BoxStorage<T> v) => new() { Value = v.Value };
+            }
+
+            [ParquetSerializable]
+            public partial class Row
+            {
+                public Id<Order> Key { get; init; }
+                public Id<Row>? Parent { get; init; }
+                public List<Id<Order>> Lines { get; init; } = new();
+                public Box<long> Weight { get; init; } = new();
+                public Box<string>? Label { get; init; }
+                public List<Box<int>> Counts { get; init; } = new();
+            }
+            """;
+
+        GeneratorRun run = Run(source);
+
+        run.GeneratorDiagnostics.ShouldBeEmpty(string.Join("\n", run.GeneratorDiagnostics));
+        run.CompileErrors.ShouldBeEmpty(string.Join("\n", run.CompileErrors));
+        run.ShadowSource!.ShouldContain("global::IdAdapter.ToStorage<global::Order>(this.Key)");
+        run.ShadowSource!.ShouldContain("global::BoxAdapter<long>.FromStorage(value)");
+    }
+
+    public static IEnumerable<object[]> MalformedGenericAdapters() =>
+        new[]
+        {
+            // The member's type argument violates the conversion's constraint.
+            new object[]
+            {
+                "[ParquetTypeAdapter(typeof(Wrap<>), typeof(int))] public static class Bad { public static int ToStorage<T>(Wrap<T> v) where T : struct => 0; public static Wrap<T> FromStorage<T>(int v) where T : struct => new(); }",
+                "public Wrap<string> Member { get; init; } = new();",
+                "does not satisfy the constraints",
+            },
+            // Generic adapter class of the wrong arity.
+            [
+                "[ParquetTypeAdapter(typeof(Wrap<>), typeof(int))] public static class Bad<A, B> { public static int ToStorage(Wrap<A> v) => 0; public static Wrap<A> FromStorage(int v) => new(); }",
+                "public Wrap<int> Member { get; init; } = new();",
+                "same number of type parameters",
+            ],
+            // An open surrogate with a closed source has nowhere to take its arguments from.
+            [
+                "[ParquetTypeAdapter(typeof(Wrap<int>), typeof(Wrap<>))] public static class Bad { }",
+                "public Wrap<int> Member { get; init; } = new();",
+                "open generic source",
+            ],
+            // Generic methods that do not close to the member's construction.
+            [
+                "[ParquetTypeAdapter(typeof(Wrap<>), typeof(int))] public static class Bad { public static int ToStorage<T>(T v) => 0; public static Wrap<T> FromStorage<T>(int v) => new(); }",
+                "public Wrap<int> Member { get; init; } = new();",
+                "ToStorage",
+            ],
+        };
+
+    [Theory]
+    [MemberData(nameof(MalformedGenericAdapters))]
+    public void MalformedGenericAdaptersReportPARQ016(
+        string adapter,
+        string member,
+        string expected
+    )
+    {
+        string source =
+            "using Parquet.SourceGenerator;\npublic sealed class Wrap<T> { }\n"
+            + adapter
+            + "\n[ParquetSerializable] public partial class Row { [ParquetAdapter(typeof(Bad))] "
+            + member
+            + " }";
+        source = source.Replace(
+            "typeof(Bad))] public Wrap",
+            "typeof(Bad"
+                + (adapter.Contains("Bad<A, B>", StringComparison.Ordinal) ? "<,>" : "")
+                + "))] public Wrap",
+            StringComparison.Ordinal
+        );
+
+        GeneratorRun run = Run(source);
+
+        Diagnostic diagnostic = run.GeneratorDiagnostics.Single();
+        diagnostic.Id.ShouldBe(DiagnosticDescriptors.InvalidTypeAdapter.Id);
+        diagnostic
+            .GetMessage(System.Globalization.CultureInfo.InvariantCulture)
+            .ShouldContain(expected);
+        run.CompileErrors.ShouldBeEmpty(string.Join("\n", run.CompileErrors));
+    }
+
     private sealed record GeneratorRun(
         ImmutableArray<Diagnostic> GeneratorDiagnostics,
         IReadOnlyList<Diagnostic> CompileErrors,
-        string? ShadowSource
+        string? ShadowSource,
+        string SerializerSource
     )
     {
         public IReadOnlyList<string> Ids => GeneratorDiagnostics.Select(d => d.Id).ToList();
@@ -556,7 +792,16 @@ public sealed class TypeAdapterDiagnosticTests
             )
             .ToList();
 
-        return new GeneratorRun(diagnostics, errors, shadow);
+        string serializer = string.Join(
+            "\n",
+            output
+                .SyntaxTrees.Where(t =>
+                    t.FilePath.EndsWith(".ParquetSerializer.g.cs", StringComparison.Ordinal)
+                )
+                .Select(t => t.ToString())
+        );
+
+        return new GeneratorRun(diagnostics, errors, shadow, serializer);
     }
 
     private static CSharpCompilation CreateCompilation(string source, MetadataReference[] extra) =>

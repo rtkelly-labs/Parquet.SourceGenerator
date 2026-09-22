@@ -23,6 +23,16 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   generator. New diagnostics: **PARQ016** (invalid adapter), **PARQ017** (ambiguous defaults),
   **PARQ018** (unrepresentable surrogate), **PARQ019** (built-in override ignored, warning).
   Scalar surrogates work on the legacy 4.x/5.x backend too; group surrogates need Parquet.Net 6.
+- **Generic type adapters and adapted collection elements** (`docs/44-TYPE-ADAPTERS.md` §A.4a,
+  §A.4b). A descriptor may name an open generic source (`typeof(Id<>)`) served by generic
+  conversion methods or a generic adapter class, with a closed or same-arity generic surrogate;
+  the resolver closes it per member type, checks generic constraints, and lets an exact closed
+  registration specialise it. Collection members — `T[]`, `List<T>`, `IList<T>`,
+  `IReadOnlyList<T>`, `IEnumerable<T>` and the rest — adapt their elements inline in the list
+  emitter (one static call per element, no collection copies), with scalar or group surrogates,
+  nullable elements, and `[ParquetAdapter]` on the collection member selecting the element
+  adapter. Plain `List<SomeStruct>` / `SomeStruct?[]` members now work too: value-type list
+  elements were previously rejected.
 - **`Parquet.SourceGenerator.NodaTime`** — a new, independently published package
   (`docs/45-NODATIME.md`). Referencing it makes `Instant`, `Duration`, `LocalDate`, `LocalTime`,
   `LocalDateTime`, `Offset`, `OffsetDateTime`, `OffsetDate`, `OffsetTime`, `ZonedDateTime`,

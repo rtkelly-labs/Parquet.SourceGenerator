@@ -46,6 +46,15 @@ The rule, the three surfaces and the author process are in
   AOT-hostile, a lookup per value). Scanning referenced assemblies for extension methods was
   rejected (cost, and silent ambiguity); registration is explicit.
 
+### 2026-09-22 — `PropertyModel.ElementAdapter` (adapted collection elements)
+
+- **Surface:** seam
+- **Semver:** internal
+- **Issue:** type-adapter extension model ([docs/44 §A.4b](../44-TYPE-ADAPTERS.md))
+- **Rationale:** Carries a list element's adapter calls from the parser to the list emitter,
+  which converts per element inline. Internal and init-only with a null default, so existing
+  models and golden output are unchanged.
+
 ### 2026-09-22 — `TargetClassModel.AdapterShadows` (type adapters)
 
 - **Surface:** seam

@@ -132,11 +132,16 @@ internal static class CompoundMapping
         builder.AppendLine($"{prefix}}}");
     }
 
-    private static void EmitListElementField(StringBuilder builder, LeafColumn col, string p)
+    private static void EmitListElementField(
+        StringBuilder builder,
+        LeafColumn col,
+        string element,
+        string p
+    )
     {
         int n = col.Slot;
         string cv = $"cv_{n}";
-        builder.AppendLine($"{p}var {cv} = el_{n}.{col.Leaf.Name};");
+        builder.AppendLine($"{p}var {cv} = {element}.{col.Leaf.Name};");
         string conv = GetCompoundLeafWriteExpression(col.Leaf, cv);
         if (col.Leaf.IsNullable)
         {
@@ -144,10 +149,7 @@ internal static class CompoundMapping
             GrowValues(builder, col, p + "    ");
             builder.AppendLine($"{p}    buffer_{n}[nonNullCount_{n}++] = {conv};");
             builder.AppendLine($"{p}    defLevels_{n}[posCount_{n}] = {col.MaxDef};");
-            builder.AppendLine($"{p}}}");
-            builder.AppendLine($"{p}else {{");
-            builder.AppendLine($"{p}    defLevels_{n}[posCount_{n}] = {col.MaxDef - 1};");
-            builder.AppendLine($"{p}}}");
+            CloseWithAbsentLevel(builder, p, n, col.MaxDef - 1);
         }
         else
         {
@@ -155,6 +157,54 @@ internal static class CompoundMapping
             builder.AppendLine($"{p}buffer_{n}[nonNullCount_{n}++] = {conv};");
             builder.AppendLine($"{p}defLevels_{n}[posCount_{n}] = {col.MaxDef};");
         }
+    }
+
+    /// <summary>
+    /// List&lt;POCO&gt; element write: the element slot gets its own rung (def ==
+    /// ListElementRung means a null element); below it the field ladder walks with bases offset
+    /// by two. A non-nullable value-type element has no null state, so it skips the test; an
+    /// adapted element is converted to its group surrogate first (docs/44 §A.4).
+    /// </summary>
+    private static void EmitStructElementExtraction(StringBuilder builder, LeafColumn col, string p)
+    {
+        int n = col.Slot;
+        PropertyModel element = col.ListElementStruct!;
+        ElementAdapterModel? adapter = element.ElementAdapter;
+        bool domainIsValueType = adapter?.DomainIsValueType ?? element.CompoundIsValueType;
+        bool nullTest = !domainIsValueType || element.IsNullable;
+        string value = domainIsValueType && element.IsNullable ? $"el_{n}.Value" : $"el_{n}";
+        string storage = adapter is null ? value : adapter.ToStorage(value);
+
+        // An unadapted reference element is read in place; anything converted or unwrapped gets
+        // one local so the conversion runs once per element for this column.
+        bool alias = storage != $"el_{n}";
+        string source = alias ? $"ev_{n}" : $"el_{n}";
+
+        if (!nullTest)
+        {
+            if (alias)
+                builder.AppendLine($"{p}var ev_{n} = {storage};");
+            EmitListElementField(builder, col, source, p);
+            return;
+        }
+
+        builder.AppendLine($"{p}if (el_{n} is not null) {{");
+        if (alias)
+            builder.AppendLine($"{p}    var ev_{n} = {storage};");
+        EmitListElementField(builder, col, source, p + "    ");
+        CloseWithAbsentLevel(builder, p, n, col.ListElementRung);
+    }
+
+    /// <summary>
+    /// Closes an open <c>if (… is not null) {</c> presence test with the branch that records the
+    /// absent definition level instead.
+    /// </summary>
+    private static void CloseWithAbsentLevel(StringBuilder builder, string p, int n, int level)
+    {
+        builder.AppendLine($"{p}}}");
+        builder.AppendLine($"{p}else {{");
+        builder.AppendLine($"{p}    defLevels_{n}[posCount_{n}] = {level};");
+        builder.AppendLine($"{p}}}");
     }
 
     private static void GrowLevels(StringBuilder b, int n, string prefix)
@@ -217,7 +267,18 @@ internal static class CompoundMapping
     {
         int n = col.Slot;
         PropertyModel el = col.Leaf;
-        string conv = GetCompoundLeafWriteExpression(el, $"el_{n}");
+        ElementAdapterModel? adapter = el.ElementAdapter;
+        string conv = adapter is null
+            ? GetCompoundLeafWriteExpression(el, $"el_{n}")
+            : GetCompoundLeafWriteExpression(
+                el with
+                {
+                    IsNullable = false,
+                },
+                adapter.ToStorage(
+                    el.IsNullable && adapter.DomainIsValueType ? $"el_{n}.Value" : $"el_{n}"
+                )
+            );
         builder.AppendLine($"{prefix}var lm_{n} = {itemExpr}.{col.ListMemberName};");
         builder.AppendLine($"{prefix}if (lm_{n} is null)");
         builder.AppendLine($"{prefix}{{");
@@ -235,16 +296,7 @@ internal static class CompoundMapping
         GrowLevels(builder, n, prefix + "        ");
         if (col.ListElementStruct is not null)
         {
-            // List<POCO>: element slot gets its own rung (def == ListElementRung means a
-            // null element); below that the field ladder walks with bases offset by two.
-            builder.AppendLine($"{prefix}        if (el_{n} is not null) {{");
-            EmitListElementField(builder, col, prefix + "            ");
-            builder.AppendLine($"{prefix}        }}");
-            builder.AppendLine($"{prefix}        else {{");
-            builder.AppendLine(
-                $"{prefix}            defLevels_{n}[posCount_{n}] = {col.ListElementRung};"
-            );
-            builder.AppendLine($"{prefix}        }}");
+            EmitStructElementExtraction(builder, col, prefix + "        ");
         }
         else if (el.IsNullable)
         {
@@ -340,7 +392,7 @@ internal static class CompoundMapping
         builder.AppendLine($"{indent}    else if (dv_{n} >= {col.ListElementRung}) {{");
         builder.AppendLine($"{indent}        bk_{n} ??= new {listType}();");
         builder.AppendLine(
-            $"{indent}        if (dv_{n} == {col.MaxDef}) {{ if (vc_{n} >= entries_{n}) throw new global::System.IO.InvalidDataException(\"Definition levels in column '{col.Leaf.Name}' exceeded values count (\" + entries_{n} + \").\"); bk_{n}.Add({GetCompoundLeafReadExpression(col.Leaf, $"buffer_{n}[vc_{n}++]")}); }}"
+            $"{indent}        if (dv_{n} == {col.MaxDef}) {{ if (vc_{n} >= entries_{n}) throw new global::System.IO.InvalidDataException(\"Definition levels in column '{col.Leaf.Name}' exceeded values count (\" + entries_{n} + \").\"); bk_{n}.Add({ElementRead(col.Leaf, GetCompoundLeafReadExpression(col.Leaf, $"buffer_{n}[vc_{n}++]"))}); }}"
         );
         if (col.Leaf.IsNullable)
             builder.AppendLine($"{indent}        else bk_{n}.Add(null!);");
@@ -368,8 +420,10 @@ internal static class CompoundMapping
     {
         int a = anchor.Slot;
         PropertyModel element = anchor.ListElementStruct!;
+        ElementAdapterModel? adapter = element.ElementAdapter;
         string elemType = element.TypeName.TrimEnd('?');
-        string annotated = elemType + (element.IsNullable ? "?" : "");
+        bool domainIsValueType = adapter?.DomainIsValueType ?? element.CompoundIsValueType;
+        string annotated = (adapter?.DomainTypeName ?? elemType) + (element.IsNullable ? "?" : "");
         string listType = $"global::System.Collections.Generic.List<{annotated}>";
         builder.AppendLine($"{indent}var lane_{a} = new {listType}?[{rowCountVar}];");
         builder.AppendLine(
@@ -391,8 +445,14 @@ internal static class CompoundMapping
         );
         builder.AppendLine($"{indent}    else if (dv_{a} >= {anchor.ListElementRung}) {{");
         builder.AppendLine($"{indent}        bk_{a} ??= new {listType}();");
+        // A null element needs a null state: a non-nullable value-type element has none, so
+        // the rung can only come from a malformed file.
+        string nullElement =
+            domainIsValueType && !element.IsNullable
+                ? $"throw new global::System.IO.InvalidDataException(\"Column '{anchor.Leaf.Name}' holds a null list element, but the element type is a non-nullable value type.\");"
+                : $"bk_{a}.Add(null!);";
         builder.AppendLine(
-            $"{indent}        if (dv_{a} == {anchor.ListElementRung}) bk_{a}.Add(null!);"
+            $"{indent}        if (dv_{a} == {anchor.ListElementRung}) {nullElement}"
         );
         builder.AppendLine($"{indent}        else {{");
         foreach (LeafColumn g in group)
@@ -401,7 +461,11 @@ internal static class CompoundMapping
                 $"{indent}            if (defLevels_{g.Slot}[p_{a}] >= {g.MaxDef} && vc_{g.Slot} >= entries_{g.Slot}) throw new global::System.IO.InvalidDataException(\"Definition levels in column '{g.Leaf.Name}' exceeded values count (\" + entries_{g.Slot} + \").\");"
             );
         }
-        builder.AppendLine($"{indent}            bk_{a}.Add(new {elemType}");
+        builder.AppendLine(
+            adapter is null
+                ? $"{indent}            bk_{a}.Add(new {elemType}"
+                : $"{indent}            bk_{a}.Add({adapter.AdapterTypeName}.{adapter.FromStorageMethod}(new {elemType}"
+        );
         builder.AppendLine($"{indent}            {{");
         foreach (LeafColumn g in group)
         {
@@ -411,7 +475,9 @@ internal static class CompoundMapping
                 $"{indent}                {g.Leaf.Name} = defLevels_{g.Slot}[p_{a}] >= {g.MaxDef} ? {read} : {absent},"
             );
         }
-        builder.AppendLine($"{indent}            }});");
+        builder.AppendLine(
+            adapter is null ? $"{indent}            }});" : $"{indent}            }}));"
+        );
         builder.AppendLine($"{indent}        }}");
         builder.AppendLine($"{indent}    }}");
         builder.AppendLine($"{indent}}}");
@@ -426,7 +492,7 @@ internal static class CompoundMapping
         // The parser renders element types without nullability suffixes; the lane must
         // carry the element's annotation or assigning a List<string> into a
         // List<string?> property fails the compiler's nullability check.
-        string elemType = element.TypeName;
+        string elemType = element.ElementAdapter?.DomainTypeName ?? element.TypeName;
         if (
             element.IsNullable
             && !elemType.EndsWith("?", StringComparison.Ordinal)
@@ -607,6 +673,10 @@ internal static class CompoundMapping
         builder.AppendLine($"{indent}    }};");
         builder.AppendLine($"{indent}}}");
     }
+
+    /// <summary>A leaf element's read expression, converted back to its domain type if adapted.</summary>
+    private static string ElementRead(PropertyModel element, string storage) =>
+        element.ElementAdapter is { } adapter ? adapter.FromStorage(storage) : storage;
 
     private static bool ValueNullableWrapper(PropertyModel leaf) =>
         !(leaf.Kind == PropertyKind.Primitive && leaf.TypeName.Contains("string"))

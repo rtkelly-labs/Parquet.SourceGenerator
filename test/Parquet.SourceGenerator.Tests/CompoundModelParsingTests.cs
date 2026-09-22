@@ -172,7 +172,7 @@ public sealed class CompoundModelParsingTests
     }
 
     [Fact]
-    public void PipelineDialRejectsListOfValuePoco()
+    public void PipelineDialAcceptsListOfValuePoco()
     {
         const string pointDecl = """
             [ParquetSerializable]
@@ -191,10 +191,12 @@ public sealed class CompoundModelParsingTests
             ParquetApiLevel.V6,
             CompoundKinds.Struct | CompoundKinds.List
         );
-        viaPipeline.Diagnostics.ShouldContain(d =>
-            d.Descriptor.Id == DiagnosticDescriptors.UnsupportedPropertyType.Id
-        );
-        viaPipeline.Model.ShouldBeNull();
+        // Value-type elements are emitted since adapted collections (docs/44 §A.4) needed them:
+        // a non-nullable struct element simply has no null rung to test.
+        viaPipeline.Diagnostics.ShouldBeEmpty();
+        PropertyModel spots = viaPipeline.Model!.Properties.Single(p => p.Name == "Spots");
+        spots.Element!.Kind.ShouldBe(PropertyKind.Struct);
+        spots.Element!.CompoundIsValueType.ShouldBeTrue();
     }
 
     [Fact]

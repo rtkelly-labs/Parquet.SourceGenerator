@@ -1021,6 +1021,13 @@ Namespaces: adapters in `Parquet.SourceGenerator.NodaTime.Adapters`, storage rec
 Column names inside groups are snake_case (§16) and fixed by `[property: ParquetColumn(...)]`
 on the storage records: they are a data format (§21).
 
+Collections of these types (`List<Instant>`, `LocalDate?[]`, `IReadOnlyList<Period>`, ...)
+convert per element inline ([document 44 §A.4b](./44-TYPE-ADAPTERS.md)). Every default above
+works as a list element except the three whose storage nests a group — `ZonedDateTime`,
+`Interval` and `DateInterval` — which report PARQ018 until the list emitter supports nested
+element groups. An interop adapter applies to a collection's elements when placed on the
+collection member: `[ParquetAdapter(typeof(InstantAsUnixNanosecondsAdapter))] List<Instant>`.
+
 ### A.3 Explicit interop adapters (not registered)
 
 | Adapter | Maps | Rejects (throws) |
