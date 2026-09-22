@@ -5,12 +5,14 @@
 # MI maintainability index 0-100 (higher is better), CC cyclomatic complexity,
 # CL class coupling, DIT depth of inheritance, SLOC source lines, ELOC executable lines.
 # Ordinal-sorted. MI is compared with a +/-2 tolerance; every other metric exactly.
-A:Parquet.SourceGenerator.Attributes | MI=88 CC=195 CL=32 DIT=2 SLOC=1762 ELOC=231
+A:Parquet.SourceGenerator.Attributes | MI=88 CC=204 CL=32 DIT=2 SLOC=1865 ELOC=240
 M:Parquet.SourceGenerator.NullableColumnExtractor.CompactInPlace<T>(System.Span<T>, System.ReadOnlySpan<byte>) | MI=64 CC=3 CL=4 DIT=- SLOC=72 ELOC=8
 M:Parquet.SourceGenerator.NullableColumnExtractor.CountPresent(System.ReadOnlySpan<byte>) | MI=69 CC=2 CL=1 DIT=- SLOC=42 ELOC=6
 M:Parquet.SourceGenerator.NullableColumnExtractor.ExpandPresenceToDefinitionLevels(System.ReadOnlySpan<byte>, System.Span<int>) | MI=70 CC=3 CL=4 DIT=- SLOC=47 ELOC=5
 M:Parquet.SourceGenerator.NullableColumnExtractor.ExtractBranchless<T>(System.ReadOnlySpan<System.Nullable<T>>, System.Span<int>, System.Span<T>) | MI=59 CC=5 CL=5 DIT=- SLOC=48 ELOC=11
 M:Parquet.SourceGenerator.NullableColumnExtractor.ExtractTwoPass<T>(System.ReadOnlySpan<System.Nullable<T>>, System.Span<byte>, System.Span<int>, System.Span<T>) | MI=58 CC=6 CL=5 DIT=- SLOC=50 ELOC=11
+M:Parquet.SourceGenerator.ParquetAdapterAttribute.AdapterType.get | MI=100 CC=1 CL=1 DIT=- SLOC=1 ELOC=0
+M:Parquet.SourceGenerator.ParquetAdapterAttribute.ParquetAdapterAttribute(System.Type) | MI=96 CC=1 CL=2 DIT=- SLOC=8 ELOC=1
 M:Parquet.SourceGenerator.ParquetColumnAttribute.Deduplicate.get | MI=100 CC=1 CL=0 DIT=- SLOC=1 ELOC=0
 M:Parquet.SourceGenerator.ParquetColumnAttribute.Deduplicate.set | MI=100 CC=1 CL=0 DIT=- SLOC=1 ELOC=0
 M:Parquet.SourceGenerator.ParquetColumnAttribute.Encoding.get | MI=100 CC=1 CL=1 DIT=- SLOC=1 ELOC=0
@@ -93,6 +95,13 @@ M:Parquet.SourceGenerator.ParquetSerializerOptions.RowGroupSize.get | MI=100 CC=
 M:Parquet.SourceGenerator.ParquetSerializerOptions.RowGroupSize.set | MI=100 CC=1 CL=0 DIT=- SLOC=1 ELOC=0
 M:Parquet.SourceGenerator.ParquetTimestampAttribute.ParquetTimestampAttribute(Parquet.SourceGenerator.ParquetTimestampUnit) | MI=96 CC=1 CL=2 DIT=- SLOC=8 ELOC=1
 M:Parquet.SourceGenerator.ParquetTimestampAttribute.Unit.get | MI=100 CC=1 CL=1 DIT=- SLOC=1 ELOC=0
+M:Parquet.SourceGenerator.ParquetTypeAdapterAttribute.AdapterType.get | MI=100 CC=1 CL=1 DIT=- SLOC=1 ELOC=0
+M:Parquet.SourceGenerator.ParquetTypeAdapterAttribute.ContractVersion.get | MI=100 CC=1 CL=0 DIT=- SLOC=1 ELOC=0
+M:Parquet.SourceGenerator.ParquetTypeAdapterAttribute.ContractVersion.set | MI=100 CC=1 CL=0 DIT=- SLOC=1 ELOC=0
+M:Parquet.SourceGenerator.ParquetTypeAdapterAttribute.ParquetTypeAdapterAttribute(System.Type) | MI=96 CC=1 CL=2 DIT=- SLOC=9 ELOC=1
+M:Parquet.SourceGenerator.ParquetTypeAdapterAttribute.ParquetTypeAdapterAttribute(System.Type, System.Type) | MI=85 CC=1 CL=2 DIT=- SLOC=13 ELOC=2
+M:Parquet.SourceGenerator.ParquetTypeAdapterAttribute.SourceType.get | MI=100 CC=1 CL=1 DIT=- SLOC=1 ELOC=0
+M:Parquet.SourceGenerator.ParquetTypeAdapterAttribute.SurrogateType.get | MI=100 CC=1 CL=1 DIT=- SLOC=1 ELOC=0
 M:Parquet.SourceGenerator.VectorizedColumnTransforms.ConvertDateTimeToEpochMicroseconds(System.ReadOnlySpan<System.DateTime>, System.Span<long>) | MI=66 CC=3 CL=6 DIT=- SLOC=22 ELOC=6
 M:Parquet.SourceGenerator.VectorizedColumnTransforms.ConvertDateTimeToEpochMilliseconds(System.ReadOnlySpan<System.DateTime>, System.Span<long>) | MI=66 CC=3 CL=6 DIT=- SLOC=22 ELOC=6
 M:Parquet.SourceGenerator.VectorizedColumnTransforms.ConvertEpochMicrosecondsToDateTime(System.ReadOnlySpan<long>, System.Span<System.DateTime>) | MI=67 CC=3 CL=6 DIT=- SLOC=64 ELOC=6
@@ -110,8 +119,9 @@ M:Parquet.SourceGenerator.VectorizedColumnTransforms.UtcEpochConstant.get | MI=9
 M:Parquet.SourceGenerator.VectorizedColumnTransforms.Widen(System.ReadOnlySpan<byte>, System.Span<int>) | MI=70 CC=3 CL=4 DIT=- SLOC=42 ELOC=5
 M:Parquet.SourceGenerator.VectorizedColumnTransforms.Widen(System.ReadOnlySpan<int>, System.Span<long>) | MI=70 CC=3 CL=4 DIT=- SLOC=41 ELOC=5
 M:Parquet.SourceGenerator.VectorizedColumnTransforms.Widen(System.ReadOnlySpan<short>, System.Span<int>) | MI=70 CC=3 CL=4 DIT=- SLOC=37 ELOC=5
-N:Parquet.SourceGenerator | MI=87 CC=195 CL=32 DIT=2 SLOC=1762 ELOC=231
+N:Parquet.SourceGenerator | MI=87 CC=204 CL=32 DIT=2 SLOC=1865 ELOC=240
 N:System.Runtime.CompilerServices | MI=100 CC=0 CL=0 DIT=1 SLOC=0 ELOC=0
+P:Parquet.SourceGenerator.ParquetAdapterAttribute.AdapterType | MI=100 CC=1 CL=1 DIT=- SLOC=2 ELOC=0
 P:Parquet.SourceGenerator.ParquetColumnAttribute.Deduplicate | MI=100 CC=2 CL=0 DIT=- SLOC=6 ELOC=0
 P:Parquet.SourceGenerator.ParquetColumnAttribute.Encoding | MI=100 CC=2 CL=1 DIT=- SLOC=4 ELOC=1
 P:Parquet.SourceGenerator.ParquetColumnAttribute.Name | MI=100 CC=2 CL=0 DIT=- SLOC=4 ELOC=0
@@ -149,9 +159,14 @@ P:Parquet.SourceGenerator.ParquetSerializerOptions.MaxRowGroupCount | MI=100 CC=
 P:Parquet.SourceGenerator.ParquetSerializerOptions.MaxStringLengthBytes | MI=100 CC=2 CL=0 DIT=- SLOC=5 ELOC=1
 P:Parquet.SourceGenerator.ParquetSerializerOptions.RowGroupSize | MI=100 CC=2 CL=0 DIT=- SLOC=9 ELOC=1
 P:Parquet.SourceGenerator.ParquetTimestampAttribute.Unit | MI=100 CC=1 CL=1 DIT=- SLOC=4 ELOC=0
+P:Parquet.SourceGenerator.ParquetTypeAdapterAttribute.AdapterType | MI=100 CC=1 CL=1 DIT=- SLOC=2 ELOC=0
+P:Parquet.SourceGenerator.ParquetTypeAdapterAttribute.ContractVersion | MI=100 CC=2 CL=0 DIT=- SLOC=5 ELOC=1
+P:Parquet.SourceGenerator.ParquetTypeAdapterAttribute.SourceType | MI=100 CC=1 CL=1 DIT=- SLOC=2 ELOC=0
+P:Parquet.SourceGenerator.ParquetTypeAdapterAttribute.SurrogateType | MI=100 CC=1 CL=1 DIT=- SLOC=2 ELOC=0
 P:Parquet.SourceGenerator.VectorizedColumnTransforms.UnixEpochTicks | MI=100 CC=2 CL=0 DIT=- SLOC=4 ELOC=2
 P:Parquet.SourceGenerator.VectorizedColumnTransforms.UtcEpochConstant | MI=92 CC=2 CL=0 DIT=- SLOC=5 ELOC=2
 T:Parquet.SourceGenerator.NullableColumnExtractor | MI=62 CC=19 CL=5 DIT=1 SLOC=285 ELOC=41
+T:Parquet.SourceGenerator.ParquetAdapterAttribute | MI=85 CC=2 CL=4 DIT=2 SLOC=24 ELOC=3
 T:Parquet.SourceGenerator.ParquetColumnAttribute | MI=89 CC=11 CL=6 DIT=2 SLOC=50 ELOC=5
 T:Parquet.SourceGenerator.ParquetColumnEncoding | MI=93 CC=1 CL=0 DIT=1 SLOC=27 ELOC=2
 T:Parquet.SourceGenerator.ParquetColumnStatistics | MI=66 CC=5 CL=6 DIT=1 SLOC=79 ELOC=15
@@ -168,5 +183,6 @@ T:Parquet.SourceGenerator.ParquetSerializerOptions | MI=91 CC=31 CL=8 DIT=1 SLOC
 T:Parquet.SourceGenerator.ParquetSortKeyAttribute | MI=100 CC=1 CL=3 DIT=2 SLOC=32 ELOC=2
 T:Parquet.SourceGenerator.ParquetTimestampAttribute | MI=85 CC=2 CL=4 DIT=2 SLOC=24 ELOC=3
 T:Parquet.SourceGenerator.ParquetTimestampUnit | MI=100 CC=1 CL=0 DIT=1 SLOC=20 ELOC=0
+T:Parquet.SourceGenerator.ParquetTypeAdapterAttribute | MI=89 CC=7 CL=4 DIT=2 SLOC=76 ELOC=6
 T:Parquet.SourceGenerator.VectorizedColumnTransforms | MI=69 CC=49 CL=6 DIT=1 SLOC=690 ELOC=82
 T:System.Runtime.CompilerServices.IsExternalInit | MI=100 CC=0 CL=0 DIT=1 SLOC=1 ELOC=0

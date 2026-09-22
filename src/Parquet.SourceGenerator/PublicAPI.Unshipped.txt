@@ -78,3 +78,7 @@ Parquet.SourceGenerator.Models.PropertyModel.IsSortKey.init -> void
 Parquet.SourceGenerator.Models.SortKeyEligibility
 static Parquet.SourceGenerator.Models.SortKeyEligibility.IsEligible(Parquet.SourceGenerator.Models.PropertyModel! property, out string! reason) -> bool
 static readonly Parquet.SourceGenerator.Diagnostics.DiagnosticDescriptors.SortKeyNotEligible -> Microsoft.CodeAnalysis.DiagnosticDescriptor!
+static readonly Parquet.SourceGenerator.Diagnostics.DiagnosticDescriptors.AmbiguousTypeAdapter -> Microsoft.CodeAnalysis.DiagnosticDescriptor!
+static readonly Parquet.SourceGenerator.Diagnostics.DiagnosticDescriptors.BuiltInAdapterRegistrationIgnored -> Microsoft.CodeAnalysis.DiagnosticDescriptor!
+static readonly Parquet.SourceGenerator.Diagnostics.DiagnosticDescriptors.InvalidTypeAdapter -> Microsoft.CodeAnalysis.DiagnosticDescriptor!
+static readonly Parquet.SourceGenerator.Diagnostics.DiagnosticDescriptors.UnsupportedAdapterSurrogate -> Microsoft.CodeAnalysis.DiagnosticDescriptor!

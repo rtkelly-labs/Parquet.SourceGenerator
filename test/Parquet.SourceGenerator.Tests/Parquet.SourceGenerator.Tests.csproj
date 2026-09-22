@@ -24,6 +24,11 @@
       this assembly: the emitted overloads only exist because this reference does.
     -->
         <PackageReference Include="Apache.Arrow" />
+        <!--
+      The newest NodaTime 3.x, overriding the package's compile-time floor (Directory.Packages.props),
+      so the adapters are exercised against both ends of the supported range.
+    -->
+        <PackageReference Include="NodaTime" VersionOverride="3.3.4" />
         <PackageReference Include="Shouldly" />
         <PackageReference Include="Bogus" />
         <PackageReference Include="Microsoft.CodeAnalysis.BannedApiAnalyzers">
@@ -34,6 +39,11 @@
 
     <ItemGroup>
         <ProjectReference Include="..\..\src\Parquet.SourceGenerator.Attributes\Parquet.SourceGenerator.Attributes.csproj" />
+        <!--
+      The NodaTime adapter package, referenced exactly as a consumer would: its assembly-level
+      [ParquetTypeAdapter] registrations are what the generator discovers in this compilation.
+    -->
+        <ProjectReference Include="..\..\src\Parquet.SourceGenerator.NodaTime\Parquet.SourceGenerator.NodaTime.csproj" />
         <!--
       ReferenceOutputAssembly stays "true" here, unlike every other consumer in the repository.
       This project unit-tests the generator's internals directly (CodeEmitter, TargetParser,

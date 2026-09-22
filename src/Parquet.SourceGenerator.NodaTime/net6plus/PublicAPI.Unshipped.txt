@@ -1,0 +1,7 @@
+#nullable enable
+Parquet.SourceGenerator.NodaTime.Adapters.IsoLocalDateAsDateOnlyAdapter
+Parquet.SourceGenerator.NodaTime.Adapters.LocalTimeAsTimeOnlyAdapter
+static Parquet.SourceGenerator.NodaTime.Adapters.IsoLocalDateAsDateOnlyAdapter.FromStorage(System.DateOnly value) -> NodaTime.LocalDate
+static Parquet.SourceGenerator.NodaTime.Adapters.IsoLocalDateAsDateOnlyAdapter.ToStorage(NodaTime.LocalDate value) -> System.DateOnly
+static Parquet.SourceGenerator.NodaTime.Adapters.LocalTimeAsTimeOnlyAdapter.FromStorage(System.TimeOnly value) -> NodaTime.LocalTime
+static Parquet.SourceGenerator.NodaTime.Adapters.LocalTimeAsTimeOnlyAdapter.ToStorage(NodaTime.LocalTime value) -> System.TimeOnly

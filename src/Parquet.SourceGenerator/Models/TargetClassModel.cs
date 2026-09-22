@@ -21,6 +21,12 @@ public sealed record TargetClassModel(
 ) : IEquatable<TargetClassModel>
 {
     /// <summary>
+    /// Storage-typed shadow members the generator adds to this type's partial declaration for
+    /// adapted members (docs/44-TYPE-ADAPTERS.md). Empty unless a member resolved to an adapter.
+    /// </summary>
+    internal AdapterShadowSet AdapterShadows { get; init; } = AdapterShadowSet.None;
+
+    /// <summary>
     /// Backwards-compatible constructor overload without single instance field metadata.
     /// </summary>
     public TargetClassModel(

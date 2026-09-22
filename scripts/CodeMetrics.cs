@@ -79,6 +79,13 @@ var measured = new (string Project, string? TargetFramework)[]
         "src/Parquet.SourceGenerator.Attributes/Parquet.SourceGenerator.Attributes.csproj",
         "netstandard2.0"
     ),
+    // The NodaTime adapter package ships beside the generator, so it is product code too. Pinned to
+    // netstandard2.0 for the same determinism reason; the net8.0-only DateOnly/TimeOnly adapters
+    // are two short classes outside that measurement.
+    (
+        "src/Parquet.SourceGenerator.NodaTime/Parquet.SourceGenerator.NodaTime.csproj",
+        "netstandard2.0"
+    ),
 };
 
 const string BaselineDirectory = "metrics";

@@ -102,3 +102,14 @@ override Parquet.SourceGenerator.ParquetColumnStatistics<T>.GetHashCode() -> int
 static Parquet.SourceGenerator.ParquetColumnStatistics.FromRaw<T>(object? min, object? max, long? nullCount, long? distinctCount) -> Parquet.SourceGenerator.ParquetColumnStatistics<T>
 static Parquet.SourceGenerator.ParquetColumnStatistics<T>.operator !=(Parquet.SourceGenerator.ParquetColumnStatistics<T> left, Parquet.SourceGenerator.ParquetColumnStatistics<T> right) -> bool
 static Parquet.SourceGenerator.ParquetColumnStatistics<T>.operator ==(Parquet.SourceGenerator.ParquetColumnStatistics<T> left, Parquet.SourceGenerator.ParquetColumnStatistics<T> right) -> bool
+Parquet.SourceGenerator.ParquetAdapterAttribute
+Parquet.SourceGenerator.ParquetAdapterAttribute.AdapterType.get -> System.Type!
+Parquet.SourceGenerator.ParquetAdapterAttribute.ParquetAdapterAttribute(System.Type! adapterType) -> void
+Parquet.SourceGenerator.ParquetTypeAdapterAttribute
+Parquet.SourceGenerator.ParquetTypeAdapterAttribute.AdapterType.get -> System.Type?
+Parquet.SourceGenerator.ParquetTypeAdapterAttribute.ContractVersion.get -> int
+Parquet.SourceGenerator.ParquetTypeAdapterAttribute.ContractVersion.set -> void
+Parquet.SourceGenerator.ParquetTypeAdapterAttribute.ParquetTypeAdapterAttribute(System.Type! adapterType) -> void
+Parquet.SourceGenerator.ParquetTypeAdapterAttribute.ParquetTypeAdapterAttribute(System.Type! sourceType, System.Type! surrogateType) -> void
+Parquet.SourceGenerator.ParquetTypeAdapterAttribute.SourceType.get -> System.Type?
+Parquet.SourceGenerator.ParquetTypeAdapterAttribute.SurrogateType.get -> System.Type?

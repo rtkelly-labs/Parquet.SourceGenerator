@@ -209,6 +209,10 @@ internal static class Program
             "Arrow RecordBatch ingestion under Native AOT (#267)",
             ArrowIngestionAsync
         );
+        await CheckAsync(
+            "NodaTime type adapters round-trip (lossless defaults and interop)",
+            NodaTimeChecks.RoundTripAsync
+        );
 
         Console.WriteLine("=================================================");
         if (_failures == 0)

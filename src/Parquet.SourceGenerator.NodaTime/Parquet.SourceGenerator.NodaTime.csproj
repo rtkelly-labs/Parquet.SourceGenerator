@@ -1,0 +1,60 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
+        <RootNamespace>Parquet.SourceGenerator.NodaTime</RootNamespace>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <PackageId>Parquet.SourceGenerator.NodaTime</PackageId>
+        <Description>NodaTime type adapters for Parquet.SourceGenerator: lossless default storage for Instant, LocalDate, LocalDateTime, ZonedDateTime, Period and the rest of the NodaTime value types, plus explicit native-timestamp interoperability adapters. Reference it and the generator picks the adapters up at compile time — no reflection, no runtime registry.</Description>
+        <PackageTags>$(PackageTags);nodatime</PackageTags>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+    </PropertyGroup>
+
+    <!--
+    A plain library, not an analyzer: the adapters run in the consumer's process, called directly by
+    generated code. The package's assembly-level [ParquetTypeAdapter] registrations are what make
+    them discoverable — the generator reads those from the referenced assembly at compile time.
+  -->
+    <ItemGroup>
+        <PackageReference Include="NodaTime" />
+        <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" PrivateAssets="All" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Parquet.SourceGenerator.Attributes\Parquet.SourceGenerator.Attributes.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- CA1502 / CA1505 / CA1506 thresholds. See docs/21-CODE-METRICS.md. -->
+        <AdditionalFiles Include="..\..\CodeMetricsConfig.txt" />
+        <AdditionalFiles Include="PublicAPI.Shipped.txt" />
+        <AdditionalFiles Include="PublicAPI.Unshipped.txt" />
+    </ItemGroup>
+
+    <!--
+    The DateOnly / TimeOnly interop adapters exist only where those types do. Their catalogue lines
+    live in a second pair of files the analyzer merges in for those targets alone, so the
+    netstandard2.0 build does not report them as removed API.
+  -->
+    <ItemGroup Condition="'$(TargetFramework)' != 'netstandard2.0'">
+        <AdditionalFiles Include="net6plus\PublicAPI.Shipped.txt" />
+        <AdditionalFiles Include="net6plus\PublicAPI.Unshipped.txt" />
+    </ItemGroup>
+
+    <!-- The package ships its own README in place of the repository-wide PACKAGE_README.md. -->
+    <ItemGroup>
+        <None Remove="$(MSBuildThisFileDirectory)..\..\PACKAGE_README.md" />
+        <None Include="README.md" Pack="true" PackagePath="\" />
+    </ItemGroup>
+
+    <!-- PARQAPI002 (docs/18-API-CHANGE-CONTRACT.md), as for the other shipped projects. -->
+    <ItemGroup>
+        <ProjectReference
+            Include="..\..\tools\Parquet.SourceGenerator.ApiGates\Parquet.SourceGenerator.ApiGates.csproj"
+            OutputItemType="Analyzer"
+            ReferenceOutputAssembly="false"
+            PrivateAssets="all"
+        />
+        <AdditionalFiles Include="..\api\seams.txt" />
+        <AdditionalFiles Include="..\..\docs\api\LEDGER.md" />
+    </ItemGroup>
+</Project>

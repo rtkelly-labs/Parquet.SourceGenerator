@@ -169,13 +169,29 @@ jobs:
             unzip -Z1 "$attrs" | grep -q "^lib/$tfm/Parquet\.SourceGenerator\.Attributes\.dll$" \
               || { echo "FAIL: attributes package missing lib/$tfm"; exit 1; }
           done
+          # The NodaTime adapter package is an ordinary runtime library, published independently of
+          # the generator: it must carry its assemblies and declare both of its dependencies, and it
+          # must not drag the generator (an analyzer) into a consumer's compile references.
+          noda="Parquet.SourceGenerator.NodaTime.${version}.nupkg"
+          test -f "$noda" || { echo "FAIL: NodaTime adapter package not produced"; ls -la; exit 1; }
+          for tfm in netstandard2.0 net8.0; do
+            unzip -Z1 "$noda" | grep -q "^lib/$tfm/Parquet\.SourceGenerator\.NodaTime\.dll$" \
+              || { echo "FAIL: NodaTime package missing lib/$tfm"; exit 1; }
+          done
+          unzip -p "$noda" '*.nuspec' | grep -q 'id="NodaTime"' \
+            || { echo "FAIL: NodaTime package .nuspec does not depend on NodaTime"; exit 1; }
+          unzip -p "$noda" '*.nuspec' | grep -q 'id="Parquet.SourceGenerator.Attributes"' \
+            || { echo "FAIL: NodaTime package .nuspec does not depend on the Attributes package"; exit 1; }
+          if unzip -p "$noda" '*.nuspec' | grep -q 'id="Parquet.SourceGenerator"'; then
+            echo "FAIL: NodaTime package must not depend on the generator package"; exit 1
+          fi
           echo "Package layout OK for $version."
 
       - name: Verify Package Consumption (v6 & Legacy packages on .NET 8 & .NET 9)
         run: |
           set -euo pipefail
           version="${{ needs.prepare.outputs.version }}"
-          echo "Consuming Parquet.SourceGenerator $version and Legacy from local feed"
+          echo "Consuming Parquet.SourceGenerator $version, Legacy and NodaTime from local feed"
           dotnet run --project test/PackageConsumption/PackageConsumption.csproj \
             --framework net8.0 \
             --configuration Release \

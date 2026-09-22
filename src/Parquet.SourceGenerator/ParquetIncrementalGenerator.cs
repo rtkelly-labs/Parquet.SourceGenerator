@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Parquet.SourceGenerator.Emitter;
+using Parquet.SourceGenerator.Emitter.Components;
 using Parquet.SourceGenerator.Models;
 using Parquet.SourceGenerator.Parser;
 
@@ -82,6 +83,17 @@ public sealed class ParquetIncrementalGenerator : IIncrementalGenerator
                     string hintName = $"{prefix}.ParquetSerializer.g.cs";
                     string sourceCode = CodeEmitter.EmitSource(result.Model, pair.Right);
                     spc.AddSource(hintName, sourceCode);
+
+                    // Adapted members read and write through generated storage shadows on the
+                    // partial type (docs/44-TYPE-ADAPTERS.md); emitted only when there are any, so
+                    // every model without an adapter produces exactly the files it always did.
+                    if (!result.Model.AdapterShadows.IsEmpty)
+                    {
+                        spc.AddSource(
+                            $"{prefix}.{AdapterShadowComponent.HintSuffix}",
+                            AdapterShadowComponent.EmitSource(result.Model.AdapterShadows)
+                        );
+                    }
                 }
             }
         );

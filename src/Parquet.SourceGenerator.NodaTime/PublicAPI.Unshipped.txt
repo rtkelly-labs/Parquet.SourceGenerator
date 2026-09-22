@@ -1,0 +1,273 @@
+#nullable enable
+Parquet.SourceGenerator.NodaTime.Adapters.AnnualDateAdapter
+Parquet.SourceGenerator.NodaTime.Adapters.DateIntervalAdapter
+Parquet.SourceGenerator.NodaTime.Adapters.DurationAdapter
+Parquet.SourceGenerator.NodaTime.Adapters.InstantAdapter
+Parquet.SourceGenerator.NodaTime.Adapters.InstantAsDateTimeAdapter
+Parquet.SourceGenerator.NodaTime.Adapters.InstantAsDateTimeMicrosecondsAdapter
+Parquet.SourceGenerator.NodaTime.Adapters.InstantAsUnixNanosecondsAdapter
+Parquet.SourceGenerator.NodaTime.Adapters.IntervalAdapter
+Parquet.SourceGenerator.NodaTime.Adapters.IsoLocalDateAsDateTimeAdapter
+Parquet.SourceGenerator.NodaTime.Adapters.IsoLocalDateTimeAsDateTimeAdapter
+Parquet.SourceGenerator.NodaTime.Adapters.LocalDateAdapter
+Parquet.SourceGenerator.NodaTime.Adapters.LocalDateTimeAdapter
+Parquet.SourceGenerator.NodaTime.Adapters.LocalTimeAdapter
+Parquet.SourceGenerator.NodaTime.Adapters.OffsetAdapter
+Parquet.SourceGenerator.NodaTime.Adapters.OffsetDateAdapter
+Parquet.SourceGenerator.NodaTime.Adapters.OffsetDateTimeAdapter
+Parquet.SourceGenerator.NodaTime.Adapters.OffsetTimeAdapter
+Parquet.SourceGenerator.NodaTime.Adapters.PeriodAdapter
+Parquet.SourceGenerator.NodaTime.Adapters.YearMonthAdapter
+Parquet.SourceGenerator.NodaTime.Adapters.ZonedDateTimeAdapter
+Parquet.SourceGenerator.NodaTime.Storage.NodaAnnualDateStorage
+Parquet.SourceGenerator.NodaTime.Storage.NodaAnnualDateStorage.Day.get -> int
+Parquet.SourceGenerator.NodaTime.Storage.NodaAnnualDateStorage.Day.init -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaAnnualDateStorage.Deconstruct(out int Month, out int Day) -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaAnnualDateStorage.Equals(Parquet.SourceGenerator.NodaTime.Storage.NodaAnnualDateStorage other) -> bool
+Parquet.SourceGenerator.NodaTime.Storage.NodaAnnualDateStorage.Month.get -> int
+Parquet.SourceGenerator.NodaTime.Storage.NodaAnnualDateStorage.Month.init -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaAnnualDateStorage.NodaAnnualDateStorage() -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaAnnualDateStorage.NodaAnnualDateStorage(int Month, int Day) -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaDateIntervalStorage
+Parquet.SourceGenerator.NodaTime.Storage.NodaDateIntervalStorage.Deconstruct(out Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateStorage Start, out Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateStorage End) -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaDateIntervalStorage.End.get -> Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateStorage
+Parquet.SourceGenerator.NodaTime.Storage.NodaDateIntervalStorage.End.init -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaDateIntervalStorage.Equals(Parquet.SourceGenerator.NodaTime.Storage.NodaDateIntervalStorage other) -> bool
+Parquet.SourceGenerator.NodaTime.Storage.NodaDateIntervalStorage.NodaDateIntervalStorage() -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaDateIntervalStorage.NodaDateIntervalStorage(Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateStorage Start, Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateStorage End) -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaDateIntervalStorage.Start.get -> Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateStorage
+Parquet.SourceGenerator.NodaTime.Storage.NodaDateIntervalStorage.Start.init -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaDurationStorage
+Parquet.SourceGenerator.NodaTime.Storage.NodaDurationStorage.Days.get -> int
+Parquet.SourceGenerator.NodaTime.Storage.NodaDurationStorage.Days.init -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaDurationStorage.Deconstruct(out int Days, out long NanosecondOfDay) -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaDurationStorage.Equals(Parquet.SourceGenerator.NodaTime.Storage.NodaDurationStorage other) -> bool
+Parquet.SourceGenerator.NodaTime.Storage.NodaDurationStorage.NanosecondOfDay.get -> long
+Parquet.SourceGenerator.NodaTime.Storage.NodaDurationStorage.NanosecondOfDay.init -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaDurationStorage.NodaDurationStorage() -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaDurationStorage.NodaDurationStorage(int Days, long NanosecondOfDay) -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaInstantStorage
+Parquet.SourceGenerator.NodaTime.Storage.NodaInstantStorage.DaysSinceUnixEpoch.get -> int
+Parquet.SourceGenerator.NodaTime.Storage.NodaInstantStorage.DaysSinceUnixEpoch.init -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaInstantStorage.Deconstruct(out int DaysSinceUnixEpoch, out long NanosecondOfDay) -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaInstantStorage.Equals(Parquet.SourceGenerator.NodaTime.Storage.NodaInstantStorage other) -> bool
+Parquet.SourceGenerator.NodaTime.Storage.NodaInstantStorage.NanosecondOfDay.get -> long
+Parquet.SourceGenerator.NodaTime.Storage.NodaInstantStorage.NanosecondOfDay.init -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaInstantStorage.NodaInstantStorage() -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaInstantStorage.NodaInstantStorage(int DaysSinceUnixEpoch, long NanosecondOfDay) -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaIntervalStorage
+Parquet.SourceGenerator.NodaTime.Storage.NodaIntervalStorage.Deconstruct(out Parquet.SourceGenerator.NodaTime.Storage.NodaInstantStorage? Start, out Parquet.SourceGenerator.NodaTime.Storage.NodaInstantStorage? End) -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaIntervalStorage.End.get -> Parquet.SourceGenerator.NodaTime.Storage.NodaInstantStorage?
+Parquet.SourceGenerator.NodaTime.Storage.NodaIntervalStorage.End.init -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaIntervalStorage.Equals(Parquet.SourceGenerator.NodaTime.Storage.NodaIntervalStorage other) -> bool
+Parquet.SourceGenerator.NodaTime.Storage.NodaIntervalStorage.NodaIntervalStorage() -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaIntervalStorage.NodaIntervalStorage(Parquet.SourceGenerator.NodaTime.Storage.NodaInstantStorage? Start, Parquet.SourceGenerator.NodaTime.Storage.NodaInstantStorage? End) -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaIntervalStorage.Start.get -> Parquet.SourceGenerator.NodaTime.Storage.NodaInstantStorage?
+Parquet.SourceGenerator.NodaTime.Storage.NodaIntervalStorage.Start.init -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateStorage
+Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateStorage.CalendarId.get -> string!
+Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateStorage.CalendarId.init -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateStorage.DayNumber.get -> int
+Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateStorage.DayNumber.init -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateStorage.Deconstruct(out int DayNumber, out string! CalendarId) -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateStorage.Equals(Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateStorage other) -> bool
+Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateStorage.NodaLocalDateStorage() -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateStorage.NodaLocalDateStorage(int DayNumber, string! CalendarId) -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateTimeStorage
+Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateTimeStorage.CalendarId.get -> string!
+Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateTimeStorage.CalendarId.init -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateTimeStorage.DayNumber.get -> int
+Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateTimeStorage.DayNumber.init -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateTimeStorage.Deconstruct(out int DayNumber, out long NanosecondOfDay, out string! CalendarId) -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateTimeStorage.Equals(Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateTimeStorage other) -> bool
+Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateTimeStorage.NanosecondOfDay.get -> long
+Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateTimeStorage.NanosecondOfDay.init -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateTimeStorage.NodaLocalDateTimeStorage() -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateTimeStorage.NodaLocalDateTimeStorage(int DayNumber, long NanosecondOfDay, string! CalendarId) -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateStorage
+Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateStorage.CalendarId.get -> string!
+Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateStorage.CalendarId.init -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateStorage.DayNumber.get -> int
+Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateStorage.DayNumber.init -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateStorage.Deconstruct(out int DayNumber, out string! CalendarId, out int OffsetSeconds) -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateStorage.Equals(Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateStorage other) -> bool
+Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateStorage.NodaOffsetDateStorage() -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateStorage.NodaOffsetDateStorage(int DayNumber, string! CalendarId, int OffsetSeconds) -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateStorage.OffsetSeconds.get -> int
+Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateStorage.OffsetSeconds.init -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateTimeStorage
+Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateTimeStorage.CalendarId.get -> string!
+Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateTimeStorage.CalendarId.init -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateTimeStorage.DayNumber.get -> int
+Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateTimeStorage.DayNumber.init -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateTimeStorage.Deconstruct(out int DayNumber, out long NanosecondOfDay, out string! CalendarId, out int OffsetSeconds) -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateTimeStorage.Equals(Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateTimeStorage other) -> bool
+Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateTimeStorage.NanosecondOfDay.get -> long
+Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateTimeStorage.NanosecondOfDay.init -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateTimeStorage.NodaOffsetDateTimeStorage() -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateTimeStorage.NodaOffsetDateTimeStorage(int DayNumber, long NanosecondOfDay, string! CalendarId, int OffsetSeconds) -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateTimeStorage.OffsetSeconds.get -> int
+Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateTimeStorage.OffsetSeconds.init -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetTimeStorage
+Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetTimeStorage.Deconstruct(out long NanosecondOfDay, out int OffsetSeconds) -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetTimeStorage.Equals(Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetTimeStorage other) -> bool
+Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetTimeStorage.NanosecondOfDay.get -> long
+Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetTimeStorage.NanosecondOfDay.init -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetTimeStorage.NodaOffsetTimeStorage() -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetTimeStorage.NodaOffsetTimeStorage(long NanosecondOfDay, int OffsetSeconds) -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetTimeStorage.OffsetSeconds.get -> int
+Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetTimeStorage.OffsetSeconds.init -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaPeriodStorage
+Parquet.SourceGenerator.NodaTime.Storage.NodaPeriodStorage.Days.get -> int
+Parquet.SourceGenerator.NodaTime.Storage.NodaPeriodStorage.Days.init -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaPeriodStorage.Deconstruct(out int Years, out int Months, out int Weeks, out int Days, out long Hours, out long Minutes, out long Seconds, out long Milliseconds, out long Ticks, out long Nanoseconds) -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaPeriodStorage.Equals(Parquet.SourceGenerator.NodaTime.Storage.NodaPeriodStorage other) -> bool
+Parquet.SourceGenerator.NodaTime.Storage.NodaPeriodStorage.Hours.get -> long
+Parquet.SourceGenerator.NodaTime.Storage.NodaPeriodStorage.Hours.init -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaPeriodStorage.Milliseconds.get -> long
+Parquet.SourceGenerator.NodaTime.Storage.NodaPeriodStorage.Milliseconds.init -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaPeriodStorage.Minutes.get -> long
+Parquet.SourceGenerator.NodaTime.Storage.NodaPeriodStorage.Minutes.init -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaPeriodStorage.Months.get -> int
+Parquet.SourceGenerator.NodaTime.Storage.NodaPeriodStorage.Months.init -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaPeriodStorage.Nanoseconds.get -> long
+Parquet.SourceGenerator.NodaTime.Storage.NodaPeriodStorage.Nanoseconds.init -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaPeriodStorage.NodaPeriodStorage() -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaPeriodStorage.NodaPeriodStorage(int Years, int Months, int Weeks, int Days, long Hours, long Minutes, long Seconds, long Milliseconds, long Ticks, long Nanoseconds) -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaPeriodStorage.Seconds.get -> long
+Parquet.SourceGenerator.NodaTime.Storage.NodaPeriodStorage.Seconds.init -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaPeriodStorage.Ticks.get -> long
+Parquet.SourceGenerator.NodaTime.Storage.NodaPeriodStorage.Ticks.init -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaPeriodStorage.Weeks.get -> int
+Parquet.SourceGenerator.NodaTime.Storage.NodaPeriodStorage.Weeks.init -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaPeriodStorage.Years.get -> int
+Parquet.SourceGenerator.NodaTime.Storage.NodaPeriodStorage.Years.init -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaYearMonthStorage
+Parquet.SourceGenerator.NodaTime.Storage.NodaYearMonthStorage.CalendarId.get -> string!
+Parquet.SourceGenerator.NodaTime.Storage.NodaYearMonthStorage.CalendarId.init -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaYearMonthStorage.Deconstruct(out int Year, out int Month, out string! CalendarId) -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaYearMonthStorage.Equals(Parquet.SourceGenerator.NodaTime.Storage.NodaYearMonthStorage other) -> bool
+Parquet.SourceGenerator.NodaTime.Storage.NodaYearMonthStorage.Month.get -> int
+Parquet.SourceGenerator.NodaTime.Storage.NodaYearMonthStorage.Month.init -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaYearMonthStorage.NodaYearMonthStorage() -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaYearMonthStorage.NodaYearMonthStorage(int Year, int Month, string! CalendarId) -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaYearMonthStorage.Year.get -> int
+Parquet.SourceGenerator.NodaTime.Storage.NodaYearMonthStorage.Year.init -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaZonedDateTimeStorage
+Parquet.SourceGenerator.NodaTime.Storage.NodaZonedDateTimeStorage.CalendarId.get -> string!
+Parquet.SourceGenerator.NodaTime.Storage.NodaZonedDateTimeStorage.CalendarId.init -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaZonedDateTimeStorage.Deconstruct(out Parquet.SourceGenerator.NodaTime.Storage.NodaInstantStorage Instant, out string! ZoneId, out string! CalendarId, out int ObservedOffsetSeconds) -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaZonedDateTimeStorage.Equals(Parquet.SourceGenerator.NodaTime.Storage.NodaZonedDateTimeStorage other) -> bool
+Parquet.SourceGenerator.NodaTime.Storage.NodaZonedDateTimeStorage.Instant.get -> Parquet.SourceGenerator.NodaTime.Storage.NodaInstantStorage
+Parquet.SourceGenerator.NodaTime.Storage.NodaZonedDateTimeStorage.Instant.init -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaZonedDateTimeStorage.NodaZonedDateTimeStorage() -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaZonedDateTimeStorage.NodaZonedDateTimeStorage(Parquet.SourceGenerator.NodaTime.Storage.NodaInstantStorage Instant, string! ZoneId, string! CalendarId, int ObservedOffsetSeconds) -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaZonedDateTimeStorage.ObservedOffsetSeconds.get -> int
+Parquet.SourceGenerator.NodaTime.Storage.NodaZonedDateTimeStorage.ObservedOffsetSeconds.init -> void
+Parquet.SourceGenerator.NodaTime.Storage.NodaZonedDateTimeStorage.ZoneId.get -> string!
+Parquet.SourceGenerator.NodaTime.Storage.NodaZonedDateTimeStorage.ZoneId.init -> void
+override Parquet.SourceGenerator.NodaTime.Storage.NodaAnnualDateStorage.GetHashCode() -> int
+override Parquet.SourceGenerator.NodaTime.Storage.NodaDateIntervalStorage.GetHashCode() -> int
+override Parquet.SourceGenerator.NodaTime.Storage.NodaDurationStorage.GetHashCode() -> int
+override Parquet.SourceGenerator.NodaTime.Storage.NodaInstantStorage.GetHashCode() -> int
+override Parquet.SourceGenerator.NodaTime.Storage.NodaIntervalStorage.GetHashCode() -> int
+override Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateStorage.GetHashCode() -> int
+override Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateTimeStorage.GetHashCode() -> int
+override Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateStorage.GetHashCode() -> int
+override Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateTimeStorage.GetHashCode() -> int
+override Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetTimeStorage.GetHashCode() -> int
+override Parquet.SourceGenerator.NodaTime.Storage.NodaPeriodStorage.GetHashCode() -> int
+override Parquet.SourceGenerator.NodaTime.Storage.NodaYearMonthStorage.GetHashCode() -> int
+override Parquet.SourceGenerator.NodaTime.Storage.NodaZonedDateTimeStorage.GetHashCode() -> int
+static Parquet.SourceGenerator.NodaTime.Adapters.AnnualDateAdapter.FromStorage(this Parquet.SourceGenerator.NodaTime.Storage.NodaAnnualDateStorage value) -> NodaTime.AnnualDate
+static Parquet.SourceGenerator.NodaTime.Adapters.AnnualDateAdapter.ToStorage(this NodaTime.AnnualDate value) -> Parquet.SourceGenerator.NodaTime.Storage.NodaAnnualDateStorage
+static Parquet.SourceGenerator.NodaTime.Adapters.DateIntervalAdapter.FromStorage(this Parquet.SourceGenerator.NodaTime.Storage.NodaDateIntervalStorage value) -> NodaTime.DateInterval!
+static Parquet.SourceGenerator.NodaTime.Adapters.DateIntervalAdapter.ToStorage(this NodaTime.DateInterval! value) -> Parquet.SourceGenerator.NodaTime.Storage.NodaDateIntervalStorage
+static Parquet.SourceGenerator.NodaTime.Adapters.DurationAdapter.FromStorage(this Parquet.SourceGenerator.NodaTime.Storage.NodaDurationStorage value) -> NodaTime.Duration
+static Parquet.SourceGenerator.NodaTime.Adapters.DurationAdapter.ToStorage(this NodaTime.Duration value) -> Parquet.SourceGenerator.NodaTime.Storage.NodaDurationStorage
+static Parquet.SourceGenerator.NodaTime.Adapters.InstantAdapter.FromStorage(this Parquet.SourceGenerator.NodaTime.Storage.NodaInstantStorage value) -> NodaTime.Instant
+static Parquet.SourceGenerator.NodaTime.Adapters.InstantAdapter.ToStorage(this NodaTime.Instant value) -> Parquet.SourceGenerator.NodaTime.Storage.NodaInstantStorage
+static Parquet.SourceGenerator.NodaTime.Adapters.InstantAsDateTimeAdapter.FromStorage(System.DateTime value) -> NodaTime.Instant
+static Parquet.SourceGenerator.NodaTime.Adapters.InstantAsDateTimeAdapter.ToStorage(NodaTime.Instant value) -> System.DateTime
+static Parquet.SourceGenerator.NodaTime.Adapters.InstantAsDateTimeMicrosecondsAdapter.FromStorage(System.DateTime value) -> NodaTime.Instant
+static Parquet.SourceGenerator.NodaTime.Adapters.InstantAsDateTimeMicrosecondsAdapter.ToStorage(NodaTime.Instant value) -> System.DateTime
+static Parquet.SourceGenerator.NodaTime.Adapters.InstantAsUnixNanosecondsAdapter.FromStorage(long value) -> NodaTime.Instant
+static Parquet.SourceGenerator.NodaTime.Adapters.InstantAsUnixNanosecondsAdapter.ToStorage(NodaTime.Instant value) -> long
+static Parquet.SourceGenerator.NodaTime.Adapters.IntervalAdapter.FromStorage(this Parquet.SourceGenerator.NodaTime.Storage.NodaIntervalStorage value) -> NodaTime.Interval
+static Parquet.SourceGenerator.NodaTime.Adapters.IntervalAdapter.ToStorage(this NodaTime.Interval value) -> Parquet.SourceGenerator.NodaTime.Storage.NodaIntervalStorage
+static Parquet.SourceGenerator.NodaTime.Adapters.IsoLocalDateAsDateTimeAdapter.FromStorage(System.DateTime value) -> NodaTime.LocalDate
+static Parquet.SourceGenerator.NodaTime.Adapters.IsoLocalDateAsDateTimeAdapter.ToStorage(NodaTime.LocalDate value) -> System.DateTime
+static Parquet.SourceGenerator.NodaTime.Adapters.IsoLocalDateTimeAsDateTimeAdapter.FromStorage(System.DateTime value) -> NodaTime.LocalDateTime
+static Parquet.SourceGenerator.NodaTime.Adapters.IsoLocalDateTimeAsDateTimeAdapter.ToStorage(NodaTime.LocalDateTime value) -> System.DateTime
+static Parquet.SourceGenerator.NodaTime.Adapters.LocalDateAdapter.FromStorage(this Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateStorage value) -> NodaTime.LocalDate
+static Parquet.SourceGenerator.NodaTime.Adapters.LocalDateAdapter.ToStorage(this NodaTime.LocalDate value) -> Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateStorage
+static Parquet.SourceGenerator.NodaTime.Adapters.LocalDateTimeAdapter.FromStorage(this Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateTimeStorage value) -> NodaTime.LocalDateTime
+static Parquet.SourceGenerator.NodaTime.Adapters.LocalDateTimeAdapter.ToStorage(this NodaTime.LocalDateTime value) -> Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateTimeStorage
+static Parquet.SourceGenerator.NodaTime.Adapters.LocalTimeAdapter.FromStorage(this long value) -> NodaTime.LocalTime
+static Parquet.SourceGenerator.NodaTime.Adapters.LocalTimeAdapter.ToStorage(this NodaTime.LocalTime value) -> long
+static Parquet.SourceGenerator.NodaTime.Adapters.OffsetAdapter.FromStorage(this int value) -> NodaTime.Offset
+static Parquet.SourceGenerator.NodaTime.Adapters.OffsetAdapter.ToStorage(this NodaTime.Offset value) -> int
+static Parquet.SourceGenerator.NodaTime.Adapters.OffsetDateAdapter.FromStorage(this Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateStorage value) -> NodaTime.OffsetDate
+static Parquet.SourceGenerator.NodaTime.Adapters.OffsetDateAdapter.ToStorage(this NodaTime.OffsetDate value) -> Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateStorage
+static Parquet.SourceGenerator.NodaTime.Adapters.OffsetDateTimeAdapter.FromStorage(this Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateTimeStorage value) -> NodaTime.OffsetDateTime
+static Parquet.SourceGenerator.NodaTime.Adapters.OffsetDateTimeAdapter.ToStorage(this NodaTime.OffsetDateTime value) -> Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateTimeStorage
+static Parquet.SourceGenerator.NodaTime.Adapters.OffsetTimeAdapter.FromStorage(this Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetTimeStorage value) -> NodaTime.OffsetTime
+static Parquet.SourceGenerator.NodaTime.Adapters.OffsetTimeAdapter.ToStorage(this NodaTime.OffsetTime value) -> Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetTimeStorage
+static Parquet.SourceGenerator.NodaTime.Adapters.PeriodAdapter.FromStorage(this Parquet.SourceGenerator.NodaTime.Storage.NodaPeriodStorage value) -> NodaTime.Period!
+static Parquet.SourceGenerator.NodaTime.Adapters.PeriodAdapter.ToStorage(this NodaTime.Period! value) -> Parquet.SourceGenerator.NodaTime.Storage.NodaPeriodStorage
+static Parquet.SourceGenerator.NodaTime.Adapters.YearMonthAdapter.FromStorage(this Parquet.SourceGenerator.NodaTime.Storage.NodaYearMonthStorage value) -> NodaTime.YearMonth
+static Parquet.SourceGenerator.NodaTime.Adapters.YearMonthAdapter.ToStorage(this NodaTime.YearMonth value) -> Parquet.SourceGenerator.NodaTime.Storage.NodaYearMonthStorage
+static Parquet.SourceGenerator.NodaTime.Adapters.ZonedDateTimeAdapter.FromStorage(this Parquet.SourceGenerator.NodaTime.Storage.NodaZonedDateTimeStorage value) -> NodaTime.ZonedDateTime
+static Parquet.SourceGenerator.NodaTime.Adapters.ZonedDateTimeAdapter.ToStorage(this NodaTime.ZonedDateTime value) -> Parquet.SourceGenerator.NodaTime.Storage.NodaZonedDateTimeStorage
+static Parquet.SourceGenerator.NodaTime.Storage.NodaAnnualDateStorage.operator !=(Parquet.SourceGenerator.NodaTime.Storage.NodaAnnualDateStorage left, Parquet.SourceGenerator.NodaTime.Storage.NodaAnnualDateStorage right) -> bool
+static Parquet.SourceGenerator.NodaTime.Storage.NodaAnnualDateStorage.operator ==(Parquet.SourceGenerator.NodaTime.Storage.NodaAnnualDateStorage left, Parquet.SourceGenerator.NodaTime.Storage.NodaAnnualDateStorage right) -> bool
+static Parquet.SourceGenerator.NodaTime.Storage.NodaDateIntervalStorage.operator !=(Parquet.SourceGenerator.NodaTime.Storage.NodaDateIntervalStorage left, Parquet.SourceGenerator.NodaTime.Storage.NodaDateIntervalStorage right) -> bool
+static Parquet.SourceGenerator.NodaTime.Storage.NodaDateIntervalStorage.operator ==(Parquet.SourceGenerator.NodaTime.Storage.NodaDateIntervalStorage left, Parquet.SourceGenerator.NodaTime.Storage.NodaDateIntervalStorage right) -> bool
+static Parquet.SourceGenerator.NodaTime.Storage.NodaDurationStorage.operator !=(Parquet.SourceGenerator.NodaTime.Storage.NodaDurationStorage left, Parquet.SourceGenerator.NodaTime.Storage.NodaDurationStorage right) -> bool
+static Parquet.SourceGenerator.NodaTime.Storage.NodaDurationStorage.operator ==(Parquet.SourceGenerator.NodaTime.Storage.NodaDurationStorage left, Parquet.SourceGenerator.NodaTime.Storage.NodaDurationStorage right) -> bool
+static Parquet.SourceGenerator.NodaTime.Storage.NodaInstantStorage.operator !=(Parquet.SourceGenerator.NodaTime.Storage.NodaInstantStorage left, Parquet.SourceGenerator.NodaTime.Storage.NodaInstantStorage right) -> bool
+static Parquet.SourceGenerator.NodaTime.Storage.NodaInstantStorage.operator ==(Parquet.SourceGenerator.NodaTime.Storage.NodaInstantStorage left, Parquet.SourceGenerator.NodaTime.Storage.NodaInstantStorage right) -> bool
+static Parquet.SourceGenerator.NodaTime.Storage.NodaIntervalStorage.operator !=(Parquet.SourceGenerator.NodaTime.Storage.NodaIntervalStorage left, Parquet.SourceGenerator.NodaTime.Storage.NodaIntervalStorage right) -> bool
+static Parquet.SourceGenerator.NodaTime.Storage.NodaIntervalStorage.operator ==(Parquet.SourceGenerator.NodaTime.Storage.NodaIntervalStorage left, Parquet.SourceGenerator.NodaTime.Storage.NodaIntervalStorage right) -> bool
+static Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateStorage.operator !=(Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateStorage left, Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateStorage right) -> bool
+static Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateStorage.operator ==(Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateStorage left, Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateStorage right) -> bool
+static Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateTimeStorage.operator !=(Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateTimeStorage left, Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateTimeStorage right) -> bool
+static Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateTimeStorage.operator ==(Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateTimeStorage left, Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateTimeStorage right) -> bool
+static Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateStorage.operator !=(Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateStorage left, Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateStorage right) -> bool
+static Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateStorage.operator ==(Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateStorage left, Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateStorage right) -> bool
+static Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateTimeStorage.operator !=(Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateTimeStorage left, Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateTimeStorage right) -> bool
+static Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateTimeStorage.operator ==(Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateTimeStorage left, Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateTimeStorage right) -> bool
+static Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetTimeStorage.operator !=(Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetTimeStorage left, Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetTimeStorage right) -> bool
+static Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetTimeStorage.operator ==(Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetTimeStorage left, Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetTimeStorage right) -> bool
+static Parquet.SourceGenerator.NodaTime.Storage.NodaPeriodStorage.operator !=(Parquet.SourceGenerator.NodaTime.Storage.NodaPeriodStorage left, Parquet.SourceGenerator.NodaTime.Storage.NodaPeriodStorage right) -> bool
+static Parquet.SourceGenerator.NodaTime.Storage.NodaPeriodStorage.operator ==(Parquet.SourceGenerator.NodaTime.Storage.NodaPeriodStorage left, Parquet.SourceGenerator.NodaTime.Storage.NodaPeriodStorage right) -> bool
+static Parquet.SourceGenerator.NodaTime.Storage.NodaYearMonthStorage.operator !=(Parquet.SourceGenerator.NodaTime.Storage.NodaYearMonthStorage left, Parquet.SourceGenerator.NodaTime.Storage.NodaYearMonthStorage right) -> bool
+static Parquet.SourceGenerator.NodaTime.Storage.NodaYearMonthStorage.operator ==(Parquet.SourceGenerator.NodaTime.Storage.NodaYearMonthStorage left, Parquet.SourceGenerator.NodaTime.Storage.NodaYearMonthStorage right) -> bool
+static Parquet.SourceGenerator.NodaTime.Storage.NodaZonedDateTimeStorage.operator !=(Parquet.SourceGenerator.NodaTime.Storage.NodaZonedDateTimeStorage left, Parquet.SourceGenerator.NodaTime.Storage.NodaZonedDateTimeStorage right) -> bool
+static Parquet.SourceGenerator.NodaTime.Storage.NodaZonedDateTimeStorage.operator ==(Parquet.SourceGenerator.NodaTime.Storage.NodaZonedDateTimeStorage left, Parquet.SourceGenerator.NodaTime.Storage.NodaZonedDateTimeStorage right) -> bool
+~override Parquet.SourceGenerator.NodaTime.Storage.NodaAnnualDateStorage.Equals(object obj) -> bool
+~override Parquet.SourceGenerator.NodaTime.Storage.NodaAnnualDateStorage.ToString() -> string
+~override Parquet.SourceGenerator.NodaTime.Storage.NodaDateIntervalStorage.Equals(object obj) -> bool
+~override Parquet.SourceGenerator.NodaTime.Storage.NodaDateIntervalStorage.ToString() -> string
+~override Parquet.SourceGenerator.NodaTime.Storage.NodaDurationStorage.Equals(object obj) -> bool
+~override Parquet.SourceGenerator.NodaTime.Storage.NodaDurationStorage.ToString() -> string
+~override Parquet.SourceGenerator.NodaTime.Storage.NodaInstantStorage.Equals(object obj) -> bool
+~override Parquet.SourceGenerator.NodaTime.Storage.NodaInstantStorage.ToString() -> string
+~override Parquet.SourceGenerator.NodaTime.Storage.NodaIntervalStorage.Equals(object obj) -> bool
+~override Parquet.SourceGenerator.NodaTime.Storage.NodaIntervalStorage.ToString() -> string
+~override Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateStorage.Equals(object obj) -> bool
+~override Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateStorage.ToString() -> string
+~override Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateTimeStorage.Equals(object obj) -> bool
+~override Parquet.SourceGenerator.NodaTime.Storage.NodaLocalDateTimeStorage.ToString() -> string
+~override Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateStorage.Equals(object obj) -> bool
+~override Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateStorage.ToString() -> string
+~override Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateTimeStorage.Equals(object obj) -> bool
+~override Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetDateTimeStorage.ToString() -> string
+~override Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetTimeStorage.Equals(object obj) -> bool
+~override Parquet.SourceGenerator.NodaTime.Storage.NodaOffsetTimeStorage.ToString() -> string
+~override Parquet.SourceGenerator.NodaTime.Storage.NodaPeriodStorage.Equals(object obj) -> bool
+~override Parquet.SourceGenerator.NodaTime.Storage.NodaPeriodStorage.ToString() -> string
+~override Parquet.SourceGenerator.NodaTime.Storage.NodaYearMonthStorage.Equals(object obj) -> bool
+~override Parquet.SourceGenerator.NodaTime.Storage.NodaYearMonthStorage.ToString() -> string
+~override Parquet.SourceGenerator.NodaTime.Storage.NodaZonedDateTimeStorage.Equals(object obj) -> bool
+~override Parquet.SourceGenerator.NodaTime.Storage.NodaZonedDateTimeStorage.ToString() -> string

@@ -171,6 +171,13 @@ internal static class Program
             return 1;
         }
 
+        // The separately published NodaTime adapter package, discovered by the packaged generator
+        // purely through the adapter assembly's [ParquetTypeAdapter] registrations.
+        if (!await NodaTimeConsumption.RoundTripAsync())
+        {
+            return 1;
+        }
+
         Console.WriteLine(
             $"Package consumption OK: round-tripped {actual.Count} records across all entry points, schema has "
                 + $"{ReadingParquetExtensions.Schema.Fields.Count} fields."

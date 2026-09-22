@@ -23,6 +23,12 @@
     -->
         <PackageVersion Include="Apache.Arrow" Version="23.0.0" />
         <PackageVersion Include="System.Memory" Version="4.6.3" />
+        <!--
+      NodaTime is the Parquet.SourceGenerator.NodaTime package's only third-party dependency. The
+      pin here is the supported floor the package compiles against (and so the minimum its nuspec
+      declares); the test project overrides it to the newest 3.x so both ends of the range run.
+    -->
+        <PackageVersion Include="NodaTime" Version="3.2.0" />
 
         <!-- Test Framework & Coverage Dependencies -->
         <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />

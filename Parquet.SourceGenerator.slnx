@@ -13,6 +13,7 @@
     <Folder Name="/src/">
         <Project Path="src/Parquet.SourceGenerator.Attributes/Parquet.SourceGenerator.Attributes.csproj" />
         <Project Path="src/Parquet.SourceGenerator.Legacy/Parquet.SourceGenerator.Legacy.csproj" />
+        <Project Path="src/Parquet.SourceGenerator.NodaTime/Parquet.SourceGenerator.NodaTime.csproj" />
         <Project Path="src/Parquet.SourceGenerator/Parquet.SourceGenerator.csproj" />
     </Folder>
     <Folder Name="/test/">

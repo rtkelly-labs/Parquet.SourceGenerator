@@ -237,4 +237,68 @@ public static class DiagnosticDescriptors
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true
     );
+
+    /// <summary>
+    /// PARQ016: A type adapter selected for a member is malformed or cannot be used there.
+    /// </summary>
+    /// <remarks>
+    /// Covers every adapter-contract failure — a missing or ambiguous <c>ToStorage</c> /
+    /// <c>FromStorage</c>, a conversion with the wrong signature, an inaccessible adapter, a
+    /// descriptor whose source type is not the member's, an unsupported contract version — plus
+    /// the member shapes the storage shadow cannot serve. Reported at the member that resolved to
+    /// the adapter so the fix is findable, never as broken generated C#.
+    /// </remarks>
+    public static readonly DiagnosticDescriptor InvalidTypeAdapter = new(
+        id: "PARQ016",
+        title: "Invalid Parquet type adapter",
+        messageFormat: "The adapter '{0}' selected for member '{1}' on type '{2}' cannot be used: {3}",
+        category: "ParquetSourceGenerator",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
+
+    /// <summary>
+    /// PARQ017: More than one default adapter is registered for a member's type.
+    /// </summary>
+    /// <remarks>
+    /// The generator never picks by reference order or assembly name: two valid storage
+    /// representations of the same domain type are exactly the case where a silent choice
+    /// corrupts data. The member must choose with <c>[ParquetAdapter]</c>.
+    /// </remarks>
+    public static readonly DiagnosticDescriptor AmbiguousTypeAdapter = new(
+        id: "PARQ017",
+        title: "Ambiguous Parquet type adapter",
+        messageFormat: "The member '{0}' on type '{1}' has type '{2}', for which more than one default adapter is registered ({3}). Select one explicitly with [ParquetAdapter(typeof(...))]",
+        category: "ParquetSourceGenerator",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
+
+    /// <summary>
+    /// PARQ018: An adapter's surrogate type has no Parquet representation.
+    /// </summary>
+    public static readonly DiagnosticDescriptor UnsupportedAdapterSurrogate = new(
+        id: "PARQ018",
+        title: "Adapter surrogate type is not representable",
+        messageFormat: "The surrogate type '{0}' of adapter '{1}', selected for member '{2}' on type '{3}', has no Parquet representation: {4}",
+        category: "ParquetSourceGenerator",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
+
+    /// <summary>
+    /// PARQ019: A default adapter registration would replace a built-in mapping, and is ignored.
+    /// </summary>
+    /// <remarks>
+    /// A registration can make an unsupported type work; it cannot silently change how a type the
+    /// generator already maps is stored. Overriding a built-in takes explicit intent at the member.
+    /// </remarks>
+    public static readonly DiagnosticDescriptor BuiltInAdapterRegistrationIgnored = new(
+        id: "PARQ019",
+        title: "Adapter registration for a built-in type is ignored",
+        messageFormat: "The member '{0}' on type '{1}' has type '{2}', which the generator maps natively; the registered adapter '{3}' is ignored. Use [ParquetAdapter(typeof(...))] on the member to override the built-in mapping",
+        category: "ParquetSourceGenerator",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true
+    );
 }

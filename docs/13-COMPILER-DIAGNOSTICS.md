@@ -22,6 +22,10 @@ This document details all diagnostic codes, their severity, rationale, and remed
 | **[`PARQ010`](#parq010-generic-type-not-supported)** | **Error** | Generic types not supported | Target type is generic. |
 | **[`PARQ011`](#parq011-type-unsupported-on-classic-v5-api)** | **Error** | Unsupported on classic API | Member type is supported by Parquet.Net 6 but not by the 4.x/5.x API. |
 | **[`PARQ015`](#parq015-invalid-generator-feature-level)** | **Error** | Invalid generator feature level | `ParquetGeneratorFeatureLevel` is present but is not a defined level. |
+| **[`PARQ016`](#parq016-invalid-type-adapter)** | **Error** | Invalid type adapter | The adapter selected for a member is malformed or cannot serve that member. |
+| **[`PARQ017`](#parq017-ambiguous-type-adapter)** | **Error** | Ambiguous type adapter | More than one default adapter is registered for the member's type. |
+| **[`PARQ018`](#parq018-adapter-surrogate-not-representable)** | **Error** | Surrogate not representable | The adapter's surrogate type has no Parquet representation on this backend. |
+| **[`PARQ019`](#parq019-adapter-registration-for-a-built-in-type-ignored)** | **Warning** | Built-in override ignored | A project registration would replace a built-in mapping; it is ignored. |
 
 ---
 
@@ -174,3 +178,49 @@ This document details all diagnostic codes, their severity, rationale, and remed
 - **Why**: Silently falling back to the default level makes a misspelled build property change the
   generated API without any indication that the requested policy was ignored.
 - **Remediation**: Use `Level1Flat`, `Level2CompoundPreview`, or `Level3ModernCSharp`.
+
+---
+
+### PARQ016: Invalid Type Adapter
+
+- **Severity**: Error
+- **Cause**: The adapter a member resolved to — through `[ParquetAdapter]` or a default
+  `[assembly: ParquetTypeAdapter]` registration — cannot be used. The message names the reason:
+  no `[ParquetTypeAdapter(sourceType, surrogateType)]` descriptor; no (or more than one) static
+  `ToStorage(TSource) → TSurrogate` / `FromStorage(TSurrogate) → TSource`; an inaccessible
+  adapter or conversion; a descriptor for a different type than the member's; a `Nullable<T>`
+  source or surrogate; a type mapped to itself; an unsupported `ContractVersion`; or a member the
+  generated storage shadow cannot serve (`required`, no reachable setter, a name collision with
+  `<Member>ParquetStorage`, a non-`partial` containing type).
+- **Why**: A malformed adapter must fail at the member, not as broken generated C#.
+- **Remediation**: Fix the adapter as the message describes. See
+  [44 - Type Adapters](./44-TYPE-ADAPTERS.md).
+
+### PARQ017: Ambiguous Type Adapter
+
+- **Severity**: Error
+- **Cause**: Two default registrations at the same precedence level (both in the project, or
+  both in referenced packages) claim the member's type.
+- **Why**: Two valid storage representations of one domain type is precisely where a silent
+  choice by reference order corrupts data.
+- **Remediation**: Choose one on the member with `[ParquetAdapter(typeof(...))]`, or remove a
+  registration. A project registration always beats a package default without ambiguity.
+
+### PARQ018: Adapter Surrogate Not Representable
+
+- **Severity**: Error
+- **Cause**: The adapter's surrogate is neither a type the generator maps natively nor a class or
+  struct whose members it can map as a group — or it is a group and the backend cannot emit
+  groups (the legacy Parquet.Net 4.x/5.x package, or feature level 1).
+- **Remediation**: Use a representable surrogate, or the Parquet.Net 6 package at feature level 2+.
+
+### PARQ019: Adapter Registration for a Built-in Type Ignored
+
+- **Severity**: Warning
+- **Cause**: The consuming assembly registers a default adapter for a type the generator already
+  maps (for example `DateTime`).
+- **Why**: A registration may make an unsupported type work; it must not silently change how a
+  supported type is stored.
+- **Remediation**: Put `[ParquetAdapter(typeof(...))]` on the members that should use it, and
+  remove the registration.
+

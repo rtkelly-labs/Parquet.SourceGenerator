@@ -22,6 +22,8 @@
 
     <ItemGroup>
         <ProjectReference Include="..\..\src\Parquet.SourceGenerator.Attributes\Parquet.SourceGenerator.Attributes.csproj" />
+        <!-- Type adapters (docs/44): the NodaTime package's static conversions must survive AOT. -->
+        <ProjectReference Include="..\..\src\Parquet.SourceGenerator.NodaTime\Parquet.SourceGenerator.NodaTime.csproj" />
         <ProjectReference
             Include="..\..\src\Parquet.SourceGenerator\Parquet.SourceGenerator.csproj"
             OutputItemType="Analyzer"

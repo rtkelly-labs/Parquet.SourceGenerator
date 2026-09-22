@@ -230,6 +230,43 @@ Supported codecs: `None`, `Snappy` (default), `Gzip`, `Lz4`, `Brotli`, and `Zstd
 
 ---
 
+## 🧩 Domain Types via Type Adapters — NodaTime First
+
+Types the generator does not map itself — NodaTime values, money, strongly-typed IDs — plug in
+through **compile-time type adapters**: a static `ToStorage` / `FromStorage` pair converting to a
+surrogate the generator already understands (a scalar, or a struct it maps as a Parquet group).
+Adapters are resolved at compile time and called directly by generated code: no reflection, no
+runtime registry, Native AOT safe.
+
+NodaTime support ships as its own package:
+
+```bash
+dotnet add package Parquet.SourceGenerator.NodaTime
+```
+
+```csharp
+[ParquetSerializable]
+public partial record Reading
+{
+    public Instant TakenAt { get; init; }          // lossless: days + nanosecond of day
+    public LocalDate Day { get; init; }            // calendar preserved
+    public ZonedDateTime? ScheduledFor { get; init; }
+
+    // Explicit, range- and precision-checked native timestamp for Spark / DuckDB / PyArrow.
+    [ParquetAdapter(typeof(InstantAsDateTimeMicrosecondsAdapter))]
+    [ParquetTimestamp(ParquetTimestampUnit.Microseconds)]
+    public Instant EventTime { get; init; }
+}
+```
+
+Defaults are lossless for every NodaTime value; narrower native mappings are opt-in per member
+and throw rather than truncate. Your own adapters register the same way —
+`[assembly: ParquetTypeAdapter(typeof(MoneyAdapter))]`. Design and rules:
+[`docs/44-TYPE-ADAPTERS.md`](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/44-TYPE-ADAPTERS.md),
+[`docs/45-NODATIME.md`](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/45-NODATIME.md).
+
+---
+
 ## ✨ Core Features & Architecture
 
 - **Zero Runtime Reflection**: Schemas, serializers, and deserializers are generated at compile time as strongly-typed C# extensions.
@@ -260,6 +297,7 @@ Full details on all 11 diagnostic rules, examples, and fixes are documented in *
 - `PARQ006`: Unsupported property type (mirrors Parquet.Net supported types)
 - `PARQ007`–`PARQ010`: Assignability, constructors, nested, and generic type constraints
 - `PARQ011`: Classic API version compatibility
+- `PARQ016`–`PARQ019`: Type adapter validation, ambiguity, surrogate support and built-in overrides
 
 ---
 

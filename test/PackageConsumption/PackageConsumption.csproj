@@ -28,6 +28,16 @@
     -->
         <PackageReference Include="Parquet.SourceGenerator" Version="$(GeneratorPackageVersion)" />
         <PackageReference Include="Parquet.Net" Version="6.1.0" />
+        <!--
+      The NodaTime adapter package ships independently of the generator. Referencing it — and
+      nothing else NodaTime-specific — must be enough for NodaTime members to serialize: NodaTime
+      itself arrives transitively, and the generator finds the adapters through the package's
+      assembly-level registrations.
+    -->
+        <PackageReference
+            Include="Parquet.SourceGenerator.NodaTime"
+            Version="$(GeneratorPackageVersion)"
+        />
     </ItemGroup>
 
     <ItemGroup>

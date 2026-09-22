@@ -16,6 +16,46 @@ The rule, the three surfaces and the author process are in
 
 <!-- Add new entries directly below this line, newest first. -->
 
+### 2026-09-22 — `Parquet.SourceGenerator.NodaTime` package surface
+
+- **Surface:** unshipped
+- **Semver:** additive-minor
+- **Issue:** NodaTime adapter package ([docs/45](../45-NODATIME.md))
+- **Rationale:** A new, independently published package. Its public surface is the fifteen
+  default adapter classes (registered for the generator), the seven explicit native-interop
+  adapters, and the storage records they convert to. The storage records are persisted data
+  formats: their field names, types and meanings change only with a data-format version decision.
+  The `DateOnly` / `TimeOnly` adapters exist only on .NET 6+, so their lines live in
+  `src/Parquet.SourceGenerator.NodaTime/net6plus/PublicAPI.Unshipped.txt`.
+- **Alternatives considered:** Hard-coding NodaTime kinds into the generator was rejected — the
+  point of the adapter model is that a new ecosystem needs no generator change.
+
+### 2026-09-22 — compile-time type adapters: `ParquetTypeAdapterAttribute`, `ParquetAdapterAttribute`, PARQ016–PARQ019
+
+- **Surface:** unshipped
+- **Semver:** additive-minor
+- **Issue:** type-adapter extension model ([docs/44](../44-TYPE-ADAPTERS.md))
+- **Rationale:** Adds the adapter contract to the Attributes package — the assembly/class
+  `[ParquetTypeAdapter]` registration and descriptor, and the member-level `[ParquetAdapter]`
+  explicit selection — so domain types (NodaTime first, via the separately published
+  `Parquet.SourceGenerator.NodaTime` package) serialize without reflection or hard-coding each
+  ecosystem into the generator. The four new `DiagnosticDescriptors` fields
+  (`InvalidTypeAdapter`, `AmbiguousTypeAdapter`, `UnsupportedAdapterSurrogate`,
+  `BuiltInAdapterRegistrationIgnored`) follow the existing one-public-field-per-rule pattern.
+- **Alternatives considered:** A runtime `Type → converter` registry was rejected (reflection,
+  AOT-hostile, a lookup per value). Scanning referenced assemblies for extension methods was
+  rejected (cost, and silent ambiguity); registration is explicit.
+
+### 2026-09-22 — `TargetClassModel.AdapterShadows` (type adapters)
+
+- **Surface:** seam
+- **Semver:** internal
+- **Issue:** type-adapter extension model ([docs/44](../44-TYPE-ADAPTERS.md))
+- **Rationale:** Carries the storage-shadow members from the parser to the shadow emitter in both
+  generators. Internal so the value-equatable shadow model is not public package API; an
+  init-only property with an empty default so every existing construction site and golden model
+  is unchanged.
+
 ### 2026-09-17 — dictionary and string payload safety limits (#307)
 
 - **Surface:** unshipped

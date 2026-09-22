@@ -530,3 +530,23 @@ row advances (`rep == 0` bounded to row capacity), definition level limits (`0 <
 buffer cursor bounds with clean `InvalidDataException` reporting and safe `ArrayPool` hygiene.
 
 ---
+
+## 8. Type adapters (first version)
+
+The adapter model ([document 44](./44-TYPE-ADAPTERS.md)) ships with the scope its design calls
+for, and these edges are deliberate rather than accidental:
+
+- **Collections of adapted types are not adapted.** `List<Instant>`, `Instant[]` and dictionary
+  values of adapted types still report PARQ006; collection-level adapters are deferred (§15).
+- **One adapter hop.** A surrogate's own members are mapped by the ordinary rules and never
+  through another adapter (§10).
+- **Group surrogates need Parquet.Net 6.** The legacy 4.x/5.x package supports scalar surrogates
+  only (PARQ018 otherwise), and so does feature level 1.
+- **Adapted members are reached through a generated `<Member>ParquetStorage` property**, so they
+  need a `partial` declaration chain, cannot be `required`, and column-named emitted APIs
+  (columnar batches, statistics, sort-key lookups) expose the storage name and surrogate type.
+- **No context-dependent adapters yet.** `ZonedDateTime` resolves zones through
+  `DateTimeZoneProviders.Tzdb`; an application-supplied `IDateTimeZoneProvider` waits for the
+  contextual contract (§16).
+
+---

@@ -36,7 +36,11 @@ The documentation is organized into three distinct tiers based on audience and i
    - Serializing nested POCOs, struct fields, and collections (`List<T>`, arrays) without runtime reflection.
    - Backend-specific compatibility boundary and remaining parity work in [document 42](./42-NESTED-BACKEND-SCOPE-176.md).
 
-5. **[Performance Benchmarks & Baselines](./BENCHMARKS.md)**
+5. **[44 - Type Adapters](./44-TYPE-ADAPTERS.md)** and **[45 - NodaTime Adapter Package](./45-NODATIME.md)**
+   - Serializing domain types the generator does not map itself through compile-time adapters.
+   - `Parquet.SourceGenerator.NodaTime`: lossless NodaTime storage and explicit native interop.
+
+6. **[Performance Benchmarks & Baselines](./BENCHMARKS.md)**
    - BenchmarkDotNet performance numbers, zero-boxing verification, and memory savings over reflection serializers.
 
 ---
@@ -48,7 +52,7 @@ The documentation is organized into three distinct tiers based on audience and i
    - Reviewing change rationales in the [API Change Ledger](./api/LEDGER.md).
 
 2. **[13 - Compiler Diagnostics Reference](./13-COMPILER-DIAGNOSTICS.md)**
-   - Complete index of compiler diagnostics (`PARQ001` through `PARQ014`).
+   - Complete index of compiler diagnostics (`PARQ001` through `PARQ019`).
    - Descriptions, error explanations, and remediation steps.
 
 3. **[14 - Parquet Compatibility Matrix](./14-COMPATIBILITY-MATRIX.md)**
