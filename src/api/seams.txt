@@ -8,8 +8,8 @@
 # Type declarations are NOT listed. An `internal` type is this repository's ordinary unit of
 # composition and is already unreachable outside the assembly; compiler polyfills such as
 # `IsExternalInit` are excluded by rule. See docs/18-API-CHANGE-CONTRACT.md.
-Parquet.SourceGenerator.Models.PropertyModel.ElementAdapter.get -> Parquet.SourceGenerator.Models.ElementAdapterModel?
-Parquet.SourceGenerator.Models.PropertyModel.ElementAdapter.init -> void
+Parquet.SourceGenerator.Models.PropertyModel.InlineAdapter.get -> Parquet.SourceGenerator.Models.InlineAdapterModel?
+Parquet.SourceGenerator.Models.PropertyModel.InlineAdapter.init -> void
 Parquet.SourceGenerator.Models.TargetClassModel.AdapterShadows.get -> Parquet.SourceGenerator.Models.AdapterShadowSet
 Parquet.SourceGenerator.Models.TargetClassModel.AdapterShadows.init -> void
 static Parquet.SourceGenerator.Emitter.CodeEmitter.EmitReadWithNullBypass(System.Text.StringBuilder builder, Parquet.SourceGenerator.Emitter.Compound.LeafColumn col, string fieldAccess, string bufName, string indent = "                ") -> void

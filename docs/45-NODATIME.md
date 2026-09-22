@@ -1022,10 +1022,10 @@ Column names inside groups are snake_case (§16) and fixed by `[property: Parque
 on the storage records: they are a data format (§21).
 
 Collections of these types (`List<Instant>`, `LocalDate?[]`, `IReadOnlyList<Period>`, ...)
-convert per element inline ([document 44 §A.4b](./44-TYPE-ADAPTERS.md)). Every default above
-works as a list element except the three whose storage nests a group — `ZonedDateTime`,
-`Interval` and `DateInterval` — which report PARQ018 until the list emitter supports nested
-element groups. An interop adapter applies to a collection's elements when placed on the
+convert per element inline ([document 44 §A.4b](./44-TYPE-ADAPTERS.md)), and every default
+above works as a list element, including the three whose storage nests a group (`ZonedDateTime`,
+`Interval`, `DateInterval`). NodaTime fields inside your own types — a `[ParquetSerializable]`
+child, a list element type, or the surrogate of your own adapter — convert inline too (§A.4c). An interop adapter applies to a collection's elements when placed on the
 collection member: `[ParquetAdapter(typeof(InstantAsUnixNanosecondsAdapter))] List<Instant>`.
 
 ### A.3 Explicit interop adapters (not registered)

@@ -536,19 +536,18 @@ buffer cursor bounds with clean `InvalidDataException` reporting and safe `Array
 The adapter model ([document 44](./44-TYPE-ADAPTERS.md)) ships with the scope its design calls
 for, and these edges are deliberate rather than accidental:
 
-- **Adapted collection elements are top-level and flat.** `List<Instant>`, `Instant[]`,
-  `IReadOnlyList<LocalDate?>` and friends work (§A.4b), but an element whose group surrogate
-  contains another group (`ZonedDateTime`, `Interval`, `DateInterval`) is PARQ018, as are lists
-  inside nested types and adapted dictionary values — the same boundaries the list emitter has
-  for unadapted elements.
+- **List elements nest one group deep.** `List<Instant>`, `List<ZonedDateTime>` and
+  `List<Measurement>` (a custom type with NodaTime fields) work (§A.4b–c), but a group inside a
+  group inside an element is PARQ018, as are lists inside nested types and adapted dictionary
+  values — the same boundaries the list emitter has for unadapted elements.
 - **Generic adapters close over the source's own type arguments.** A surrogate can be closed or
   the same-arity open generic; it cannot be a bare type parameter (`Optional<T>` → `T`).
-- **One adapter hop.** A surrogate's own members are mapped by the ordinary rules and never
-  through another adapter (§10).
+- **One adapter hop.** A surrogate's members may be adapted (§A.4c), but a surrogate *type*
+  that itself needs an adapter is not followed (§10).
 - **Group surrogates need Parquet.Net 6.** The legacy 4.x/5.x package supports scalar surrogates
   only (PARQ018 otherwise), and so does feature level 1.
-- **Adapted members are reached through a generated `<Member>ParquetStorage` property**, so they
-  need a `partial` declaration chain, cannot be `required`, and column-named emitted APIs
+- **Root-level adapted members are reached through a generated `<Member>ParquetStorage`
+  property** (nested ones convert inline), so they need a `partial` declaration chain, cannot be `required`, and column-named emitted APIs
   (columnar batches, statistics, sort-key lookups) expose the storage name and surrogate type.
 - **No context-dependent adapters yet.** `ZonedDateTime` resolves zones through
   `DateTimeZoneProviders.Tzdb`; an application-supplied `IDateTimeZoneProvider` waits for the

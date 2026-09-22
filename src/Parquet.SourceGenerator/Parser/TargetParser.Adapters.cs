@@ -86,7 +86,11 @@ public static partial class TargetParser
         }
 
         AdapterDescriptor adapter = resolution.Adapter!;
-        string? error = adapter.Error ?? CheckShadowable(member, scope);
+        // Below the root a member is converted inline where its parent is read and rebuilt, so
+        // it needs no shadow — and no partial declaration, which a surrogate never has.
+        string? error =
+            adapter.Error
+            ?? (scope.CompoundDepth > 0 ? CheckInlineable(member) : CheckShadowable(member, scope));
         if (error is not null)
         {
             ReportInvalidAdapter(adapter, member, scope, error);
@@ -111,7 +115,8 @@ public static partial class TargetParser
     )
     {
         ITypeSymbol surrogate = adapter.Surrogate!;
-        string shadowName = member.Symbol.Name + ShadowSuffix;
+        bool inline = scope.CompoundDepth > 0;
+        string shadowName = inline ? member.Symbol.Name : member.Symbol.Name + ShadowSuffix;
         string surrogateName = surrogate.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
         // Column-model spelling follows the parser's existing convention: `T?` only for a
@@ -154,6 +159,26 @@ public static partial class TargetParser
         );
 
         sink.HasAdaptedMember = true;
+        if (inline)
+        {
+            sink.Properties.Add(
+                model with
+                {
+                    InlineAdapter = new InlineAdapterModel(
+                        adapter.QualifiedName,
+                        adapter.ToStorageMethod,
+                        adapter.FromStorageMethod,
+                        member
+                            .UnderlyingType.WithNullableAnnotation(NullableAnnotation.None)
+                            .ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                        member.UnderlyingType.IsValueType,
+                        surrogateName
+                    ),
+                }
+            );
+            return;
+        }
+
         sink.Properties.Add(model);
 
         // An inherited member whose declaring base is itself a [ParquetSerializable] target gets
@@ -307,6 +332,12 @@ public static partial class TargetParser
 
         return null;
     }
+
+    /// <summary>What an inline-converted member needs: a setter the object initializer can use.</summary>
+    private static string? CheckInlineable(AdaptedMember member) =>
+        IsAssignable(member.Symbol)
+            ? null
+            : "the member has no setter the generated code can reach";
 
     private static bool ShadowInheritedFromTarget(ISymbol member, INamedTypeSymbol? declaring)
     {

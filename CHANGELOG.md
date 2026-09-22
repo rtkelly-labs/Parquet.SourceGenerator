@@ -33,6 +33,13 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   nullable elements, and `[ParquetAdapter]` on the collection member selecting the element
   adapter. Plain `List<SomeStruct>` / `SomeStruct?[]` members now work too: value-type list
   elements were previously rejected.
+- **Adapted members inside custom types** (`docs/44-TYPE-ADAPTERS.md` §A.4c). A NodaTime (or any
+  adapted) field of a nested `[ParquetSerializable]` type, of a list element type, or of an
+  application surrogate converts inline where its parent is read and rebuilt — no shadow, no
+  extra `partial` requirement — so `List<Measurement>` with `Measurement.At : Instant`, and a
+  surrogate record holding `Instant` fields, both round-trip. List elements may now contain one
+  level of groups (nested types or adapted group surrogates), which also makes `ZonedDateTime`,
+  `Interval` and `DateInterval` usable as list elements.
 - **`Parquet.SourceGenerator.NodaTime`** — a new, independently published package
   (`docs/45-NODATIME.md`). Referencing it makes `Instant`, `Duration`, `LocalDate`, `LocalTime`,
   `LocalDateTime`, `Offset`, `OffsetDateTime`, `OffsetDate`, `OffsetTime`, `ZonedDateTime`,

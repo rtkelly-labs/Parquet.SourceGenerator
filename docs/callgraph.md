@@ -31,8 +31,8 @@ graph TD
     tparquetsourcegeneratoremitterrowgrouppruningcomponent_056["Parquet.SourceGenerator.Emitter.RowGroupPruningComponent"]
     tparquetsourcegeneratoremittersortedrowgrouppruningcomponent_062["Parquet.SourceGenerator.Emitter.SortedRowGroupPruningComponent"]
     tparquetsourcegeneratormodelsdiagnosticinfo_045["Parquet.SourceGenerator.Models.DiagnosticInfo"]
-    tparquetsourcegeneratormodelselementadaptermodel_050["Parquet.SourceGenerator.Models.ElementAdapterModel"]
     tparquetsourcegeneratormodelsgeneratorconfiguration_053["Parquet.SourceGenerator.Models.GeneratorConfiguration"]
+    tparquetsourcegeneratormodelsinlineadaptermodel_049["Parquet.SourceGenerator.Models.InlineAdapterModel"]
     tparquetsourcegeneratormodelssortkeyeligibility_049["Parquet.SourceGenerator.Models.SortKeyEligibility"]
     tparquetsourcegeneratorparquetincrementalgenerator_051["Parquet.SourceGenerator.ParquetIncrementalGenerator"]
     tparquetsourcegeneratorparsertargetparser_043["Parquet.SourceGenerator.Parser.TargetParser"]
@@ -67,7 +67,7 @@ graph TD
     tparquetsourcegeneratoremittercompoundcompoundbuffers_056 -->|4| tparquetsourcegeneratoremittercompoundemissionplan_053
     tparquetsourcegeneratoremittercompoundcompoundmapping_056 -->|2| tparquetsourcegeneratoremittercomponentspropertymappingcomponent_067
     tparquetsourcegeneratoremittercompoundcompoundmapping_056 -->|3| tparquetsourcegeneratoremittercompoundemissionplan_053
-    tparquetsourcegeneratoremittercompoundcompoundmapping_056 -->|3| tparquetsourcegeneratormodelselementadaptermodel_050
+    tparquetsourcegeneratoremittercompoundcompoundmapping_056 -->|8| tparquetsourcegeneratormodelsinlineadaptermodel_049
     tparquetsourcegeneratoremittercompoundcompoundschema_055 -->|1| tparquetsourcegeneratoremittercomponentsschemacomponent_058
     tparquetsourcegeneratoremittercompoundcompoundschema_055 -->|1| tparquetsourcegeneratoremittercompoundemissionplan_053
     tparquetsourcegeneratoremitterreadbuildercomponent_052 -->|1| tparquetsourcegeneratoremittercolumnbatchcomponent_052

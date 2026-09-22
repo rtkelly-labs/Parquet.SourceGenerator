@@ -80,9 +80,11 @@ internal static class CompoundMapping
             // Leaf rung.
             string valueLocal = $"cv_{col.Slot}";
             string leafMember = col.MemberChain[col.MemberChain.Length - 1];
-            builder.AppendLine($"{prefix}var {valueLocal} = {curExpr}.{leafMember};");
-
             PropertyModel leaf = col.Leaf;
+            builder.AppendLine(
+                $"{prefix}var {valueLocal} = {ReadConverted(leaf, $"{curExpr}.{leafMember}", $"ad_{col.Slot}")};"
+            );
+
             string defWrite = $"defLevels_{col.Slot}[{indexVar}]";
             string writeExpr = GetCompoundLeafWriteExpression(leaf, valueLocal);
 
@@ -111,7 +113,17 @@ internal static class CompoundMapping
 
         string local = $"ca_{col.Slot}_{level}";
         string member = col.MemberChain[level];
-        builder.AppendLine($"{prefix}var {local} = {curExpr}.{member};");
+        string access = $"{curExpr}.{member}";
+        if (level < col.StepAdapters.Length && col.StepAdapters[level] is { } stepAdapter)
+        {
+            // An adapted group member: the ladder walks its surrogate (docs/44 §A.4c).
+            access = stepAdapter.ToStorageFrom(
+                access,
+                col.StepDomainNullable[level],
+                $"ad_{col.Slot}_{level}"
+            );
+        }
+        builder.AppendLine($"{prefix}var {local} = {access};");
 
         if (!col.StepHasNullTest[level])
         {
@@ -141,7 +153,9 @@ internal static class CompoundMapping
     {
         int n = col.Slot;
         string cv = $"cv_{n}";
-        builder.AppendLine($"{p}var {cv} = {element}.{col.Leaf.Name};");
+        builder.AppendLine(
+            $"{p}var {cv} = {ReadConverted(col.Leaf, $"{element}.{col.Leaf.Name}", $"ad_{n}")};"
+        );
         string conv = GetCompoundLeafWriteExpression(col.Leaf, cv);
         if (col.Leaf.IsNullable)
         {
@@ -169,7 +183,7 @@ internal static class CompoundMapping
     {
         int n = col.Slot;
         PropertyModel element = col.ListElementStruct!;
-        ElementAdapterModel? adapter = element.ElementAdapter;
+        InlineAdapterModel? adapter = element.InlineAdapter;
         bool domainIsValueType = adapter?.DomainIsValueType ?? element.CompoundIsValueType;
         bool nullTest = !domainIsValueType || element.IsNullable;
         string value = domainIsValueType && element.IsNullable ? $"el_{n}.Value" : $"el_{n}";
@@ -184,15 +198,50 @@ internal static class CompoundMapping
         {
             if (alias)
                 builder.AppendLine($"{p}var ev_{n} = {storage};");
-            EmitListElementField(builder, col, source, p);
+            EmitListElementColumn(builder, col, source, p);
             return;
         }
 
         builder.AppendLine($"{p}if (el_{n} is not null) {{");
         if (alias)
             builder.AppendLine($"{p}    var ev_{n} = {storage};");
-        EmitListElementField(builder, col, source, p + "    ");
+        EmitListElementColumn(builder, col, source, p + "    ");
         CloseWithAbsentLevel(builder, p, n, col.ListElementRung);
+    }
+
+    /// <summary>
+    /// One element column: a direct element member, or a leaf of a group one level inside the
+    /// element, reached through that group's null test (and inline adapter, docs/44 §A.4c).
+    /// </summary>
+    private static void EmitListElementColumn(
+        StringBuilder builder,
+        LeafColumn col,
+        string element,
+        string p
+    )
+    {
+        if (col.SchemaPath.Length == 1)
+        {
+            EmitListElementField(builder, col, element, p);
+            return;
+        }
+
+        int n = col.Slot;
+        string access = $"{element}.{col.MemberChain[1]}";
+        if (col.StepAdapters[2] is { } groupAdapter)
+            access = groupAdapter.ToStorageFrom(access, col.StepDomainNullable[2], $"ag_{n}");
+        builder.AppendLine($"{p}var ga_{n} = {access};");
+
+        if (!col.StepHasNullTest[2])
+        {
+            EmitListElementField(builder, col, $"ga_{n}", p);
+            return;
+        }
+
+        builder.AppendLine($"{p}if (ga_{n} is not null) {{");
+        string group = col.StepValueUnwrap[2] ? $"ga_{n}.Value" : $"ga_{n}";
+        EmitListElementField(builder, col, group, p + "    ");
+        CloseWithAbsentLevel(builder, p, n, col.StepDefBase[2]);
     }
 
     /// <summary>
@@ -267,7 +316,7 @@ internal static class CompoundMapping
     {
         int n = col.Slot;
         PropertyModel el = col.Leaf;
-        ElementAdapterModel? adapter = el.ElementAdapter;
+        InlineAdapterModel? adapter = el.InlineAdapter;
         string conv = adapter is null
             ? GetCompoundLeafWriteExpression(el, $"el_{n}")
             : GetCompoundLeafWriteExpression(
@@ -420,7 +469,7 @@ internal static class CompoundMapping
     {
         int a = anchor.Slot;
         PropertyModel element = anchor.ListElementStruct!;
-        ElementAdapterModel? adapter = element.ElementAdapter;
+        InlineAdapterModel? adapter = element.InlineAdapter;
         string elemType = element.TypeName.TrimEnd('?');
         bool domainIsValueType = adapter?.DomainIsValueType ?? element.CompoundIsValueType;
         string annotated = (adapter?.DomainTypeName ?? elemType) + (element.IsNullable ? "?" : "");
@@ -467,13 +516,15 @@ internal static class CompoundMapping
                 : $"{indent}            bk_{a}.Add({adapter.AdapterTypeName}.{adapter.FromStorageMethod}(new {elemType}"
         );
         builder.AppendLine($"{indent}            {{");
-        foreach (LeafColumn g in group)
+        for (int c = 0; c < element.Children.Length; c++)
         {
-            string read = GetCompoundLeafReadExpression(g.Leaf, $"buffer_{g.Slot}[vc_{g.Slot}++]");
-            string absent = g.Leaf.IsNullable ? "null!" : "default";
-            builder.AppendLine(
-                $"{indent}                {g.Leaf.Name} = defLevels_{g.Slot}[p_{a}] >= {g.MaxDef} ? {read} : {absent},"
-            );
+            PropertyModel child = element.Children[c];
+            List<LeafColumn> columns = [.. group.Where(g => g.SchemaPath[0] == c)];
+            string value =
+                child.Kind == PropertyKind.Struct
+                    ? ElementGroupRead(child, columns, a)
+                    : ElementLeafRead(columns[0], a);
+            builder.AppendLine($"{indent}                {child.Name} = {value},");
         }
         builder.AppendLine(
             adapter is null ? $"{indent}            }});" : $"{indent}            }}));"
@@ -492,7 +543,7 @@ internal static class CompoundMapping
         // The parser renders element types without nullability suffixes; the lane must
         // carry the element's annotation or assigning a List<string> into a
         // List<string?> property fails the compiler's nullability check.
-        string elemType = element.ElementAdapter?.DomainTypeName ?? element.TypeName;
+        string elemType = element.InlineAdapter?.DomainTypeName ?? element.TypeName;
         if (
             element.IsNullable
             && !elemType.EndsWith("?", StringComparison.Ordinal)
@@ -549,7 +600,22 @@ internal static class CompoundMapping
             {
                 StructNode child = plan.Nodes[childId];
                 string bang = child.IsValueType || child.MemberAnnotatedNullable ? "" : "!";
-                if (child.IsValueType && child.MemberAnnotatedNullable)
+                if (child.Adapter is { } childAdapter)
+                {
+                    // Rebuilt as its surrogate; converted back as it is attached to the parent.
+                    // Presence gates a nullable member so absent means null, never a converted
+                    // default surrogate.
+                    string stored = child.IsValueType
+                        ? $"{child.ArrayVar}[ri_{node.Id}]"
+                        : $"{child.ArrayVar}[ri_{node.Id}]!";
+                    LeafColumn cp = child.PresenceLeaf!;
+                    builder.AppendLine(
+                        child.MemberAnnotatedNullable
+                            ? $"{p}    {child.MemberName} = defLevels_{cp.Slot}[ri_{node.Id}] >= {child.PresenceThreshold} ? {childAdapter.FromStorage(stored)} : null,"
+                            : $"{p}    {child.MemberName} = {childAdapter.FromStorage(stored)},"
+                    );
+                }
+                else if (child.IsValueType && child.MemberAnnotatedNullable)
                 {
                     // Absent must mean null, not default(T): gate on the child's presence rung.
                     LeafColumn cp = child.PresenceLeaf!;
@@ -567,7 +633,10 @@ internal static class CompoundMapping
             foreach (LeafColumn leafCol in node.Leaves)
             {
                 string lane = $"buffer_{leafCol.Slot}[cursor_{leafCol.Slot}++]";
-                string expr = GetCompoundLeafReadExpression(leafCol.Leaf, lane);
+                string expr = AssignConverted(
+                    leafCol.Leaf,
+                    GetCompoundLeafReadExpression(leafCol.Leaf, lane)
+                );
                 bool nullableish =
                     leafCol.Leaf.IsNullable
                     || (
@@ -575,7 +644,11 @@ internal static class CompoundMapping
                         && leafCol.Leaf.TypeName.Contains("string")
                     )
                     || leafCol.Leaf.Kind == PropertyKind.ByteArray;
-                string absent = nullableish ? "null!" : "default";
+                string absent =
+                    leafCol.Leaf.InlineAdapter is not null
+                        ? (leafCol.Leaf.IsNullable ? "null" : "default!")
+                    : nullableish ? "null!"
+                    : "default";
                 builder.AppendLine(
                     $"{p}    {leafCol.Leaf.Name} = defLevels_{leafCol.Slot}[ri_{node.Id}] >= {leafCol.MaxDef} ? {expr} : {absent},"
                 );
@@ -674,9 +747,57 @@ internal static class CompoundMapping
         builder.AppendLine($"{indent}}}");
     }
 
+    /// <summary>A direct element member read from its lane at the element's entry position.</summary>
+    private static string ElementLeafRead(LeafColumn g, int a)
+    {
+        string read = AssignConverted(
+            g.Leaf,
+            GetCompoundLeafReadExpression(g.Leaf, $"buffer_{g.Slot}[vc_{g.Slot}++]")
+        );
+        string absent = g.Leaf.IsNullable ? "null!" : "default";
+        return $"defLevels_{g.Slot}[p_{a}] >= {g.MaxDef} ? {read} : {absent}";
+    }
+
+    /// <summary>
+    /// A group one level inside an element: present when its first leaf's def reaches the
+    /// group rung, rebuilt from its leaves, converted back through its inline adapter if any.
+    /// </summary>
+    private static string ElementGroupRead(PropertyModel child, List<LeafColumn> columns, int a)
+    {
+        string type = child.TypeName.TrimEnd('?');
+        string fields = string.Join(
+            ", ",
+            columns.Select(g => $"{g.Leaf.Name} = {ElementLeafRead(g, a)}")
+        );
+        string rebuilt = AssignConverted(child, $"new {type} {{ {fields} }}");
+        string absent =
+            child.IsNullable ? "null"
+            : child.CompoundIsValueType && child.InlineAdapter is null ? "default"
+            : "default!";
+        LeafColumn presence = columns[0];
+        return $"defLevels_{presence.Slot}[p_{a}] > {presence.StepDefBase[2]} ? {rebuilt} : {absent}";
+    }
+
+    /// <summary>
+    /// A nested member's value as the write ladder reads it: the member itself, or — for an
+    /// inline-adapted member — its storage form, nullable when the member is.
+    /// </summary>
+    private static string ReadConverted(
+        PropertyModel leaf,
+        string access,
+        string patternVariable
+    ) =>
+        leaf.InlineAdapter is { } adapter
+            ? adapter.ToStorageFrom(access, leaf.IsNullable, patternVariable)
+            : access;
+
+    /// <summary>A present nested value as assigned to its parent: converted back if adapted.</summary>
+    private static string AssignConverted(PropertyModel leaf, string storage) =>
+        leaf.InlineAdapter is { } adapter ? adapter.FromStorage(storage) : storage;
+
     /// <summary>A leaf element's read expression, converted back to its domain type if adapted.</summary>
     private static string ElementRead(PropertyModel element, string storage) =>
-        element.ElementAdapter is { } adapter ? adapter.FromStorage(storage) : storage;
+        element.InlineAdapter is { } adapter ? adapter.FromStorage(storage) : storage;
 
     private static bool ValueNullableWrapper(PropertyModel leaf) =>
         !(leaf.Kind == PropertyKind.Primitive && leaf.TypeName.Contains("string"))

@@ -47,17 +47,19 @@ internal sealed record AdapterShadowSet(
 }
 
 /// <summary>
-/// The adapter applied to each element of a list member (docs/44 §A.4). Unlike a member-level
-/// adapter there is no shadow: the list emitter calls the conversions inline, once per element,
-/// so a collection is never copied to convert it. The element's own column model is the
-/// surrogate's; <see cref="DomainTypeName"/> is what the reconstructed collection holds.
+/// An adapter the emitters call inline (docs/44 §A.4b, §A.4c): on a list element, or on a member
+/// nested anywhere below the root — inside a <c>[ParquetSerializable]</c> child, a structural
+/// surrogate or a list element. There is no shadow: the value is converted where it is read off
+/// its parent on write, and where it is assigned to its parent on read, once per value. The
+/// model carrying this is the surrogate's; <see cref="DomainTypeName"/> is what the member holds.
 /// </summary>
-internal sealed record ElementAdapterModel(
+internal sealed record InlineAdapterModel(
     string AdapterTypeName,
     string ToStorageMethod,
     string FromStorageMethod,
     string DomainTypeName,
-    bool DomainIsValueType
+    bool DomainIsValueType,
+    string StorageTypeName
 )
 {
     /// <summary>The write-side call converting <paramref name="value"/> to storage.</summary>
@@ -66,4 +68,13 @@ internal sealed record ElementAdapterModel(
     /// <summary>The read-side call converting <paramref name="storage"/> back to the domain.</summary>
     public string FromStorage(string storage) =>
         $"{AdapterTypeName}.{FromStorageMethod}({storage})";
+
+    /// <summary>
+    /// Reads <paramref name="access"/> and converts it to storage. A nullable member converts
+    /// only when present, yielding a nullable storage value the definition ladder then tests.
+    /// </summary>
+    public string ToStorageFrom(string access, bool nullable, string patternVariable) =>
+        nullable
+            ? $"{access} is {{ }} {patternVariable} ? ({StorageTypeName}?){ToStorage(patternVariable)} : null"
+            : ToStorage(access);
 }

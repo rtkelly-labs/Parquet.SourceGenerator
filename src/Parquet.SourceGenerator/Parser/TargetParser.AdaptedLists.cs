@@ -24,8 +24,7 @@ public static partial class TargetParser
     )
     {
         if (
-            scope.InSurrogate
-            || !TypeAdapterResolver.TryGetCollectionElement(
+            !TypeAdapterResolver.TryGetCollectionElement(
                 member.UnderlyingType,
                 out ITypeSymbol declaredElement
             )
@@ -172,14 +171,15 @@ public static partial class TargetParser
         string surrogateName = surrogate.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         string typeName =
             elementNullable && surrogate.IsValueType ? surrogateName + "?" : surrogateName;
-        var call = new ElementAdapterModel(
+        var call = new InlineAdapterModel(
             adapter.QualifiedName,
             adapter.ToStorageMethod,
             adapter.FromStorageMethod,
             element
                 .WithNullableAnnotation(NullableAnnotation.None)
                 .ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-            element.IsValueType
+            element.IsValueType,
+            surrogateName
         );
 
         if (TryClassifyKind(surrogate, surrogate, out PropertyKind kind))
@@ -203,7 +203,7 @@ public static partial class TargetParser
                 elementNullable
             )
             {
-                ElementAdapter = call,
+                InlineAdapter = call,
             };
         }
 
@@ -244,24 +244,21 @@ public static partial class TargetParser
         if (group is null)
             return null;
 
-        foreach (PropertyModel child in group.Children)
+        if (!ElementChildrenSupported(group))
         {
-            if (child.Kind is PropertyKind.Struct or PropertyKind.List or PropertyKind.Map)
-            {
-                ReportUnsupportedSurrogate(
-                    adapter,
-                    member,
-                    scope,
-                    "a list element's group surrogate must consist of single columns; nested groups inside list elements are not supported yet"
-                );
-                rejected = true;
-                return null;
-            }
+            ReportUnsupportedSurrogate(
+                adapter,
+                member,
+                scope,
+                "a list element's group surrogate may contain single columns and groups of single columns; deeper nesting inside list elements is not supported yet"
+            );
+            rejected = true;
+            return null;
         }
 
         return group with
         {
-            ElementAdapter = call,
+            InlineAdapter = call,
         };
     }
 }

@@ -56,6 +56,15 @@ internal sealed class LeafColumn
     /// <summary>Per chain step: after the null test, member access goes through <c>.Value</c>.</summary>
     public bool[] StepValueUnwrap { get; set; } = [];
 
+    /// <summary>
+    /// Per chain step: the inline adapter converting that step's member to its group surrogate
+    /// (docs/44 §A.4c), or null. The step's null test and unwrap then apply to the storage value.
+    /// </summary>
+    public InlineAdapterModel?[] StepAdapters { get; set; } = [];
+
+    /// <summary>Per chain step: whether the (domain) member is nullable — for adapted steps.</summary>
+    public bool[] StepDomainNullable { get; set; } = [];
+
     public int AncestorCount => SchemaPath.Length;
     public bool IsCompound => SchemaPath.Length > 0;
 
@@ -125,6 +134,12 @@ internal sealed class StructNode
 
     /// <summary>Value-type nodes reconstruct into non-nullable arrays (absent = default).</summary>
     public bool IsValueType { get; set; }
+
+    /// <summary>
+    /// The inline adapter turning this node's reconstructed surrogate back into the parent
+    /// member's domain value (docs/44 §A.4c), or null for an ordinary nested type.
+    /// </summary>
+    public InlineAdapterModel? Adapter { get; set; }
 
     /// <summary>C# member name on the parent (another node, or the row).</summary>
     public string MemberName { get; set; } = "";
@@ -223,6 +238,11 @@ internal sealed class EmissionPlan
                 for (int c = 0; c < element.Children.Length; c++)
                 {
                     PropertyModel child = element.Children[c];
+                    if (child.Kind == PropertyKind.Struct)
+                    {
+                        AddElementGroupColumns(prop, element, child, c, root, columns);
+                        continue;
+                    }
                     columns.Add(
                         new LeafColumn
                         {
@@ -290,6 +310,8 @@ internal sealed class EmissionPlan
                 depth: 0,
                 valueTypes: [prop.CompoundIsValueType],
                 nullableValueSteps: [prop.IsNullable && prop.CompoundIsValueType],
+                adapters: [prop.InlineAdapter],
+                domainNullable: [prop.IsNullable],
                 memberPrefix: [prop.Name],
                 columns,
                 nodes
@@ -305,6 +327,53 @@ internal sealed class EmissionPlan
         };
     }
 
+    /// <summary>
+    /// A group one level inside a list element (an element member that is itself a nested type
+    /// or an adapted group surrogate, docs/44 §A.4c): one lane column per leaf of the group. The
+    /// group adds one rung above the element's (def 3 = element present, group absent), and its
+    /// member is read through the inline adapter when it has one.
+    /// </summary>
+    private static void AddElementGroupColumns(
+        PropertyModel list,
+        PropertyModel element,
+        PropertyModel group,
+        int childIndex,
+        int root,
+        List<LeafColumn> columns
+    )
+    {
+        bool groupNullTest = !group.CompoundIsValueType || group.IsNullable;
+        bool groupUnwrap = group.CompoundIsValueType && group.IsNullable;
+        for (int g = 0; g < group.Children.Length; g++)
+        {
+            PropertyModel leaf = group.Children[g];
+            columns.Add(
+                new LeafColumn
+                {
+                    Slot = columns.Count,
+                    Leaf = leaf,
+                    RootPropertyIndex = root,
+                    SchemaPath = [childIndex, g],
+                    MaxDef = 4 + (leaf.IsNullable ? 1 : 0),
+                    MemberChain = [list.Name, group.Name, leaf.Name],
+                    StepKinds = [ChainStepKind.List, ChainStepKind.Struct, ChainStepKind.Struct],
+                    StepDefBase = [0, 2, 3],
+                    StepHasNullTest = [true, true, groupNullTest],
+                    StepValueUnwrap = [false, false, groupUnwrap],
+                    StepAdapters = [null, null, group.InlineAdapter],
+                    StepDomainNullable = [list.IsNullable, element.IsNullable, group.IsNullable],
+                    IsListLeaf = true,
+                    ListElementStruct = element,
+                    ListPresenceRung = 1,
+                    ListElementRung = 2,
+                    MemberAnnotatedNullable = list.IsNullable,
+                    ListMemberName = list.Name,
+                    ListMemberIsArray = list.TypeName.EndsWith("[]", StringComparison.Ordinal),
+                }
+            );
+        }
+    }
+
     private static void WalkStruct(
         PropertyModel structProp,
         StructNode node,
@@ -313,6 +382,8 @@ internal sealed class EmissionPlan
         int depth,
         bool[] valueTypes,
         bool[] nullableValueSteps,
+        InlineAdapterModel?[] adapters,
+        bool[] domainNullable,
         string[] memberPrefix,
         List<LeafColumn> columns,
         List<StructNode> nodes
@@ -331,6 +402,7 @@ internal sealed class EmissionPlan
                     Id = nodes.Count,
                     ClrType = child.TypeName.TrimEnd('?'),
                     IsValueType = child.CompoundIsValueType,
+                    Adapter = child.InlineAdapter,
                     MemberName = child.Name,
                     MemberAnnotatedNullable = child.IsNullable,
                     ParentId = node.Id,
@@ -348,6 +420,8 @@ internal sealed class EmissionPlan
                     depth + 1,
                     [.. valueTypes, child.CompoundIsValueType],
                     [.. nullableValueSteps, child.IsNullable && child.CompoundIsValueType],
+                    [.. adapters, child.InlineAdapter],
+                    [.. domainNullable, child.IsNullable],
                     chain,
                     columns,
                     nodes
@@ -384,6 +458,8 @@ internal sealed class EmissionPlan
                 StepDefBase = defBases,
                 StepHasNullTest = hasNullTests,
                 StepValueUnwrap = valueUnwraps,
+                StepAdapters = adapters,
+                StepDomainNullable = domainNullable,
             };
             columns.Add(column);
             node.Leaves.Add(column);

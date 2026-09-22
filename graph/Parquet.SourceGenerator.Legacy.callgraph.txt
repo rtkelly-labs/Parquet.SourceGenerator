@@ -6,7 +6,7 @@
 #        components-must-not-call-the-emitter-hub layering.
 # Unresolved call sites (delegates, virtuals, framework): measured in the
 # header below so the blind spot is visible, never silently absent.
-# stats: nodes=171 edges=219 call-sites=1887 unresolved=1625
+# stats: nodes=174 edges=224 call-sites=1898 unresolved=1630
 E:Parquet.SourceGenerator.Emitter.Components.AdapterShadowComponent.EmitShadow/(StringBuilder,AdapterShadowModel,string) | Parquet.SourceGenerator.Emitter.Components.AdapterShadowComponent.Identifier/(string)
 E:Parquet.SourceGenerator.Emitter.Components.AdapterShadowComponent.EmitSource/(AdapterShadowSet) | Parquet.SourceGenerator.Emitter.Components.AdapterShadowComponent.EmitShadow/(StringBuilder,AdapterShadowModel,string)
 E:Parquet.SourceGenerator.Emitter.Components.ArrowMappingComponent.IsSupported/(TargetClassModel) | Parquet.SourceGenerator.Emitter.Components.ArrowMappingComponent.TryMap/(PropertyModel)
@@ -88,6 +88,7 @@ E:Parquet.SourceGenerator.Models.EquatableArray.GetEnumerator[IEnumerable]/() | 
 E:Parquet.SourceGenerator.Models.GeneratorConfiguration.From/(Compilation,AnalyzerConfigOptionsProvider) | Parquet.SourceGenerator.Models.GeneratorConfiguration.GetGeneratorVersion/()
 E:Parquet.SourceGenerator.Models.GeneratorConfiguration.From/(Compilation,AnalyzerConfigOptionsProvider) | Parquet.SourceGenerator.Models.GeneratorConfiguration.Invalid/(string)
 E:Parquet.SourceGenerator.Models.GeneratorConfiguration.Invalid/(string) | Parquet.SourceGenerator.Models.GeneratorConfiguration.GetGeneratorVersion/()
+E:Parquet.SourceGenerator.Models.InlineAdapterModel.ToStorageFrom/(string,bool,string) | Parquet.SourceGenerator.Models.InlineAdapterModel.ToStorage/(string)
 E:Parquet.SourceGenerator.Models.SortKeyEligibility.IsEligible/(PropertyModel,string) | Parquet.SourceGenerator.Models.SortKeyEligibility.IsStringLike/(PropertyModel)
 E:Parquet.SourceGenerator.Models.SortKeyEligibility.IsEligible/(PropertyModel,string) | Parquet.SourceGenerator.Models.SortKeyEligibility.IsSystemDateTime/(string)
 E:Parquet.SourceGenerator.Parser.TargetParser.BuildCompoundModel/(PropertyKind,ITypeSymbol,string,ITypeSymbol,string,int,bool,ParquetApiLevel,string,Location,List<DiagnosticInfo>,HashSet<INamedTypeSymbol>,int,CompoundKinds,bool,string?,bool) | Parquet.SourceGenerator.Parser.TargetParser.BuildNestedElementModel/(ITypeSymbol,string,ParquetApiLevel,string,string,Location,List<DiagnosticInfo>,HashSet<INamedTypeSymbol>,int,CompoundKinds,bool)
@@ -99,6 +100,7 @@ E:Parquet.SourceGenerator.Parser.TargetParser.BuildNestedElementModel/(ITypeSymb
 E:Parquet.SourceGenerator.Parser.TargetParser.BuildNestedElementModel/(ITypeSymbol,string,ParquetApiLevel,string,string,Location,List<DiagnosticInfo>,HashSet<INamedTypeSymbol>,int,CompoundKinds,bool) | Parquet.SourceGenerator.Parser.TargetParser.IsSupportedOnClassicApi/(ITypeSymbol)
 E:Parquet.SourceGenerator.Parser.TargetParser.BuildNestedElementModel/(ITypeSymbol,string,ParquetApiLevel,string,string,Location,List<DiagnosticInfo>,HashSet<INamedTypeSymbol>,int,CompoundKinds,bool) | Parquet.SourceGenerator.Parser.TargetParser.TryClassifyKind/(ITypeSymbol,ITypeSymbol,PropertyKind)
 E:Parquet.SourceGenerator.Parser.TargetParser.BuildShadowSet/(INamedTypeSymbol,string,List<AdapterShadowModel>) | Parquet.SourceGenerator.Parser.TargetParser.DeclarationKeyword/(INamedTypeSymbol)
+E:Parquet.SourceGenerator.Parser.TargetParser.CheckInlineable/(AdaptedMember) | Parquet.SourceGenerator.Parser.TargetParser.IsAssignable/(ISymbol)
 E:Parquet.SourceGenerator.Parser.TargetParser.CheckShadowable/(AdaptedMember,MemberScope) | Parquet.SourceGenerator.Parser.TargetParser.IsAssignable/(ISymbol)
 E:Parquet.SourceGenerator.Parser.TargetParser.CheckShadowable/(AdaptedMember,MemberScope) | Parquet.SourceGenerator.Parser.TargetParser.IsDeclaredPartial/(INamedTypeSymbol)
 E:Parquet.SourceGenerator.Parser.TargetParser.CheckShadowable/(AdaptedMember,MemberScope) | Parquet.SourceGenerator.Parser.TargetParser.IsRequiredMember/(ISymbol)
@@ -137,8 +139,10 @@ E:Parquet.SourceGenerator.Parser.TargetParser.GetTargetModelCore/(INamedTypeSymb
 E:Parquet.SourceGenerator.Parser.TargetParser.HasAttribute/(ISymbol,string[],string[]) | Parquet.SourceGenerator.Parser.TargetParser.FindAttribute/(ISymbol,string[],string[])
 E:Parquet.SourceGenerator.Parser.TargetParser.HasParameterlessConstructor/(INamedTypeSymbol) | Parquet.SourceGenerator.Parser.TargetParser.IsReachableFromGeneratedCode/(Accessibility)
 E:Parquet.SourceGenerator.Parser.TargetParser.IsAssignable/(ISymbol) | Parquet.SourceGenerator.Parser.TargetParser.IsReachableFromGeneratedCode/(Accessibility)
+E:Parquet.SourceGenerator.Parser.TargetParser.ListElementShapeSupported/(PropertyModel) | Parquet.SourceGenerator.Parser.TargetParser.ElementChildrenSupported/(PropertyModel)
 E:Parquet.SourceGenerator.Parser.TargetParser.ListScopeError/(MemberScope) | Parquet.SourceGenerator.Parser.TargetParser.IsCompoundKindEmittable/(PropertyKind,CompoundKinds)
 E:Parquet.SourceGenerator.Parser.TargetParser.PlanElementSurrogate/(AdaptedMember,AdapterDescriptor,ITypeSymbol,bool,MemberScope,bool) | Parquet.SourceGenerator.Parser.TargetParser.BuildCompoundModel/(PropertyKind,ITypeSymbol,string,ITypeSymbol,string,int,bool,ParquetApiLevel,string,Location,List<DiagnosticInfo>,HashSet<INamedTypeSymbol>,int,CompoundKinds,bool,string?,bool)
+E:Parquet.SourceGenerator.Parser.TargetParser.PlanElementSurrogate/(AdaptedMember,AdapterDescriptor,ITypeSymbol,bool,MemberScope,bool) | Parquet.SourceGenerator.Parser.TargetParser.ElementChildrenSupported/(PropertyModel)
 E:Parquet.SourceGenerator.Parser.TargetParser.PlanElementSurrogate/(AdaptedMember,AdapterDescriptor,ITypeSymbol,bool,MemberScope,bool) | Parquet.SourceGenerator.Parser.TargetParser.ReportUnsupportedSurrogate/(AdapterDescriptor,AdaptedMember,MemberScope,string)
 E:Parquet.SourceGenerator.Parser.TargetParser.PlanElementSurrogate/(AdaptedMember,AdapterDescriptor,ITypeSymbol,bool,MemberScope,bool) | Parquet.SourceGenerator.Parser.TargetParser.TryClassifyCompound/(ITypeSymbol,PropertyKind,bool)
 E:Parquet.SourceGenerator.Parser.TargetParser.PlanElementSurrogate/(AdaptedMember,AdapterDescriptor,ITypeSymbol,bool,MemberScope,bool) | Parquet.SourceGenerator.Parser.TargetParser.TryClassifyKind/(ITypeSymbol,ITypeSymbol,PropertyKind)
@@ -170,6 +174,7 @@ E:Parquet.SourceGenerator.Parser.TargetParser.TryCollectAdaptedList/(AdaptedMemb
 E:Parquet.SourceGenerator.Parser.TargetParser.TryCollectAdaptedList/(AdaptedMember,ColumnOptions,MemberScope,MemberSink) | Parquet.SourceGenerator.Parser.TypeAdapterResolver.ResolveElement/(ISymbol,ITypeSymbol,bool)
 E:Parquet.SourceGenerator.Parser.TargetParser.TryCollectAdaptedList/(AdaptedMember,ColumnOptions,MemberScope,MemberSink) | Parquet.SourceGenerator.Parser.TypeAdapterResolver.TryGetCollectionElement/(ITypeSymbol,ITypeSymbol)
 E:Parquet.SourceGenerator.Parser.TargetParser.TryCollectAdaptedList/(AdaptedMember,ColumnOptions,MemberScope,MemberSink) | Parquet.SourceGenerator.Parser.TypeAdapterResolver.UnwrapNullable/(ITypeSymbol)
+E:Parquet.SourceGenerator.Parser.TargetParser.TryCollectAdaptedMember/(AdaptedMember,ColumnOptions,LeafOptions,MemberScope,MemberSink) | Parquet.SourceGenerator.Parser.TargetParser.CheckInlineable/(AdaptedMember)
 E:Parquet.SourceGenerator.Parser.TargetParser.TryCollectAdaptedMember/(AdaptedMember,ColumnOptions,LeafOptions,MemberScope,MemberSink) | Parquet.SourceGenerator.Parser.TargetParser.CheckShadowable/(AdaptedMember,MemberScope)
 E:Parquet.SourceGenerator.Parser.TargetParser.TryCollectAdaptedMember/(AdaptedMember,ColumnOptions,LeafOptions,MemberScope,MemberSink) | Parquet.SourceGenerator.Parser.TargetParser.CollectThroughAdapter/(AdaptedMember,AdapterDescriptor,ColumnOptions,LeafOptions,MemberScope,MemberSink)
 E:Parquet.SourceGenerator.Parser.TargetParser.TryCollectAdaptedMember/(AdaptedMember,ColumnOptions,LeafOptions,MemberScope,MemberSink) | Parquet.SourceGenerator.Parser.TargetParser.ReportAmbiguousAdapter/(AdaptedMember,ITypeSymbol,string,MemberScope)

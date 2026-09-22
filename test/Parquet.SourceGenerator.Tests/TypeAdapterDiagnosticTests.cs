@@ -313,7 +313,7 @@ public sealed class TypeAdapterDiagnosticTests
     }
 
     [Fact]
-    public void AdaptersDoNotChainThroughASurrogate()
+    public void AdaptersResolveForMembersInsideASurrogate()
     {
         const string source = """
             using Parquet.SourceGenerator;
@@ -349,10 +349,12 @@ public sealed class TypeAdapterDiagnosticTests
 
         GeneratorRun run = Run(source);
 
-        // One hop only (docs/44 §10): inside the surrogate, Inner is planned by the ordinary
-        // rules — as an empty group — and its registered adapter is not consulted.
-        run.Ids.ShouldContain(DiagnosticDescriptors.NoPropertiesFound.Id);
-        run.HasShadowFile.ShouldBeFalse();
+        // A surrogate's own members resolve adapters too (docs/44 §A.4c): Inner converts
+        // inline to its int storage inside Holder, with no shadow on a type nobody can reopen.
+        run.GeneratorDiagnostics.ShouldBeEmpty(string.Join("\n", run.GeneratorDiagnostics));
+        run.CompileErrors.ShouldBeEmpty(string.Join("\n", run.CompileErrors));
+        run.SerializerSource.ShouldContain("global::InnerAdapter.ToStorage(");
+        run.SerializerSource.ShouldContain("global::InnerAdapter.FromStorage(");
     }
 
     [Fact]
@@ -598,14 +600,15 @@ public sealed class TypeAdapterDiagnosticTests
             using Parquet.SourceGenerator;
 
             public sealed class Temperature { public double Celsius { get; init; } }
-            public readonly record struct Inner(double Celsius);
+            public readonly record struct Deepest(double Celsius);
+            public readonly record struct Inner(Deepest Value);
             public readonly record struct Outer(Inner Reading, string Scale);
 
             [ParquetTypeAdapter(typeof(Temperature), typeof(Outer))]
             public static class NestedAdapter
             {
-                public static Outer ToStorage(Temperature v) => new(new Inner(v.Celsius), "C");
-                public static Temperature FromStorage(Outer v) => new() { Celsius = v.Reading.Celsius };
+                public static Outer ToStorage(Temperature v) => new(new Inner(new Deepest(v.Celsius)), "C");
+                public static Temperature FromStorage(Outer v) => new() { Celsius = v.Reading.Value.Celsius };
             }
 
             [ParquetSerializable]
@@ -619,7 +622,7 @@ public sealed class TypeAdapterDiagnosticTests
         run.Ids.ShouldBe([DiagnosticDescriptors.UnsupportedAdapterSurrogate.Id]);
         run.GeneratorDiagnostics[0]
             .GetMessage(System.Globalization.CultureInfo.InvariantCulture)
-            .ShouldContain("nested groups");
+            .ShouldContain("deeper nesting");
 
         GeneratorRun legacy = Run(
             Registered

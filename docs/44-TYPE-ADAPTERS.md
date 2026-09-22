@@ -701,8 +701,10 @@ asserts unrelated edits leave every generator step cached.
   `[ParquetSerializable]` (§9), with the ordinary cycle, depth, accessibility, parameterless
   constructor and ordering rules. Groups need the Parquet.Net 6 backend at feature level 2 or
   later; elsewhere they are **PARQ018**.
-- One hop only (§10): members *inside* a surrogate are never adapted, and nested classes and
-  structs inside a surrogate are themselves planned as groups.
+- Members *inside* a surrogate resolve adapters like any other member (§A.4c), so an
+  application surrogate can hold `Instant`s. Adapter **chains** — a surrogate type that itself
+  needs an adapter — are still one hop (§10); a cycle through surrogates is PARQ012. Nested
+  classes and structs inside a surrogate are planned as groups without `[ParquetSerializable]`.
 - `Nullable<T>` source or surrogate types are refused (§7): the generator owns nulls.
 - A **closed construction of a generic surrogate** (`TaggedStorage<int>`) is a concrete group and
   is planned like any other; open generic `[ParquetSerializable]` children remain PARQ010.
@@ -766,8 +768,39 @@ Element shapes, which follow the list emitter's own:
 - **Group surrogates** of single-column members — reference or value type. Lifting the
   value-type restriction here also made plain `List<SomeStruct>` / `SomeStruct?[]` members of
   `[ParquetSerializable]` structs work; a non-nullable value-type element has no null rung.
-- **Not yet:** element groups that contain groups (e.g. `ZonedDateTime`, `Interval`,
-  `DateInterval` storage) and lists below the top level — PARQ018 names the reason.
+- **Groups one level inside an element** — an element member that is a nested type or an
+  adapted group (`List<Measurement>` where `Measurement.At` is an `Instant`; `ZonedDateTime`,
+  `Interval` and `DateInterval` elements).
+- **Not yet:** deeper nesting inside elements, and lists below the top level — PARQ018 names the
+  reason.
+
+### A.4c Adapted members nested in custom types
+
+An adapted member anywhere below the root — a field of a `[ParquetSerializable]` child type, of
+a list element, or of an application surrogate — is converted **inline**, like a collection
+element: `ToStorage` where the write ladder reads the member off its parent, `FromStorage` where
+the reader assigns the rebuilt value to its parent, nullable members converting only when
+present. The storage shadow of §A.2 is used only for the root type's own members, where every
+emitter (row, columnar, pruning, Arrow) reads them; nested types therefore need no shadow and no
+`partial` beyond what `[ParquetSerializable]` already asks of them, and a surrogate — which
+nobody can reopen — can carry adapted fields.
+
+```csharp
+[ParquetSerializable]
+public partial record Measurement
+{
+    public double Value { get; init; }
+    public Instant At { get; init; }        // group inside a group
+    public LocalTime? Time { get; init; }   // scalar, nullable
+}
+
+[ParquetSerializable]
+public partial record SensorRow
+{
+    public Measurement Reading { get; init; } = new();
+    public List<Measurement> History { get; init; } = [];   // group inside a list element
+}
+```
 
 ### A.5 Diagnostics
 

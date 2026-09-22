@@ -42,6 +42,11 @@ public sealed partial record AotNodaRecord
     public AotId<AotNodaRecord> Key { get; init; }
     public List<AotId<string>> Links { get; init; } = [];
 
+    // A custom type with NodaTime fields inside, as a member and as list elements.
+    public AotReading Reading { get; init; } = new();
+    public List<AotReading> Readings { get; init; } = [];
+    public List<ZonedDateTime> Zones { get; init; } = [];
+
     public bool Equals(AotNodaRecord? other) =>
         other is not null
         && At == other.At
@@ -60,9 +65,20 @@ public sealed partial record AotNodaRecord
                 : other.Slots is not null && Slots.SequenceEqual(other.Slots)
         )
         && Key == other.Key
-        && Links.SequenceEqual(other.Links);
+        && Links.SequenceEqual(other.Links)
+        && Reading == other.Reading
+        && Readings.SequenceEqual(other.Readings)
+        && Zones.SequenceEqual(other.Zones);
 
     public override int GetHashCode() => At.GetHashCode();
+}
+
+[ParquetSerializable]
+public sealed partial record AotReading
+{
+    public double Value { get; init; }
+    public Instant At { get; init; }
+    public LocalDate? Day { get; init; }
 }
 
 public readonly record struct AotId<T>(Guid Value);
@@ -93,6 +109,18 @@ internal static class NodaTimeChecks
                 Slots = [LocalTime.Noon, null],
                 Key = new AotId<AotNodaRecord>(Guid.NewGuid()),
                 Links = [new AotId<string>(Guid.NewGuid())],
+                Reading = new AotReading
+                {
+                    Value = 1,
+                    At = Instant.MaxValue,
+                    Day = new LocalDate(2024, 2, 29),
+                },
+                Readings =
+                [
+                    new AotReading { At = Instant.MinValue },
+                    new AotReading { Value = -1 },
+                ],
+                Zones = [london.AtLeniently(new LocalDateTime(2021, 3, 28, 1, 30))],
                 Window = new Interval(NodaConstants.UnixEpoch, null),
                 Retention = Period.FromMinutes(90),
                 Zoned = london.AtLeniently(new LocalDateTime(2021, 10, 31, 1, 30)),

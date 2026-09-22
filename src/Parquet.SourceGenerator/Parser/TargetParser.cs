@@ -407,8 +407,8 @@ public static partial class TargetParser
 
         /// <summary>
         /// True while planning an adapter's structural surrogate: its members are mapped by the
-        /// ordinary rules, but may not themselves be adapted (one hop, docs/44 §10), and nested
-        /// groups need no <c>[ParquetSerializable]</c> (§9).
+        /// ordinary rules — adapted members included, converted inline (docs/44 §A.4c) — and
+        /// nested groups need no <c>[ParquetSerializable]</c> (§9).
         /// </summary>
         public bool InSurrogate { get; init; }
     }
@@ -670,8 +670,7 @@ public static partial class TargetParser
         // with no built-in mapping, or one that names an adapter explicitly, is planned through
         // its adapter's surrogate instead.
         if (
-            !scope.InSurrogate
-            && TryCollectAdaptedMember(
+            TryCollectAdaptedMember(
                 new AdaptedMember(member, memberType, underlyingType, isNullable, memberLocation),
                 column,
                 leafOptions,
@@ -1160,8 +1159,8 @@ public static partial class TargetParser
     /// </summary>
     /// <summary>
     /// M3b stack 2 scope for row-level lists under the pipeline dial: leaf elements (M3a) or
-    /// POCO elements — reference or value type — whose collectable members are all leaves.
-    /// Compound children inside elements, and lists inside compounds live in later stacks;
+    /// POCO elements — reference or value type — whose members are leaves or groups of leaves.
+    /// Deeper nesting inside elements, and lists inside compounds live in later stacks;
     /// the parser builds the full tree under its test dial regardless.
     /// </summary>
     private static bool ListElementShapeSupported(PropertyModel listModel)
@@ -1172,10 +1171,28 @@ public static partial class TargetParser
             return false;
         if (element.Kind != PropertyKind.Struct)
             return true;
+        return ElementChildrenSupported(element);
+    }
+
+    /// <summary>
+    /// A list element's members may be leaves or groups of leaves (one nesting level inside the
+    /// element — a nested type, or an adapted member's group surrogate); nothing deeper.
+    /// </summary>
+    private static bool ElementChildrenSupported(PropertyModel element)
+    {
         foreach (PropertyModel child in element.Children)
         {
-            if (child.Kind is PropertyKind.Struct or PropertyKind.List or PropertyKind.Map)
+            if (child.Kind is PropertyKind.List or PropertyKind.Map)
                 return false;
+            if (
+                child.Kind == PropertyKind.Struct
+                && child.Children.Any(g =>
+                    g.Kind is PropertyKind.Struct or PropertyKind.List or PropertyKind.Map
+                )
+            )
+            {
+                return false;
+            }
         }
         return true;
     }
