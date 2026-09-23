@@ -37,7 +37,7 @@ The suite evaluates three fixed public datasets tracked under **Git LFS** with f
 
 ### 📈 Real-World Deserialization & Parallel Performance
 
-BenchmarkDotNet measurements comparing reflection deserialization (`ParquetSerializer`) against the source-generated readers (at the time of measurement the flat `ReadParquetAsync`, `ReadParquetParallelAsync` and `ReadParquetStreamAsync`; since #480 the same code paths are reached through `From(...).ToListAsync()`, `From(buffer).Parallel().ToListAsync()` and `From(...).AsAsyncEnumerable()`):
+BenchmarkDotNet measurements comparing reflection deserialization (`ParquetSerializer`) against the source-generated readers (at the time of measurement the flat `ReadParquetAsync`, `ReadParquetParallelAsync` and `ReadParquetStreamAsync`; since #480 and #478/#479 the same code paths are reached through `From(...).ToArrayAsync()`, `From(buffer).Parallel().ToArrayAsync()` and `From(...).AsAsyncEnumerable()`; call `.ToList()` on the array where a `List<T>` is needed):
 
 | Operation | Dataset | Rows | Reflection Baseline | Source Generator | Speedup | Memory Reduction |
 |:--- |:--- |:---:|:---:|:---:|:---:|:---:|
