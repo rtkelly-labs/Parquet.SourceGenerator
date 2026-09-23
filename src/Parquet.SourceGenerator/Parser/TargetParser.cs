@@ -230,12 +230,21 @@ internal static class TargetParser
 
         // Emission is suppressed whenever a fatal diagnostic already explains the problem. Emitting
         // anyway buries that message under cascading errors from the generated file.
+        bool nameCollides = ReportGeneratedNameCollision(
+            typeSymbol,
+            className,
+            namespaceName,
+            fallbackLocation,
+            diagnostics
+        );
+
         bool canEmit =
             isPartial
             && hasParameterlessConstructor
             && !rejectedAnyMember
             && !nestedUnreachable
-            && !isGeneric;
+            && !isGeneric
+            && !nameCollides;
 
         bool hasSingleInstanceField = ComputeHasSingleInstanceField(typeSymbol);
 
@@ -254,6 +263,84 @@ internal static class TargetParser
             model,
             new EquatableArray<DiagnosticInfo>(diagnostics.ToArray())
         );
+    }
+
+    /// <summary>
+    /// Rule PARQ016: generated types are named after the containing-type path with the dots
+    /// removed, so two targets whose paths flatten alike (<c>A.BC</c>, <c>AB.C</c>) would emit
+    /// identically named namespace-scope types. Each colliding target reports and emits nothing,
+    /// so the build fails on one clear message instead of a CS0101 cascade in generated files.
+    /// </summary>
+    /// <remarks>
+    /// Only the compiling assembly's part of the namespace is searched: generated types are
+    /// emitted into this compilation, and walking a merged namespace would enumerate every type in
+    /// every referenced assembly that shares it.
+    /// </remarks>
+    private static bool ReportGeneratedNameCollision(
+        INamedTypeSymbol target,
+        string className,
+        string namespaceName,
+        Location location,
+        List<DiagnosticInfo> diagnostics
+    )
+    {
+        string flattened = className.Replace(".", string.Empty);
+        INamespaceSymbol scope =
+            target.ContainingNamespace.ConstituentNamespaces.FirstOrDefault(ns =>
+                SymbolEqualityComparer.Default.Equals(
+                    ns.ContainingAssembly,
+                    target.ContainingAssembly
+                )
+            ) ?? target.ContainingNamespace;
+
+        var pending = new Stack<INamedTypeSymbol>(scope.GetTypeMembers());
+        while (pending.Count > 0)
+        {
+            INamedTypeSymbol candidate = pending.Pop();
+            foreach (INamedTypeSymbol nested in candidate.GetTypeMembers())
+            {
+                pending.Push(nested);
+            }
+
+            if (
+                SymbolEqualityComparer.Default.Equals(candidate, target)
+                || !candidate
+                    .GetAttributes()
+                    .Any(a => a.AttributeClass?.ToDisplayString() == AttributeFullName)
+            )
+            {
+                continue;
+            }
+
+            string candidateName = GetNestedQualifiedTypeName(candidate);
+            if (
+                !string.Equals(
+                    candidateName.Replace(".", string.Empty),
+                    flattened,
+                    StringComparison.Ordinal
+                )
+            )
+            {
+                continue;
+            }
+
+            diagnostics.Add(
+                new DiagnosticInfo(
+                    DiagnosticDescriptors.GeneratedNameCollision,
+                    location,
+                    new[]
+                    {
+                        className,
+                        candidateName,
+                        flattened,
+                        namespaceName.Length == 0 ? "<global>" : namespaceName,
+                    }
+                )
+            );
+            return true;
+        }
+
+        return false;
     }
 
     /// <summary>

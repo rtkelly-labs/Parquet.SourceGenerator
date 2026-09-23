@@ -381,6 +381,80 @@ public sealed class DiagnosticTests
     }
 
     [Fact]
+    public void NestedTargetsWhosePathsFlattenAlikeReportPARQ016InsteadOfCS0101()
+    {
+        // A.BC and AB.C both flatten to "ABC", so both would emit ABCParquetExtensions,
+        // ABCRowGroupMetadata, ... into the same namespace. Backported from Arrow.SourceGenerator.
+        string source = """
+            using Parquet.SourceGenerator;
+
+            namespace Demo;
+
+            public partial class A
+            {
+                [ParquetSerializable]
+                public partial class BC { [ParquetColumn("x")] public int X { get; init; } }
+            }
+
+            public partial class AB
+            {
+                [ParquetSerializable]
+                public partial class C { [ParquetColumn("x")] public int X { get; init; } }
+            }
+
+            [ParquetSerializable]
+            public partial class Unrelated { [ParquetColumn("x")] public int X { get; init; } }
+            """;
+
+        var (diagnostics, outputTrees) = RunGenerator(source);
+
+        var collisions = diagnostics
+            .Where(d => d.Id == DiagnosticDescriptors.GeneratedNameCollision.Id)
+            .Select(d => d.GetMessage(System.Globalization.CultureInfo.InvariantCulture))
+            .ToList();
+        collisions.Count.ShouldBe(2, "each colliding target reports");
+        collisions.ShouldContain(m =>
+            m.Contains("'A.BC' and 'AB.C'", System.StringComparison.Ordinal)
+        );
+        collisions.ShouldContain(m =>
+            m.Contains("'AB.C' and 'A.BC'", System.StringComparison.Ordinal)
+        );
+        outputTrees
+            .Select(t => t.ToString())
+            .ShouldNotContain(t =>
+                t.Contains("ABCParquetExtensions", System.StringComparison.Ordinal)
+            );
+        outputTrees
+            .Select(t => t.ToString())
+            .ShouldContain(t =>
+                t.Contains("UnrelatedParquetExtensions", System.StringComparison.Ordinal)
+            );
+    }
+
+    [Fact]
+    public void NestedTargetCollidingWithATopLevelTargetReportsPARQ016()
+    {
+        string source = """
+            using Parquet.SourceGenerator;
+
+            namespace Demo;
+
+            public partial class A
+            {
+                [ParquetSerializable]
+                public partial class BC { [ParquetColumn("x")] public int X { get; init; } }
+            }
+
+            [ParquetSerializable]
+            public partial class ABC { [ParquetColumn("x")] public int X { get; init; } }
+            """;
+
+        var (diagnostics, _) = RunGenerator(source);
+
+        diagnostics.Count(d => d.Id == DiagnosticDescriptors.GeneratedNameCollision.Id).ShouldBe(2);
+    }
+
+    [Fact]
     public void PrivateNestedTypeStillTriggersPARQ009()
     {
         // What the reversal keeps: a declaration the namespace-scope extension class cannot name.

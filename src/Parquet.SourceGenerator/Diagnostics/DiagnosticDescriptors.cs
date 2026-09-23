@@ -237,4 +237,23 @@ internal static class DiagnosticDescriptors
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true
     );
+
+    /// <summary>
+    /// PARQ016: Two targets flatten to the same generated type names.
+    /// </summary>
+    /// <remarks>
+    /// Generated types live at namespace scope and are named after the target's containing-type
+    /// path with the dots removed, so <c>A.BC</c> and <c>AB.C</c> both produce
+    /// <c>ABCParquetExtensions</c>, <c>ABCRowGroupMetadata</c> and the rest. Without this rule the
+    /// build failed with a cascade of CS0101 errors inside generated files, naming neither
+    /// declaration. Found while building Arrow.SourceGenerator, which nests its companions instead.
+    /// </remarks>
+    public static readonly DiagnosticDescriptor GeneratedNameCollision = new(
+        id: "PARQ016",
+        title: "Generated type names collide",
+        messageFormat: "The types '{0}' and '{1}' both generate types named '{2}…' in namespace '{3}'. Rename one of them",
+        category: "ParquetSourceGenerator",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
 }
