@@ -117,14 +117,14 @@ public static class FuzzRunner
         );
 
         using var stream = new MemoryStream(bytes, writable: false);
-        List<FuzzWideRecord> actual = await FuzzWideRecordParquet
+        FuzzWideRecord[] actual = await FuzzWideRecordParquet
             .From(stream)
             .WithOptions(BuildOptions(fuzzCase))
-            .ToListAsync();
+            .ToArrayAsync();
 
-        if (actual.Count != rows.Count)
+        if (actual.Length != rows.Count)
         {
-            return $"row count: expected {rows.Count}, generated reader produced {actual.Count}";
+            return $"row count: expected {rows.Count}, generated reader produced {actual.Length}";
         }
 
         foreach (FuzzColumn column in FuzzColumns.All)
@@ -150,14 +150,14 @@ public static class FuzzRunner
         byte[] bytes = await WriteWithGeneratedWriterAsync(rows, fuzzCase);
 
         using var stream = new MemoryStream(bytes, writable: false);
-        List<FuzzWideRecord> actual = await FuzzWideRecordParquet
+        FuzzWideRecord[] actual = await FuzzWideRecordParquet
             .From(stream)
             .WithOptions(BuildOptions(fuzzCase))
-            .ToListAsync();
+            .ToArrayAsync();
 
-        if (actual.Count != rows.Count)
+        if (actual.Length != rows.Count)
         {
-            return $"row count: expected {rows.Count}, generated reader produced {actual.Count}";
+            return $"row count: expected {rows.Count}, generated reader produced {actual.Length}";
         }
 
         foreach (FuzzColumn column in FuzzColumns.All)

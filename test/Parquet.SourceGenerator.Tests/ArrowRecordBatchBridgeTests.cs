@@ -460,12 +460,10 @@ public sealed class ArrowRecordBatchBridgeTests
         byte[] bytes = await WriteArrowAsync(batch);
 
         using var readStream = new MemoryStream(bytes);
-        List<ArrowPrimitiveRow> actual = await ArrowPrimitiveRowParquet
-            .From(readStream)
-            .ToListAsync();
+        ArrowPrimitiveRow[] actual = await ArrowPrimitiveRowParquet.From(readStream).ToArrayAsync();
 
         List<ArrowPrimitiveRow> expected = ExpectedPrimitiveRows();
-        actual.Count.ShouldBe(expected.Count);
+        actual.Length.ShouldBe(expected.Count);
 
         for (int i = 0; i < expected.Count; i++)
         {
@@ -610,12 +608,10 @@ public sealed class ArrowRecordBatchBridgeTests
         }
 
         using var readStream = new MemoryStream(stream.ToArray());
-        List<ArrowNullableRow> actual = await ArrowNullableRowParquet
-            .From(readStream)
-            .ToListAsync();
+        ArrowNullableRow[] actual = await ArrowNullableRowParquet.From(readStream).ToArrayAsync();
 
         List<ArrowNullableRow> expected = NullableRows();
-        actual.Count.ShouldBe(expected.Count);
+        actual.Length.ShouldBe(expected.Count);
         for (int i = 0; i < expected.Count; i++)
         {
             // Record equality would compare Blob by reference, so the columns are checked one by one.
@@ -889,7 +885,7 @@ public sealed class ArrowRecordBatchBridgeTests
         }
 
         using var readStream = new MemoryStream(stream.ToArray());
-        List<ArrowNullableRow> rows = await ArrowNullableRowParquet.From(readStream).ToListAsync();
+        ArrowNullableRow[] rows = await ArrowNullableRowParquet.From(readStream).ToArrayAsync();
         rows.ShouldBeEmpty();
     }
 }

@@ -75,15 +75,15 @@ public sealed class TestDataIntegrationTests
         );
 
     [Fact]
-    public async Task ToListAsyncDeserializesPyArrowV1Dataset()
+    public async Task ToArrayAsyncDeserializesPyArrowV1Dataset()
     {
         string filePath = Path.Combine(TestDataRoot, "v1", "01_small_flat_primitives.parquet");
         System.IO.File.Exists(filePath).ShouldBeTrue($"File not found: {filePath}");
 
         using var stream = System.IO.File.OpenRead(filePath);
-        var records = await TestUserRecordParquet.From(stream).ToListAsync();
+        var records = await TestUserRecordParquet.From(stream).ToArrayAsync();
 
-        records.Count.ShouldBe(100);
+        records.Length.ShouldBe(100);
         records[0].Id.ShouldBe(0);
         records[0].Name.ShouldBe("user_0");
         records[0].Score.ShouldBe(0.0);
@@ -96,22 +96,22 @@ public sealed class TestDataIntegrationTests
     }
 
     [Fact]
-    public async Task ToListAsyncDeserializesPyArrowV2Dataset()
+    public async Task ToArrayAsyncDeserializesPyArrowV2Dataset()
     {
         string filePath = Path.Combine(TestDataRoot, "v2", "01_small_flat_primitives.parquet");
         System.IO.File.Exists(filePath).ShouldBeTrue($"File not found: {filePath}");
 
         using var stream = System.IO.File.OpenRead(filePath);
-        var records = await TestUserRecordParquet.From(stream).ToListAsync();
+        var records = await TestUserRecordParquet.From(stream).ToArrayAsync();
 
-        records.Count.ShouldBe(100);
+        records.Length.ShouldBe(100);
         records[50].Id.ShouldBe(50);
         records[50].Name.ShouldBe("user_50");
         records[50].IsActive.ShouldBeTrue();
     }
 
     [Fact]
-    public async Task ToListAsyncDeserializesCSharpV3Dataset()
+    public async Task ToArrayAsyncDeserializesCSharpV3Dataset()
     {
         string filePath = Path.Combine(
             TestDataCSharpRoot,
@@ -121,16 +121,16 @@ public sealed class TestDataIntegrationTests
         System.IO.File.Exists(filePath).ShouldBeTrue($"File not found: {filePath}");
 
         using var stream = System.IO.File.OpenRead(filePath);
-        var records = await TestUserRecordParquet.From(stream).ToListAsync();
+        var records = await TestUserRecordParquet.From(stream).ToArrayAsync();
 
-        records.Count.ShouldBe(100);
+        records.Length.ShouldBe(100);
         records[10].Id.ShouldBe(10);
         records[10].Name.ShouldBe("user_10");
         records[10].IsActive.ShouldBeTrue();
     }
 
     [Fact]
-    public async Task ToListAsyncDeserializesNullableDataset()
+    public async Task ToArrayAsyncDeserializesNullableDataset()
     {
         string filePath = Path.Combine(
             TestDataCSharpRoot,
@@ -140,9 +140,9 @@ public sealed class TestDataIntegrationTests
         System.IO.File.Exists(filePath).ShouldBeTrue($"File not found: {filePath}");
 
         using var stream = System.IO.File.OpenRead(filePath);
-        var records = await TestNullableRecordParquet.From(stream).ToListAsync();
+        var records = await TestNullableRecordParquet.From(stream).ToArrayAsync();
 
-        records.Count.ShouldBe(10000);
+        records.Length.ShouldBe(10000);
         records[0].NullableInt.ShouldBeNull();
         records[0].NullableString.ShouldBeNull();
 
@@ -151,15 +151,15 @@ public sealed class TestDataIntegrationTests
     }
 
     [Fact]
-    public async Task ToListAsyncDeserializesLargeScaleDataset()
+    public async Task ToArrayAsyncDeserializesLargeScaleDataset()
     {
         string filePath = Path.Combine(TestDataCSharpRoot, "v3", "05_large_scale_flat.parquet");
         System.IO.File.Exists(filePath).ShouldBeTrue($"File not found: {filePath}");
 
         using var stream = System.IO.File.OpenRead(filePath);
-        var records = await TestLargeFlatRecordParquet.From(stream).ToListAsync();
+        var records = await TestLargeFlatRecordParquet.From(stream).ToArrayAsync();
 
-        records.Count.ShouldBe(100000);
+        records.Length.ShouldBe(100000);
         records[0].Id.ShouldBe(0L);
         records[99999].Id.ShouldBe(99999L);
         records[99999].ValA.ShouldBe(699993);

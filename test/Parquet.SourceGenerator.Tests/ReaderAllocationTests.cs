@@ -20,9 +20,10 @@ public partial record MultiRowGroupModel
 }
 
 /// <summary>
-/// Guards the read path's result-list sizing. The list is pre-sized once to the file's total row
+/// Guards the read path's result sizing. The result is pre-sized once to the file's total row
 /// count; assigning <c>Capacity</c> again inside the row-group loop reallocated a smaller backing
-/// array and copied into it on every group, which cost O(groups x rows) for no benefit.
+/// array and copied into it on every group, which cost O(groups x rows) for no benefit. Since #479
+/// the materialising path is the array one — the <c>List&lt;T&gt;</c> read path it guarded is gone.
 /// </summary>
 public sealed class ReaderAllocationTests
 {
@@ -44,7 +45,10 @@ public sealed class ReaderAllocationTests
 
         // Sizing happens upfront from the summed row count, avoiding per-row-group reallocations.
         source.ShouldContain("int totalRows = checked((int)totalRowsLong);");
-        source.ShouldContain("new global::System.Collections.Generic.List<TestEntity>(totalRows)");
+        source.ShouldContain("var results = new TestEntity[totalRows];");
+        source.ShouldNotContain(
+            "new global::System.Collections.Generic.List<TestEntity>(totalRows)"
+        );
         source.ShouldNotContain("results.Capacity");
     }
 
@@ -82,9 +86,9 @@ public sealed class ReaderAllocationTests
         );
         stream.Position = 0;
 
-        List<MultiRowGroupModel> read = await MultiRowGroupModelParquet.From(stream).ToListAsync();
+        MultiRowGroupModel[] read = await MultiRowGroupModelParquet.From(stream).ToArrayAsync();
 
-        read.Count.ShouldBe(7);
+        read.Length.ShouldBe(7);
         read.Select(x => x.Id).ShouldBe(written.Select(x => x.Id));
         read.Select(x => x.Name).ShouldBe(written.Select(x => x.Name));
     }
@@ -104,15 +108,15 @@ public sealed class ReaderAllocationTests
         );
 
         stream.Position = 0;
-        List<MultiRowGroupModel> sequential = await MultiRowGroupModelParquet
+        MultiRowGroupModel[] sequential = await MultiRowGroupModelParquet
             .From(stream)
-            .ToListAsync();
+            .ToArrayAsync();
 
         stream.Position = 0;
-        List<MultiRowGroupModel> parallel = await MultiRowGroupModelParquet
+        MultiRowGroupModel[] parallel = await MultiRowGroupModelParquet
             .From(stream.ToArray())
             .Parallel()
-            .ToListAsync();
+            .ToArrayAsync();
 
         parallel.Select(x => x.Id).ShouldBe(sequential.Select(x => x.Id));
         parallel.Select(x => x.Name).ShouldBe(sequential.Select(x => x.Name));

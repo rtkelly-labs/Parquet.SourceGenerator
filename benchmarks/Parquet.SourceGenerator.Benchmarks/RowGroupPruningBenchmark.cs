@@ -86,9 +86,9 @@ public class RowGroupPruningBenchmark
     [Benchmark(Baseline = true)]
     public async Task<int> ReadEverythingThenFilter()
     {
-        List<PrunableOrder> all = await PrunableOrderParquet
+        PrunableOrder[] all = await PrunableOrderParquet
             .From(new MemoryStream(_parquet, writable: false))
-            .ToListAsync();
+            .ToArrayAsync();
         return all.Count(o => o.OrderKey >= _threshold);
     }
 
@@ -97,10 +97,10 @@ public class RowGroupPruningBenchmark
     public async Task<int> PruneRowGroupsThenFilter()
     {
         long threshold = _threshold;
-        List<PrunableOrder> candidates = await PrunableOrderParquet
+        PrunableOrder[] candidates = await PrunableOrderParquet
             .From(new MemoryStream(_parquet, writable: false))
             .Where(meta => meta.OrderKey.MayContainAtLeast(threshold))
-            .ToListAsync();
+            .ToArrayAsync();
         return candidates.Count(o => o.OrderKey >= threshold);
     }
 }

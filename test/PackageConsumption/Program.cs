@@ -112,11 +112,11 @@ internal static class Program
         }
 
         stream.Position = 0;
-        List<Reading> actual = await ReadingParquet.From(stream).ToListAsync();
+        Reading[] actual = await ReadingParquet.From(stream).ToArrayAsync();
 
-        if (actual.Count != expected.Count)
+        if (actual.Length != expected.Count)
         {
-            return Fail($"Expected {expected.Count} records, read {actual.Count}.");
+            return Fail($"Expected {expected.Count} records, read {actual.Length}.");
         }
 
         for (int i = 0; i < expected.Count; i++)
@@ -172,7 +172,7 @@ internal static class Program
         }
 
         Console.WriteLine(
-            $"Package consumption OK: round-tripped {actual.Count} records across all entry points, schema has "
+            $"Package consumption OK: round-tripped {actual.Length} records across all entry points, schema has "
                 + $"{ReadingParquetExtensions.Schema.Fields.Count} fields."
         );
         return 0;
@@ -205,28 +205,28 @@ internal static class Program
         byte[] bytes = mem.ToArray();
 
         // 1. Sequential buffer read
-        List<Reading> sequentialRead = await ReadingParquet
+        Reading[] sequentialRead = await ReadingParquet
             .From(new ReadOnlyMemory<byte>(bytes))
-            .ToListAsync();
-        if (sequentialRead.Count != totalCount)
+            .ToArrayAsync();
+        if (sequentialRead.Length != totalCount)
         {
             Console.Error.WriteLine(
-                $"FAILED: From(buffer).ToListAsync() expected {totalCount} rows, got {sequentialRead.Count}."
+                $"FAILED: From(buffer).ToArrayAsync() expected {totalCount} rows, got {sequentialRead.Length}."
             );
             return false;
         }
 
         // 2. Parallel buffer read with degree of parallelism = 4
-        List<Reading> parallelRead = await ReadingParquet
+        Reading[] parallelRead = await ReadingParquet
             .From(new ReadOnlyMemory<byte>(bytes))
             .WithOptions(new ParquetSerializerOptions { MaxDegreeOfParallelism = 4 })
             .Parallel()
-            .ToListAsync();
+            .ToArrayAsync();
 
-        if (parallelRead.Count != totalCount)
+        if (parallelRead.Length != totalCount)
         {
             Console.Error.WriteLine(
-                $"FAILED: From(buffer).Parallel().ToListAsync() expected {totalCount} rows, got {parallelRead.Count}."
+                $"FAILED: From(buffer).Parallel().ToArrayAsync() expected {totalCount} rows, got {parallelRead.Length}."
             );
             return false;
         }
@@ -261,7 +261,7 @@ internal static class Program
         await CrossVersionInteropDriver.CanonicalRows.WriteParquetAsync(stream);
         stream.Position = 0;
 
-        List<InteropRowEvolved> read = await InteropRowEvolvedParquet.From(stream).ToListAsync();
+        InteropRowEvolved[] read = await InteropRowEvolvedParquet.From(stream).ToArrayAsync();
 
         string? failure = InteropVerification.Verify(read, CrossVersionInteropDriver.CanonicalRows);
         if (failure is not null)

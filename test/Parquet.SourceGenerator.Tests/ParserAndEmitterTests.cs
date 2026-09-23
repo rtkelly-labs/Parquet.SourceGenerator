@@ -109,7 +109,7 @@ public sealed class ParserAndEmitterTests
         source.ShouldContain("TimeDataField");
         source.ShouldContain("WriteParquetRowGroupAsync");
         source.ShouldContain("WriteAllPartsAsync");
-        source.ShouldContain("ReadParallelListCoreAsync");
+        source.ShouldContain("ReadParallelArrayCoreAsync");
         // The all-null bypass is a shared helper per column shape, called once per nullable column (#552).
         source.ShouldContain("if (missing || chunkStats?.NullCount == rowCount)");
         source.ShouldContain("global::System.Array.Clear(buffer, 0, rowCount);");
@@ -248,10 +248,10 @@ public sealed class ParserAndEmitterTests
     }
 
     [Fact]
-    public async Task ToListAsyncNullStreamThrowsArgumentNullException()
+    public async Task ToArrayAsyncNullStreamThrowsArgumentNullException()
     {
         await Should.ThrowAsync<ArgumentNullException>(() =>
-            TypeCoverageRecordParquet.From((Stream)null!).ToListAsync()
+            TypeCoverageRecordParquet.From((Stream)null!).ToArrayAsync()
         );
     }
 }

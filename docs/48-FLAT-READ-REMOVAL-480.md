@@ -3,6 +3,13 @@
 > **Status:** decided and implemented. **Supersedes** [document 41](41-FLAT-READ-FREEZE-SCOPE-262.md)
 > (#262, closed by PR #344). Document 41 is left unedited as the historical record of the earlier
 > decision; this document is the one in force.
+>
+> **Later change (#478, #479).** The builder this document migrates onto has since become one
+> `<Model>ParquetReader` struct, and its `ToListAsync` terminal was removed along with the internal
+> `ReadListCoreAsync` / `ReadParallelListCoreAsync` bodies named below. The mapping and migration
+> examples here have been updated to the current terminals (`ToArrayAsync`, with `.ToList()` where a
+> `List<T>` is needed); the measurements and the rest of the record are as of #480. See `CHANGELOG.md`
+> (Unreleased) and [47](47-0.1-CONTRACT-AND-DESIGN-GOALS.md) §4.2.
 
 ## Decision
 
@@ -13,11 +20,11 @@ Removed from every modern model, in both the `Stream` and the `ReadOnlyMemory<by
 
 | Removed member | Builder equivalent |
 |:---|:---|
-| `ReadParquetAsync` | `.ToListAsync()` |
+| `ReadParquetAsync` | `.ToArrayAsync()` (then `.ToList()` for a `List<T>`) |
 | `ReadParquetArrayAsync` | `.ToArrayAsync()` |
 | `ReadParquetStreamAsync` | `.AsAsyncEnumerable()` |
 | `ReadParquetBatchesAsync` | `.Batches()` |
-| `ReadParquetParallelAsync` | `.Parallel().ToListAsync()` (buffer source only) |
+| `ReadParquetParallelAsync` | `.Parallel().ToArrayAsync()` (buffer source only) |
 | `ReadParquetParallelArrayAsync` | `.Parallel().ToArrayAsync()` (buffer source only) |
 | the `predicate` parameter on four of them | `.Where(predicate)` |
 
@@ -105,19 +112,19 @@ argument, so a call that passed `options: null` (or relied on the default) simpl
 
 ```csharp
 // Before                                                  // After
-await OrderEventParquetExtensions.ReadParquetAsync(s);     await OrderEventParquet.From(s).ToListAsync();
+await OrderEventParquetExtensions.ReadParquetAsync(s);     (await OrderEventParquet.From(s).ToArrayAsync()).ToList();
 await OrderEventParquetExtensions.ReadParquetArrayAsync(   await OrderEventParquet.From(s)
     s, options, ct);                                           .WithOptions(options).ToArrayAsync(ct);
 OrderEventParquetExtensions.ReadParquetStreamAsync(        OrderEventParquet.From(bytes)
     bytes, predicate: p);                                      .Where(p).AsAsyncEnumerable();
 await OrderEventParquetExtensions                          await OrderEventParquet.From(bytes)
-    .ReadParquetParallelAsync(bytes, options);                 .WithOptions(options).Parallel().ToListAsync();
+    .ReadParquetParallelAsync(bytes, options);                 .WithOptions(options).Parallel().ToArrayAsync();
 ```
 
 `ReadParquetParallelAsync(Stream)` / `ReadParquetParallelArrayAsync(Stream)` have no parallel
-equivalent because they were never parallel: use `From(stream).ToListAsync()` /
-`ToArrayAsync()` for the same (sequential) behaviour, or buffer the file and use
-`From(bytes).Parallel()` for genuine decode parallelism.
+equivalent because they were never parallel: use `From(stream).ToArrayAsync()` for the same
+(sequential) behaviour, or buffer the file and use `From(bytes).Parallel()` for genuine decode
+parallelism.
 
 In this repository every call site in the tests, benchmarks, samples, the AOT test and the package
 consumption projects was migrated by those rules. Where a test used the stream "parallel" overload to

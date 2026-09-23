@@ -289,7 +289,7 @@ public sealed class ParquetHashRegressionTests
     {
         string filePath = Path.Combine(BenchmarkDataRoot, "tpch_lineitem_sf001.parquet");
         await using var readStream = System.IO.File.OpenRead(filePath);
-        var allRecords = await TpchLineItemRecordParquet.From(readStream).ToListAsync();
+        var allRecords = await TpchLineItemRecordParquet.From(readStream).ToArrayAsync();
         var slice = allRecords.Take(200).ToList();
 
         using var stream1 = new MemoryStream();
@@ -325,7 +325,7 @@ public sealed class ParquetHashRegressionTests
     {
         string filePath = Path.Combine(BenchmarkDataRoot, "adult_census_income.parquet");
         await using var readStream = System.IO.File.OpenRead(filePath);
-        var allRecords = await AdultCensusRecordParquet.From(readStream).ToListAsync();
+        var allRecords = await AdultCensusRecordParquet.From(readStream).ToArrayAsync();
         var slice = allRecords.Take(200).ToList();
 
         using var stream1 = new MemoryStream();
@@ -361,7 +361,7 @@ public sealed class ParquetHashRegressionTests
     {
         string filePath = Path.Combine(BenchmarkDataRoot, "diamonds.parquet");
         await using var readStream = System.IO.File.OpenRead(filePath);
-        var allRecords = await DiamondRecordParquet.From(readStream).ToListAsync();
+        var allRecords = await DiamondRecordParquet.From(readStream).ToArrayAsync();
         var slice = allRecords.Take(200).ToList();
 
         using var stream1 = new MemoryStream();

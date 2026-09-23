@@ -157,9 +157,11 @@ public sealed class BlittableStructPropertyTests
             await items.WriteParquetAsync(ms);
             byte[] bytes = ms.ToArray();
 
-            // 1. Sequential Stream List Read
+            // 1. Sequential Stream Read, converted to a List (the #479 migration for List callers)
             ms.Position = 0;
-            var seqList = await BlittableInt32StructParquet.From(ms).ToListAsync();
+            List<BlittableInt32Struct> seqList = (
+                await BlittableInt32StructParquet.From(ms).ToArrayAsync()
+            ).ToList();
             seqList.Count.ShouldBe(count);
             seqList.ShouldBe(items);
 
@@ -176,8 +178,10 @@ public sealed class BlittableStructPropertyTests
             var parArray = await BlittableInt32StructParquet.From(bytes).Parallel().ToArrayAsync();
             parArray.ShouldBe(items);
 
-            // 5. Parallel Bytes List Read
-            var parList = await BlittableInt32StructParquet.From(bytes).Parallel().ToListAsync();
+            // 5. Parallel Bytes Read, converted to a List
+            List<BlittableInt32Struct> parList = (
+                await BlittableInt32StructParquet.From(bytes).Parallel().ToArrayAsync()
+            ).ToList();
             parList.ShouldBe(items);
         }
     }
@@ -484,7 +488,7 @@ public sealed class BlittableStructPropertyTests
             .ToArrayAsync();
         var seqList = await BlittableInt32StructParquet
             .From(new MemoryStream(parquetBytes))
-            .ToListAsync();
+            .ToArrayAsync();
 
         seqArray.Length.ShouldBe(totalRows);
         seqArray.ShouldBe(allItems);
