@@ -21,6 +21,31 @@ page reader in this repository), neither of which is appropriate to add as part 
 The generated legacy contract and tests deliberately preserve this ordering so the limitation is
 visible rather than implying that the option protects against pre-read string allocation.
 
+## Parquet.Net 4.25.0 Column I/O Allocates Whole Columns
+
+Parquet.Net 4.25.0 is the last line that supports .NET Framework (`net472`). Its column API is
+`ParquetRowGroupReader.ReadColumnAsync(DataField) → DataColumn` and
+`ParquetRowGroupWriter.WriteColumnAsync(DataColumn)`. Every read allocates a complete array for the
+column and row group, and every write requires one. There is no caller-buffer equivalent of the
+v6 `ReadAsync<T>(DataField, Memory<T>)` / `WriteAsync<T>(DataField, ReadOnlyMemory<T>)`.
+
+Consequences for the classic backend, which reaches API parity with the modern backend under
+[docs/49](docs/49-LEGACY-PARITY-490.md) (#490):
+
+- The generated API can match the modern backend, but allocation cannot. The ArrayPool and
+  caller-buffer strategy does not carry over, so every column read allocates its own array.
+- Columnar input (`<Model>ColumnarBatch`) is copied once per column into the array `DataColumn`
+  requires.
+- `DataColumn` has no `ReadOnlyMemory<byte>` / `ReadOnlyMemory<char>` representation, so those
+  member types (PARQ011) need a `byte[]` / `string` conversion at one copy per value.
+- Row-group statistics (`GetStatistics`) return `object` min/max values, costing one unbox per
+  column per row group.
+
+The upstream change that would remove the allocation gap is a caller-buffer read and write API
+(`Memory<T>` / `ReadOnlyMemory<T>` overloads) on the 4.x line. That is unlikely, since 4.x is not
+actively developed. Revisit if a net472-capable Parquet.Net release ever adds one, or if 6.x
+regains a `netstandard2.0` target.
+
 ## Parquet.Net 6.1.0 Page Checksums Are Not Verified
 
 Parquet's `PageHeader.crc` is optional, and Parquet.Net neither writes nor verifies it. A single

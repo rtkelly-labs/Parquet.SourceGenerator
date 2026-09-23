@@ -36,7 +36,9 @@ builder, filtering, parallel, streaming or columnar members. Checked against the
 
 The one genuine difference is **column I/O**. v4 reads and writes whole `DataColumn` arrays and
 allocates them itself; v6 fills and drains caller-owned `Memory<T>` buffers. That is a performance
-difference, and it is documented, not hidden. It is not an API difference.
+difference, and it is documented, not hidden. It is not an API difference. The limitation and the
+upstream change that would remove it are recorded in
+[UPSTREAM_DEPENDENCY_LIMITATIONS.md](../UPSTREAM_DEPENDENCY_LIMITATIONS.md#parquetnet-4250-column-io-allocates-whole-columns).
 
 ## The rule
 
@@ -58,6 +60,7 @@ difference, and it is documented, not hidden. It is not an API difference.
 |:---|:---|:---|
 | Nested types (structs, lists, maps) | The legacy emitter is flat-only. Parquet.Net 4.x can represent repeated and group columns, so this is emitter work, not a platform limit. | #176, [42](./42-NESTED-BACKEND-SCOPE-176.md) |
 | `Batches()` / `ColumnBatch` | The ownership shape is undecided on the modern backend too. Porting it before the decision would freeze it twice. | #369 |
+| `ReadOnlyMemory<byte>` / `ReadOnlyMemory<char>` members (PARQ011) | The v4 `DataColumn` API has no `ReadOnlyMemory` column representation, so the classic parser rejects these today. They can be mapped onto `byte[]` / `string` columns at one copy per value on write and read. That is emitter work, recorded in [UPSTREAM_DEPENDENCY_LIMITATIONS.md](../UPSTREAM_DEPENDENCY_LIMITATIONS.md). | #494 |
 | Arrow `RecordBatch` bridge | Not yet built for v4. Apache.Arrow supports `netstandard2.0`, so it is possible. | #490 |
 
 Everything else in the modern surface is in scope for parity: the reader and its options, buffer
