@@ -637,17 +637,31 @@ internal static class TargetParser
         return name is not null && Array.IndexOf(shortNames, name) >= 0;
     }
 
+    /// <remarks>
+    /// For a property override, falls back to the nearest overridden declaration. The member
+    /// attributes are <c>Inherited = true</c>, but <c>GetAttributes()</c> returns only those
+    /// written on the symbol itself, and <see cref="GetSerializableMembers"/> keeps the override in
+    /// place of the base declaration, so an override silently lost its base's annotations.
+    /// </remarks>
     private static AttributeData? FindAttribute(
         ISymbol member,
         string[] fullNames,
         string[] shortNames
     )
     {
-        foreach (AttributeData a in member.GetAttributes())
+        for (
+            ISymbol? current = member;
+            current is not null;
+            current = (current as IPropertySymbol)?.OverriddenProperty
+        )
         {
-            if (MatchesAttributeName(a.AttributeClass, fullNames, shortNames))
-                return a;
+            foreach (AttributeData a in current.GetAttributes())
+            {
+                if (MatchesAttributeName(a.AttributeClass, fullNames, shortNames))
+                    return a;
+            }
         }
+
         return null;
     }
 
