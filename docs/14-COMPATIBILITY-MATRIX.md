@@ -33,6 +33,11 @@ performance characteristics.
 
 ### Backend API policy for 0.1
 
+> **Direction change:** [document 49](49-LEGACY-PARITY-490.md) (#490) supersedes the declared-subset
+> policy below. The classic backend is moving to the same generated API as the modern backend, with
+> any remaining difference listed in a parity allowlist. Until that work lands, the text below still
+> describes what the classic backend emits today.
+
 The project deliberately follows the **declared-subset policy (B)** from issue #246. The classic
 V5 backend is a compatibility backend with a core generated surface: schema, flat read, flat write,
 and batched write. The per-row-group writer (`WriteRowGroupAsync(ParquetWriter, …)`) is still

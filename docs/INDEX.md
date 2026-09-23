@@ -200,14 +200,20 @@ The documentation is organized into three distinct tiers based on audience and i
      - The legacy emitter keeps its flat reads as its declared subset (#246); no `[Obsolete]` release.
      - Measured shrinkage (−66 members, −222 parameter slots) and the flat → builder migration table.
 
-25. **[50 - Generated Code Analysis](./50-GENERATED-CODE-ANALYSIS.md)**
+25. **[49 - Legacy Backend Parity (#490)](./49-LEGACY-PARITY-490.md)**
+     - The legacy (net472) backend exposes the same generated API as modern; differences live in a
+       shrinking allowlist. Supersedes the #246 declared-subset policy.
+     - Parquet.Net 4.25 evidence, the shared-surface / per-backend column-I/O split, and the
+       one-package end state.
+
+26. **[50 - Generated Code Analysis](./50-GENERATED-CODE-ANALYSIS.md)**
      - Every analyzer `src/` runs (NetAnalyzers, Meziantou, Sonar, Roslynator, code style, metric and
        AOT rules), run over the golden models' emitted source through `analysis/`.
      - Why none of them saw emitted code before: the `src/` scope, `NoWarn` in consumer projects,
        and generated-code classification (three switches undo it).
      - Gate: any finding fails the `generated-analysis` CI job; the baseline is empty and stays so.
 
-26. **[51 - CI Gate Matrix](./51-CI-GATE-MATRIX.md)**
+27. **[51 - CI Gate Matrix](./51-CI-GATE-MATRIX.md)**
      - Every gate the project relies on: where it runs, whether branch protection reaches it, how it
        can pass vacuously, and what is open. Includes the line-by-line read of the `build` aggregate.
      - Read it before adding, renaming or removing a CI job; a gate outside `build` blocks nothing.
