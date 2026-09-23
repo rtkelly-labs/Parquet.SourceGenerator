@@ -1871,358 +1871,6 @@ public static partial class ListOrderParquetExtensions
     }
 
     /// <summary>
-    /// Asynchronously deserializes all <c>ListOrder</c> objects using Parquet.Net low-level primitives.
-    /// Fast O(1) index-check schema resolution and ArrayPool buffer recycling.
-    /// </summary>
-    internal static async global::System.Threading.Tasks.Task<global::System.Collections.Generic.List<ListOrder>> ReadListCoreAsync(
-        global::System.IO.Stream stream,
-        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,
-        global::System.Threading.CancellationToken cancellationToken = default,
-        global::System.Func<global::SampleDomain.Models.ListOrderRowGroupMetadata, bool>? predicate = null)
-    {
-        if (stream == null) throw new global::System.ArgumentNullException(nameof(stream));
-
-        options ??= global::Parquet.SourceGenerator.ParquetSerializerOptions.Default;
-
-        using var guardedStream = CreateGuardedReadStream(stream, options);
-        await using var reader = await global::Parquet.ParquetReader.CreateAsync(
-            guardedStream,
-            BuildFormatOptions(options),
-            cancellationToken: cancellationToken);
-        guardedStream.Activate();
-        await ValidateReaderAsync(reader, stream, options, cancellationToken).ConfigureAwait(false);
-        var fileFields = reader.Schema.DataFields;
-
-        global::System.Collections.Generic.Dictionary<string, global::Parquet.Schema.DataField>? fieldsByName = null;
-        var field_0 = ResolveSchemaField(fileFields, 0, _field_0, ref fieldsByName, out _);
-        var field_1 = ResolveSchemaField(fileFields, 1, _field_1, ref fieldsByName, out _);
-        var field_2 = ResolveSchemaField(fileFields, 2, _field_2, ref fieldsByName, out _);
-        var field_3 = ResolveSchemaField(fileFields, 3, _field_3, ref fieldsByName, out _);
-
-        int rowGroupCount = reader.RowGroupCount;
-        if (rowGroupCount < 0 || rowGroupCount > options.MaxRowGroupCount)
-        {
-            throw new global::System.IO.InvalidDataException($"Row group count {rowGroupCount} is invalid or exceeds maximum allowed {options.MaxRowGroupCount}.");
-        }
-        int totalRows;
-        bool[]? selectedGroups = null;
-        if (predicate == null)
-        {
-            long sumRows = 0;
-            for (int r = 0; r < rowGroupCount; r++)
-            {
-                long rc = reader.RowGroups[r].RowCount;
-                if (rc < 0 || rc > options.MaxAllocationValues)
-                {
-                    throw new global::System.IO.InvalidDataException($"Row group {r} row count {rc} is invalid or exceeds maximum allowed {options.MaxAllocationValues}.");
-                }
-                sumRows = checked(sumRows + rc);
-            }
-            if (sumRows > options.MaxAllocationValues)
-            {
-                throw new global::System.IO.InvalidDataException($"Total row count {sumRows} exceeds maximum allowed {options.MaxAllocationValues}.");
-            }
-            totalRows = checked((int)sumRows);
-        }
-        else
-        {
-            // Zone-map pre-pass: footer statistics only. Surviving groups are the only ones
-            // whose pages are ever read, and the result is sized to exactly their rows.
-            selectedGroups = new bool[rowGroupCount];
-            long sumRows = 0;
-            for (int r = 0; r < rowGroupCount; r++)
-            {
-                using var probeReader = reader.OpenRowGroupReader(r);
-                if (!AcceptRowGroup(predicate, probeReader, r, field_0)) continue;
-                long rc = probeReader.RowCount;
-                if (rc < 0 || rc > options.MaxAllocationValues)
-                {
-                    throw new global::System.IO.InvalidDataException($"Row group {r} row count {rc} is invalid or exceeds maximum allowed {options.MaxAllocationValues}.");
-                }
-                selectedGroups[r] = true;
-                sumRows = checked(sumRows + rc);
-            }
-            if (sumRows > options.MaxAllocationValues)
-            {
-                throw new global::System.IO.InvalidDataException($"Total matching row count {sumRows} exceeds maximum allowed {options.MaxAllocationValues}.");
-            }
-            totalRows = checked((int)sumRows);
-        }
-#if NET8_0_OR_GREATER
-        var results = new global::System.Collections.Generic.List<ListOrder>(totalRows);
-        global::System.Runtime.InteropServices.CollectionsMarshal.SetCount(results, totalRows);
-#else
-        var results = new global::System.Collections.Generic.List<ListOrder>(totalRows);
-#endif
-        int currentOffset = 0;
-
-        for (int r = 0; r < reader.RowGroupCount; r++)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (selectedGroups != null && !selectedGroups[r]) continue;
-            using var groupReader = reader.OpenRowGroupReader(r);
-            int rowCount = checked((int)groupReader.RowCount);
-            if (rowCount < 0 || rowCount > options.MaxAllocationValues)
-            {
-                throw new global::System.IO.InvalidDataException($"Row group {r} row count {rowCount} is invalid or exceeds maximum allowed {options.MaxAllocationValues}.");
-            }
-
-            var buffer_0 = global::System.Buffers.ArrayPool<int>.Shared.Rent(rowCount);
-            var buffer_1 = global::System.Buffers.ArrayPool<global::System.ReadOnlyMemory<char>>.Shared.Rent(rowCount);
-            var defLevels_1 = global::System.Buffers.ArrayPool<int>.Shared.Rent(rowCount);
-            var repLevels_1 = global::System.Buffers.ArrayPool<int>.Shared.Rent(rowCount);
-            var buffer_2 = global::System.Buffers.ArrayPool<int>.Shared.Rent(rowCount);
-            var defLevels_2 = global::System.Buffers.ArrayPool<int>.Shared.Rent(rowCount);
-            var repLevels_2 = global::System.Buffers.ArrayPool<int>.Shared.Rent(rowCount);
-            var buffer_3 = global::System.Buffers.ArrayPool<global::System.Guid>.Shared.Rent(rowCount);
-            var defLevels_3 = global::System.Buffers.ArrayPool<int>.Shared.Rent(rowCount);
-            var repLevels_3 = global::System.Buffers.ArrayPool<int>.Shared.Rent(rowCount);
-
-            try
-            {
-                var metadata_0 = groupReader.GetMetadata(field_0).MetaData;
-                bool dictionaryEncoded_0 = false;
-                foreach (var encoding_0 in metadata_0.Encodings)
-                {
-                    if (encoding_0 == global::Parquet.Meta.Encoding.PLAIN_DICTIONARY || encoding_0 == global::Parquet.Meta.Encoding.RLE_DICTIONARY)
-                    {
-                        dictionaryEncoded_0 = true;
-                        break;
-                    }
-                }
-                int? dictionaryEntries_0 = dictionaryEncoded_0 ? ReadDictionaryEntryCount(groupReader, stream, field_0) : null;
-                if (dictionaryEntries_0.HasValue && dictionaryEntries_0.Value > options.MaxDictionaryEntries)
-                {
-                    throw new global::System.IO.InvalidDataException($"Dictionary column 'Id' entry count {dictionaryEntries_0.Value} exceeds maximum allowed {options.MaxDictionaryEntries}.");
-                }
-                await groupReader.ReadAsync<int>(
-                    field_0,
-                    new global::System.Memory<int>(buffer_0, 0, rowCount),
-                    cancellationToken: cancellationToken);
-                var metadata_1 = groupReader.GetMetadata(field_1).MetaData;
-                bool dictionaryEncoded_1 = false;
-                foreach (var encoding_1 in metadata_1.Encodings)
-                {
-                    if (encoding_1 == global::Parquet.Meta.Encoding.PLAIN_DICTIONARY || encoding_1 == global::Parquet.Meta.Encoding.RLE_DICTIONARY)
-                    {
-                        dictionaryEncoded_1 = true;
-                        break;
-                    }
-                }
-                int? dictionaryEntries_1 = dictionaryEncoded_1 ? ReadDictionaryEntryCount(groupReader, stream, field_1) : null;
-                if (dictionaryEntries_1.HasValue && dictionaryEntries_1.Value > options.MaxDictionaryEntries)
-                {
-                    throw new global::System.IO.InvalidDataException($"Dictionary column 'element' entry count {dictionaryEntries_1.Value} exceeds maximum allowed {options.MaxDictionaryEntries}.");
-                }
-                var entries_1 = checked((int)groupReader.GetMetadata(field_1).MetaData.NumValues);
-                if (entries_1 < 0 || entries_1 > options.MaxAllocationValues)
-                {
-                    throw new global::System.IO.InvalidDataException($"Column 'element' NumValues ({entries_1}) is invalid or exceeds maximum allowed {options.MaxAllocationValues}.");
-                }
-                if (entries_1 > defLevels_1.Length)
-                {
-                    var ndL_1 = global::System.Buffers.ArrayPool<int>.Shared.Rent(entries_1);
-                    global::System.Buffers.ArrayPool<int>.Shared.Return(defLevels_1, clearArray: false);
-                    defLevels_1 = ndL_1;
-                    var nrL_1 = global::System.Buffers.ArrayPool<int>.Shared.Rent(entries_1);
-                    global::System.Buffers.ArrayPool<int>.Shared.Return(repLevels_1, clearArray: false);
-                    repLevels_1 = nrL_1;
-                    var nvL_1 = global::System.Buffers.ArrayPool<global::System.ReadOnlyMemory<char>>.Shared.Rent(entries_1);
-                    global::System.Buffers.ArrayPool<global::System.ReadOnlyMemory<char>>.Shared.Return(buffer_1, clearArray: true);
-                    buffer_1 = nvL_1;
-                }
-                await groupReader.ReadRawAsync<global::System.ReadOnlyMemory<char>>(
-                    field_1,
-                    new global::System.Memory<global::System.ReadOnlyMemory<char>>(buffer_1, 0, entries_1),
-                    new global::System.Memory<int>(defLevels_1, 0, entries_1),
-                    new global::System.Memory<int>(repLevels_1, 0, entries_1),
-                    cancellationToken);
-                int packedString_1 = 0;
-                for (int levelIndex_1 = 0; levelIndex_1 < entries_1; levelIndex_1++)
-                {
-                    if (defLevels_1[levelIndex_1] != 3) continue;
-                    if (packedString_1 >= entries_1)
-                    {
-                        throw new global::System.IO.InvalidDataException("Definition levels in column 'element' exceeded values count.");
-                    }
-                    int stringByteCount_1 = global::System.Text.Encoding.UTF8.GetByteCount(buffer_1[packedString_1++].Span);
-                    if (stringByteCount_1 > options.MaxStringLengthBytes)
-                    {
-                        throw new global::System.IO.InvalidDataException($"String column 'Tags' value at index {levelIndex_1} UTF-8 length {stringByteCount_1} exceeds maximum allowed {options.MaxStringLengthBytes}.");
-                    }
-                }
-                var metadata_2 = groupReader.GetMetadata(field_2).MetaData;
-                bool dictionaryEncoded_2 = false;
-                foreach (var encoding_2 in metadata_2.Encodings)
-                {
-                    if (encoding_2 == global::Parquet.Meta.Encoding.PLAIN_DICTIONARY || encoding_2 == global::Parquet.Meta.Encoding.RLE_DICTIONARY)
-                    {
-                        dictionaryEncoded_2 = true;
-                        break;
-                    }
-                }
-                int? dictionaryEntries_2 = dictionaryEncoded_2 ? ReadDictionaryEntryCount(groupReader, stream, field_2) : null;
-                if (dictionaryEntries_2.HasValue && dictionaryEntries_2.Value > options.MaxDictionaryEntries)
-                {
-                    throw new global::System.IO.InvalidDataException($"Dictionary column 'element' entry count {dictionaryEntries_2.Value} exceeds maximum allowed {options.MaxDictionaryEntries}.");
-                }
-                var entries_2 = checked((int)groupReader.GetMetadata(field_2).MetaData.NumValues);
-                if (entries_2 < 0 || entries_2 > options.MaxAllocationValues)
-                {
-                    throw new global::System.IO.InvalidDataException($"Column 'element' NumValues ({entries_2}) is invalid or exceeds maximum allowed {options.MaxAllocationValues}.");
-                }
-                if (entries_2 > defLevels_2.Length)
-                {
-                    var ndL_2 = global::System.Buffers.ArrayPool<int>.Shared.Rent(entries_2);
-                    global::System.Buffers.ArrayPool<int>.Shared.Return(defLevels_2, clearArray: false);
-                    defLevels_2 = ndL_2;
-                    var nrL_2 = global::System.Buffers.ArrayPool<int>.Shared.Rent(entries_2);
-                    global::System.Buffers.ArrayPool<int>.Shared.Return(repLevels_2, clearArray: false);
-                    repLevels_2 = nrL_2;
-                    var nvL_2 = global::System.Buffers.ArrayPool<int>.Shared.Rent(entries_2);
-                    global::System.Buffers.ArrayPool<int>.Shared.Return(buffer_2, clearArray: true);
-                    buffer_2 = nvL_2;
-                }
-                await groupReader.ReadRawAsync<int>(
-                    field_2,
-                    new global::System.Memory<int>(buffer_2, 0, entries_2),
-                    new global::System.Memory<int>(defLevels_2, 0, entries_2),
-                    new global::System.Memory<int>(repLevels_2, 0, entries_2),
-                    cancellationToken);
-                var metadata_3 = groupReader.GetMetadata(field_3).MetaData;
-                bool dictionaryEncoded_3 = false;
-                foreach (var encoding_3 in metadata_3.Encodings)
-                {
-                    if (encoding_3 == global::Parquet.Meta.Encoding.PLAIN_DICTIONARY || encoding_3 == global::Parquet.Meta.Encoding.RLE_DICTIONARY)
-                    {
-                        dictionaryEncoded_3 = true;
-                        break;
-                    }
-                }
-                int? dictionaryEntries_3 = dictionaryEncoded_3 ? ReadDictionaryEntryCount(groupReader, stream, field_3) : null;
-                if (dictionaryEntries_3.HasValue && dictionaryEntries_3.Value > options.MaxDictionaryEntries)
-                {
-                    throw new global::System.IO.InvalidDataException($"Dictionary column 'element' entry count {dictionaryEntries_3.Value} exceeds maximum allowed {options.MaxDictionaryEntries}.");
-                }
-                var entries_3 = checked((int)groupReader.GetMetadata(field_3).MetaData.NumValues);
-                if (entries_3 < 0 || entries_3 > options.MaxAllocationValues)
-                {
-                    throw new global::System.IO.InvalidDataException($"Column 'element' NumValues ({entries_3}) is invalid or exceeds maximum allowed {options.MaxAllocationValues}.");
-                }
-                if (entries_3 > defLevels_3.Length)
-                {
-                    var ndL_3 = global::System.Buffers.ArrayPool<int>.Shared.Rent(entries_3);
-                    global::System.Buffers.ArrayPool<int>.Shared.Return(defLevels_3, clearArray: false);
-                    defLevels_3 = ndL_3;
-                    var nrL_3 = global::System.Buffers.ArrayPool<int>.Shared.Rent(entries_3);
-                    global::System.Buffers.ArrayPool<int>.Shared.Return(repLevels_3, clearArray: false);
-                    repLevels_3 = nrL_3;
-                    var nvL_3 = global::System.Buffers.ArrayPool<global::System.Guid>.Shared.Rent(entries_3);
-                    global::System.Buffers.ArrayPool<global::System.Guid>.Shared.Return(buffer_3, clearArray: true);
-                    buffer_3 = nvL_3;
-                }
-                await groupReader.ReadRawAsync<global::System.Guid>(
-                    field_3,
-                    new global::System.Memory<global::System.Guid>(buffer_3, 0, entries_3),
-                    new global::System.Memory<int>(defLevels_3, 0, entries_3),
-                    new global::System.Memory<int>(repLevels_3, 0, entries_3),
-                    cancellationToken);
-
-                var lane_1 = new global::System.Collections.Generic.List<string?>?[rowCount];
-                global::System.Collections.Generic.List<string?>? bk_1 = null; int rc_1 = 0; int vc_1 = 0; bool st_1 = false;
-                for (int p_1 = 0; p_1 < entries_1; p_1++)
-                {
-                    if (repLevels_1[p_1] == 0) { if (st_1) { if (rc_1 >= lane_1.Length) throw new global::System.IO.InvalidDataException("Repetition levels in column 'element' produced more rows than row group capacity (" + lane_1.Length + ")."); lane_1[rc_1++] = bk_1; } st_1 = true; bk_1 = null; }
-                    int dv_1 = defLevels_1[p_1];
-                    if (dv_1 < 0 || dv_1 > 3) throw new global::System.IO.InvalidDataException("Illegal definition level " + dv_1 + " in column 'element' (max: 3).");
-                    if (dv_1 == 1) bk_1 = new global::System.Collections.Generic.List<string?>();
-                    else if (dv_1 >= 2) {
-                        bk_1 ??= new global::System.Collections.Generic.List<string?>();
-                        if (dv_1 == 3) { if (vc_1 >= entries_1) throw new global::System.IO.InvalidDataException("Definition levels in column 'element' exceeded values count (" + entries_1 + ")."); bk_1.Add(buffer_1[vc_1++].ToString()); }
-                        else bk_1.Add(null!);
-                    }
-                }
-                if (st_1) { if (rc_1 >= lane_1.Length) throw new global::System.IO.InvalidDataException("Repetition levels in column 'element' produced more rows than row group capacity (" + lane_1.Length + ")."); lane_1[rc_1++] = bk_1; }
-                _ = rc_1;
-                var lane_2 = new global::System.Collections.Generic.List<int>?[rowCount];
-                global::System.Collections.Generic.List<int>? bk_2 = null; int rc_2 = 0; int vc_2 = 0; bool st_2 = false;
-                for (int p_2 = 0; p_2 < entries_2; p_2++)
-                {
-                    if (repLevels_2[p_2] == 0) { if (st_2) { if (rc_2 >= lane_2.Length) throw new global::System.IO.InvalidDataException("Repetition levels in column 'element' produced more rows than row group capacity (" + lane_2.Length + ")."); lane_2[rc_2++] = bk_2; } st_2 = true; bk_2 = null; }
-                    int dv_2 = defLevels_2[p_2];
-                    if (dv_2 < 0 || dv_2 > 2) throw new global::System.IO.InvalidDataException("Illegal definition level " + dv_2 + " in column 'element' (max: 2).");
-                    if (dv_2 == 1) bk_2 = new global::System.Collections.Generic.List<int>();
-                    else if (dv_2 >= 2) {
-                        bk_2 ??= new global::System.Collections.Generic.List<int>();
-                        if (dv_2 == 2) { if (vc_2 >= entries_2) throw new global::System.IO.InvalidDataException("Definition levels in column 'element' exceeded values count (" + entries_2 + ")."); bk_2.Add(buffer_2[vc_2++]); }
-                    }
-                }
-                if (st_2) { if (rc_2 >= lane_2.Length) throw new global::System.IO.InvalidDataException("Repetition levels in column 'element' produced more rows than row group capacity (" + lane_2.Length + ")."); lane_2[rc_2++] = bk_2; }
-                _ = rc_2;
-                var lane_3 = new global::System.Collections.Generic.List<global::System.Guid>?[rowCount];
-                global::System.Collections.Generic.List<global::System.Guid>? bk_3 = null; int rc_3 = 0; int vc_3 = 0; bool st_3 = false;
-                for (int p_3 = 0; p_3 < entries_3; p_3++)
-                {
-                    if (repLevels_3[p_3] == 0) { if (st_3) { if (rc_3 >= lane_3.Length) throw new global::System.IO.InvalidDataException("Repetition levels in column 'element' produced more rows than row group capacity (" + lane_3.Length + ")."); lane_3[rc_3++] = bk_3; } st_3 = true; bk_3 = null; }
-                    int dv_3 = defLevels_3[p_3];
-                    if (dv_3 < 0 || dv_3 > 2) throw new global::System.IO.InvalidDataException("Illegal definition level " + dv_3 + " in column 'element' (max: 2).");
-                    if (dv_3 == 1) bk_3 = new global::System.Collections.Generic.List<global::System.Guid>();
-                    else if (dv_3 >= 2) {
-                        bk_3 ??= new global::System.Collections.Generic.List<global::System.Guid>();
-                        if (dv_3 == 2) { if (vc_3 >= entries_3) throw new global::System.IO.InvalidDataException("Definition levels in column 'element' exceeded values count (" + entries_3 + ")."); bk_3.Add(buffer_3[vc_3++]); }
-                    }
-                }
-                if (st_3) { if (rc_3 >= lane_3.Length) throw new global::System.IO.InvalidDataException("Repetition levels in column 'element' produced more rows than row group capacity (" + lane_3.Length + ")."); lane_3[rc_3++] = bk_3; }
-                _ = rc_3;
-#if NET8_0_OR_GREATER
-                void PopulateSpan()
-                {
-                    var span = global::System.Runtime.InteropServices.CollectionsMarshal.AsSpan(results);
-                    for (int i = 0; i < rowCount; i++)
-                    {
-                        span[currentOffset + i] = new ListOrder
-                        {
-                            Id = buffer_0[i],
-                            Tags = lane_1[i],
-                            Scores = lane_2[i]!,
-                            Keys = lane_3[i] is { } ln_3 ? ln_3.ToArray() : null,
-                        };
-                    }
-                }
-                PopulateSpan();
-#else
-                for (int i = 0; i < rowCount; i++)
-                {
-                    results.Add(new ListOrder
-                    {
-                        Id = buffer_0[i],
-                        Tags = lane_1[i],
-                        Scores = lane_2[i]!,
-                        Keys = lane_3[i] is { } ln_3 ? ln_3.ToArray() : null,
-                    });
-                }
-#endif
-                currentOffset += rowCount;
-            }
-            finally
-            {
-                global::System.Buffers.ArrayPool<int>.Shared.Return(buffer_0, clearArray: false);
-                global::System.Buffers.ArrayPool<global::System.ReadOnlyMemory<char>>.Shared.Return(buffer_1, clearArray: true);
-                global::System.Buffers.ArrayPool<int>.Shared.Return(defLevels_1, clearArray: false);
-                global::System.Buffers.ArrayPool<int>.Shared.Return(repLevels_1, clearArray: false);
-                global::System.Buffers.ArrayPool<int>.Shared.Return(buffer_2, clearArray: true);
-                global::System.Buffers.ArrayPool<int>.Shared.Return(defLevels_2, clearArray: false);
-                global::System.Buffers.ArrayPool<int>.Shared.Return(repLevels_2, clearArray: false);
-                global::System.Buffers.ArrayPool<global::System.Guid>.Shared.Return(buffer_3, clearArray: true);
-                global::System.Buffers.ArrayPool<int>.Shared.Return(defLevels_3, clearArray: false);
-                global::System.Buffers.ArrayPool<int>.Shared.Return(repLevels_3, clearArray: false);
-            }
-        }
-
-        return results;
-    }
-
-    /// <summary>
     /// Asynchronously deserializes all <c>ListOrder</c> objects directly into an array using Parquet.Net low-level primitives.
     /// Eliminates List wrapper allocations for zero-copy array materialization.
     /// </summary>
@@ -2825,18 +2473,6 @@ public static partial class ListOrderParquetExtensions
     }
 
     /// <summary>
-    /// Asynchronously deserializes all <c>ListOrder</c> objects directly from an in-memory byte buffer with zero buffer allocation.
-    /// </summary>
-    internal static async global::System.Threading.Tasks.Task<global::System.Collections.Generic.List<ListOrder>> ReadListCoreAsync(
-        global::System.ReadOnlyMemory<byte> parquetBytes,
-        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,
-        global::System.Threading.CancellationToken cancellationToken = default)
-    {
-        var results = await ReadBufferSequentialArrayAsync(parquetBytes, options, cancellationToken);
-        return new global::System.Collections.Generic.List<ListOrder>(results);
-    }
-
-    /// <summary>
     /// Asynchronously deserializes all <c>ListOrder</c> objects directly from an in-memory byte buffer into an array with zero buffer allocation.
     /// </summary>
     internal static async global::System.Threading.Tasks.Task<ListOrder[]> ReadArrayCoreAsync(
@@ -2964,19 +2600,6 @@ public static partial class ListOrderParquetExtensions
         }
 
         return resultArray;
-    }
-
-    /// <summary>
-    /// Asynchronously deserializes all <c>ListOrder</c> objects from an in-memory byte buffer,
-    /// decoding row groups across multiple workers.
-    /// </summary>
-    internal static async global::System.Threading.Tasks.Task<global::System.Collections.Generic.List<ListOrder>> ReadParallelListCoreAsync(
-        global::System.ReadOnlyMemory<byte> parquetBytes,
-        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,
-        global::System.Threading.CancellationToken cancellationToken = default)
-    {
-        var resultArray = await ReadParallelArrayCoreAsync(parquetBytes, options, cancellationToken);
-        return new global::System.Collections.Generic.List<ListOrder>(resultArray);
     }
 
     /// <summary>
@@ -3675,78 +3298,61 @@ public readonly struct ListOrderRowGroupMetadata
 }
 
 /// <summary>
-/// Entry point for reading <c>ListOrder</c> values from Parquet (issue #217).
+/// Entry point for reading <c>ListOrder</c> values from Parquet (issues #217, #478).
 /// </summary>
 public static partial class ListOrderParquet
 {
-    /// <summary>Reads from a <see cref="System.IO.Stream"/>.</summary>
-    public static ListOrderParquetStreamSource From(global::System.IO.Stream stream)
-        => new ListOrderParquetStreamSource(stream ?? throw new global::System.ArgumentNullException(nameof(stream)), null);
+    /// <summary>Reads from a <see cref="System.IO.Stream"/>. Row groups are decoded sequentially.</summary>
+    public static ListOrderParquetReader From(global::System.IO.Stream stream)
+        => new ListOrderParquetReader(stream ?? throw new global::System.ArgumentNullException(nameof(stream)), default, null, null, false);
 
-    /// <summary>Reads from an in-memory buffer.</summary>
-    public static ListOrderParquetMemorySource From(global::System.ReadOnlyMemory<byte> parquetBytes)
-        => new ListOrderParquetMemorySource(parquetBytes, null);
+    /// <summary>Reads from an in-memory buffer. The only source that supports <c>Parallel()</c>.</summary>
+    public static ListOrderParquetReader From(global::System.ReadOnlyMemory<byte> parquetBytes)
+        => new ListOrderParquetReader(null, parquetBytes, null, null, false);
 }
 
 /// <summary>
-/// A pending read of <c>ListOrder</c> from a stream.
+/// A pending read of <c>ListOrder</c> (issue #478).
 /// </summary>
 /// <remarks>
-/// There is deliberately no <c>Parallel</c> member. A single <c>ParquetReader</c> seeks
-/// within its stream, so concurrent row-group reads would corrupt one another, and an
-/// arbitrary stream cannot be handed to more than one reader. Buffer the file and use
-/// <c>From(ReadOnlyMemory&lt;byte&gt;)</c> for genuine decode parallelism.
+/// One reader expresses every read: the source is chosen by <c>From(...)</c>, and
+/// <c>WithOptions</c>, <c>Where</c> and <c>Parallel</c> return copies with updated state.
+/// A combination no backend can execute throws <see cref="System.NotSupportedException"/>
+/// from the call that completes it, rather than being silently degraded.
 /// </remarks>
-public readonly struct ListOrderParquetStreamSource
+public readonly struct ListOrderParquetReader
 {
-    private readonly global::System.IO.Stream _stream;
-    private readonly global::Parquet.SourceGenerator.ParquetSerializerOptions? _options;
-
-    internal ListOrderParquetStreamSource(global::System.IO.Stream stream, global::Parquet.SourceGenerator.ParquetSerializerOptions? options)
-    {
-        _stream = stream;
-        _options = options;
-    }
-
-    /// <summary>Replaces the serializer options.</summary>
-    public ListOrderParquetStreamSource WithOptions(global::Parquet.SourceGenerator.ParquetSerializerOptions options)
-        => new ListOrderParquetStreamSource(_stream, options ?? throw new global::System.ArgumentNullException(nameof(options)));
-
-    /// <summary>Skips row groups whose footer statistics cannot satisfy the predicate.</summary>
-    public ListOrderParquetFilteredSource Where(global::System.Func<global::SampleDomain.Models.ListOrderRowGroupMetadata, bool> predicate)
-        => new ListOrderParquetFilteredSource(_stream, default, _options, predicate ?? throw new global::System.ArgumentNullException(nameof(predicate)));
-
-    /// <summary>Executes the read.</summary>
-    public global::System.Threading.Tasks.Task<global::System.Collections.Generic.List<ListOrder>> ToListAsync(global::System.Threading.CancellationToken cancellationToken = default)
-        => ListOrderParquetExtensions.ReadListCoreAsync(_stream, _options, cancellationToken);
-
-    /// <summary>Executes the read.</summary>
-    public global::System.Threading.Tasks.Task<ListOrder[]> ToArrayAsync(global::System.Threading.CancellationToken cancellationToken = default)
-        => ListOrderParquetExtensions.ReadArrayCoreAsync(_stream, _options, cancellationToken);
-
-    /// <summary>Executes the read.</summary>
-    public global::System.Collections.Generic.IAsyncEnumerable<ListOrder> AsAsyncEnumerable(global::System.Threading.CancellationToken cancellationToken = default)
-        => ListOrderParquetExtensions.ReadEnumerableCoreAsync(_stream, _options, cancellationToken);
-
-}
-
-/// <summary>
-/// A pending read of <c>ListOrder</c> from an in-memory buffer.
-/// </summary>
-public readonly struct ListOrderParquetMemorySource
-{
+    // Source kind is discriminated by _stream: non-null means a stream source, null a buffer.
+    private readonly global::System.IO.Stream? _stream;
     private readonly global::System.ReadOnlyMemory<byte> _bytes;
     private readonly global::Parquet.SourceGenerator.ParquetSerializerOptions? _options;
+    private readonly global::System.Func<global::SampleDomain.Models.ListOrderRowGroupMetadata, bool>? _predicate;
+    private readonly bool _parallel;
 
-    internal ListOrderParquetMemorySource(global::System.ReadOnlyMemory<byte> bytes, global::Parquet.SourceGenerator.ParquetSerializerOptions? options)
+    internal ListOrderParquetReader(global::System.IO.Stream? stream, global::System.ReadOnlyMemory<byte> bytes, global::Parquet.SourceGenerator.ParquetSerializerOptions? options, global::System.Func<global::SampleDomain.Models.ListOrderRowGroupMetadata, bool>? predicate, bool parallel)
     {
+        _stream = stream;
         _bytes = bytes;
         _options = options;
+        _predicate = predicate;
+        _parallel = parallel;
     }
 
     /// <summary>Replaces the serializer options.</summary>
-    public ListOrderParquetMemorySource WithOptions(global::Parquet.SourceGenerator.ParquetSerializerOptions options)
-        => new ListOrderParquetMemorySource(_bytes, options ?? throw new global::System.ArgumentNullException(nameof(options)));
+    public ListOrderParquetReader WithOptions(global::Parquet.SourceGenerator.ParquetSerializerOptions options)
+        => new ListOrderParquetReader(_stream, _bytes, options ?? throw new global::System.ArgumentNullException(nameof(options)), _predicate, _parallel);
+
+    /// <summary>Skips row groups whose footer statistics cannot satisfy the predicate.</summary>
+    /// <exception cref="System.NotSupportedException">The reader is already <c>Parallel()</c> (no parallel reader accepts a predicate yet, #222), or already has a predicate (combine the conditions into one).</exception>
+    public ListOrderParquetReader Where(global::System.Func<global::SampleDomain.Models.ListOrderRowGroupMetadata, bool> predicate)
+    {
+        if (predicate is null) throw new global::System.ArgumentNullException(nameof(predicate));
+        if (_parallel)
+            throw new global::System.NotSupportedException("Where() cannot be combined with Parallel(): no parallel reader accepts a row-group predicate yet (#222). Drop Parallel() to filter sequentially.");
+        if (_predicate is not null)
+            throw new global::System.NotSupportedException("Where() has already been applied to this reader. Combine the conditions into a single predicate.");
+        return new ListOrderParquetReader(_stream, _bytes, _options, predicate, _parallel);
+    }
 
     /// <summary>Decodes row groups concurrently, each worker over its own view of the buffer.</summary>
     /// <remarks>
@@ -3755,109 +3361,44 @@ public readonly struct ListOrderParquetMemorySource
     /// #218 existed to remove. Set <c>MaxDegreeOfParallelism</c> on the options; #241 decides
     /// whether it moves here now this builder exists.
     /// </remarks>
-    public ListOrderParquetParallelSource Parallel()
-        => new ListOrderParquetParallelSource(_bytes, _options);
+    /// <exception cref="System.NotSupportedException">The source is a stream (use <c>ListOrderParquet.From(ReadOnlyMemory&lt;byte&gt;)</c>), or the reader has a <c>Where()</c> predicate.</exception>
+    public ListOrderParquetReader Parallel()
+    {
+        if (_stream is not null)
+            throw new global::System.NotSupportedException("Parallel() is not supported on a Stream source: a single ParquetReader seeks within its stream, so row groups cannot be decoded concurrently. Buffer the file and read it with ListOrderParquet.From(ReadOnlyMemory<byte>), the parallel source.");
+        if (_predicate is not null)
+            throw new global::System.NotSupportedException("Parallel() cannot be combined with Where(): no parallel reader accepts a row-group predicate yet (#222). Drop Where() to read in parallel, or drop Parallel() to filter.");
+        return new ListOrderParquetReader(_stream, _bytes, _options, _predicate, true);
+    }
 
-    /// <summary>Skips row groups whose footer statistics cannot satisfy the predicate.</summary>
-    public ListOrderParquetFilteredSource Where(global::System.Func<global::SampleDomain.Models.ListOrderRowGroupMetadata, bool> predicate)
-        => new ListOrderParquetFilteredSource(null, _bytes, _options, predicate ?? throw new global::System.ArgumentNullException(nameof(predicate)));
-
-    /// <summary>Executes the read.</summary>
-    public global::System.Threading.Tasks.Task<global::System.Collections.Generic.List<ListOrder>> ToListAsync(global::System.Threading.CancellationToken cancellationToken = default)
-        => ListOrderParquetExtensions.ReadListCoreAsync(_bytes, _options, cancellationToken);
-
-    /// <summary>Executes the read.</summary>
+    /// <summary>Materializes every surviving row into an array.</summary>
     public global::System.Threading.Tasks.Task<ListOrder[]> ToArrayAsync(global::System.Threading.CancellationToken cancellationToken = default)
-        => ListOrderParquetExtensions.ReadArrayCoreAsync(_bytes, _options, cancellationToken);
-
-    /// <summary>Executes the read.</summary>
-    public global::System.Collections.Generic.IAsyncEnumerable<ListOrder> AsAsyncEnumerable(global::System.Threading.CancellationToken cancellationToken = default)
-        => ListOrderParquetExtensions.ReadEnumerableCoreAsync(_bytes, _options, cancellationToken);
-
-}
-
-/// <summary>
-/// A pending read of <c>ListOrder</c> with a row-group predicate applied.
-/// </summary>
-/// <remarks>
-/// There is deliberately no <c>Parallel</c> member: no parallel reader accepts a
-/// predicate yet. Parallel predicate selection is a post-freeze follow-up tracked by #222.
-/// </remarks>
-public readonly struct ListOrderParquetFilteredSource
-{
-    private readonly global::System.IO.Stream? _stream;
-    private readonly global::System.ReadOnlyMemory<byte> _bytes;
-    private readonly global::Parquet.SourceGenerator.ParquetSerializerOptions? _options;
-    private readonly global::System.Func<global::SampleDomain.Models.ListOrderRowGroupMetadata, bool> _predicate;
-
-    internal ListOrderParquetFilteredSource(global::System.IO.Stream? stream, global::System.ReadOnlyMemory<byte> bytes, global::Parquet.SourceGenerator.ParquetSerializerOptions? options, global::System.Func<global::SampleDomain.Models.ListOrderRowGroupMetadata, bool> predicate)
     {
-        _stream = stream;
-        _bytes = bytes;
-        _options = options;
-        _predicate = predicate;
-    }
-
-    /// <summary>Replaces the serializer options.</summary>
-    public ListOrderParquetFilteredSource WithOptions(global::Parquet.SourceGenerator.ParquetSerializerOptions options)
-        => new ListOrderParquetFilteredSource(_stream, _bytes, options ?? throw new global::System.ArgumentNullException(nameof(options)), _predicate);
-
-    /// <summary>Materializes the surviving rows into a list.</summary>
-    public async global::System.Threading.Tasks.Task<global::System.Collections.Generic.List<ListOrder>> ToListAsync(global::System.Threading.CancellationToken cancellationToken = default)
-    {
+        if (_parallel)
+            return ListOrderParquetExtensions.ReadParallelArrayCoreAsync(_bytes, _options, cancellationToken);
         if (_stream is not null)
-            return await ListOrderParquetExtensions.ReadListCoreAsync(_stream, _options, cancellationToken, _predicate).ConfigureAwait(false);
-
-        var results = new global::System.Collections.Generic.List<ListOrder>();
-        await foreach (var item in ListOrderParquetExtensions.ReadEnumerableCoreAsync(_bytes, _options, cancellationToken, _predicate))
-            results.Add(item);
-        return results;
-    }
-
-    /// <summary>Materializes the surviving rows into an array.</summary>
-    public async global::System.Threading.Tasks.Task<ListOrder[]> ToArrayAsync(global::System.Threading.CancellationToken cancellationToken = default)
-    {
-        if (_stream is not null)
-            return await ListOrderParquetExtensions.ReadArrayCoreAsync(_stream, _options, cancellationToken, _predicate).ConfigureAwait(false);
-
-        return (await ToListAsync(cancellationToken).ConfigureAwait(false)).ToArray();
+            return ListOrderParquetExtensions.ReadArrayCoreAsync(_stream, _options, cancellationToken, _predicate);
+        if (_predicate is not null)
+            return CollectFilteredBufferAsync(_bytes, _options, _predicate, cancellationToken);
+        return ListOrderParquetExtensions.ReadArrayCoreAsync(_bytes, _options, cancellationToken);
     }
 
     /// <summary>Streams the surviving rows without materializing them all.</summary>
+    /// <exception cref="System.NotSupportedException">The reader is <c>Parallel()</c>: streaming is sequential by definition.</exception>
     public global::System.Collections.Generic.IAsyncEnumerable<ListOrder> AsAsyncEnumerable(global::System.Threading.CancellationToken cancellationToken = default)
-        => _stream is not null
+    {
+        if (_parallel)
+            throw new global::System.NotSupportedException("AsAsyncEnumerable() cannot follow Parallel(): the parallel reader only produces materialised results and streaming is sequential by definition. Use ToArrayAsync(), or drop Parallel() to stream.");
+        return _stream is not null
             ? ListOrderParquetExtensions.ReadEnumerableCoreAsync(_stream, _options, cancellationToken, _predicate)
             : ListOrderParquetExtensions.ReadEnumerableCoreAsync(_bytes, _options, cancellationToken, _predicate);
-}
-
-/// <summary>
-/// A pending parallel read of <c>ListOrder</c> from an in-memory buffer.
-/// </summary>
-/// <remarks>
-/// Only the materializing shapes are offered: there is no parallel streaming or
-/// columnar-batch reader to delegate to, so offering the member would mean throwing.
-/// </remarks>
-public readonly struct ListOrderParquetParallelSource
-{
-    private readonly global::System.ReadOnlyMemory<byte> _bytes;
-    private readonly global::Parquet.SourceGenerator.ParquetSerializerOptions? _options;
-
-    internal ListOrderParquetParallelSource(global::System.ReadOnlyMemory<byte> bytes, global::Parquet.SourceGenerator.ParquetSerializerOptions? options)
-    {
-        _bytes = bytes;
-        _options = options;
     }
 
-    /// <summary>Replaces the serializer options.</summary>
-    public ListOrderParquetParallelSource WithOptions(global::Parquet.SourceGenerator.ParquetSerializerOptions options)
-        => new ListOrderParquetParallelSource(_bytes, options ?? throw new global::System.ArgumentNullException(nameof(options)));
-
-    /// <summary>Executes the read.</summary>
-    public global::System.Threading.Tasks.Task<global::System.Collections.Generic.List<ListOrder>> ToListAsync(global::System.Threading.CancellationToken cancellationToken = default)
-        => ListOrderParquetExtensions.ReadParallelListCoreAsync(_bytes, _options, cancellationToken);
-
-    /// <summary>Executes the read.</summary>
-    public global::System.Threading.Tasks.Task<ListOrder[]> ToArrayAsync(global::System.Threading.CancellationToken cancellationToken = default)
-        => ListOrderParquetExtensions.ReadParallelArrayCoreAsync(_bytes, _options, cancellationToken);
-
+    private static async global::System.Threading.Tasks.Task<ListOrder[]> CollectFilteredBufferAsync(global::System.ReadOnlyMemory<byte> bytes, global::Parquet.SourceGenerator.ParquetSerializerOptions? options, global::System.Func<global::SampleDomain.Models.ListOrderRowGroupMetadata, bool> predicate, global::System.Threading.CancellationToken cancellationToken)
+    {
+        var results = new global::System.Collections.Generic.List<ListOrder>();
+        await foreach (var item in ListOrderParquetExtensions.ReadEnumerableCoreAsync(bytes, options, cancellationToken, predicate))
+            results.Add(item);
+        return results.ToArray();
+    }
 }

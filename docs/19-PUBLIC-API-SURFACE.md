@@ -3,7 +3,9 @@
 > **Status**: decision record for issue #216, part of the `0.1.0` API freeze (#230).
 > The surface described here is the one emitted by `Parquet.SourceGenerator` for a flat model;
 > it is reproduced verbatim in `test/Parquet.SourceGenerator.Tests/GoldenFiles/*.api.txt`.
-> The read builder is the only modern read surface (#480, [document 48](48-FLAT-READ-REMOVAL-480.md));
+> The read builder is the only modern read surface (#480, [document 48](48-FLAT-READ-REMOVAL-480.md)),
+> and since #478 / #479 it is one public `<Model>ParquetReader` struct with `ToArrayAsync`,
+> `AsAsyncEnumerable` and `Batches` as its terminals (see the D2 amendment);
 > a symmetric write builder remains a post-freeze proposal tracked by #219, and the current write
 > entry points remain in the compatibility window. The grid and defects below describe the flat read
 > methods as they were when this audit was written; they are the reason those methods were removed.
@@ -182,7 +184,7 @@ A generated entry point returning a builder struct:
 
 ```csharp
 await PersonParquet.From(stream).Parallel(4).ToArrayAsync(ct);
-await PersonParquet.From(bytes).Where(m => m.OrderKey.Min >= 1000).ToListAsync(ct);
+await PersonParquet.From(bytes).Where(m => m.OrderKey.Min >= 1000).ToArrayAsync(ct);
 await foreach (var batch in PersonParquet.From(path).Batches(ct)) { /* ... */ }
 ```
 
@@ -196,6 +198,19 @@ source that cannot parallelise is a diagnostic or a documented degradation, not 
 
 Defects 7 and 8 are **not** resolved by the builder and are tracked separately: unifying the batch
 types belongs with #220's column catalog, and the positional columnar write form belongs with #219.
+
+**Amendment to D2 (#478, #479).** The #217 builder was type-state: four public structs
+(`<Model>ParquetStreamSource`, `…MemorySource`, `…FilteredSource`, `…ParallelSource`), each offering
+only the members valid in its state. That removed the method-name cross-product and introduced a
+public *state-type* cross-product ([document 47](47-0.1-CONTRACT-AND-DESIGN-GOALS.md) §4.2). The four
+are now one `readonly struct <Model>ParquetReader`: both `From` overloads return it, and
+`WithOptions`, `Where` and `Parallel` return it with updated private state, so composing a read
+still allocates nothing. Combinations the separate types made unrepresentable throw
+`NotSupportedException` from the call that completes them — `Parallel()` on a stream source or a
+filtered reader, `Where()` on a parallel or already-filtered reader, and `AsAsyncEnumerable()` /
+`Batches()` on a parallel reader or `Batches()` on a filtered one. The terminal set is
+`ToArrayAsync` and `AsAsyncEnumerable` (plus `Batches`, whose shape #369 owns); `ToListAsync` was
+removed because `List<T>` versus `T[]` is a collection preference, not a read capability (#479).
 
 ### D3 — Fate of the existing flat methods
 
@@ -263,7 +278,7 @@ the concrete case for the Guides / Reference / Internals split in #228.
 ## Related
 
 - #215 — signature-only baselines (the instrument)
-- #217 — the builder (D2)
+- #217 — the builder (D2); #478 / #479 — its single-reader amendment
 - #235 / `docs/17` — the signature baselines every claim here is checkable against
 - #236 / `docs/18` — the API change contract that now governs additions to this surface
 - #218 / #239 — the options rule (D1); #241 is its open amendment

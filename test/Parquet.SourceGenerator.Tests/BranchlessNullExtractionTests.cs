@@ -156,11 +156,11 @@ public sealed class BranchlessNullExtractionTests
 
     private static void AssertMatches(
         List<BranchlessNullModel> expected,
-        List<BranchlessNullModel> actual,
+        BranchlessNullModel[] actual,
         string because
     )
     {
-        actual.Count.ShouldBe(expected.Count, because);
+        actual.Length.ShouldBe(expected.Count, because);
         for (int i = 0; i < expected.Count; i++)
         {
             BranchlessNullModel e = expected[i];
@@ -179,14 +179,14 @@ public sealed class BranchlessNullExtractionTests
         }
     }
 
-    private static async Task<List<BranchlessNullModel>> RoundTripAsync(
+    private static async Task<BranchlessNullModel[]> RoundTripAsync(
         IReadOnlyCollection<BranchlessNullModel> source
     )
     {
         using var stream = new MemoryStream();
         await source.WriteParquetAsync(stream);
         stream.Position = 0;
-        return await BranchlessNullModelParquet.From(stream).ToListAsync();
+        return await BranchlessNullModelParquet.From(stream).ToArrayAsync();
     }
 
     [Theory]

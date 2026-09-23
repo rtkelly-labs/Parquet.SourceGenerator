@@ -25,30 +25,13 @@ SampleDomain.Models.OrderEventParquetExtensions.ColumnBatch.PriceSpan.get -> Sys
 SampleDomain.Models.OrderEventParquetExtensions.ColumnBatch.RowCount.get -> int
 SampleDomain.Models.OrderEventParquetExtensions.ColumnBatch.RowGroupIndex.get -> int
 SampleDomain.Models.OrderEventParquetExtensions.ColumnBatch.ScoreSpan.get -> System.ReadOnlySpan<double>
-SampleDomain.Models.OrderEventParquetFilteredSource
-SampleDomain.Models.OrderEventParquetFilteredSource.AsAsyncEnumerable(System.Threading.CancellationToken cancellationToken = default) -> System.Collections.Generic.IAsyncEnumerable<OrderEvent>
-SampleDomain.Models.OrderEventParquetFilteredSource.ToArrayAsync(System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<OrderEvent[]>
-SampleDomain.Models.OrderEventParquetFilteredSource.ToListAsync(System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<System.Collections.Generic.List<OrderEvent>>
-SampleDomain.Models.OrderEventParquetFilteredSource.WithOptions(Parquet.SourceGenerator.ParquetSerializerOptions options) -> OrderEventParquetFilteredSource
-SampleDomain.Models.OrderEventParquetMemorySource
-SampleDomain.Models.OrderEventParquetMemorySource.AsAsyncEnumerable(System.Threading.CancellationToken cancellationToken = default) -> System.Collections.Generic.IAsyncEnumerable<OrderEvent>
-SampleDomain.Models.OrderEventParquetMemorySource.Batches(System.Threading.CancellationToken cancellationToken = default) -> System.Collections.Generic.IAsyncEnumerable<OrderEventParquetExtensions.ColumnBatch>
-SampleDomain.Models.OrderEventParquetMemorySource.Parallel() -> OrderEventParquetParallelSource
-SampleDomain.Models.OrderEventParquetMemorySource.ToArrayAsync(System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<OrderEvent[]>
-SampleDomain.Models.OrderEventParquetMemorySource.ToListAsync(System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<System.Collections.Generic.List<OrderEvent>>
-SampleDomain.Models.OrderEventParquetMemorySource.Where(System.Func<SampleDomain.Models.OrderEventRowGroupMetadata, bool> predicate) -> OrderEventParquetFilteredSource
-SampleDomain.Models.OrderEventParquetMemorySource.WithOptions(Parquet.SourceGenerator.ParquetSerializerOptions options) -> OrderEventParquetMemorySource
-SampleDomain.Models.OrderEventParquetParallelSource
-SampleDomain.Models.OrderEventParquetParallelSource.ToArrayAsync(System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<OrderEvent[]>
-SampleDomain.Models.OrderEventParquetParallelSource.ToListAsync(System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<System.Collections.Generic.List<OrderEvent>>
-SampleDomain.Models.OrderEventParquetParallelSource.WithOptions(Parquet.SourceGenerator.ParquetSerializerOptions options) -> OrderEventParquetParallelSource
-SampleDomain.Models.OrderEventParquetStreamSource
-SampleDomain.Models.OrderEventParquetStreamSource.AsAsyncEnumerable(System.Threading.CancellationToken cancellationToken = default) -> System.Collections.Generic.IAsyncEnumerable<OrderEvent>
-SampleDomain.Models.OrderEventParquetStreamSource.Batches(System.Threading.CancellationToken cancellationToken = default) -> System.Collections.Generic.IAsyncEnumerable<OrderEventParquetExtensions.ColumnBatch>
-SampleDomain.Models.OrderEventParquetStreamSource.ToArrayAsync(System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<OrderEvent[]>
-SampleDomain.Models.OrderEventParquetStreamSource.ToListAsync(System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<System.Collections.Generic.List<OrderEvent>>
-SampleDomain.Models.OrderEventParquetStreamSource.Where(System.Func<SampleDomain.Models.OrderEventRowGroupMetadata, bool> predicate) -> OrderEventParquetFilteredSource
-SampleDomain.Models.OrderEventParquetStreamSource.WithOptions(Parquet.SourceGenerator.ParquetSerializerOptions options) -> OrderEventParquetStreamSource
+SampleDomain.Models.OrderEventParquetReader
+SampleDomain.Models.OrderEventParquetReader.AsAsyncEnumerable(System.Threading.CancellationToken cancellationToken = default) -> System.Collections.Generic.IAsyncEnumerable<OrderEvent>
+SampleDomain.Models.OrderEventParquetReader.Batches(System.Threading.CancellationToken cancellationToken = default) -> System.Collections.Generic.IAsyncEnumerable<OrderEventParquetExtensions.ColumnBatch>
+SampleDomain.Models.OrderEventParquetReader.Parallel() -> OrderEventParquetReader
+SampleDomain.Models.OrderEventParquetReader.ToArrayAsync(System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<OrderEvent[]>
+SampleDomain.Models.OrderEventParquetReader.Where(System.Func<SampleDomain.Models.OrderEventRowGroupMetadata, bool> predicate) -> OrderEventParquetReader
+SampleDomain.Models.OrderEventParquetReader.WithOptions(Parquet.SourceGenerator.ParquetSerializerOptions options) -> OrderEventParquetReader
 SampleDomain.Models.OrderEventRowGroupMetadata
 SampleDomain.Models.OrderEventRowGroupMetadata.HasStatistics.get -> bool
 SampleDomain.Models.OrderEventRowGroupMetadata.Id.get -> Parquet.SourceGenerator.ParquetColumnStatistics<int>
@@ -56,8 +39,8 @@ SampleDomain.Models.OrderEventRowGroupMetadata.Name.get -> Parquet.SourceGenerat
 SampleDomain.Models.OrderEventRowGroupMetadata.RowCount.get -> long
 SampleDomain.Models.OrderEventRowGroupMetadata.RowGroupIndex.get -> int
 SampleDomain.Models.OrderEventRowGroupMetadata.Score.get -> Parquet.SourceGenerator.ParquetColumnStatistics<double>
-static SampleDomain.Models.OrderEventParquet.From(System.IO.Stream stream) -> OrderEventParquetStreamSource
-static SampleDomain.Models.OrderEventParquet.From(System.ReadOnlyMemory<byte> parquetBytes) -> OrderEventParquetMemorySource
+static SampleDomain.Models.OrderEventParquet.From(System.IO.Stream stream) -> OrderEventParquetReader
+static SampleDomain.Models.OrderEventParquet.From(System.ReadOnlyMemory<byte> parquetBytes) -> OrderEventParquetReader
 static SampleDomain.Models.OrderEventParquetExtensions.WriteParquetAsync(this OrderEventColumnarBatch batch, System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task
 static SampleDomain.Models.OrderEventParquetExtensions.WriteParquetAsync(this System.Collections.Generic.IAsyncEnumerable<OrderEvent> items, System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task
 static SampleDomain.Models.OrderEventParquetExtensions.WriteParquetAsync(this System.Collections.Generic.IReadOnlyCollection<OrderEvent> items, System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task

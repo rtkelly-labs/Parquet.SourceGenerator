@@ -9,9 +9,9 @@
 # ELOC_PER_MEMBER emitted executable lines per emitted public member.
 # Ordinal-sorted. CC, CL, SLOC, ELOC, DIT, ERRORS and MEMBERS are gated exactly; MI is
 # REPORTED BUT NOT GATED for generated code. See docs/22-GENERATED-CODE-METRICS.md.
-S:SortedShipmentParquetExtensions | EMITTER=v6 MEMBERS=57 CC=577 CL=92 SLOC=3322 ELOC=1224 ERRORS=0 METHODS=117 MAXCC=50 ELOC_PER_MEMBER=21.5
-M:SampleDomain.Models.SortedShipmentParquet.From(System.IO.Stream) | MI=90 CC=2 CL=5 DIT=- SLOC=3 ELOC=1
-M:SampleDomain.Models.SortedShipmentParquet.From(System.ReadOnlyMemory<byte>) | MI=94 CC=1 CL=3 DIT=- SLOC=3 ELOC=1
+S:SortedShipmentParquetExtensions | EMITTER=v6 MEMBERS=40 CC=514 CL=90 SLOC=2979 ELOC=1083 ERRORS=0 METHODS=98 MAXCC=50 ELOC_PER_MEMBER=27.1
+M:SampleDomain.Models.SortedShipmentParquet.From(System.IO.Stream) | MI=89 CC=2 CL=8 DIT=- SLOC=3 ELOC=1
+M:SampleDomain.Models.SortedShipmentParquet.From(System.ReadOnlyMemory<byte>) | MI=92 CC=1 CL=6 DIT=- SLOC=3 ELOC=1
 M:SampleDomain.Models.SortedShipmentParquetExtensions.AcceptRowGroup(System.Func<SampleDomain.Models.SortedShipmentRowGroupMetadata, bool>, Parquet.ParquetRowGroupReader, int, Parquet.Schema.DataField, Parquet.Schema.DataField, Parquet.Schema.DataField) | MI=59 CC=11 CL=8 DIT=- SLOC=42 ELOC=8
 M:SampleDomain.Models.SortedShipmentParquetExtensions.AsColumnarText(string) | MI=92 CC=2 CL=3 DIT=- SLOC=7 ELOC=1
 M:SampleDomain.Models.SortedShipmentParquetExtensions.BuildFormatOptions(Parquet.SourceGenerator.ParquetSerializerOptions) | MI=59 CC=5 CL=11 DIT=- SLOC=64 ELOC=10
@@ -61,10 +61,7 @@ M:SampleDomain.Models.SortedShipmentParquetExtensions.ReadDictionaryPageHeader(S
 M:SampleDomain.Models.SortedShipmentParquetExtensions.ReadDictionaryPageHeaderBody(System.IO.Stream) | MI=62 CC=7 CL=2 DIT=- SLOC=16 ELOC=9
 M:SampleDomain.Models.SortedShipmentParquetExtensions.ReadEnumerableCoreAsync(System.IO.Stream, Parquet.SourceGenerator.ParquetSerializerOptions, System.Threading.CancellationToken, System.Func<SampleDomain.Models.SortedShipmentRowGroupMetadata, bool>) | MI=28 CC=37 CL=33 DIT=- SLOC=164 ELOC=79
 M:SampleDomain.Models.SortedShipmentParquetExtensions.ReadEnumerableCoreAsync(System.ReadOnlyMemory<byte>, Parquet.SourceGenerator.ParquetSerializerOptions, System.Threading.CancellationToken, System.Func<SampleDomain.Models.SortedShipmentRowGroupMetadata, bool>) | MI=67 CC=2 CL=10 DIT=- SLOC=15 ELOC=6
-M:SampleDomain.Models.SortedShipmentParquetExtensions.ReadListCoreAsync(System.IO.Stream, Parquet.SourceGenerator.ParquetSerializerOptions, System.Threading.CancellationToken, System.Func<SampleDomain.Models.SortedShipmentRowGroupMetadata, bool>) | MI=22 CC=50 CL=34 DIT=- SLOC=243 ELOC=114
-M:SampleDomain.Models.SortedShipmentParquetExtensions.ReadListCoreAsync(System.ReadOnlyMemory<byte>, Parquet.SourceGenerator.ParquetSerializerOptions, System.Threading.CancellationToken) | MI=72 CC=1 CL=7 DIT=- SLOC=11 ELOC=4
 M:SampleDomain.Models.SortedShipmentParquetExtensions.ReadParallelArrayCoreAsync(System.ReadOnlyMemory<byte>, Parquet.SourceGenerator.ParquetSerializerOptions, System.Threading.CancellationToken) | MI=39 CC=15 CL=22 DIT=- SLOC=118 ELOC=47
-M:SampleDomain.Models.SortedShipmentParquetExtensions.ReadParallelListCoreAsync(System.ReadOnlyMemory<byte>, Parquet.SourceGenerator.ParquetSerializerOptions, System.Threading.CancellationToken) | MI=72 CC=1 CL=7 DIT=- SLOC=12 ELOC=4
 M:SampleDomain.Models.SortedShipmentParquetExtensions.ReadParquetBySequenceAsync(System.IO.Stream, long, Parquet.SourceGenerator.ParquetPruneStatistics, Parquet.SourceGenerator.ParquetSerializerOptions, System.Threading.CancellationToken) | MI=68 CC=1 CL=9 DIT=- SLOC=13 ELOC=5
 M:SampleDomain.Models.SortedShipmentParquetExtensions.ReadParquetByShippedAtAsync(System.IO.Stream, System.DateTime, Parquet.SourceGenerator.ParquetPruneStatistics, Parquet.SourceGenerator.ParquetSerializerOptions, System.Threading.CancellationToken) | MI=68 CC=1 CL=10 DIT=- SLOC=13 ELOC=5
 M:SampleDomain.Models.SortedShipmentParquetExtensions.ReadParquetSequenceRangeAsync(System.IO.Stream, long, long, Parquet.SourceGenerator.ParquetPruneStatistics, Parquet.SourceGenerator.ParquetSerializerOptions, System.Threading.CancellationToken) | MI=68 CC=1 CL=9 DIT=- SLOC=12 ELOC=5
@@ -96,30 +93,14 @@ M:SampleDomain.Models.SortedShipmentParquetExtensions.WriteParquetBatchedAsync(S
 M:SampleDomain.Models.SortedShipmentParquetExtensions.WriteParquetRowGroupAsync(Parquet.ParquetWriter, SampleDomain.Models.SortedShipmentColumnarBatch, System.Threading.CancellationToken) | MI=52 CC=8 CL=14 DIT=- SLOC=39 ELOC=14
 M:SampleDomain.Models.SortedShipmentParquetExtensions.WriteParquetRowGroupAsync(Parquet.ParquetWriter, System.Collections.Generic.IReadOnlyCollection<SampleDomain.Models.SortedShipment>, System.Threading.CancellationToken) | MI=35 CC=16 CL=20 DIT=- SLOC=133 ELOC=63
 M:SampleDomain.Models.SortedShipmentParquetExtensions.WriteParquetRowGroupColumnarAsync(Parquet.ParquetWriter, int, System.ReadOnlyMemory<long>, System.ReadOnlyMemory<System.DateTime>, System.ReadOnlyMemory<int>, System.ReadOnlyMemory<System.Nullable<System.ReadOnlyMemory<char>>>, System.Threading.CancellationToken) | MI=72 CC=1 CL=7 DIT=- SLOC=23 ELOC=3
-M:SampleDomain.Models.SortedShipmentParquetFilteredSource.AsAsyncEnumerable(System.Threading.CancellationToken) | MI=77 CC=2 CL=9 DIT=- SLOC=5 ELOC=2
-M:SampleDomain.Models.SortedShipmentParquetFilteredSource.SortedShipmentParquetFilteredSource(System.IO.Stream, System.ReadOnlyMemory<byte>, Parquet.SourceGenerator.ParquetSerializerOptions, System.Func<SampleDomain.Models.SortedShipmentRowGroupMetadata, bool>) | MI=75 CC=1 CL=5 DIT=- SLOC=7 ELOC=4
-M:SampleDomain.Models.SortedShipmentParquetFilteredSource.ToArrayAsync(System.Threading.CancellationToken) | MI=73 CC=2 CL=10 DIT=- SLOC=8 ELOC=3
-M:SampleDomain.Models.SortedShipmentParquetFilteredSource.ToListAsync(System.Threading.CancellationToken) | MI=68 CC=3 CL=12 DIT=- SLOC=11 ELOC=5
-M:SampleDomain.Models.SortedShipmentParquetFilteredSource.WithOptions(Parquet.SourceGenerator.ParquetSerializerOptions) | MI=88 CC=2 CL=7 DIT=- SLOC=3 ELOC=1
-M:SampleDomain.Models.SortedShipmentParquetMemorySource.AsAsyncEnumerable(System.Threading.CancellationToken) | MI=81 CC=1 CL=8 DIT=- SLOC=3 ELOC=2
-M:SampleDomain.Models.SortedShipmentParquetMemorySource.Batches(System.Threading.CancellationToken) | MI=81 CC=1 CL=6 DIT=- SLOC=3 ELOC=2
-M:SampleDomain.Models.SortedShipmentParquetMemorySource.Parallel() | MI=93 CC=1 CL=3 DIT=- SLOC=9 ELOC=1
-M:SampleDomain.Models.SortedShipmentParquetMemorySource.SortedShipmentParquetMemorySource(System.ReadOnlyMemory<byte>, Parquet.SourceGenerator.ParquetSerializerOptions) | MI=85 CC=1 CL=2 DIT=- SLOC=5 ELOC=2
-M:SampleDomain.Models.SortedShipmentParquetMemorySource.ToArrayAsync(System.Threading.CancellationToken) | MI=81 CC=1 CL=5 DIT=- SLOC=3 ELOC=2
-M:SampleDomain.Models.SortedShipmentParquetMemorySource.ToListAsync(System.Threading.CancellationToken) | MI=81 CC=1 CL=7 DIT=- SLOC=3 ELOC=2
-M:SampleDomain.Models.SortedShipmentParquetMemorySource.Where(System.Func<SampleDomain.Models.SortedShipmentRowGroupMetadata, bool>) | MI=89 CC=2 CL=8 DIT=- SLOC=3 ELOC=1
-M:SampleDomain.Models.SortedShipmentParquetMemorySource.WithOptions(Parquet.SourceGenerator.ParquetSerializerOptions) | MI=90 CC=2 CL=4 DIT=- SLOC=3 ELOC=1
-M:SampleDomain.Models.SortedShipmentParquetParallelSource.SortedShipmentParquetParallelSource(System.ReadOnlyMemory<byte>, Parquet.SourceGenerator.ParquetSerializerOptions) | MI=85 CC=1 CL=2 DIT=- SLOC=5 ELOC=2
-M:SampleDomain.Models.SortedShipmentParquetParallelSource.ToArrayAsync(System.Threading.CancellationToken) | MI=81 CC=1 CL=5 DIT=- SLOC=3 ELOC=2
-M:SampleDomain.Models.SortedShipmentParquetParallelSource.ToListAsync(System.Threading.CancellationToken) | MI=81 CC=1 CL=7 DIT=- SLOC=3 ELOC=2
-M:SampleDomain.Models.SortedShipmentParquetParallelSource.WithOptions(Parquet.SourceGenerator.ParquetSerializerOptions) | MI=90 CC=2 CL=4 DIT=- SLOC=3 ELOC=1
-M:SampleDomain.Models.SortedShipmentParquetStreamSource.AsAsyncEnumerable(System.Threading.CancellationToken) | MI=81 CC=1 CL=8 DIT=- SLOC=3 ELOC=2
-M:SampleDomain.Models.SortedShipmentParquetStreamSource.Batches(System.Threading.CancellationToken) | MI=81 CC=1 CL=6 DIT=- SLOC=3 ELOC=2
-M:SampleDomain.Models.SortedShipmentParquetStreamSource.SortedShipmentParquetStreamSource(System.IO.Stream, Parquet.SourceGenerator.ParquetSerializerOptions) | MI=85 CC=1 CL=2 DIT=- SLOC=5 ELOC=2
-M:SampleDomain.Models.SortedShipmentParquetStreamSource.ToArrayAsync(System.Threading.CancellationToken) | MI=81 CC=1 CL=7 DIT=- SLOC=3 ELOC=2
-M:SampleDomain.Models.SortedShipmentParquetStreamSource.ToListAsync(System.Threading.CancellationToken) | MI=81 CC=1 CL=9 DIT=- SLOC=3 ELOC=2
-M:SampleDomain.Models.SortedShipmentParquetStreamSource.Where(System.Func<SampleDomain.Models.SortedShipmentRowGroupMetadata, bool>) | MI=89 CC=2 CL=8 DIT=- SLOC=3 ELOC=1
-M:SampleDomain.Models.SortedShipmentParquetStreamSource.WithOptions(Parquet.SourceGenerator.ParquetSerializerOptions) | MI=90 CC=2 CL=4 DIT=- SLOC=3 ELOC=1
+M:SampleDomain.Models.SortedShipmentParquetReader.AsAsyncEnumerable(System.Threading.CancellationToken) | MI=72 CC=3 CL=11 DIT=- SLOC=10 ELOC=3
+M:SampleDomain.Models.SortedShipmentParquetReader.Batches(System.Threading.CancellationToken) | MI=70 CC=4 CL=11 DIT=- SLOC=12 ELOC=4
+M:SampleDomain.Models.SortedShipmentParquetReader.CollectFilteredBufferAsync(System.ReadOnlyMemory<byte>, Parquet.SourceGenerator.ParquetSerializerOptions, System.Func<SampleDomain.Models.SortedShipmentRowGroupMetadata, bool>, System.Threading.CancellationToken) | MI=77 CC=2 CL=10 DIT=- SLOC=7 ELOC=3
+M:SampleDomain.Models.SortedShipmentParquetReader.Parallel() | MI=75 CC=3 CL=7 DIT=- SLOC=16 ELOC=3
+M:SampleDomain.Models.SortedShipmentParquetReader.SortedShipmentParquetReader(System.IO.Stream, System.ReadOnlyMemory<byte>, Parquet.SourceGenerator.ParquetSerializerOptions, System.Func<SampleDomain.Models.SortedShipmentRowGroupMetadata, bool>, bool) | MI=72 CC=1 CL=5 DIT=- SLOC=8 ELOC=5
+M:SampleDomain.Models.SortedShipmentParquetReader.ToArrayAsync(System.Threading.CancellationToken) | MI=67 CC=4 CL=8 DIT=- SLOC=11 ELOC=5
+M:SampleDomain.Models.SortedShipmentParquetReader.Where(System.Func<SampleDomain.Models.SortedShipmentRowGroupMetadata, bool>) | MI=72 CC=4 CL=8 DIT=- SLOC=11 ELOC=4
+M:SampleDomain.Models.SortedShipmentParquetReader.WithOptions(Parquet.SourceGenerator.ParquetSerializerOptions) | MI=88 CC=2 CL=7 DIT=- SLOC=3 ELOC=1
 M:SampleDomain.Models.SortedShipmentRowGroupMetadata.Carrier.get | MI=100 CC=1 CL=1 DIT=- SLOC=1 ELOC=0
 M:SampleDomain.Models.SortedShipmentRowGroupMetadata.HasStatistics.get | MI=100 CC=1 CL=0 DIT=- SLOC=1 ELOC=0
 M:SampleDomain.Models.SortedShipmentRowGroupMetadata.RowCount.get | MI=100 CC=1 CL=0 DIT=- SLOC=1 ELOC=0
@@ -145,14 +126,11 @@ P:SampleDomain.Models.SortedShipmentRowGroupMetadata.RowGroupIndex | MI=100 CC=1
 P:SampleDomain.Models.SortedShipmentRowGroupMetadata.Sequence | MI=100 CC=1 CL=1 DIT=- SLOC=2 ELOC=0
 P:SampleDomain.Models.SortedShipmentRowGroupMetadata.WeightGrams | MI=100 CC=1 CL=1 DIT=- SLOC=2 ELOC=0
 T:SampleDomain.Models.SortedShipmentColumnarBatch | MI=100 CC=1 CL=3 DIT=1 SLOC=29 ELOC=0
-T:SampleDomain.Models.SortedShipmentParquet | MI=91 CC=3 CL=7 DIT=1 SLOC=13 ELOC=2
-T:SampleDomain.Models.SortedShipmentParquetExtensions | MI=47 CC=532 CL=87 DIT=1 SLOC=3058 ELOC=1169
+T:SampleDomain.Models.SortedShipmentParquet | MI=90 CC=3 CL=8 DIT=1 SLOC=13 ELOC=2
+T:SampleDomain.Models.SortedShipmentParquetExtensions | MI=48 CC=480 CL=87 DIT=1 SLOC=2789 ELOC=1047
 T:SampleDomain.Models.SortedShipmentParquetExtensions.ColumnBatch | MI=82 CC=11 CL=2 DIT=1 SLOC=56 ELOC=14
 T:SampleDomain.Models.SortedShipmentParquetExtensions.DecompressionGuardStream | MI=79 CC=32 CL=9 DIT=3 SLOC=117 ELOC=37
 T:SampleDomain.Models.SortedShipmentParquetExtensions.DecompressionGuardStream.CompactProtocolReader | MI=70 CC=12 CL=1 DIT=1 SLOC=40 ELOC=19
 T:SampleDomain.Models.SortedShipmentParquetExtensions.StringDeduplicator | MI=64 CC=24 CL=7 DIT=1 SLOC=139 ELOC=57
-T:SampleDomain.Models.SortedShipmentParquetFilteredSource | MI=73 CC=10 CL=14 DIT=1 SLOC=53 ELOC=15
-T:SampleDomain.Models.SortedShipmentParquetMemorySource | MI=82 CC=10 CL=16 DIT=1 SLOC=49 ELOC=13
-T:SampleDomain.Models.SortedShipmentParquetParallelSource | MI=82 CC=5 CL=9 DIT=1 SLOC=31 ELOC=7
-T:SampleDomain.Models.SortedShipmentParquetStreamSource | MI=81 CC=9 CL=15 DIT=1 SLOC=45 ELOC=12
+T:SampleDomain.Models.SortedShipmentParquetReader | MI=71 CC=23 CL=15 DIT=1 SLOC=104 ELOC=28
 T:SampleDomain.Models.SortedShipmentRowGroupMetadata | MI=92 CC=7 CL=1 DIT=1 SLOC=44 ELOC=6

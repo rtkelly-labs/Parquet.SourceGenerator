@@ -110,6 +110,35 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   byte-identical.
 
 ### Removed
+- **BREAKING: the four public read state types collapse into one reader, and `ToListAsync` is
+  gone (#478, #479).** `<Model>Parquet.From(Stream)` and `From(ReadOnlyMemory<byte>)` now both
+  return a single `readonly struct <Model>ParquetReader`; `WithOptions`, `Where` and `Parallel`
+  return the same type with updated private state (source kind, options, predicate, parallel flag),
+  so composing a read still allocates nothing. `ToArrayAsync(ct)` and `AsAsyncEnumerable(ct)` are
+  the stable terminals; `Batches(ct)` is unchanged in shape (its ownership model is #369). The
+  internal `List<T>`-only read paths (`ReadListCoreAsync`, `ReadParallelListCoreAsync`) are no
+  longer emitted, since nothing reaches them. Measured on the golden models: `OrderEvent` 64 → 47
+  members and 37 → 23 parameters; `ListOrder` / `NestedOrder` / `PocoOrder` 35 → 19 and 31 → 18;
+  `SortedShipment` 57 → 40 and 59 → 45. The legacy package is unchanged.
+
+  Combinations the separate types made unrepresentable now throw `NotSupportedException` from the
+  call that completes them (never silently degraded): `From(stream).Parallel()` (the message names
+  `From(ReadOnlyMemory<byte>)` as the parallel source), `.Where(...).Parallel()` and
+  `.Parallel().Where(...)`, a second `.Where(...)`, `.Parallel().AsAsyncEnumerable()`,
+  `.Parallel().Batches()` and `.Where(...).Batches()`. `WithOptions(null)` and `Where(null)` still
+  throw `ArgumentNullException`. Rationale: `docs/47-0.1-CONTRACT-AND-DESIGN-GOALS.md` §4.2.
+
+  | Before | After |
+  |:---|:---|
+  | `XParquetStreamSource` (from `XParquet.From(stream)`) | `XParquetReader` |
+  | `XParquetMemorySource` (from `XParquet.From(bytes)`) | `XParquetReader` |
+  | `XParquetFilteredSource` (from `.Where(p)`) | `XParquetReader` |
+  | `XParquetParallelSource` (from `.Parallel()`) | `XParquetReader` |
+  | `….ToListAsync(ct)` | `….ToArrayAsync(ct)`; where a `List<T>` is genuinely needed, `(await ….ToArrayAsync(ct)).ToList()` or `new List<T>(await ….ToArrayAsync(ct))` |
+  | `….Parallel().ToListAsync(ct)` | `….Parallel().ToArrayAsync(ct)` |
+
+  Code that only chains calls needs no change other than replacing `ToListAsync`; code that named
+  a state type in a variable, field or parameter declaration renames it to `XParquetReader`.
 - **BREAKING: the flat `ReadParquet*Async` read methods are gone from the modern generator
   (#480).** `<Model>Parquet.From(...)` is now the only generated read surface of
   `Parquet.SourceGenerator`. Removed, in both the `Stream` and the `ReadOnlyMemory<byte>` overload:
@@ -124,16 +153,16 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
 
   | Before (`XParquetExtensions.…`) | After |
   |:---|:---|
-  | `ReadParquetAsync(source)` | `XParquet.From(source).ToListAsync()` |
+  | `ReadParquetAsync(source)` | `XParquet.From(source).ToArrayAsync()` (then `.ToList()` where a `List<T>` is needed; `ToListAsync` went with #479) |
   | `ReadParquetArrayAsync(source)` | `XParquet.From(source).ToArrayAsync()` |
   | `ReadParquetStreamAsync(source)` | `XParquet.From(source).AsAsyncEnumerable()` |
   | `ReadParquetBatchesAsync(source)` | `XParquet.From(source).Batches()` |
-  | `ReadParquetParallelAsync(bytes)` | `XParquet.From(bytes).Parallel().ToListAsync()` |
+  | `ReadParquetParallelAsync(bytes)` | `XParquet.From(bytes).Parallel().ToArrayAsync()` |
   | `ReadParquetParallelArrayAsync(bytes)` | `XParquet.From(bytes).Parallel().ToArrayAsync()` |
-  | `ReadParquetParallelAsync(stream)` / `…ArrayAsync(stream)` | `XParquet.From(stream).ToListAsync()` / `.ToArrayAsync()` — the stream overloads always read sequentially; buffer the file and use `From(bytes).Parallel()` for real parallelism |
+  | `ReadParquetParallelAsync(stream)` / `…ArrayAsync(stream)` | `XParquet.From(stream).ToArrayAsync()` — the stream overloads always read sequentially; buffer the file and use `From(bytes).Parallel()` for real parallelism |
   | `…, options, …` | `.WithOptions(options)` before the terminal (omit it for `null`; `WithOptions(null)` throws) |
   | `…, predicate: p` | `.Where(p)` before the terminal |
-  | `…, cancellationToken: ct` | the terminal's argument, e.g. `.ToListAsync(ct)` |
+  | `…, cancellationToken: ct` | the terminal's argument, e.g. `.ToArrayAsync(ct)` |
 - **Implementation types are no longer public API (#461, part of the 0.1 contract #477).**
   `NullableColumnExtractor` and `VectorizedColumnTransforms` in `Parquet.SourceGenerator.Attributes`
   are now `internal`: no generated code calls either, so they were shipped API with no consumer

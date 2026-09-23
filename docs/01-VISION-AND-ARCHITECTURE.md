@@ -79,12 +79,13 @@ public static partial class UserRecordParquetExtensions
 public static partial class UserRecordParquet
 {
     // Reads go through the builder: From(...) -> WithOptions / Where / Parallel -> terminal.
-    public static UserRecordParquetStreamSource From(Stream stream);
-    public static UserRecordParquetMemorySource From(ReadOnlyMemory<byte> parquetBytes);
+    // Both overloads return the one reader struct, UserRecordParquetReader (#478).
+    public static UserRecordParquetReader From(Stream stream);
+    public static UserRecordParquetReader From(ReadOnlyMemory<byte> parquetBytes);
 }
 
 // Usage:
-// List<UserRecord> rows = await UserRecordParquet.From(stream).ToListAsync(cancellationToken);
+// UserRecord[] rows = await UserRecordParquet.From(stream).ToArrayAsync(cancellationToken);
 ```
 
 ---

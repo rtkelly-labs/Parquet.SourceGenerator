@@ -601,14 +601,14 @@ public sealed class VersionAndSchemaEvolutionMatrixTests
         using MemoryStream stream = await WriteBaselineAsync();
         (string createdBy, string formatVersion) = await ReadFooterAsync(stream);
 
-        List<EvoBaseline> read = await EvoBaselineParquet.From(stream).ToListAsync();
+        EvoBaseline[] read = await EvoBaselineParquet.From(stream).ToArrayAsync();
         ParquetCompatibilityOracle.AssertEquivalent(BaselineRows(), read);
 
         return new MatrixObservation(
             CompatibilityOutcome.Compatible,
             createdBy,
             formatVersion,
-            $"{read.Count} rows round-tripped"
+            $"{read.Length} rows round-tripped"
         );
     }
 
@@ -619,7 +619,7 @@ public sealed class VersionAndSchemaEvolutionMatrixTests
         using MemoryStream stream = await WriteBaselineAsync();
         (string createdBy, string formatVersion) = await ReadFooterAsync(stream);
 
-        List<EvoExtended> read = await EvoExtendedParquet.From(stream).ToListAsync();
+        EvoExtended[] read = await EvoExtendedParquet.From(stream).ToArrayAsync();
         AssertBaselineColumnsSurvived(read);
 
         return new MatrixObservation(
@@ -635,7 +635,7 @@ public sealed class VersionAndSchemaEvolutionMatrixTests
         using MemoryStream stream = await WriteBaselineAsync();
         (string createdBy, string formatVersion) = await ReadFooterAsync(stream);
 
-        List<EvoExtended> read = await ReadExtendedAsync(stream, consumer);
+        EvoExtended[] read = await ReadExtendedAsync(stream, consumer);
         AssertBaselineColumnsSurvived(read);
         AssertAddedColumnsAreNull(read);
 
@@ -652,11 +652,11 @@ public sealed class VersionAndSchemaEvolutionMatrixTests
         using MemoryStream stream = await WriteBaselineAsync(rowGroupSize: 40);
         (string createdBy, string formatVersion) = await ReadFooterAsync(stream);
 
-        List<EvoExtended> read = await EvoExtendedParquet
+        EvoExtended[] read = await EvoExtendedParquet
             .From(stream.ToArray())
             .Parallel()
-            .ToListAsync();
-        read.Count.ShouldBe(250);
+            .ToArrayAsync();
+        read.Length.ShouldBe(250);
         AssertAddedColumnsAreNull(read);
         read.OrderBy(r => r.Id).Select(r => r.Id).ShouldBe(Enumerable.Range(0, 250));
 
@@ -699,9 +699,9 @@ public sealed class VersionAndSchemaEvolutionMatrixTests
         stream.Position = 0;
         (string createdBy, string formatVersion) = await ReadFooterAsync(stream);
 
-        List<EvoSubset> read = await EvoSubsetParquet.From(stream).ToListAsync();
+        EvoSubset[] read = await EvoSubsetParquet.From(stream).ToArrayAsync();
 
-        read.Count.ShouldBe(2);
+        read.Length.ShouldBe(2);
         read.Select(r => r.Id).ShouldBe([1, 2]);
         read.Select(r => r.Name).ShouldBe(["one", "two"]);
 
@@ -719,7 +719,7 @@ public sealed class VersionAndSchemaEvolutionMatrixTests
         (string createdBy, string formatVersion) = await ReadFooterAsync(stream);
 
         InvalidDataException exception = await Should.ThrowAsync<InvalidDataException>(() =>
-            EvoRequiresAbsentColumnParquet.From(stream).ToListAsync()
+            EvoRequiresAbsentColumnParquet.From(stream).ToArrayAsync()
         );
         AssertClearMissingColumnError(exception, "absent_required");
 
@@ -767,7 +767,7 @@ public sealed class VersionAndSchemaEvolutionMatrixTests
         stream.Position = 0;
 
         (string createdBy, string formatVersion) = await ReadFooterAsync(stream);
-        List<EvoBaseline> read = await EvoBaselineParquet.From(stream).ToListAsync();
+        EvoBaseline[] read = await EvoBaselineParquet.From(stream).ToArrayAsync();
         ParquetCompatibilityOracle.AssertEquivalent(BaselineRows(), read);
 
         return new MatrixObservation(
@@ -803,7 +803,7 @@ public sealed class VersionAndSchemaEvolutionMatrixTests
             stream.Position = 0;
             (createdBy, formatVersion) = await ReadFooterAsync(stream);
 
-            List<EvoExtended> read = await EvoExtendedParquet.From(stream).ToListAsync();
+            EvoExtended[] read = await EvoExtendedParquet.From(stream).ToArrayAsync();
             AssertBaselineColumnsSurvived(read);
             AssertAddedColumnsAreNull(read);
         }
@@ -835,15 +835,15 @@ public sealed class VersionAndSchemaEvolutionMatrixTests
         await using FileStream stream = OpenFixture(path);
         (string createdBy, string formatVersion) = await ReadFooterAsync(stream);
 
-        List<TestUserRecord> read = await TestUserRecordParquet.From(stream).ToListAsync();
-        read.Count.ShouldBe(expectedRows);
+        TestUserRecord[] read = await TestUserRecordParquet.From(stream).ToArrayAsync();
+        read.Length.ShouldBe(expectedRows);
         read[0].Name.ShouldBe("user_0");
 
         return new MatrixObservation(
             CompatibilityOutcome.Compatible,
             createdBy,
             formatVersion,
-            $"{read.Count} rows read from {Path.GetFileName(path)}"
+            $"{read.Length} rows read from {Path.GetFileName(path)}"
         );
     }
 
@@ -855,11 +855,11 @@ public sealed class VersionAndSchemaEvolutionMatrixTests
         await using FileStream stream = OpenFixture(path);
         (string createdBy, string formatVersion) = await ReadFooterAsync(stream);
 
-        List<EvoReversedFixtureUser> read = await EvoReversedFixtureUserParquet
+        EvoReversedFixtureUser[] read = await EvoReversedFixtureUserParquet
             .From(stream)
-            .ToListAsync();
+            .ToArrayAsync();
 
-        read.Count.ShouldBe(expectedRows);
+        read.Length.ShouldBe(expectedRows);
         // Positional resolution would transpose id and created_at_ms, which differ by orders of
         // magnitude, so this pair is what makes the assertion meaningful.
         read[0].Id.ShouldBe(0);
@@ -883,24 +883,24 @@ public sealed class VersionAndSchemaEvolutionMatrixTests
         await using FileStream stream = OpenFixture(path);
         (string createdBy, string formatVersion) = await ReadFooterAsync(stream);
 
-        List<EvoFixtureUser> read = consumer switch
+        EvoFixtureUser[] read = consumer switch
         {
             ParallelReader => await EvoFixtureUserParquet
                 .From(await BufferAsync(stream))
                 .Parallel()
-                .ToListAsync(),
+                .ToArrayAsync(),
             StreamingReader => await CollectAsync(
                 EvoFixtureUserParquet.From(stream).AsAsyncEnumerable()
             ),
-            _ => await EvoFixtureUserParquet.From(stream).ToListAsync(),
+            _ => await EvoFixtureUserParquet.From(stream).ToArrayAsync(),
         };
 
-        read.Count.ShouldBe(expectedRows);
-        read.ForEach(row =>
+        read.Length.ShouldBe(expectedRows);
+        foreach (EvoFixtureUser row in read)
         {
             row.Email.ShouldBeNull();
             row.RetryCount.ShouldBeNull();
-        });
+        }
         read[0].Name.ShouldBe("user_0");
         read[0].CreatedAtMs.ShouldBe(1_700_000_000_000L);
 
@@ -920,8 +920,8 @@ public sealed class VersionAndSchemaEvolutionMatrixTests
         await using FileStream stream = OpenFixture(path);
         (string createdBy, string formatVersion) = await ReadFooterAsync(stream);
 
-        List<EvoSubset> read = await EvoSubsetParquet.From(stream).ToListAsync();
-        read.Count.ShouldBe(expectedRows);
+        EvoSubset[] read = await EvoSubsetParquet.From(stream).ToArrayAsync();
+        read.Length.ShouldBe(expectedRows);
         read[0].Id.ShouldBe(0);
         read[0].Name.ShouldBe("user_0");
 
@@ -941,10 +941,8 @@ public sealed class VersionAndSchemaEvolutionMatrixTests
         await using FileStream stream = OpenFixture(path);
         (string createdBy, string formatVersion) = await ReadFooterAsync(stream);
 
-        List<EvoSubset> read = await CollectAsync(
-            EvoSubsetParquet.From(stream).AsAsyncEnumerable()
-        );
-        read.Count.ShouldBe(expectedRows);
+        EvoSubset[] read = await CollectAsync(EvoSubsetParquet.From(stream).AsAsyncEnumerable());
+        read.Length.ShouldBe(expectedRows);
         read[0].Name.ShouldBe("user_0");
 
         return new MatrixObservation(
@@ -964,7 +962,7 @@ public sealed class VersionAndSchemaEvolutionMatrixTests
         (string createdBy, string formatVersion) = await ReadFooterAsync(stream);
 
         InvalidDataException exception = await Should.ThrowAsync<InvalidDataException>(() =>
-            EvoRequiresAbsentColumnParquet.From(stream).ToListAsync()
+            EvoRequiresAbsentColumnParquet.From(stream).ToArrayAsync()
         );
         AssertClearMissingColumnError(exception, missingColumn);
 
@@ -986,7 +984,7 @@ public sealed class VersionAndSchemaEvolutionMatrixTests
         (string createdBy, string formatVersion) = await ReadFooterAsync(stream);
 
         InvalidDataException exception = await Should.ThrowAsync<InvalidDataException>(() =>
-            EvoNestedProbeParquet.From(stream).ToListAsync()
+            EvoNestedProbeParquet.From(stream).ToArrayAsync()
         );
         AssertClearMissingColumnError(exception, "tags");
 
@@ -1005,9 +1003,9 @@ public sealed class VersionAndSchemaEvolutionMatrixTests
         );
         (string createdBy, string formatVersion) = await ReadFooterAsync(stream);
 
-        List<TpchLineItemRecord> read = await TpchLineItemRecordParquet.From(stream).ToListAsync();
+        TpchLineItemRecord[] read = await TpchLineItemRecordParquet.From(stream).ToArrayAsync();
 
-        read.Count.ShouldBe(60175);
+        read.Length.ShouldBe(60175);
         read[0].OrderKey.ShouldBe(1L);
         read[0].ExtendedPrice.ShouldBe(24710.35m);
 
@@ -1015,7 +1013,7 @@ public sealed class VersionAndSchemaEvolutionMatrixTests
             CompatibilityOutcome.Compatible,
             createdBy,
             formatVersion,
-            $"{read.Count} rows over 16 columns including decimals and dates"
+            $"{read.Length} rows over 16 columns including decimals and dates"
         );
     }
 
@@ -1068,23 +1066,20 @@ public sealed class VersionAndSchemaEvolutionMatrixTests
         return buffer.ToArray();
     }
 
-    private static async Task<List<EvoExtended>> ReadExtendedAsync(
-        Stream stream,
-        string consumer
-    ) =>
+    private static async Task<EvoExtended[]> ReadExtendedAsync(Stream stream, string consumer) =>
         consumer switch
         {
             ParallelReader => await EvoExtendedParquet
                 .From(await BufferAsync(stream))
                 .Parallel()
-                .ToListAsync(),
+                .ToArrayAsync(),
             StreamingReader => await CollectAsync(
                 EvoExtendedParquet.From(stream).AsAsyncEnumerable()
             ),
-            _ => await EvoExtendedParquet.From(stream).ToListAsync(),
+            _ => await EvoExtendedParquet.From(stream).ToArrayAsync(),
         };
 
-    private static async Task<List<T>> CollectAsync<T>(IAsyncEnumerable<T> source)
+    private static async Task<T[]> CollectAsync<T>(IAsyncEnumerable<T> source)
     {
         var results = new List<T>();
         await foreach (T item in source)
@@ -1092,13 +1087,13 @@ public sealed class VersionAndSchemaEvolutionMatrixTests
             results.Add(item);
         }
 
-        return results;
+        return results.ToArray();
     }
 
-    private static void AssertBaselineColumnsSurvived(List<EvoExtended> read)
+    private static void AssertBaselineColumnsSurvived(EvoExtended[] read)
     {
         List<EvoBaseline> expected = BaselineRows();
-        read.Count.ShouldBe(expected.Count);
+        read.Length.ShouldBe(expected.Count);
         for (int i = 0; i < expected.Count; i++)
         {
             read[i].Id.ShouldBe(expected[i].Id);
@@ -1107,14 +1102,16 @@ public sealed class VersionAndSchemaEvolutionMatrixTests
         }
     }
 
-    private static void AssertAddedColumnsAreNull(List<EvoExtended> read) =>
-        read.ForEach(row =>
+    private static void AssertAddedColumnsAreNull(EvoExtended[] read)
+    {
+        foreach (EvoExtended row in read)
         {
             row.AddedNote.ShouldBeNull();
             row.AddedCount.ShouldBeNull();
             row.AddedAmount.ShouldBeNull();
             row.AddedPayload.ShouldBeNull();
-        });
+        }
+    }
 
     /// <summary>
     /// "Fails clearly" means the caller can identify the column from the message alone. A bare

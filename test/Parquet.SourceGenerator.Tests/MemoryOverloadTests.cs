@@ -44,11 +44,11 @@ public sealed class MemoryOverloadTests
     {
         byte[] bytes = await WriteSampleAsync(5, 2);
 
-        List<BufferModel> read = await BufferModelParquet
+        BufferModel[] read = await BufferModelParquet
             .From(new ReadOnlyMemory<byte>(bytes))
-            .ToListAsync();
+            .ToArrayAsync();
 
-        read.Count.ShouldBe(5);
+        read.Length.ShouldBe(5);
         read.Select(x => x.Id).ShouldBe(Enumerable.Range(1, 5));
     }
 
@@ -57,12 +57,12 @@ public sealed class MemoryOverloadTests
     {
         byte[] bytes = await WriteSampleAsync(5, 2);
 
-        List<BufferModel> read = await BufferModelParquet
+        BufferModel[] read = await BufferModelParquet
             .From(new ReadOnlyMemory<byte>(bytes))
             .Parallel()
-            .ToListAsync();
+            .ToArrayAsync();
 
-        read.Count.ShouldBe(5);
+        read.Length.ShouldBe(5);
         read.Select(x => x.Id).ShouldBe(Enumerable.Range(1, 5));
         read[2].Name.ShouldBe("Item_3");
     }
@@ -119,11 +119,11 @@ public sealed class MemoryOverloadTests
         byte[] padded = new byte[bytes.Length + 8];
         bytes.CopyTo(padded, 4);
 
-        List<BufferModel> read = await BufferModelParquet
+        BufferModel[] read = await BufferModelParquet
             .From(new ReadOnlyMemory<byte>(padded, 4, bytes.Length))
-            .ToListAsync();
+            .ToArrayAsync();
 
-        read.Count.ShouldBe(4);
+        read.Length.ShouldBe(4);
         read.Select(x => x.Id).ShouldBe(Enumerable.Range(1, 4));
     }
 }

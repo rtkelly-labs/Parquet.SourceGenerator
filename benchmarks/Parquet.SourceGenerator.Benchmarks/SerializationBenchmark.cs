@@ -174,20 +174,27 @@ public class ScalingDeserializationBenchmark
     /// <summary>
     /// Source generator sequential deserializer — Native AOT compatible, ArrayPool buffers.
     /// </summary>
+    /// <remarks>
+    /// Measured the <c>List&lt;T&gt;</c> terminal until #479 removed it; it now measures the array
+    /// path (the same path as <see cref="SourceGeneratorReadArrayAsync"/>). The name is kept because
+    /// the benchmark summary and the regression history key on it. The same applies to the
+    /// <c>...BufferAsync</c> and <c>...ParallelBufferAsync</c> benchmarks below and to the
+    /// formerly <c>List</c>-returning read benchmarks in the dataset and deduplication suites.
+    /// </remarks>
     [Benchmark]
-    public async Task<List<ScaleEvent>> SourceGeneratorReadAsync()
+    public async Task<ScaleEvent[]> SourceGeneratorReadAsync()
     {
         using var stream = new MemoryStream(_parquetBytes);
-        return await ScaleEventParquet.From(stream).ToListAsync();
+        return await ScaleEventParquet.From(stream).ToArrayAsync();
     }
 
     /// <summary>
     /// Source generator sequential deserializer over a byte buffer — no stream wrapper allocation.
     /// </summary>
     [Benchmark]
-    public async Task<List<ScaleEvent>> SourceGeneratorReadBufferAsync()
+    public async Task<ScaleEvent[]> SourceGeneratorReadBufferAsync()
     {
-        return await ScaleEventParquet.From(new ReadOnlyMemory<byte>(_parquetBytes)).ToListAsync();
+        return await ScaleEventParquet.From(new ReadOnlyMemory<byte>(_parquetBytes)).ToArrayAsync();
     }
 
     /// <summary>
@@ -201,13 +208,13 @@ public class ScalingDeserializationBenchmark
     /// obvious in the allocation column here.
     /// </remarks>
     [Benchmark]
-    public async Task<List<ScaleEvent>> SourceGeneratorReadParallelBufferAsync()
+    public async Task<ScaleEvent[]> SourceGeneratorReadParallelBufferAsync()
     {
         return await ScaleEventParquet
             .From(new ReadOnlyMemory<byte>(_parquetBytes))
             .WithOptions(new ParquetSerializerOptions { MaxDegreeOfParallelism = 4 })
             .Parallel()
-            .ToListAsync();
+            .ToArrayAsync();
     }
 
     /// <summary>

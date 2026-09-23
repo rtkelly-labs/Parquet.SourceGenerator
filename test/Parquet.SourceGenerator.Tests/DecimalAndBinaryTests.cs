@@ -45,9 +45,9 @@ public sealed class DecimalAndBinaryTests
         await written.WriteParquetAsync(stream);
         stream.Position = 0;
 
-        List<MoneyRecord> read = await MoneyRecordParquet.From(stream).ToListAsync();
+        MoneyRecord[] read = await MoneyRecordParquet.From(stream).ToArrayAsync();
 
-        read.Count.ShouldBe(3);
+        read.Length.ShouldBe(3);
         // Scale 4 is declared, so all three values are representable exactly; anything lost here is
         // a precision bug rather than a rounding artifact.
         read[0].Amount.ShouldBe(12345.6789m);
@@ -68,9 +68,9 @@ public sealed class DecimalAndBinaryTests
         await written.WriteParquetAsync(stream);
         stream.Position = 0;
 
-        List<MoneyRecord> read = await MoneyRecordParquet.From(stream).ToListAsync();
+        MoneyRecord[] read = await MoneyRecordParquet.From(stream).ToArrayAsync();
 
-        read.Count.ShouldBe(2);
+        read.Length.ShouldBe(2);
         // High bytes and 0x00 are the values most likely to be mangled by an accidental
         // string conversion somewhere in the pipeline.
         read[0].Blob.ShouldBe(new byte[] { 0x00, 0x7F, 0x80, 0xFF });

@@ -77,9 +77,9 @@ public sealed class PyArrowInteropTests
         System.IO.File.Exists(path).ShouldBeTrue($"PyArrow fixture does not exist: {path}");
 
         await using var stream = System.IO.File.OpenRead(path!);
-        List<PyArrowInteropRecord> actual = await PyArrowInteropRecordParquet
+        PyArrowInteropRecord[] actual = await PyArrowInteropRecordParquet
             .From(stream)
-            .ToListAsync();
+            .ToArrayAsync();
 
         ParquetCompatibilityOracle.AssertEquivalent(
             ExpectedRows(),
@@ -100,9 +100,7 @@ public sealed class PyArrowInteropTests
 
         System.IO.File.Exists(path).ShouldBeTrue($"DuckDB fixture does not exist: {path}");
         await using var stream = System.IO.File.OpenRead(path);
-        List<DuckDbInteropRecord> actual = await DuckDbInteropRecordParquet
-            .From(stream)
-            .ToListAsync();
+        DuckDbInteropRecord[] actual = await DuckDbInteropRecordParquet.From(stream).ToArrayAsync();
 
         ParquetCompatibilityOracle.AssertEquivalent(
             ExpectedDuckDbRows(),

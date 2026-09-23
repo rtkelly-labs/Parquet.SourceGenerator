@@ -5,7 +5,7 @@
 # MI maintainability index 0-100 (higher is better), CC cyclomatic complexity,
 # CL class coupling, DIT depth of inheritance, SLOC source lines, ELOC executable lines.
 # Ordinal-sorted. MI is compared with a +/-2 tolerance; every other metric exactly.
-A:Parquet.SourceGenerator.Attributes | MI=88 CC=195 CL=32 DIT=2 SLOC=1762 ELOC=231
+A:Parquet.SourceGenerator.Attributes | MI=88 CC=195 CL=32 DIT=2 SLOC=1763 ELOC=231
 M:Parquet.SourceGenerator.NullableColumnExtractor.CompactInPlace<T>(System.Span<T>, System.ReadOnlySpan<byte>) | MI=64 CC=3 CL=4 DIT=- SLOC=72 ELOC=8
 M:Parquet.SourceGenerator.NullableColumnExtractor.CountPresent(System.ReadOnlySpan<byte>) | MI=69 CC=2 CL=1 DIT=- SLOC=42 ELOC=6
 M:Parquet.SourceGenerator.NullableColumnExtractor.ExpandPresenceToDefinitionLevels(System.ReadOnlySpan<byte>, System.Span<int>) | MI=70 CC=3 CL=4 DIT=- SLOC=47 ELOC=5
@@ -110,7 +110,7 @@ M:Parquet.SourceGenerator.VectorizedColumnTransforms.UtcEpochConstant.get | MI=9
 M:Parquet.SourceGenerator.VectorizedColumnTransforms.Widen(System.ReadOnlySpan<byte>, System.Span<int>) | MI=70 CC=3 CL=4 DIT=- SLOC=42 ELOC=5
 M:Parquet.SourceGenerator.VectorizedColumnTransforms.Widen(System.ReadOnlySpan<int>, System.Span<long>) | MI=70 CC=3 CL=4 DIT=- SLOC=41 ELOC=5
 M:Parquet.SourceGenerator.VectorizedColumnTransforms.Widen(System.ReadOnlySpan<short>, System.Span<int>) | MI=70 CC=3 CL=4 DIT=- SLOC=37 ELOC=5
-N:Parquet.SourceGenerator | MI=87 CC=195 CL=32 DIT=2 SLOC=1762 ELOC=231
+N:Parquet.SourceGenerator | MI=87 CC=195 CL=32 DIT=2 SLOC=1763 ELOC=231
 N:System.Runtime.CompilerServices | MI=100 CC=0 CL=0 DIT=1 SLOC=0 ELOC=0
 P:Parquet.SourceGenerator.ParquetColumnAttribute.Deduplicate | MI=100 CC=2 CL=0 DIT=- SLOC=6 ELOC=0
 P:Parquet.SourceGenerator.ParquetColumnAttribute.Encoding | MI=100 CC=2 CL=1 DIT=- SLOC=4 ELOC=1
@@ -142,7 +142,7 @@ P:Parquet.SourceGenerator.ParquetSerializerOptions.DictionaryEncodingThreshold |
 P:Parquet.SourceGenerator.ParquetSerializerOptions.MaxAllocationValues | MI=100 CC=2 CL=0 DIT=- SLOC=4 ELOC=1
 P:Parquet.SourceGenerator.ParquetSerializerOptions.MaxDecompressedPageSize | MI=100 CC=2 CL=0 DIT=- SLOC=9 ELOC=1
 P:Parquet.SourceGenerator.ParquetSerializerOptions.MaxDecompressionExpansionRatio | MI=100 CC=2 CL=0 DIT=- SLOC=9 ELOC=1
-P:Parquet.SourceGenerator.ParquetSerializerOptions.MaxDegreeOfParallelism | MI=100 CC=2 CL=0 DIT=- SLOC=18 ELOC=1
+P:Parquet.SourceGenerator.ParquetSerializerOptions.MaxDegreeOfParallelism | MI=100 CC=2 CL=0 DIT=- SLOC=19 ELOC=1
 P:Parquet.SourceGenerator.ParquetSerializerOptions.MaxDictionaryEntries | MI=100 CC=2 CL=0 DIT=- SLOC=5 ELOC=1
 P:Parquet.SourceGenerator.ParquetSerializerOptions.MaxNestingDepth | MI=100 CC=2 CL=0 DIT=- SLOC=4 ELOC=1
 P:Parquet.SourceGenerator.ParquetSerializerOptions.MaxRowGroupCount | MI=100 CC=2 CL=0 DIT=- SLOC=4 ELOC=1
@@ -164,7 +164,7 @@ T:Parquet.SourceGenerator.ParquetGeneratorOptionsAttribute | MI=77 CC=2 CL=4 DIT
 T:Parquet.SourceGenerator.ParquetIgnoreAttribute | MI=100 CC=1 CL=3 DIT=2 SLOC=9 ELOC=2
 T:Parquet.SourceGenerator.ParquetPruneStatistics | MI=85 CC=15 CL=1 DIT=1 SLOC=57 ELOC=12
 T:Parquet.SourceGenerator.ParquetSerializableAttribute | MI=100 CC=1 CL=3 DIT=2 SLOC=15 ELOC=2
-T:Parquet.SourceGenerator.ParquetSerializerOptions | MI=91 CC=31 CL=8 DIT=1 SLOC=149 ELOC=13
+T:Parquet.SourceGenerator.ParquetSerializerOptions | MI=91 CC=31 CL=8 DIT=1 SLOC=150 ELOC=13
 T:Parquet.SourceGenerator.ParquetSortKeyAttribute | MI=100 CC=1 CL=3 DIT=2 SLOC=32 ELOC=2
 T:Parquet.SourceGenerator.ParquetTimestampAttribute | MI=85 CC=2 CL=4 DIT=2 SLOC=24 ELOC=3
 T:Parquet.SourceGenerator.ParquetTimestampUnit | MI=100 CC=1 CL=0 DIT=1 SLOC=20 ELOC=0

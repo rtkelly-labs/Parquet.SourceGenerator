@@ -184,17 +184,17 @@ public sealed class GeneratedTypeMatrixTests
         List<GeneratedTypeMatrixRecord> expected = RequiredRows();
         byte[] bytes = await WriteRequiredAsync(expected, compressionMethod, rowGroupSize: 2);
 
-        List<GeneratedTypeMatrixRecord> sequential = await GeneratedTypeMatrixRecordParquet
+        GeneratedTypeMatrixRecord[] sequential = await GeneratedTypeMatrixRecordParquet
             .From(new MemoryStream(bytes))
-            .ToListAsync();
+            .ToArrayAsync();
         GeneratedTypeMatrixRecord[] array = await GeneratedTypeMatrixRecordParquet
             .From(new MemoryStream(bytes))
             .ToArrayAsync();
-        List<GeneratedTypeMatrixRecord> parallel = await GeneratedTypeMatrixRecordParquet
+        GeneratedTypeMatrixRecord[] parallel = await GeneratedTypeMatrixRecordParquet
             .From(bytes)
             .WithOptions(new ParquetSerializerOptions { MaxDegreeOfParallelism = 2 })
             .Parallel()
-            .ToListAsync();
+            .ToArrayAsync();
         GeneratedTypeMatrixRecord[] parallelArray = await GeneratedTypeMatrixRecordParquet
             .From(bytes)
             .WithOptions(new ParquetSerializerOptions { MaxDegreeOfParallelism = 2 })
@@ -258,16 +258,15 @@ public sealed class GeneratedTypeMatrixTests
             rowGroupSize: 1
         );
 
-        List<NullableGeneratedTypeMatrixRecord> actual =
-            await NullableGeneratedTypeMatrixRecordParquet
-                .From(new MemoryStream(bytes))
-                .ToListAsync();
-        List<NullableGeneratedTypeMatrixRecord> parallel =
+        NullableGeneratedTypeMatrixRecord[] actual = await NullableGeneratedTypeMatrixRecordParquet
+            .From(new MemoryStream(bytes))
+            .ToArrayAsync();
+        NullableGeneratedTypeMatrixRecord[] parallel =
             await NullableGeneratedTypeMatrixRecordParquet
                 .From(bytes)
                 .WithOptions(new ParquetSerializerOptions { MaxDegreeOfParallelism = 3 })
                 .Parallel()
-                .ToListAsync();
+                .ToArrayAsync();
 
         AssertEquivalent(expected, actual);
         AssertEquivalent(expected, parallel);

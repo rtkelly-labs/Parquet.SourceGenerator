@@ -97,10 +97,6 @@ internal static class CodeEmitter
         EmitWriteAsyncEnumerable(builder, model);
         builder.AppendLine();
 
-        // Read API — async (v6 low-level primitives)
-        EmitReadAsync(builder, model);
-        builder.AppendLine();
-
         // Direct array Read API — zero-copy array materialization
         EmitReadArrayAsync(builder, model);
         builder.AppendLine();
@@ -152,7 +148,7 @@ internal static class CodeEmitter
             ColumnarBatchComponent.EmitBatchStruct(builder, model);
         }
 
-        // Read entry point and builder structs (#217). Each axis of the read grid becomes a
+        // Read entry point and its single reader struct (#217, #478). Each axis of the read grid becomes a
         // member rather than a name segment; see docs/19-PUBLIC-API-SURFACE.md. The builder is the
         // only public read surface (#480, docs/48): the internal Read*CoreAsync methods above are
         // the implementations its terminals delegate to, and are not part of the consumer contract.
@@ -1250,212 +1246,6 @@ internal static class CodeEmitter
     //  READ METHODS
     // ──────────────────────────────────────────────────────────
 
-    private static void EmitReadAsync(StringBuilder builder, TargetClassModel model)
-    {
-        builder.AppendLine("    /// <summary>");
-        builder.AppendLine(
-            $"    /// Asynchronously deserializes all <c>{model.ClassName}</c> objects using Parquet.Net low-level primitives."
-        );
-        builder.AppendLine(
-            "    /// Fast O(1) index-check schema resolution and ArrayPool buffer recycling."
-        );
-        builder.AppendLine("    /// </summary>");
-        builder.AppendLine(
-            $"    internal static async global::System.Threading.Tasks.Task<global::System.Collections.Generic.List<{model.ClassName}>> ReadListCoreAsync("
-        );
-        builder.AppendLine($"        global::System.IO.Stream stream,");
-        builder.AppendLine(
-            $"        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,"
-        );
-        builder.AppendLine(
-            $"        global::System.Threading.CancellationToken cancellationToken = default{RowGroupPruningComponent.SignatureSuffix(model)}"
-        );
-        builder.AppendLine("    {");
-        builder.AppendLine(
-            "        if (stream == null) throw new global::System.ArgumentNullException(nameof(stream));"
-        );
-        builder.AppendLine();
-        builder.AppendLine(
-            "        options ??= global::Parquet.SourceGenerator.ParquetSerializerOptions.Default;"
-        );
-        builder.AppendLine();
-        builder.AppendLine(
-            "        using var guardedStream = CreateGuardedReadStream(stream, options);"
-        );
-        builder.AppendLine(
-            "        await using var reader = await global::Parquet.ParquetReader.CreateAsync("
-        );
-        builder.AppendLine("            guardedStream,");
-        builder.AppendLine("            BuildFormatOptions(options),");
-        builder.AppendLine("            cancellationToken: cancellationToken);");
-        builder.AppendLine("        guardedStream.Activate();");
-        builder.AppendLine(
-            "        await ValidateReaderAsync(reader, stream, options, cancellationToken).ConfigureAwait(false);"
-        );
-        builder.AppendLine("        var fileFields = reader.Schema.DataFields;");
-        builder.AppendLine();
-
-        if (model.Properties.Length > 0)
-        {
-            builder.AppendLine(
-                "        global::System.Collections.Generic.Dictionary<string, global::Parquet.Schema.DataField>? fieldsByName = null;"
-            );
-            foreach (LeafColumn col in EmissionPlan.For(model).Columns)
-            {
-                builder.AppendLine(EmitResolveFieldLine(col, "        "));
-            }
-
-            builder.AppendLine();
-        }
-        RowGroupPruningComponent.EmitSelectionPass(builder, model, "totalRows");
-        builder.AppendLine("#if NET8_0_OR_GREATER");
-        builder.AppendLine(
-            $"        var results = new global::System.Collections.Generic.List<{model.ClassName}>(totalRows);"
-        );
-        builder.AppendLine(
-            "        global::System.Runtime.InteropServices.CollectionsMarshal.SetCount(results, totalRows);"
-        );
-        builder.AppendLine("#else");
-        builder.AppendLine(
-            $"        var results = new global::System.Collections.Generic.List<{model.ClassName}>(totalRows);"
-        );
-        builder.AppendLine("#endif");
-        builder.AppendLine("        int currentOffset = 0;");
-        builder.AppendLine();
-
-        StringDeduplicatorComponent.EmitDeduplicatorDeclaration(builder, model);
-
-        builder.AppendLine("        for (int r = 0; r < reader.RowGroupCount; r++)");
-        builder.AppendLine("        {");
-        builder.AppendLine("            cancellationToken.ThrowIfCancellationRequested();");
-        RowGroupPruningComponent.EmitSelectionCheck(builder, model, "            ");
-        builder.AppendLine("            using var groupReader = reader.OpenRowGroupReader(r);");
-        builder.AppendLine("            int rowCount = checked((int)groupReader.RowCount);");
-        builder.AppendLine(
-            "            if (rowCount < 0 || rowCount > options.MaxAllocationValues)"
-        );
-        builder.AppendLine("            {");
-        builder.AppendLine(
-            "                throw new global::System.IO.InvalidDataException($\"Row group {r} row count {rowCount} is invalid or exceeds maximum allowed {options.MaxAllocationValues}.\");"
-        );
-        builder.AppendLine("            }");
-        builder.AppendLine();
-
-        EmitRentalsFor(builder, model, "rowCount", indent: "            ");
-
-        builder.AppendLine();
-        builder.AppendLine("            try");
-        builder.AppendLine("            {");
-
-        foreach (LeafColumn col in EmissionPlan.For(model).Columns)
-        {
-            EmitReadWithNullBypass(builder, col, $"field_{col.Slot}", $"buffer_{col.Slot}");
-        }
-
-        builder.AppendLine();
-        if (PropertyMappingComponent.IsSingleFieldBlittableStruct(model))
-        {
-            string elemType = PropertyMappingComponent.GetSingleFieldBufferElementType(model);
-            PropertyModel prop = model.Properties[0];
-            builder.AppendLine("#if NET8_0_OR_GREATER");
-            builder.AppendLine("                void PopulateSpan()");
-            builder.AppendLine("                {");
-            builder.AppendLine(
-                "                    var span = global::System.Runtime.InteropServices.CollectionsMarshal.AsSpan(results);"
-            );
-            builder.AppendLine(
-                $"                    if (global::System.Runtime.CompilerServices.Unsafe.SizeOf<{model.ClassName}>() == global::System.Runtime.CompilerServices.Unsafe.SizeOf<{elemType}>())"
-            );
-            builder.AppendLine("                    {");
-            builder.AppendLine(
-                $"                        global::System.Runtime.InteropServices.MemoryMarshal.Cast<{elemType}, {model.ClassName}>(buffer_0.AsSpan(0, rowCount)).CopyTo(span.Slice(currentOffset, rowCount));"
-            );
-            builder.AppendLine("                    }");
-            builder.AppendLine("                    else");
-            builder.AppendLine("                    {");
-            builder.AppendLine("                        for (int i = 0; i < rowCount; i++)");
-            builder.AppendLine("                        {");
-            builder.AppendLine(
-                $"                            span[currentOffset + i] = new {model.ClassName} {{ {prop.Name} = buffer_0[i] }};"
-            );
-            builder.AppendLine("                        }");
-            builder.AppendLine("                    }");
-            builder.AppendLine("                }");
-            builder.AppendLine("                PopulateSpan();");
-            builder.AppendLine("#else");
-            builder.AppendLine("                for (int i = 0; i < rowCount; i++)");
-            builder.AppendLine("                {");
-            builder.AppendLine($"                    results.Add(new {model.ClassName}");
-            builder.AppendLine("                    {");
-            builder.AppendLine($"                        {prop.Name} = buffer_0[i],");
-            builder.AppendLine("                    });");
-            builder.AppendLine("                }");
-            builder.AppendLine("#endif");
-        }
-        else
-        {
-            if (EmissionPlan.For(model).HasCompound)
-                CompoundMapping.EmitCompoundReconstruction(
-                    builder,
-                    model,
-                    "rowCount",
-                    "                "
-                );
-            builder.AppendLine("#if NET8_0_OR_GREATER");
-            builder.AppendLine("                void PopulateSpan()");
-            builder.AppendLine("                {");
-            builder.AppendLine(
-                "                    var span = global::System.Runtime.InteropServices.CollectionsMarshal.AsSpan(results);"
-            );
-            builder.AppendLine("                    for (int i = 0; i < rowCount; i++)");
-            builder.AppendLine("                    {");
-            builder.AppendLine(
-                $"                        span[currentOffset + i] = new {model.ClassName}"
-            );
-            builder.AppendLine("                        {");
-
-            CompoundMapping.EmitRootMemberAssignments(
-                builder,
-                model,
-                "i",
-                "                            "
-            );
-
-            builder.AppendLine("                        };");
-            builder.AppendLine("                    }");
-            builder.AppendLine("                }");
-            builder.AppendLine("                PopulateSpan();");
-            builder.AppendLine("#else");
-            builder.AppendLine("                for (int i = 0; i < rowCount; i++)");
-            builder.AppendLine("                {");
-            builder.AppendLine($"                    results.Add(new {model.ClassName}");
-            builder.AppendLine("                    {");
-
-            CompoundMapping.EmitRootMemberAssignments(
-                builder,
-                model,
-                "i",
-                "                        "
-            );
-
-            builder.AppendLine("                    });");
-            builder.AppendLine("                }");
-            builder.AppendLine("#endif");
-        }
-        builder.AppendLine("                currentOffset += rowCount;");
-        builder.AppendLine("            }");
-        builder.AppendLine("            finally");
-        builder.AppendLine("            {");
-
-        EmitReturnsFor(builder, model, indent: "                ");
-
-        builder.AppendLine("            }");
-        builder.AppendLine("        }");
-        builder.AppendLine();
-        builder.AppendLine("        return results;");
-        builder.AppendLine("    }");
-    }
-
     private static void EmitReadArrayAsync(StringBuilder builder, TargetClassModel model)
     {
         builder.AppendLine("    /// <summary>");
@@ -1685,31 +1475,6 @@ internal static class CodeEmitter
 
     private static void EmitReadMemoryOverloads(StringBuilder builder, TargetClassModel model)
     {
-        builder.AppendLine("    /// <summary>");
-        builder.AppendLine(
-            $"    /// Asynchronously deserializes all <c>{model.ClassName}</c> objects directly from an in-memory byte buffer with zero buffer allocation."
-        );
-        builder.AppendLine("    /// </summary>");
-        builder.AppendLine(
-            $"    internal static async global::System.Threading.Tasks.Task<global::System.Collections.Generic.List<{model.ClassName}>> ReadListCoreAsync("
-        );
-        builder.AppendLine($"        global::System.ReadOnlyMemory<byte> parquetBytes,");
-        builder.AppendLine(
-            $"        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,"
-        );
-        builder.AppendLine(
-            $"        global::System.Threading.CancellationToken cancellationToken = default)"
-        );
-        builder.AppendLine("    {");
-        builder.AppendLine(
-            $"        var results = await ReadBufferSequentialArrayAsync(parquetBytes, options, cancellationToken);"
-        );
-        builder.AppendLine(
-            $"        return new global::System.Collections.Generic.List<{model.ClassName}>(results);"
-        );
-        builder.AppendLine("    }");
-        builder.AppendLine();
-
         builder.AppendLine("    /// <summary>");
         builder.AppendLine(
             $"    /// Asynchronously deserializes all <c>{model.ClassName}</c> objects directly from an in-memory byte buffer into an array with zero buffer allocation."
@@ -2238,32 +2003,6 @@ internal static class CodeEmitter
         builder.AppendLine("        }");
         builder.AppendLine();
         builder.AppendLine("        return resultArray;");
-        builder.AppendLine("    }");
-        builder.AppendLine();
-
-        builder.AppendLine("    /// <summary>");
-        builder.AppendLine(
-            $"    /// Asynchronously deserializes all <c>{model.ClassName}</c> objects from an in-memory byte buffer,"
-        );
-        builder.AppendLine("    /// decoding row groups across multiple workers.");
-        builder.AppendLine("    /// </summary>");
-        builder.AppendLine(
-            $"    internal static async global::System.Threading.Tasks.Task<global::System.Collections.Generic.List<{model.ClassName}>> ReadParallelListCoreAsync("
-        );
-        builder.AppendLine($"        global::System.ReadOnlyMemory<byte> parquetBytes,");
-        builder.AppendLine(
-            $"        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,"
-        );
-        builder.AppendLine(
-            $"        global::System.Threading.CancellationToken cancellationToken = default)"
-        );
-        builder.AppendLine("    {");
-        builder.AppendLine(
-            $"        var resultArray = await ReadParallelArrayCoreAsync(parquetBytes, options, cancellationToken);"
-        );
-        builder.AppendLine(
-            $"        return new global::System.Collections.Generic.List<{model.ClassName}>(resultArray);"
-        );
         builder.AppendLine("    }");
         builder.AppendLine();
 

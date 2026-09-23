@@ -132,7 +132,7 @@ using Analytics.Models;
 public async Task ReadLogsAsync(Stream stream)
 {
     // The generated read builder reads column arrays directly into strong typed records
-    List<TransactionLog> logs = await TransactionLogParquet.From(stream).ToListAsync();
+    TransactionLog[] logs = await TransactionLogParquet.From(stream).ToArrayAsync();
 }
 ```
 

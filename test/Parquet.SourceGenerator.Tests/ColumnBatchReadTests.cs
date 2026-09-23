@@ -142,8 +142,8 @@ public sealed class ColumnBatchReadTests
         // The only allocation in the batch path is the batch struct itself (a value type) — no
         // `new TestEntity` anywhere below the batch reader.
         // Matched as a whole identifier rather than a prefix: the slice runs to the end of the
-        // emitted file, which since #217 also contains the read builders, and
-        // `new TestEntityParquetStreamSource(...)` starts with the domain type's name without
+        // emitted file, which since #217 also contains the read builder, and
+        // `new TestEntityParquetReader(...)` starts with the domain type's name without
         // constructing one.
         batchApi.ShouldNotMatch(@"new TestEntity(?![A-Za-z0-9_])");
     }
@@ -305,7 +305,7 @@ public sealed class ColumnBatchReadTests
         }
 
         stream.Position = 0;
-        List<ColumnBatchOrder> poco = await ColumnBatchOrderParquet.From(stream).ToListAsync();
+        ColumnBatchOrder[] poco = await ColumnBatchOrderParquet.From(stream).ToArrayAsync();
         double pocoTotal = poco.Sum(r => r.Amount * (1 - (r.Discount ?? 0)));
 
         batchTotal.ShouldBe(pocoTotal, 0.000001);
@@ -383,7 +383,7 @@ public sealed class ColumnBatchReadTests
     private static async Task<double> SumViaPocoAsync(byte[] bytes)
     {
         using var stream = new MemoryStream(bytes, writable: false);
-        List<ColumnBatchMetric> rows = await ColumnBatchMetricParquet.From(stream).ToListAsync();
+        ColumnBatchMetric[] rows = await ColumnBatchMetricParquet.From(stream).ToArrayAsync();
         double total = 0;
         foreach (ColumnBatchMetric row in rows)
         {

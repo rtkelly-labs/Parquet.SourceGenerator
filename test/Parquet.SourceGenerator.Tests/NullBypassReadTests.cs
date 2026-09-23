@@ -52,15 +52,15 @@ public sealed class NullBypassReadTests
             }
         }
 
-        List<NullBypassRecord> sequential = await ReadSequentialAsync(parquet);
+        NullBypassRecord[] sequential = await ReadSequentialAsync(parquet);
         NullBypassRecord[] array = await NullBypassRecordParquet
             .From(new MemoryStream(parquet))
             .ToArrayAsync();
-        List<NullBypassRecord> parallel = await NullBypassRecordParquet
+        NullBypassRecord[] parallel = await NullBypassRecordParquet
             .From(parquet)
             .WithOptions(new ParquetSerializerOptions { MaxDegreeOfParallelism = 2 })
             .Parallel()
-            .ToListAsync();
+            .ToArrayAsync();
         NullBypassRecord[] parallelArray = await NullBypassRecordParquet
             .From(parquet)
             .WithOptions(new ParquetSerializerOptions { MaxDegreeOfParallelism = 2 })
@@ -119,9 +119,9 @@ public sealed class NullBypassReadTests
         };
 
         byte[] parquet = await WriteAsync(expected);
-        List<NullBypassRecord> actual = await ReadSequentialAsync(parquet);
+        NullBypassRecord[] actual = await ReadSequentialAsync(parquet);
 
-        actual.Count.ShouldBe(expected.Count);
+        actual.Length.ShouldBe(expected.Count);
         for (int i = 0; i < expected.Count; i++)
         {
             actual[i].OptionalInt.ShouldBe(expected[i].OptionalInt);
@@ -146,9 +146,9 @@ public sealed class NullBypassReadTests
         return stream.ToArray();
     }
 
-    private static async Task<List<NullBypassRecord>> ReadSequentialAsync(byte[] parquet)
+    private static async Task<NullBypassRecord[]> ReadSequentialAsync(byte[] parquet)
     {
-        return await NullBypassRecordParquet.From(new MemoryStream(parquet)).ToListAsync();
+        return await NullBypassRecordParquet.From(new MemoryStream(parquet)).ToArrayAsync();
     }
 
     private static void AssertAllNull(IEnumerable<NullBypassRecord> items)

@@ -57,8 +57,8 @@ cell.
 
 | Consumer | How it is exercised |
 |:---|:---|
-| `From(stream).ToListAsync()` (sequential) | In-solution matrix theory |
-| `From(buffer).Parallel().ToListAsync()` | In-solution matrix theory |
+| `From(stream).ToArrayAsync()` (sequential) | In-solution matrix theory |
+| `From(buffer).Parallel().ToArrayAsync()` | In-solution matrix theory |
 | `From(stream).AsAsyncEnumerable()` | In-solution matrix theory |
 | Classic backend reader on Parquet.Net 4.25 | CI cross-version interop step |
 | Modern backend reader on Parquet.Net 6.1 | CI cross-version interop step |

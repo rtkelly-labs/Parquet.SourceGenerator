@@ -92,17 +92,17 @@ public class StreamingChunkLifecycleTests
 
         // 2. Sequential Read
         stream.Position = 0;
-        List<StreamingChunkModel> sequentialResults = await StreamingChunkModelParquet
+        StreamingChunkModel[] sequentialResults = await StreamingChunkModelParquet
             .From(stream)
-            .ToListAsync();
+            .ToArrayAsync();
         AssertEqualLists(items, sequentialResults);
 
         // 3. Parallel Read across row groups
         stream.Position = 0;
-        List<StreamingChunkModel> parallelResults = await StreamingChunkModelParquet
+        StreamingChunkModel[] parallelResults = await StreamingChunkModelParquet
             .From(stream.ToArray())
             .Parallel()
-            .ToListAsync();
+            .ToArrayAsync();
         AssertEqualLists(items, parallelResults);
 
         // 4. Streaming Read row-group by row-group
@@ -153,9 +153,9 @@ public class StreamingChunkLifecycleTests
         }
 
         stream.Position = 0;
-        List<StreamingChunkModel> readBack = await StreamingChunkModelParquet
+        StreamingChunkModel[] readBack = await StreamingChunkModelParquet
             .From(stream)
-            .ToListAsync();
+            .ToArrayAsync();
         AssertEqualLists(items, readBack);
     }
 
@@ -198,10 +198,10 @@ public class StreamingChunkLifecycleTests
         }
 
         stream.Position = 0;
-        List<StreamingChunkModel> readBack = await StreamingChunkModelParquet
+        StreamingChunkModel[] readBack = await StreamingChunkModelParquet
             .From(stream.ToArray())
             .Parallel()
-            .ToListAsync();
+            .ToArrayAsync();
         AssertEqualLists(items, readBack);
     }
 
@@ -221,9 +221,9 @@ public class StreamingChunkLifecycleTests
         }
 
         stream.Position = 0;
-        List<StreamingChunkModel> readBack = await StreamingChunkModelParquet
+        StreamingChunkModel[] readBack = await StreamingChunkModelParquet
             .From(stream)
-            .ToListAsync();
+            .ToArrayAsync();
         readBack.ShouldBeEmpty();
     }
 
@@ -251,10 +251,10 @@ public class StreamingChunkLifecycleTests
 
         // Verify roundtrip read
         stream.Position = 0;
-        List<StreamingChunkModel> results = await StreamingChunkModelParquet
+        StreamingChunkModel[] results = await StreamingChunkModelParquet
             .From(stream.ToArray())
             .Parallel()
-            .ToListAsync();
+            .ToArrayAsync();
 
         AssertEqualLists(items, results);
 
@@ -274,7 +274,7 @@ public class StreamingChunkLifecycleTests
 
     private static void AssertEqualLists(
         List<StreamingChunkModel> expected,
-        List<StreamingChunkModel> actual
+        IReadOnlyList<StreamingChunkModel> actual
     )
     {
         actual.Count.ShouldBe(expected.Count);

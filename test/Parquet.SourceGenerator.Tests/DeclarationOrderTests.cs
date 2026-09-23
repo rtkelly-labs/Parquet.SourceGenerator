@@ -30,9 +30,9 @@ public sealed class DeclarationOrderTests
         await written.WriteParquetAsync(stream);
         stream.Position = 0;
 
-        List<DeclarationOrderModel> read = await DeclarationOrderModelParquet
+        DeclarationOrderModel[] read = await DeclarationOrderModelParquet
             .From(stream)
-            .ToListAsync();
+            .ToArrayAsync();
 
         read.ShouldHaveSingleItem();
         read[0].Zzz.ShouldBe("last_letter");

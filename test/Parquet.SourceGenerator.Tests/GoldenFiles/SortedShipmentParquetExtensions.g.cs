@@ -1181,250 +1181,6 @@ public static partial class SortedShipmentParquetExtensions
     }
 
     /// <summary>
-    /// Asynchronously deserializes all <c>SortedShipment</c> objects using Parquet.Net low-level primitives.
-    /// Fast O(1) index-check schema resolution and ArrayPool buffer recycling.
-    /// </summary>
-    internal static async global::System.Threading.Tasks.Task<global::System.Collections.Generic.List<SortedShipment>> ReadListCoreAsync(
-        global::System.IO.Stream stream,
-        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,
-        global::System.Threading.CancellationToken cancellationToken = default,
-        global::System.Func<global::SampleDomain.Models.SortedShipmentRowGroupMetadata, bool>? predicate = null)
-    {
-        if (stream == null) throw new global::System.ArgumentNullException(nameof(stream));
-
-        options ??= global::Parquet.SourceGenerator.ParquetSerializerOptions.Default;
-
-        using var guardedStream = CreateGuardedReadStream(stream, options);
-        await using var reader = await global::Parquet.ParquetReader.CreateAsync(
-            guardedStream,
-            BuildFormatOptions(options),
-            cancellationToken: cancellationToken);
-        guardedStream.Activate();
-        await ValidateReaderAsync(reader, stream, options, cancellationToken).ConfigureAwait(false);
-        var fileFields = reader.Schema.DataFields;
-
-        global::System.Collections.Generic.Dictionary<string, global::Parquet.Schema.DataField>? fieldsByName = null;
-        var field_0 = ResolveSchemaField(fileFields, 0, _field_0, ref fieldsByName, out _);
-        var field_1 = ResolveSchemaField(fileFields, 1, _field_1, ref fieldsByName, out _);
-        var field_2 = ResolveSchemaField(fileFields, 2, _field_2, ref fieldsByName, out _);
-        var field_3 = ResolveSchemaField(fileFields, 3, _field_3, ref fieldsByName, out bool missing_3);
-
-        int rowGroupCount = reader.RowGroupCount;
-        if (rowGroupCount < 0 || rowGroupCount > options.MaxRowGroupCount)
-        {
-            throw new global::System.IO.InvalidDataException($"Row group count {rowGroupCount} is invalid or exceeds maximum allowed {options.MaxRowGroupCount}.");
-        }
-        int totalRows;
-        bool[]? selectedGroups = null;
-        if (predicate == null)
-        {
-            long sumRows = 0;
-            for (int r = 0; r < rowGroupCount; r++)
-            {
-                long rc = reader.RowGroups[r].RowCount;
-                if (rc < 0 || rc > options.MaxAllocationValues)
-                {
-                    throw new global::System.IO.InvalidDataException($"Row group {r} row count {rc} is invalid or exceeds maximum allowed {options.MaxAllocationValues}.");
-                }
-                sumRows = checked(sumRows + rc);
-            }
-            if (sumRows > options.MaxAllocationValues)
-            {
-                throw new global::System.IO.InvalidDataException($"Total row count {sumRows} exceeds maximum allowed {options.MaxAllocationValues}.");
-            }
-            totalRows = checked((int)sumRows);
-        }
-        else
-        {
-            // Zone-map pre-pass: footer statistics only. Surviving groups are the only ones
-            // whose pages are ever read, and the result is sized to exactly their rows.
-            selectedGroups = new bool[rowGroupCount];
-            long sumRows = 0;
-            for (int r = 0; r < rowGroupCount; r++)
-            {
-                using var probeReader = reader.OpenRowGroupReader(r);
-                if (!AcceptRowGroup(predicate, probeReader, r, field_0, field_2, field_3)) continue;
-                long rc = probeReader.RowCount;
-                if (rc < 0 || rc > options.MaxAllocationValues)
-                {
-                    throw new global::System.IO.InvalidDataException($"Row group {r} row count {rc} is invalid or exceeds maximum allowed {options.MaxAllocationValues}.");
-                }
-                selectedGroups[r] = true;
-                sumRows = checked(sumRows + rc);
-            }
-            if (sumRows > options.MaxAllocationValues)
-            {
-                throw new global::System.IO.InvalidDataException($"Total matching row count {sumRows} exceeds maximum allowed {options.MaxAllocationValues}.");
-            }
-            totalRows = checked((int)sumRows);
-        }
-#if NET8_0_OR_GREATER
-        var results = new global::System.Collections.Generic.List<SortedShipment>(totalRows);
-        global::System.Runtime.InteropServices.CollectionsMarshal.SetCount(results, totalRows);
-#else
-        var results = new global::System.Collections.Generic.List<SortedShipment>(totalRows);
-#endif
-        int currentOffset = 0;
-
-        using var stringDeduplicator = new StringDeduplicator(512);
-        bool deduplicateStrings = options.DeduplicateStrings;
-
-        for (int r = 0; r < reader.RowGroupCount; r++)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (selectedGroups != null && !selectedGroups[r]) continue;
-            using var groupReader = reader.OpenRowGroupReader(r);
-            int rowCount = checked((int)groupReader.RowCount);
-            if (rowCount < 0 || rowCount > options.MaxAllocationValues)
-            {
-                throw new global::System.IO.InvalidDataException($"Row group {r} row count {rowCount} is invalid or exceeds maximum allowed {options.MaxAllocationValues}.");
-            }
-
-            var buffer_0 = global::System.Buffers.ArrayPool<long>.Shared.Rent(rowCount);
-            var buffer_1 = global::System.Buffers.ArrayPool<global::System.DateTime>.Shared.Rent(rowCount);
-            var buffer_2 = global::System.Buffers.ArrayPool<int>.Shared.Rent(rowCount);
-            var buffer_3 = global::System.Buffers.ArrayPool<string>.Shared.Rent(rowCount);
-
-            try
-            {
-                var metadata_0 = groupReader.GetMetadata(field_0).MetaData;
-                bool dictionaryEncoded_0 = false;
-                foreach (var encoding_0 in metadata_0.Encodings)
-                {
-                    if (encoding_0 == global::Parquet.Meta.Encoding.PLAIN_DICTIONARY || encoding_0 == global::Parquet.Meta.Encoding.RLE_DICTIONARY)
-                    {
-                        dictionaryEncoded_0 = true;
-                        break;
-                    }
-                }
-                int? dictionaryEntries_0 = dictionaryEncoded_0 ? ReadDictionaryEntryCount(groupReader, stream, field_0) : null;
-                if (dictionaryEntries_0.HasValue && dictionaryEntries_0.Value > options.MaxDictionaryEntries)
-                {
-                    throw new global::System.IO.InvalidDataException($"Dictionary column 'Sequence' entry count {dictionaryEntries_0.Value} exceeds maximum allowed {options.MaxDictionaryEntries}.");
-                }
-                await groupReader.ReadAsync<long>(
-                    field_0,
-                    new global::System.Memory<long>(buffer_0, 0, rowCount),
-                    cancellationToken: cancellationToken);
-                var metadata_1 = groupReader.GetMetadata(field_1).MetaData;
-                bool dictionaryEncoded_1 = false;
-                foreach (var encoding_1 in metadata_1.Encodings)
-                {
-                    if (encoding_1 == global::Parquet.Meta.Encoding.PLAIN_DICTIONARY || encoding_1 == global::Parquet.Meta.Encoding.RLE_DICTIONARY)
-                    {
-                        dictionaryEncoded_1 = true;
-                        break;
-                    }
-                }
-                int? dictionaryEntries_1 = dictionaryEncoded_1 ? ReadDictionaryEntryCount(groupReader, stream, field_1) : null;
-                if (dictionaryEntries_1.HasValue && dictionaryEntries_1.Value > options.MaxDictionaryEntries)
-                {
-                    throw new global::System.IO.InvalidDataException($"Dictionary column 'ShippedAt' entry count {dictionaryEntries_1.Value} exceeds maximum allowed {options.MaxDictionaryEntries}.");
-                }
-                await groupReader.ReadAsync<global::System.DateTime>(
-                    field_1,
-                    new global::System.Memory<global::System.DateTime>(buffer_1, 0, rowCount),
-                    cancellationToken: cancellationToken);
-                var metadata_2 = groupReader.GetMetadata(field_2).MetaData;
-                bool dictionaryEncoded_2 = false;
-                foreach (var encoding_2 in metadata_2.Encodings)
-                {
-                    if (encoding_2 == global::Parquet.Meta.Encoding.PLAIN_DICTIONARY || encoding_2 == global::Parquet.Meta.Encoding.RLE_DICTIONARY)
-                    {
-                        dictionaryEncoded_2 = true;
-                        break;
-                    }
-                }
-                int? dictionaryEntries_2 = dictionaryEncoded_2 ? ReadDictionaryEntryCount(groupReader, stream, field_2) : null;
-                if (dictionaryEntries_2.HasValue && dictionaryEntries_2.Value > options.MaxDictionaryEntries)
-                {
-                    throw new global::System.IO.InvalidDataException($"Dictionary column 'WeightGrams' entry count {dictionaryEntries_2.Value} exceeds maximum allowed {options.MaxDictionaryEntries}.");
-                }
-                await groupReader.ReadAsync<int>(
-                    field_2,
-                    new global::System.Memory<int>(buffer_2, 0, rowCount),
-                    cancellationToken: cancellationToken);
-                if (!missing_3)
-                {
-                    var metadata_3 = groupReader.GetMetadata(field_3).MetaData;
-                    bool dictionaryEncoded_3 = false;
-                    foreach (var encoding_3 in metadata_3.Encodings)
-                    {
-                        if (encoding_3 == global::Parquet.Meta.Encoding.PLAIN_DICTIONARY || encoding_3 == global::Parquet.Meta.Encoding.RLE_DICTIONARY)
-                        {
-                            dictionaryEncoded_3 = true;
-                            break;
-                        }
-                    }
-                    int? dictionaryEntries_3 = dictionaryEncoded_3 ? ReadDictionaryEntryCount(groupReader, stream, field_3) : null;
-                    if (dictionaryEntries_3.HasValue && dictionaryEntries_3.Value > options.MaxDictionaryEntries)
-                    {
-                        throw new global::System.IO.InvalidDataException($"Dictionary column 'Carrier' entry count {dictionaryEntries_3.Value} exceeds maximum allowed {options.MaxDictionaryEntries}.");
-                    }
-                }
-                // The column is absent from the file (optional-column schema evolution) or the chunk is
-                // entirely null: either way the answer is nulls, with no page read, decompression or decoding.
-                var chunkStats_3 = missing_3 ? null : groupReader.GetStatistics(field_3);
-                if (missing_3 || chunkStats_3?.NullCount == rowCount)
-                {
-                    global::System.Array.Clear(buffer_3, 0, rowCount);
-                }
-                else
-                {
-                    await ReadBoundedStringColumnAsync(
-                        groupReader,
-                        field_3,
-                        buffer_3,
-                        rowCount,
-                        deduplicateStrings,
-                        stringDeduplicator,
-                        options.MaxStringLengthBytes,
-                        cancellationToken);
-                }
-
-#if NET8_0_OR_GREATER
-                void PopulateSpan()
-                {
-                    var span = global::System.Runtime.InteropServices.CollectionsMarshal.AsSpan(results);
-                    for (int i = 0; i < rowCount; i++)
-                    {
-                        span[currentOffset + i] = new SortedShipment
-                        {
-                            Sequence = buffer_0[i],
-                            ShippedAt = buffer_1[i],
-                            WeightGrams = buffer_2[i],
-                            Carrier = (deduplicateStrings ? stringDeduplicator.Deduplicate(buffer_3[i]) : buffer_3[i]),
-                        };
-                    }
-                }
-                PopulateSpan();
-#else
-                for (int i = 0; i < rowCount; i++)
-                {
-                    results.Add(new SortedShipment
-                    {
-                        Sequence = buffer_0[i],
-                        ShippedAt = buffer_1[i],
-                        WeightGrams = buffer_2[i],
-                        Carrier = (deduplicateStrings ? stringDeduplicator.Deduplicate(buffer_3[i]) : buffer_3[i]),
-                    });
-                }
-#endif
-                currentOffset += rowCount;
-            }
-            finally
-            {
-                global::System.Buffers.ArrayPool<long>.Shared.Return(buffer_0, clearArray: false);
-                global::System.Buffers.ArrayPool<global::System.DateTime>.Shared.Return(buffer_1, clearArray: false);
-                global::System.Buffers.ArrayPool<int>.Shared.Return(buffer_2, clearArray: false);
-                global::System.Buffers.ArrayPool<string>.Shared.Return(buffer_3, clearArray: true);
-            }
-        }
-
-        return results;
-    }
-
-    /// <summary>
     /// Asynchronously deserializes all <c>SortedShipment</c> objects directly into an array using Parquet.Net low-level primitives.
     /// Eliminates List wrapper allocations for zero-copy array materialization.
     /// </summary>
@@ -1811,18 +1567,6 @@ public static partial class SortedShipmentParquetExtensions
     }
 
     /// <summary>
-    /// Asynchronously deserializes all <c>SortedShipment</c> objects directly from an in-memory byte buffer with zero buffer allocation.
-    /// </summary>
-    internal static async global::System.Threading.Tasks.Task<global::System.Collections.Generic.List<SortedShipment>> ReadListCoreAsync(
-        global::System.ReadOnlyMemory<byte> parquetBytes,
-        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,
-        global::System.Threading.CancellationToken cancellationToken = default)
-    {
-        var results = await ReadBufferSequentialArrayAsync(parquetBytes, options, cancellationToken);
-        return new global::System.Collections.Generic.List<SortedShipment>(results);
-    }
-
-    /// <summary>
     /// Asynchronously deserializes all <c>SortedShipment</c> objects directly from an in-memory byte buffer into an array with zero buffer allocation.
     /// </summary>
     internal static async global::System.Threading.Tasks.Task<SortedShipment[]> ReadArrayCoreAsync(
@@ -1950,19 +1694,6 @@ public static partial class SortedShipmentParquetExtensions
         }
 
         return resultArray;
-    }
-
-    /// <summary>
-    /// Asynchronously deserializes all <c>SortedShipment</c> objects from an in-memory byte buffer,
-    /// decoding row groups across multiple workers.
-    /// </summary>
-    internal static async global::System.Threading.Tasks.Task<global::System.Collections.Generic.List<SortedShipment>> ReadParallelListCoreAsync(
-        global::System.ReadOnlyMemory<byte> parquetBytes,
-        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,
-        global::System.Threading.CancellationToken cancellationToken = default)
-    {
-        var resultArray = await ReadParallelArrayCoreAsync(parquetBytes, options, cancellationToken);
-        return new global::System.Collections.Generic.List<SortedShipment>(resultArray);
     }
 
     /// <summary>
@@ -3141,82 +2872,61 @@ public struct SortedShipmentColumnarBatch
 }
 
 /// <summary>
-/// Entry point for reading <c>SortedShipment</c> values from Parquet (issue #217).
+/// Entry point for reading <c>SortedShipment</c> values from Parquet (issues #217, #478).
 /// </summary>
 public static partial class SortedShipmentParquet
 {
-    /// <summary>Reads from a <see cref="System.IO.Stream"/>.</summary>
-    public static SortedShipmentParquetStreamSource From(global::System.IO.Stream stream)
-        => new SortedShipmentParquetStreamSource(stream ?? throw new global::System.ArgumentNullException(nameof(stream)), null);
+    /// <summary>Reads from a <see cref="System.IO.Stream"/>. Row groups are decoded sequentially.</summary>
+    public static SortedShipmentParquetReader From(global::System.IO.Stream stream)
+        => new SortedShipmentParquetReader(stream ?? throw new global::System.ArgumentNullException(nameof(stream)), default, null, null, false);
 
-    /// <summary>Reads from an in-memory buffer.</summary>
-    public static SortedShipmentParquetMemorySource From(global::System.ReadOnlyMemory<byte> parquetBytes)
-        => new SortedShipmentParquetMemorySource(parquetBytes, null);
+    /// <summary>Reads from an in-memory buffer. The only source that supports <c>Parallel()</c>.</summary>
+    public static SortedShipmentParquetReader From(global::System.ReadOnlyMemory<byte> parquetBytes)
+        => new SortedShipmentParquetReader(null, parquetBytes, null, null, false);
 }
 
 /// <summary>
-/// A pending read of <c>SortedShipment</c> from a stream.
+/// A pending read of <c>SortedShipment</c> (issue #478).
 /// </summary>
 /// <remarks>
-/// There is deliberately no <c>Parallel</c> member. A single <c>ParquetReader</c> seeks
-/// within its stream, so concurrent row-group reads would corrupt one another, and an
-/// arbitrary stream cannot be handed to more than one reader. Buffer the file and use
-/// <c>From(ReadOnlyMemory&lt;byte&gt;)</c> for genuine decode parallelism.
+/// One reader expresses every read: the source is chosen by <c>From(...)</c>, and
+/// <c>WithOptions</c>, <c>Where</c> and <c>Parallel</c> return copies with updated state.
+/// A combination no backend can execute throws <see cref="System.NotSupportedException"/>
+/// from the call that completes it, rather than being silently degraded.
 /// </remarks>
-public readonly struct SortedShipmentParquetStreamSource
+public readonly struct SortedShipmentParquetReader
 {
-    private readonly global::System.IO.Stream _stream;
-    private readonly global::Parquet.SourceGenerator.ParquetSerializerOptions? _options;
-
-    internal SortedShipmentParquetStreamSource(global::System.IO.Stream stream, global::Parquet.SourceGenerator.ParquetSerializerOptions? options)
-    {
-        _stream = stream;
-        _options = options;
-    }
-
-    /// <summary>Replaces the serializer options.</summary>
-    public SortedShipmentParquetStreamSource WithOptions(global::Parquet.SourceGenerator.ParquetSerializerOptions options)
-        => new SortedShipmentParquetStreamSource(_stream, options ?? throw new global::System.ArgumentNullException(nameof(options)));
-
-    /// <summary>Skips row groups whose footer statistics cannot satisfy the predicate.</summary>
-    public SortedShipmentParquetFilteredSource Where(global::System.Func<global::SampleDomain.Models.SortedShipmentRowGroupMetadata, bool> predicate)
-        => new SortedShipmentParquetFilteredSource(_stream, default, _options, predicate ?? throw new global::System.ArgumentNullException(nameof(predicate)));
-
-    /// <summary>Executes the read.</summary>
-    public global::System.Threading.Tasks.Task<global::System.Collections.Generic.List<SortedShipment>> ToListAsync(global::System.Threading.CancellationToken cancellationToken = default)
-        => SortedShipmentParquetExtensions.ReadListCoreAsync(_stream, _options, cancellationToken);
-
-    /// <summary>Executes the read.</summary>
-    public global::System.Threading.Tasks.Task<SortedShipment[]> ToArrayAsync(global::System.Threading.CancellationToken cancellationToken = default)
-        => SortedShipmentParquetExtensions.ReadArrayCoreAsync(_stream, _options, cancellationToken);
-
-    /// <summary>Executes the read.</summary>
-    public global::System.Collections.Generic.IAsyncEnumerable<SortedShipment> AsAsyncEnumerable(global::System.Threading.CancellationToken cancellationToken = default)
-        => SortedShipmentParquetExtensions.ReadEnumerableCoreAsync(_stream, _options, cancellationToken);
-
-    /// <summary>Executes the read.</summary>
-    public global::System.Collections.Generic.IAsyncEnumerable<SortedShipmentParquetExtensions.ColumnBatch> Batches(global::System.Threading.CancellationToken cancellationToken = default)
-        => SortedShipmentParquetExtensions.ReadBatchesCoreAsync(_stream, _options, cancellationToken);
-
-}
-
-/// <summary>
-/// A pending read of <c>SortedShipment</c> from an in-memory buffer.
-/// </summary>
-public readonly struct SortedShipmentParquetMemorySource
-{
+    // Source kind is discriminated by _stream: non-null means a stream source, null a buffer.
+    private readonly global::System.IO.Stream? _stream;
     private readonly global::System.ReadOnlyMemory<byte> _bytes;
     private readonly global::Parquet.SourceGenerator.ParquetSerializerOptions? _options;
+    private readonly global::System.Func<global::SampleDomain.Models.SortedShipmentRowGroupMetadata, bool>? _predicate;
+    private readonly bool _parallel;
 
-    internal SortedShipmentParquetMemorySource(global::System.ReadOnlyMemory<byte> bytes, global::Parquet.SourceGenerator.ParquetSerializerOptions? options)
+    internal SortedShipmentParquetReader(global::System.IO.Stream? stream, global::System.ReadOnlyMemory<byte> bytes, global::Parquet.SourceGenerator.ParquetSerializerOptions? options, global::System.Func<global::SampleDomain.Models.SortedShipmentRowGroupMetadata, bool>? predicate, bool parallel)
     {
+        _stream = stream;
         _bytes = bytes;
         _options = options;
+        _predicate = predicate;
+        _parallel = parallel;
     }
 
     /// <summary>Replaces the serializer options.</summary>
-    public SortedShipmentParquetMemorySource WithOptions(global::Parquet.SourceGenerator.ParquetSerializerOptions options)
-        => new SortedShipmentParquetMemorySource(_bytes, options ?? throw new global::System.ArgumentNullException(nameof(options)));
+    public SortedShipmentParquetReader WithOptions(global::Parquet.SourceGenerator.ParquetSerializerOptions options)
+        => new SortedShipmentParquetReader(_stream, _bytes, options ?? throw new global::System.ArgumentNullException(nameof(options)), _predicate, _parallel);
+
+    /// <summary>Skips row groups whose footer statistics cannot satisfy the predicate.</summary>
+    /// <exception cref="System.NotSupportedException">The reader is already <c>Parallel()</c> (no parallel reader accepts a predicate yet, #222), or already has a predicate (combine the conditions into one).</exception>
+    public SortedShipmentParquetReader Where(global::System.Func<global::SampleDomain.Models.SortedShipmentRowGroupMetadata, bool> predicate)
+    {
+        if (predicate is null) throw new global::System.ArgumentNullException(nameof(predicate));
+        if (_parallel)
+            throw new global::System.NotSupportedException("Where() cannot be combined with Parallel(): no parallel reader accepts a row-group predicate yet (#222). Drop Parallel() to filter sequentially.");
+        if (_predicate is not null)
+            throw new global::System.NotSupportedException("Where() has already been applied to this reader. Combine the conditions into a single predicate.");
+        return new SortedShipmentParquetReader(_stream, _bytes, _options, predicate, _parallel);
+    }
 
     /// <summary>Decodes row groups concurrently, each worker over its own view of the buffer.</summary>
     /// <remarks>
@@ -3225,113 +2935,57 @@ public readonly struct SortedShipmentParquetMemorySource
     /// #218 existed to remove. Set <c>MaxDegreeOfParallelism</c> on the options; #241 decides
     /// whether it moves here now this builder exists.
     /// </remarks>
-    public SortedShipmentParquetParallelSource Parallel()
-        => new SortedShipmentParquetParallelSource(_bytes, _options);
+    /// <exception cref="System.NotSupportedException">The source is a stream (use <c>SortedShipmentParquet.From(ReadOnlyMemory&lt;byte&gt;)</c>), or the reader has a <c>Where()</c> predicate.</exception>
+    public SortedShipmentParquetReader Parallel()
+    {
+        if (_stream is not null)
+            throw new global::System.NotSupportedException("Parallel() is not supported on a Stream source: a single ParquetReader seeks within its stream, so row groups cannot be decoded concurrently. Buffer the file and read it with SortedShipmentParquet.From(ReadOnlyMemory<byte>), the parallel source.");
+        if (_predicate is not null)
+            throw new global::System.NotSupportedException("Parallel() cannot be combined with Where(): no parallel reader accepts a row-group predicate yet (#222). Drop Where() to read in parallel, or drop Parallel() to filter.");
+        return new SortedShipmentParquetReader(_stream, _bytes, _options, _predicate, true);
+    }
 
-    /// <summary>Skips row groups whose footer statistics cannot satisfy the predicate.</summary>
-    public SortedShipmentParquetFilteredSource Where(global::System.Func<global::SampleDomain.Models.SortedShipmentRowGroupMetadata, bool> predicate)
-        => new SortedShipmentParquetFilteredSource(null, _bytes, _options, predicate ?? throw new global::System.ArgumentNullException(nameof(predicate)));
-
-    /// <summary>Executes the read.</summary>
-    public global::System.Threading.Tasks.Task<global::System.Collections.Generic.List<SortedShipment>> ToListAsync(global::System.Threading.CancellationToken cancellationToken = default)
-        => SortedShipmentParquetExtensions.ReadListCoreAsync(_bytes, _options, cancellationToken);
-
-    /// <summary>Executes the read.</summary>
+    /// <summary>Materializes every surviving row into an array.</summary>
     public global::System.Threading.Tasks.Task<SortedShipment[]> ToArrayAsync(global::System.Threading.CancellationToken cancellationToken = default)
-        => SortedShipmentParquetExtensions.ReadArrayCoreAsync(_bytes, _options, cancellationToken);
-
-    /// <summary>Executes the read.</summary>
-    public global::System.Collections.Generic.IAsyncEnumerable<SortedShipment> AsAsyncEnumerable(global::System.Threading.CancellationToken cancellationToken = default)
-        => SortedShipmentParquetExtensions.ReadEnumerableCoreAsync(_bytes, _options, cancellationToken);
-
-    /// <summary>Executes the read.</summary>
-    public global::System.Collections.Generic.IAsyncEnumerable<SortedShipmentParquetExtensions.ColumnBatch> Batches(global::System.Threading.CancellationToken cancellationToken = default)
-        => SortedShipmentParquetExtensions.ReadBatchesCoreAsync(_bytes, _options, cancellationToken);
-
-}
-
-/// <summary>
-/// A pending read of <c>SortedShipment</c> with a row-group predicate applied.
-/// </summary>
-/// <remarks>
-/// There is deliberately no <c>Parallel</c> member: no parallel reader accepts a
-/// predicate yet. Parallel predicate selection is a post-freeze follow-up tracked by #222.
-/// </remarks>
-public readonly struct SortedShipmentParquetFilteredSource
-{
-    private readonly global::System.IO.Stream? _stream;
-    private readonly global::System.ReadOnlyMemory<byte> _bytes;
-    private readonly global::Parquet.SourceGenerator.ParquetSerializerOptions? _options;
-    private readonly global::System.Func<global::SampleDomain.Models.SortedShipmentRowGroupMetadata, bool> _predicate;
-
-    internal SortedShipmentParquetFilteredSource(global::System.IO.Stream? stream, global::System.ReadOnlyMemory<byte> bytes, global::Parquet.SourceGenerator.ParquetSerializerOptions? options, global::System.Func<global::SampleDomain.Models.SortedShipmentRowGroupMetadata, bool> predicate)
     {
-        _stream = stream;
-        _bytes = bytes;
-        _options = options;
-        _predicate = predicate;
-    }
-
-    /// <summary>Replaces the serializer options.</summary>
-    public SortedShipmentParquetFilteredSource WithOptions(global::Parquet.SourceGenerator.ParquetSerializerOptions options)
-        => new SortedShipmentParquetFilteredSource(_stream, _bytes, options ?? throw new global::System.ArgumentNullException(nameof(options)), _predicate);
-
-    /// <summary>Materializes the surviving rows into a list.</summary>
-    public async global::System.Threading.Tasks.Task<global::System.Collections.Generic.List<SortedShipment>> ToListAsync(global::System.Threading.CancellationToken cancellationToken = default)
-    {
+        if (_parallel)
+            return SortedShipmentParquetExtensions.ReadParallelArrayCoreAsync(_bytes, _options, cancellationToken);
         if (_stream is not null)
-            return await SortedShipmentParquetExtensions.ReadListCoreAsync(_stream, _options, cancellationToken, _predicate).ConfigureAwait(false);
-
-        var results = new global::System.Collections.Generic.List<SortedShipment>();
-        await foreach (var item in SortedShipmentParquetExtensions.ReadEnumerableCoreAsync(_bytes, _options, cancellationToken, _predicate))
-            results.Add(item);
-        return results;
-    }
-
-    /// <summary>Materializes the surviving rows into an array.</summary>
-    public async global::System.Threading.Tasks.Task<SortedShipment[]> ToArrayAsync(global::System.Threading.CancellationToken cancellationToken = default)
-    {
-        if (_stream is not null)
-            return await SortedShipmentParquetExtensions.ReadArrayCoreAsync(_stream, _options, cancellationToken, _predicate).ConfigureAwait(false);
-
-        return (await ToListAsync(cancellationToken).ConfigureAwait(false)).ToArray();
+            return SortedShipmentParquetExtensions.ReadArrayCoreAsync(_stream, _options, cancellationToken, _predicate);
+        if (_predicate is not null)
+            return CollectFilteredBufferAsync(_bytes, _options, _predicate, cancellationToken);
+        return SortedShipmentParquetExtensions.ReadArrayCoreAsync(_bytes, _options, cancellationToken);
     }
 
     /// <summary>Streams the surviving rows without materializing them all.</summary>
+    /// <exception cref="System.NotSupportedException">The reader is <c>Parallel()</c>: streaming is sequential by definition.</exception>
     public global::System.Collections.Generic.IAsyncEnumerable<SortedShipment> AsAsyncEnumerable(global::System.Threading.CancellationToken cancellationToken = default)
-        => _stream is not null
+    {
+        if (_parallel)
+            throw new global::System.NotSupportedException("AsAsyncEnumerable() cannot follow Parallel(): the parallel reader only produces materialised results and streaming is sequential by definition. Use ToArrayAsync(), or drop Parallel() to stream.");
+        return _stream is not null
             ? SortedShipmentParquetExtensions.ReadEnumerableCoreAsync(_stream, _options, cancellationToken, _predicate)
             : SortedShipmentParquetExtensions.ReadEnumerableCoreAsync(_bytes, _options, cancellationToken, _predicate);
-}
-
-/// <summary>
-/// A pending parallel read of <c>SortedShipment</c> from an in-memory buffer.
-/// </summary>
-/// <remarks>
-/// Only the materializing shapes are offered: there is no parallel streaming or
-/// columnar-batch reader to delegate to, so offering the member would mean throwing.
-/// </remarks>
-public readonly struct SortedShipmentParquetParallelSource
-{
-    private readonly global::System.ReadOnlyMemory<byte> _bytes;
-    private readonly global::Parquet.SourceGenerator.ParquetSerializerOptions? _options;
-
-    internal SortedShipmentParquetParallelSource(global::System.ReadOnlyMemory<byte> bytes, global::Parquet.SourceGenerator.ParquetSerializerOptions? options)
-    {
-        _bytes = bytes;
-        _options = options;
     }
 
-    /// <summary>Replaces the serializer options.</summary>
-    public SortedShipmentParquetParallelSource WithOptions(global::Parquet.SourceGenerator.ParquetSerializerOptions options)
-        => new SortedShipmentParquetParallelSource(_bytes, options ?? throw new global::System.ArgumentNullException(nameof(options)));
+    /// <summary>Streams struct-of-arrays column batches, one per row group (#147).</summary>
+    /// <exception cref="System.NotSupportedException">The reader is <c>Parallel()</c>, or has a <c>Where()</c> predicate.</exception>
+    public global::System.Collections.Generic.IAsyncEnumerable<SortedShipmentParquetExtensions.ColumnBatch> Batches(global::System.Threading.CancellationToken cancellationToken = default)
+    {
+        if (_parallel)
+            throw new global::System.NotSupportedException("Batches() cannot follow Parallel(): there is no parallel column-batch reader and batch streaming is sequential by definition. Drop Parallel().");
+        if (_predicate is not null)
+            throw new global::System.NotSupportedException("Batches() cannot follow Where(): the column-batch reader does not accept a row-group predicate. Use AsAsyncEnumerable() or ToArrayAsync() to filter.");
+        return _stream is not null
+            ? SortedShipmentParquetExtensions.ReadBatchesCoreAsync(_stream, _options, cancellationToken)
+            : SortedShipmentParquetExtensions.ReadBatchesCoreAsync(_bytes, _options, cancellationToken);
+    }
 
-    /// <summary>Executes the read.</summary>
-    public global::System.Threading.Tasks.Task<global::System.Collections.Generic.List<SortedShipment>> ToListAsync(global::System.Threading.CancellationToken cancellationToken = default)
-        => SortedShipmentParquetExtensions.ReadParallelListCoreAsync(_bytes, _options, cancellationToken);
-
-    /// <summary>Executes the read.</summary>
-    public global::System.Threading.Tasks.Task<SortedShipment[]> ToArrayAsync(global::System.Threading.CancellationToken cancellationToken = default)
-        => SortedShipmentParquetExtensions.ReadParallelArrayCoreAsync(_bytes, _options, cancellationToken);
-
+    private static async global::System.Threading.Tasks.Task<SortedShipment[]> CollectFilteredBufferAsync(global::System.ReadOnlyMemory<byte> bytes, global::Parquet.SourceGenerator.ParquetSerializerOptions? options, global::System.Func<global::SampleDomain.Models.SortedShipmentRowGroupMetadata, bool> predicate, global::System.Threading.CancellationToken cancellationToken)
+    {
+        var results = new global::System.Collections.Generic.List<SortedShipment>();
+        await foreach (var item in SortedShipmentParquetExtensions.ReadEnumerableCoreAsync(bytes, options, cancellationToken, predicate))
+            results.Add(item);
+        return results.ToArray();
+    }
 }

@@ -16,6 +16,95 @@ The rule, the three surfaces and the author process are in
 
 <!-- Add new entries directly below this line, newest first. -->
 
+### 2026-09-23 — removed `ToListAsync(CancellationToken)` from the generated reader (#479)
+
+- **Surface:** emitted
+- **Semver:** breaking-major
+- **Issue:** [#479](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/479) (0.1 contract
+  tracker [#477](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/477))
+- **Change:** `ToListAsync(CancellationToken cancellationToken = default) -> Task<List<T>>` is gone
+  from every modern model. It existed on all four #217 state types, so 24 catalogue lines are
+  removed (four per modern golden model) — they are counted in the #478 entry below, which removes
+  the types that carried them. The stable terminals are `ToArrayAsync(CancellationToken)` and
+  `AsAsyncEnumerable(CancellationToken)`; `Batches(CancellationToken)` is unchanged (#369).
+- **Rationale:** `List<T>` versus `T[]` is a collection preference, not a storage-engine capability
+  ([47](../47-0.1-CONTRACT-AND-DESIGN-GOALS.md) §4.2). The array terminal already pre-sizes from the
+  footer row counts, so a caller who wants a list pays one copy (`.ToList()` /
+  `new List<T>(array)`), which is what the memory and parallel `ToListAsync` paths already did
+  internally. The stream `ToListAsync` was a second full materialising body per model that
+  differed from the array body only in its collection type. With no terminal reaching them, the
+  internal `ReadListCoreAsync` (both overloads) and `ReadParallelListCoreAsync` are no longer
+  emitted; every golden `.g.cs` loses them.
+- **Alternatives considered:** *Keep `ToListAsync` as a convenience forwarder over the array* —
+  rejected: it is a permanent member that expresses no read capability, and every future source or
+  execution mode would be expected to offer it. *Return `IReadOnlyList<T>` from a single terminal*
+  — rejected: it hides the concrete array the reader already builds and gives callers nothing an
+  array does not. *Keep the internal List bodies unreachable "in case"* — rejected: unreachable
+  generated code compiles into every consumer assembly and is covered by no test.
+- **Note:** pre-1.0 break; `0.0.x` permits it without a major bump.
+
+### 2026-09-23 — `WithOptions`, `Where`, `Parallel`, `ToArrayAsync`, `AsAsyncEnumerable` and `Batches` move onto `{T}ParquetReader` (#478)
+
+- **Surface:** emitted
+- **Semver:** breaking-major
+- **Issue:** [#478](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/478)
+- **Change:** each composing member and terminal is now declared once, on `{T}ParquetReader`, and
+  the composing members return `{T}ParquetReader`. Signatures are otherwise unchanged:
+  `WithOptions(ParquetSerializerOptions options)`, `Where(Func<{T}RowGroupMetadata, bool>
+  predicate)` (models with prunable columns), `Parallel()`, `ToArrayAsync(CancellationToken
+  cancellationToken = default) -> Task<T[]>`, `AsAsyncEnumerable(CancellationToken
+  cancellationToken = default) -> IAsyncEnumerable<T>` and `Batches(CancellationToken
+  cancellationToken = default) -> IAsyncEnumerable<{T}ParquetExtensions.ColumnBatch>` (flat models).
+- **Semantics chosen for the combinations the old types made unrepresentable** (the choice
+  [47](../47-0.1-CONTRACT-AND-DESIGN-GOALS.md) §4.2 asks this entry to record). Rule: *the call that
+  completes an unsupported combination throws `NotSupportedException`*; nothing is silently
+  degraded. `Parallel()` throws on a stream source (message names `From(ReadOnlyMemory<byte>)`) and
+  on a reader with a predicate; `Where()` throws on a parallel reader and on a reader that already
+  has a predicate; `AsAsyncEnumerable()` and `Batches()` throw on a parallel reader; `Batches()`
+  throws on a filtered reader. No filtered parallel path or filtered batch path exists internally,
+  so none was wired. `WithOptions(null)` / `Where(null)` throw `ArgumentNullException` as before.
+  One test per combination in `ReadBuilderTests`.
+- **Rationale:** throwing from `Parallel()` rather than at the terminal (the docs/47 default for
+  `From(Stream).Parallel()`) reports the mistake on the line that makes it, when the source is
+  already known; only the terminal-specific cases wait for the terminal. A second `Where()` throws
+  rather than AND-composing because composition would allocate a closure on a path that is
+  otherwise allocation-free, and relaxing a throw later is additive while changing composition
+  semantics is not.
+- **Alternatives considered:** *Throw every invalid combination at the terminal* — rejected: the
+  exception then surfaces far from the call that caused it, and a reader value could carry a state
+  no terminal can run. *Degrade to sequential reads* — rejected by docs/47: it hides a policy the
+  caller asked for. *Keep capability-specific public states* — rejected: it is the state-type
+  cross-product this change removes.
+- **Note:** pre-1.0 break; `0.0.x` permits it without a major bump.
+
+### 2026-09-23 — `{T}ParquetReader` replaces `{T}ParquetStreamSource`, `{T}ParquetMemorySource`, `{T}ParquetFilteredSource` and `{T}ParquetParallelSource`; `From(Stream)` / `From(ReadOnlyMemory<byte>)` return it (#478)
+
+- **Surface:** emitted
+- **Semver:** breaking-major
+- **Issue:** [#478](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/478) (0.1 contract
+  tracker [#477](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/477))
+- **Change:** the four #217 type-state structs are no longer emitted. One `public readonly struct
+  {T}ParquetReader` holds the state privately — source (a `Stream` or a `ReadOnlyMemory<byte>`),
+  options, predicate and a parallel flag — and `static {T}Parquet.From(Stream stream)` and
+  `static {T}Parquet.From(ReadOnlyMemory<byte> parquetBytes)` both return it (return-type change on
+  two lines per model). Catalogue effect per golden model, from `.api.shape.txt`: `OrderEvent` and
+  `ScalarMetric` 64 → 47 members, 37 → 23 parameters; `ListOrder`, `NestedOrder`, `PocoOrder`
+  35 → 19 members, 31 → 18 parameters; `SortedShipment` 57 → 40 members, 59 → 45 parameters.
+  Legacy (`LegacyRecord` 6 / 14) unchanged — it has no builder (#246). The figures include the
+  #479 `ToListAsync` removal.
+- **Rationale:** the #217 builder removed the method-name cross-product and replaced it with a
+  public state-type cross-product: four types, each with its own terminal set, whose names answer an
+  implementation question ("which reader state is active?") rather than a user one (docs/47 §2). The
+  reader keeps every internal read path (`ReadArrayCoreAsync`, `ReadEnumerableCoreAsync`,
+  `ReadBatchesCoreAsync`, `ReadParallelArrayCoreAsync`) and dispatches to them; composing a read
+  remains struct copies only (asserted allocation-free by `ComposingAReadAllocatesNothing`).
+- **Alternatives considered:** *Keep the type-state structs* — rejected: every new axis multiplies
+  public types again, and docs/47 names this as the multiplier left after #217. *A class-based
+  reader* — rejected: composing would allocate. *Carry the source kind as an explicit enum field*
+  — rejected as redundant: a non-null stream field already discriminates it, and a default-valued
+  reader behaves as the default `MemorySource` did (an empty buffer).
+- **Note:** pre-1.0 break; `0.0.x` permits it without a major bump.
+
 ### 2026-09-22 — `{T}RowGroupMetadata(int rowGroupIndex, long rowCount, bool hasStatistics, …column_N)` constructor made internal (#459)
 
 - **Surface:** emitted

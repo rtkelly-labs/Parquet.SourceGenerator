@@ -161,15 +161,18 @@ Models with struct, list or map members keep the row-oriented API only.
 using var stream = File.OpenRead("events.parquet");
 
 // Sequential read
-List<UserEvent> events = await UserEventParquet.From(stream).ToListAsync();
+UserEvent[] events = await UserEventParquet.From(stream).ToArrayAsync();
+
+// Need a List<T>? Convert the array: the reader has one materialised shape.
+List<UserEvent> eventList = events.ToList(); // or new List<UserEvent>(events)
 
 // Multi-core parallel read over an in-memory byte buffer
 ReadOnlyMemory<byte> buffer = File.ReadAllBytes("events.parquet");
-List<UserEvent> fast = await UserEventParquet
+UserEvent[] fast = await UserEventParquet
     .From(buffer)
     .WithOptions(new ParquetSerializerOptions { MaxDegreeOfParallelism = 8 })
     .Parallel()
-    .ToListAsync();
+    .ToArrayAsync();
 
 // Low-memory streaming reader
 await foreach (var e in UserEventParquet.From(buffer).AsAsyncEnumerable())
@@ -186,11 +189,16 @@ await foreach (var batch in UserEventParquet.From(buffer).Batches())
 }
 ```
 
-`<Model>Parquet.From(...)` is the only generated read entry point: the source (`Stream` or
-`ReadOnlyMemory<byte>`), the execution (`.Parallel()`, buffer only), pushdown (`.Where(...)`) and
-options (`.WithOptions(...)`) are members of the builder, and the terminal (`ToListAsync`,
-`ToArrayAsync`, `AsAsyncEnumerable`, `Batches`) picks the shape. The flat `ReadParquet*Async` methods
-were removed before `0.1.0`; the mapping is in [CHANGELOG.md](CHANGELOG.md) and the decision in
+`<Model>Parquet.From(...)` is the only generated read entry point, and both overloads return the
+same `readonly struct <Model>ParquetReader`: the source (`Stream` or `ReadOnlyMemory<byte>`), the
+execution (`.Parallel()`), pushdown (`.Where(...)`) and options (`.WithOptions(...)`) are reader
+state, and the terminal (`ToArrayAsync`, `AsAsyncEnumerable`, `Batches`) picks the shape. A
+`List<T>` is a conversion of the array (`.ToList()` or `new List<T>(array)`), not a separate read.
+Combinations no backend can execute throw `NotSupportedException` from the call that completes them
+rather than being silently degraded: `.Parallel()` on a `Stream` source (buffer the file and use
+`From(ReadOnlyMemory<byte>)`); `.Parallel()` together with `.Where(...)`; `AsAsyncEnumerable()` or
+`Batches()` after `.Parallel()` (streaming is sequential); and `Batches()` after `.Where(...)`. The
+flat `ReadParquet*Async` methods were removed before `0.1.0`; the mapping is in [CHANGELOG.md](CHANGELOG.md) and the decision in
 [docs/48](docs/48-FLAT-READ-REMOVAL-480.md). The `Parquet.SourceGenerator.Legacy` package has no
 builder and keeps its flat `ReadParquetAsync` / `ReadParquetArrayAsync`.
 
@@ -206,17 +214,17 @@ no buffer rental.
 
 ```csharp
 // Only the row groups whose [min, max] range can still hold a key >= 1000 are read.
-List<OrderEvent> recent = await OrderEventParquet
+OrderEvent[] recent = await OrderEventParquet
     .From(stream)
     .Where(meta => meta.OrderKey.MayContainAtLeast(1_000))
-    .ToListAsync();
+    .ToArrayAsync();
 
 // Conjunctive filters compose; any column that cannot match prunes the whole group.
-List<OrderEvent> narrow = await OrderEventParquet
+OrderEvent[] narrow = await OrderEventParquet
     .From(stream)
     .Where(meta => meta.OrderKey.MayContainBetween(1_000, 2_000)
                 && meta.Region.MayContain("emea"))
-    .ToListAsync();
+    .ToArrayAsync();
 ```
 
 The generated `<Model>RowGroupMetadata` struct exposes `RowGroupIndex`, `RowCount` and one

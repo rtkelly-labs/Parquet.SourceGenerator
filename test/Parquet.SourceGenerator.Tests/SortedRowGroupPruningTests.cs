@@ -130,16 +130,16 @@ public sealed class SortedRowGroupPruningTests
     {
         byte[] bytes = await WriteAsync(SortedRows(10_000), rowGroupSize: 100);
 
-        List<SortedEvent> all = await SortedEventParquet.From(Open(bytes)).ToListAsync();
-        all.Count.ShouldBe(10_000);
+        SortedEvent[] all = await SortedEventParquet.From(Open(bytes)).ToArrayAsync();
+        all.Length.ShouldBe(10_000);
 
         // Predicate path (AcceptRowGroup / RowGroupMetadata): the pushdown result must equal
         // the client-side filter over the full scan — pruning may only remove provably-empty
         // groups, never a matching row.
-        List<SortedEvent> viaPredicate = await SortedEventParquet
+        SortedEvent[] viaPredicate = await SortedEventParquet
             .From(Open(bytes))
             .Where(meta => meta.SequenceNumber.MayContainAtLeast(9_500))
-            .ToListAsync();
+            .ToArrayAsync();
         viaPredicate
             .Select(e => e.SequenceNumber)
             .ShouldBe(all.Where(e => e.SequenceNumber >= 9_500).Select(e => e.SequenceNumber));
@@ -382,7 +382,7 @@ public sealed class SortedRowGroupPruningTests
 
         // The ordinary read API is untouched, so the absence above is opt-in and not a
         // generator that simply failed to run for this model.
-        emitted.ShouldContain("ReadListCoreAsync");
+        emitted.ShouldContain("ReadArrayCoreAsync");
     }
 
     /// <summary>

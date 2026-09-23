@@ -69,9 +69,9 @@ public sealed class NestedListRoundTripTests
         var ms = new MemoryStream();
         await ListRowParquetExtensions.WriteParquetAsync(rows, ms);
         ms.Position = 0;
-        var back = await ListRowParquet.From(ms).ToListAsync();
+        var back = await ListRowParquet.From(ms).ToArrayAsync();
 
-        back.Count.ShouldBe(4);
+        back.Length.ShouldBe(4);
         back[0].Tags!.ToArray().ShouldBe(expectedTags0);
         back[0].Scores!.ToArray().ShouldBe(expectedScores0);
         back[0].Keys!.ShouldBe(new[] { g1, g2 });

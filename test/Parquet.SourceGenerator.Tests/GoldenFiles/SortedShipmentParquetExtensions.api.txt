@@ -14,30 +14,13 @@ SampleDomain.Models.SortedShipmentParquetExtensions.ColumnBatch.RowGroupIndex.ge
 SampleDomain.Models.SortedShipmentParquetExtensions.ColumnBatch.SequenceSpan.get -> System.ReadOnlySpan<long>
 SampleDomain.Models.SortedShipmentParquetExtensions.ColumnBatch.ShippedAtSpan.get -> System.ReadOnlySpan<System.DateTime>
 SampleDomain.Models.SortedShipmentParquetExtensions.ColumnBatch.WeightGramsSpan.get -> System.ReadOnlySpan<int>
-SampleDomain.Models.SortedShipmentParquetFilteredSource
-SampleDomain.Models.SortedShipmentParquetFilteredSource.AsAsyncEnumerable(System.Threading.CancellationToken cancellationToken = default) -> System.Collections.Generic.IAsyncEnumerable<SortedShipment>
-SampleDomain.Models.SortedShipmentParquetFilteredSource.ToArrayAsync(System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<SortedShipment[]>
-SampleDomain.Models.SortedShipmentParquetFilteredSource.ToListAsync(System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<System.Collections.Generic.List<SortedShipment>>
-SampleDomain.Models.SortedShipmentParquetFilteredSource.WithOptions(Parquet.SourceGenerator.ParquetSerializerOptions options) -> SortedShipmentParquetFilteredSource
-SampleDomain.Models.SortedShipmentParquetMemorySource
-SampleDomain.Models.SortedShipmentParquetMemorySource.AsAsyncEnumerable(System.Threading.CancellationToken cancellationToken = default) -> System.Collections.Generic.IAsyncEnumerable<SortedShipment>
-SampleDomain.Models.SortedShipmentParquetMemorySource.Batches(System.Threading.CancellationToken cancellationToken = default) -> System.Collections.Generic.IAsyncEnumerable<SortedShipmentParquetExtensions.ColumnBatch>
-SampleDomain.Models.SortedShipmentParquetMemorySource.Parallel() -> SortedShipmentParquetParallelSource
-SampleDomain.Models.SortedShipmentParquetMemorySource.ToArrayAsync(System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<SortedShipment[]>
-SampleDomain.Models.SortedShipmentParquetMemorySource.ToListAsync(System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<System.Collections.Generic.List<SortedShipment>>
-SampleDomain.Models.SortedShipmentParquetMemorySource.Where(System.Func<SampleDomain.Models.SortedShipmentRowGroupMetadata, bool> predicate) -> SortedShipmentParquetFilteredSource
-SampleDomain.Models.SortedShipmentParquetMemorySource.WithOptions(Parquet.SourceGenerator.ParquetSerializerOptions options) -> SortedShipmentParquetMemorySource
-SampleDomain.Models.SortedShipmentParquetParallelSource
-SampleDomain.Models.SortedShipmentParquetParallelSource.ToArrayAsync(System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<SortedShipment[]>
-SampleDomain.Models.SortedShipmentParquetParallelSource.ToListAsync(System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<System.Collections.Generic.List<SortedShipment>>
-SampleDomain.Models.SortedShipmentParquetParallelSource.WithOptions(Parquet.SourceGenerator.ParquetSerializerOptions options) -> SortedShipmentParquetParallelSource
-SampleDomain.Models.SortedShipmentParquetStreamSource
-SampleDomain.Models.SortedShipmentParquetStreamSource.AsAsyncEnumerable(System.Threading.CancellationToken cancellationToken = default) -> System.Collections.Generic.IAsyncEnumerable<SortedShipment>
-SampleDomain.Models.SortedShipmentParquetStreamSource.Batches(System.Threading.CancellationToken cancellationToken = default) -> System.Collections.Generic.IAsyncEnumerable<SortedShipmentParquetExtensions.ColumnBatch>
-SampleDomain.Models.SortedShipmentParquetStreamSource.ToArrayAsync(System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<SortedShipment[]>
-SampleDomain.Models.SortedShipmentParquetStreamSource.ToListAsync(System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<System.Collections.Generic.List<SortedShipment>>
-SampleDomain.Models.SortedShipmentParquetStreamSource.Where(System.Func<SampleDomain.Models.SortedShipmentRowGroupMetadata, bool> predicate) -> SortedShipmentParquetFilteredSource
-SampleDomain.Models.SortedShipmentParquetStreamSource.WithOptions(Parquet.SourceGenerator.ParquetSerializerOptions options) -> SortedShipmentParquetStreamSource
+SampleDomain.Models.SortedShipmentParquetReader
+SampleDomain.Models.SortedShipmentParquetReader.AsAsyncEnumerable(System.Threading.CancellationToken cancellationToken = default) -> System.Collections.Generic.IAsyncEnumerable<SortedShipment>
+SampleDomain.Models.SortedShipmentParquetReader.Batches(System.Threading.CancellationToken cancellationToken = default) -> System.Collections.Generic.IAsyncEnumerable<SortedShipmentParquetExtensions.ColumnBatch>
+SampleDomain.Models.SortedShipmentParquetReader.Parallel() -> SortedShipmentParquetReader
+SampleDomain.Models.SortedShipmentParquetReader.ToArrayAsync(System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<SortedShipment[]>
+SampleDomain.Models.SortedShipmentParquetReader.Where(System.Func<SampleDomain.Models.SortedShipmentRowGroupMetadata, bool> predicate) -> SortedShipmentParquetReader
+SampleDomain.Models.SortedShipmentParquetReader.WithOptions(Parquet.SourceGenerator.ParquetSerializerOptions options) -> SortedShipmentParquetReader
 SampleDomain.Models.SortedShipmentRowGroupMetadata
 SampleDomain.Models.SortedShipmentRowGroupMetadata.Carrier.get -> Parquet.SourceGenerator.ParquetColumnStatistics<string>
 SampleDomain.Models.SortedShipmentRowGroupMetadata.HasStatistics.get -> bool
@@ -45,8 +28,8 @@ SampleDomain.Models.SortedShipmentRowGroupMetadata.RowCount.get -> long
 SampleDomain.Models.SortedShipmentRowGroupMetadata.RowGroupIndex.get -> int
 SampleDomain.Models.SortedShipmentRowGroupMetadata.Sequence.get -> Parquet.SourceGenerator.ParquetColumnStatistics<long>
 SampleDomain.Models.SortedShipmentRowGroupMetadata.WeightGrams.get -> Parquet.SourceGenerator.ParquetColumnStatistics<int>
-static SampleDomain.Models.SortedShipmentParquet.From(System.IO.Stream stream) -> SortedShipmentParquetStreamSource
-static SampleDomain.Models.SortedShipmentParquet.From(System.ReadOnlyMemory<byte> parquetBytes) -> SortedShipmentParquetMemorySource
+static SampleDomain.Models.SortedShipmentParquet.From(System.IO.Stream stream) -> SortedShipmentParquetReader
+static SampleDomain.Models.SortedShipmentParquet.From(System.ReadOnlyMemory<byte> parquetBytes) -> SortedShipmentParquetReader
 static SampleDomain.Models.SortedShipmentParquetExtensions.ReadParquetBySequenceAsync(System.IO.Stream stream, long key, Parquet.SourceGenerator.ParquetPruneStatistics? pruneStatistics = null, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<System.Collections.Generic.List<SortedShipment>>
 static SampleDomain.Models.SortedShipmentParquetExtensions.ReadParquetByShippedAtAsync(System.IO.Stream stream, System.DateTime key, Parquet.SourceGenerator.ParquetPruneStatistics? pruneStatistics = null, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<System.Collections.Generic.List<SortedShipment>>
 static SampleDomain.Models.SortedShipmentParquetExtensions.ReadParquetSequenceRangeAsync(System.IO.Stream stream, long inclusiveStart, long inclusiveEnd, Parquet.SourceGenerator.ParquetPruneStatistics? pruneStatistics = null, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<System.Collections.Generic.List<SortedShipment>>

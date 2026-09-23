@@ -50,10 +50,9 @@ public sealed class BlittableStructTests
         using var ms = new MemoryStream();
         await items.WriteParquetAsync(ms);
 
-        // Read into List
-        ms.Position = 0;
-        var readList = await SingleLongStructParquet.From(ms).ToListAsync();
-        readList.Count.ShouldBe(count);
+        // Read from the buffer (sequential)
+        var readList = await SingleLongStructParquet.From(ms.ToArray()).ToArrayAsync();
+        readList.Length.ShouldBe(count);
         for (int i = 0; i < count; i++)
         {
             readList[i].Value.ShouldBe(i * 42L);
@@ -80,7 +79,9 @@ public sealed class BlittableStructTests
             parallelArray[i].Value.ShouldBe(i * 42L);
         }
 
-        var parallelList = await SingleLongStructParquet.From(bytes).Parallel().ToListAsync();
+        List<SingleLongStruct> parallelList = (
+            await SingleLongStructParquet.From(bytes).Parallel().ToArrayAsync()
+        ).ToList();
         parallelList.Count.ShouldBe(count);
         for (int i = 0; i < count; i++)
         {

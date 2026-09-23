@@ -73,7 +73,7 @@ public class ColumnBatchAggregationBenchmark
     public async Task<double> GeneratedPocoListAggregate()
     {
         using var stream = new MemoryStream(_parquetBytes);
-        List<ScaleEvent> rows = await ScaleEventParquet.From(stream).ToListAsync();
+        ScaleEvent[] rows = await ScaleEventParquet.From(stream).ToArrayAsync();
         double sum = 0;
         long sumB = 0;
         foreach (ScaleEvent row in rows)

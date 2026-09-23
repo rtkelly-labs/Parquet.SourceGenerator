@@ -109,7 +109,7 @@ public sealed class ParserAndEmitterTests
         source.ShouldContain("TimeDataField");
         source.ShouldContain("WriteParquetRowGroupAsync");
         source.ShouldContain("WriteAllPartsAsync");
-        source.ShouldContain("ReadParallelListCoreAsync");
+        source.ShouldContain("ReadParallelArrayCoreAsync");
         source.ShouldContain("if (missing_1 || chunkStats_1?.NullCount == rowCount)");
         source.ShouldContain("global::System.Array.Clear(buffer_1, 0, rowCount);");
         source.ShouldContain(
@@ -245,10 +245,10 @@ public sealed class ParserAndEmitterTests
     }
 
     [Fact]
-    public async Task ToListAsyncNullStreamThrowsArgumentNullException()
+    public async Task ToArrayAsyncNullStreamThrowsArgumentNullException()
     {
         await Should.ThrowAsync<ArgumentNullException>(() =>
-            TypeCoverageRecordParquet.From((Stream)null!).ToListAsync()
+            TypeCoverageRecordParquet.From((Stream)null!).ToArrayAsync()
         );
     }
 }

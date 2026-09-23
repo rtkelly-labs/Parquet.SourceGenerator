@@ -24,30 +24,13 @@ SampleDomain.Models.ScalarMetricParquetExtensions.ColumnBatch.RowIdSpan.get -> S
 SampleDomain.Models.ScalarMetricParquetExtensions.ColumnBatch.ShortNumSpan.get -> System.ReadOnlySpan<short>
 SampleDomain.Models.ScalarMetricParquetExtensions.ColumnBatch.StatusCodeSpan.get -> System.ReadOnlySpan<int>
 SampleDomain.Models.ScalarMetricParquetExtensions.ColumnBatch.TinyNumSpan.get -> System.ReadOnlySpan<byte>
-SampleDomain.Models.ScalarMetricParquetFilteredSource
-SampleDomain.Models.ScalarMetricParquetFilteredSource.AsAsyncEnumerable(System.Threading.CancellationToken cancellationToken = default) -> System.Collections.Generic.IAsyncEnumerable<ScalarMetric>
-SampleDomain.Models.ScalarMetricParquetFilteredSource.ToArrayAsync(System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<ScalarMetric[]>
-SampleDomain.Models.ScalarMetricParquetFilteredSource.ToListAsync(System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<System.Collections.Generic.List<ScalarMetric>>
-SampleDomain.Models.ScalarMetricParquetFilteredSource.WithOptions(Parquet.SourceGenerator.ParquetSerializerOptions options) -> ScalarMetricParquetFilteredSource
-SampleDomain.Models.ScalarMetricParquetMemorySource
-SampleDomain.Models.ScalarMetricParquetMemorySource.AsAsyncEnumerable(System.Threading.CancellationToken cancellationToken = default) -> System.Collections.Generic.IAsyncEnumerable<ScalarMetric>
-SampleDomain.Models.ScalarMetricParquetMemorySource.Batches(System.Threading.CancellationToken cancellationToken = default) -> System.Collections.Generic.IAsyncEnumerable<ScalarMetricParquetExtensions.ColumnBatch>
-SampleDomain.Models.ScalarMetricParquetMemorySource.Parallel() -> ScalarMetricParquetParallelSource
-SampleDomain.Models.ScalarMetricParquetMemorySource.ToArrayAsync(System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<ScalarMetric[]>
-SampleDomain.Models.ScalarMetricParquetMemorySource.ToListAsync(System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<System.Collections.Generic.List<ScalarMetric>>
-SampleDomain.Models.ScalarMetricParquetMemorySource.Where(System.Func<SampleDomain.Models.ScalarMetricRowGroupMetadata, bool> predicate) -> ScalarMetricParquetFilteredSource
-SampleDomain.Models.ScalarMetricParquetMemorySource.WithOptions(Parquet.SourceGenerator.ParquetSerializerOptions options) -> ScalarMetricParquetMemorySource
-SampleDomain.Models.ScalarMetricParquetParallelSource
-SampleDomain.Models.ScalarMetricParquetParallelSource.ToArrayAsync(System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<ScalarMetric[]>
-SampleDomain.Models.ScalarMetricParquetParallelSource.ToListAsync(System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<System.Collections.Generic.List<ScalarMetric>>
-SampleDomain.Models.ScalarMetricParquetParallelSource.WithOptions(Parquet.SourceGenerator.ParquetSerializerOptions options) -> ScalarMetricParquetParallelSource
-SampleDomain.Models.ScalarMetricParquetStreamSource
-SampleDomain.Models.ScalarMetricParquetStreamSource.AsAsyncEnumerable(System.Threading.CancellationToken cancellationToken = default) -> System.Collections.Generic.IAsyncEnumerable<ScalarMetric>
-SampleDomain.Models.ScalarMetricParquetStreamSource.Batches(System.Threading.CancellationToken cancellationToken = default) -> System.Collections.Generic.IAsyncEnumerable<ScalarMetricParquetExtensions.ColumnBatch>
-SampleDomain.Models.ScalarMetricParquetStreamSource.ToArrayAsync(System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<ScalarMetric[]>
-SampleDomain.Models.ScalarMetricParquetStreamSource.ToListAsync(System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<System.Collections.Generic.List<ScalarMetric>>
-SampleDomain.Models.ScalarMetricParquetStreamSource.Where(System.Func<SampleDomain.Models.ScalarMetricRowGroupMetadata, bool> predicate) -> ScalarMetricParquetFilteredSource
-SampleDomain.Models.ScalarMetricParquetStreamSource.WithOptions(Parquet.SourceGenerator.ParquetSerializerOptions options) -> ScalarMetricParquetStreamSource
+SampleDomain.Models.ScalarMetricParquetReader
+SampleDomain.Models.ScalarMetricParquetReader.AsAsyncEnumerable(System.Threading.CancellationToken cancellationToken = default) -> System.Collections.Generic.IAsyncEnumerable<ScalarMetric>
+SampleDomain.Models.ScalarMetricParquetReader.Batches(System.Threading.CancellationToken cancellationToken = default) -> System.Collections.Generic.IAsyncEnumerable<ScalarMetricParquetExtensions.ColumnBatch>
+SampleDomain.Models.ScalarMetricParquetReader.Parallel() -> ScalarMetricParquetReader
+SampleDomain.Models.ScalarMetricParquetReader.ToArrayAsync(System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<ScalarMetric[]>
+SampleDomain.Models.ScalarMetricParquetReader.Where(System.Func<SampleDomain.Models.ScalarMetricRowGroupMetadata, bool> predicate) -> ScalarMetricParquetReader
+SampleDomain.Models.ScalarMetricParquetReader.WithOptions(Parquet.SourceGenerator.ParquetSerializerOptions options) -> ScalarMetricParquetReader
 SampleDomain.Models.ScalarMetricRowGroupMetadata
 SampleDomain.Models.ScalarMetricRowGroupMetadata.FloatVal.get -> Parquet.SourceGenerator.ParquetColumnStatistics<float>
 SampleDomain.Models.ScalarMetricRowGroupMetadata.HasStatistics.get -> bool
@@ -56,8 +39,8 @@ SampleDomain.Models.ScalarMetricRowGroupMetadata.RowGroupIndex.get -> int
 SampleDomain.Models.ScalarMetricRowGroupMetadata.RowId.get -> Parquet.SourceGenerator.ParquetColumnStatistics<long>
 SampleDomain.Models.ScalarMetricRowGroupMetadata.ShortNum.get -> Parquet.SourceGenerator.ParquetColumnStatistics<short>
 SampleDomain.Models.ScalarMetricRowGroupMetadata.TinyNum.get -> Parquet.SourceGenerator.ParquetColumnStatistics<byte>
-static SampleDomain.Models.ScalarMetricParquet.From(System.IO.Stream stream) -> ScalarMetricParquetStreamSource
-static SampleDomain.Models.ScalarMetricParquet.From(System.ReadOnlyMemory<byte> parquetBytes) -> ScalarMetricParquetMemorySource
+static SampleDomain.Models.ScalarMetricParquet.From(System.IO.Stream stream) -> ScalarMetricParquetReader
+static SampleDomain.Models.ScalarMetricParquet.From(System.ReadOnlyMemory<byte> parquetBytes) -> ScalarMetricParquetReader
 static SampleDomain.Models.ScalarMetricParquetExtensions.WriteParquetAsync(this ScalarMetricColumnarBatch batch, System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task
 static SampleDomain.Models.ScalarMetricParquetExtensions.WriteParquetAsync(this System.Collections.Generic.IAsyncEnumerable<ScalarMetric> items, System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task
 static SampleDomain.Models.ScalarMetricParquetExtensions.WriteParquetAsync(this System.Collections.Generic.IReadOnlyCollection<ScalarMetric> items, System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task

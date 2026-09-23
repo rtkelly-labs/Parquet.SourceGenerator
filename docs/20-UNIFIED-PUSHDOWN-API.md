@@ -172,7 +172,7 @@ once per query — allocation there is irrelevant against a file read.
 await PersonParquet.From(path)
     .Where(PersonParquet.Columns.Timestamp.Between(from, to)
          & PersonParquet.Columns.TenantId.EqualTo(tenant))
-    .ToListAsync(cancellationToken);
+    .ToArrayAsync(cancellationToken);
 ```
 
 That is the **only** pushdown entry point. It replaces the predicate parameter, both ordered-lookup
@@ -229,6 +229,12 @@ below remain post-freeze planning notes until the accessor contract settles; the
 proposal to the `0.1.0` release.
 
 ### 3.6 Sources and terminals — four shipped generic structs
+
+> **Note (#478).** Written against the #217 type-state builder. The generated read surface has since
+> collapsed its four per-model state types into one `<Model>ParquetReader` struct that throws
+> `NotSupportedException` for unsupported combinations
+> ([47](./47-0.1-CONTRACT-AND-DESIGN-GOALS.md) §4.2); a shipped generic form of this proposal would
+> correspondingly be one `ParquetReader<T, TAccessor>`, not four.
 
 Replacing four structs generated *per model*:
 
