@@ -2,7 +2,8 @@
 
 > **Status**: decision record for issue #216, part of the `0.1.0` API freeze (#230).
 > The surface described here is the one emitted by `Parquet.SourceGenerator` for a flat model;
-> it is reproduced verbatim in `test/Parquet.SourceGenerator.Tests/GoldenFiles/*.api.txt`.
+> it is reproduced verbatim in each golden model's derived `*.api.txt`
+> ([17](./17-GENERATED-API-BASELINES.md)).
 > The read builder is the only modern read surface (#480, [document 48](48-FLAT-READ-REMOVAL-480.md));
 > a symmetric write builder remains a post-freeze proposal tracked by #219, and the current write
 > entry points remain in the compatibility window. The grid and defects below describe the flat read
@@ -215,10 +216,10 @@ the methods through the `0.1.0` window and is retained unedited as history.
 
 ### D4 — The decision is kept honest by the baselines
 
-Every claim in this document is checkable against
-`test/Parquet.SourceGenerator.Tests/GoldenFiles/*.api.txt`, which CI regenerates and diffs. A
-future feature that attaches itself unevenly — as pushdown did — shows up as a baseline diff in
-the pull request that does it.
+Every claim in this document is checkable against each golden model's `*.api.txt`, which CI
+derives from the emitter and diffs against the pull request's base. A future feature that attaches
+itself unevenly — as pushdown did — shows up in the "Emitted public API" section of the
+derived-output comment on the pull request that does it.
 
 ### D5 — Parameter-level shrinkage is measured by callable parameter slots (#244)
 
@@ -230,7 +231,7 @@ generated file. Each overload contributes its own slots; types, fields and prope
 none. A signature change can therefore leave `MEMBERS` unchanged while changing `PARAMETERS` from,
 for example, `2` to `1`.
 
-Each `Name.g.cs` golden file now has a generated `Name.api.shape.txt` companion:
+Each golden model's `Name.g.cs` has a generated `Name.api.shape.txt` companion:
 
 ```
 # generated API shape summary
@@ -238,10 +239,10 @@ MEMBERS=82 PARAMETERS=111
 ```
 
 `GeneratedApiBaseline.CreateShapeSummary` derives both values from the same emitted source string
-used to write and verify `Name.g.cs` and `Name.api.txt`. The summary is deliberately separate from
+used to write `Name.g.cs` and `Name.api.txt`. The summary is deliberately separate from
 the signature grammar: it is a measurement of the API shape, not another catalogue of public
-members. Ordering and numeric formatting are invariant and the golden test regenerates it under
-`UPDATE_GOLDEN_FILES=true`; a hand-edited count fails the normal golden suite.
+members. Ordering and numeric formatting are invariant; the golden suite publishes it with the
+other two files, and none of them is checked in.
 
 This is a burden metric, not a claim that every parameter has equal user value. #217's shrinkage
 claim is now numeric in the review diff: the relevant `PARAMETERS=` line moves alongside the

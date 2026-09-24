@@ -3,7 +3,8 @@
 > Layer 1 of [#251](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/251). This page
 > covers the **hand-written** code under `src/`. Metrics over the *generated* code are layer 2 and
 > live in [22 - Generated Code Metrics](./22-GENERATED-CODE-METRICS.md) — same computation, same
-> grammar, a different tolerance policy, and a different answer about which metrics carry signal.
+> grammar, a different gate (emitted code must compile), and a different answer about which
+> metrics carry signal.
 > Duplication (layer 3) and mutation testing (layer 4) are separate work.
 
 ## Why this exists
@@ -18,7 +19,9 @@ nothing was counting.
 Two mechanisms answer that. The **gate** is the `CA1502` / `CA1505` / `CA1506` analyzers against
 the thresholds in `CodeMetricsConfig.txt` — a build error, on every pull request. The **report** is
 `scripts/CodeMetrics.cs`: every namespace, type and member under `src/` with its numbers, derived
-from the code on demand and published by CI as a build artifact and step summary.
+from the code on demand and published by CI's `derived` job as the `derived-outputs` artifact, a
+step summary, and a base-versus-head diff on every pull request
+([17](./17-GENERATED-API-BASELINES.md#the-review-diff)).
 
 > **History.** This layer originally checked the report in under `metrics/` and failed CI on any
 > drift from it — the `.api.txt` pattern applied to quality. That was removed: see
@@ -49,12 +52,13 @@ and never as a score to optimise. It earns its place here only as a **change det
 
 Cyclomatic complexity is the more honest number of the five, and coupling is the more honest number
 still — but none of them measure whether the code is *right*. That is what the conformance, matrix,
-fuzz and golden-file suites are for.
+fuzz and golden-model suites are for.
 
 ## Where the numbers live
 
 `artifacts/metrics/<Project>.metrics.txt` (gitignored), one file per measured project, written by
-every run of `scripts/CodeMetrics.cs` and uploaded by CI as the `code-metrics` artifact:
+every run of `scripts/CodeMetrics.cs` and uploaded by CI in the `derived-outputs` artifact (under
+`metrics/`):
 
 ```
 T:Parquet.SourceGenerator.Emitter.CodeEmitter | MI=44 CC=144 CL=26 DIT=1 SLOC=2536 ELOC=1287
@@ -123,10 +127,13 @@ dotnet run scripts/CodeMetrics.cs -- --summary out.md   # plus the Markdown summ
 dotnet run scripts/CodeMetrics.cs -- --out <dir>        # somewhere else
 ```
 
-The same run also checks the generated-code baselines of
-[22](./22-GENERATED-CODE-METRICS.md) and validates `CodeMetricsConfig.txt`; those are the parts
-that can fail. To compare against another commit, run it there too (a worktree is the cheapest
-way) and `diff` the two directories, or download the `code-metrics` artifact from two CI runs.
+The same run also measures the published golden models for
+[22](./22-GENERATED-CODE-METRICS.md) (`--src-only` skips that) and validates
+`CodeMetricsConfig.txt`; an invalid config and emitted code that does not compile are the parts
+that can fail. On a pull request CI already compares against the merge base — the "Hand-written
+code metrics (src/)" section of the derived-output comment. To compare against any other commit,
+run `dotnet run scripts/DerivedOutputs.cs -- --repo <worktree> --out <dir>` there too and `diff`
+the two directories, or download the `derived-outputs` artifact from two CI runs.
 
 > The file-based `dotnet run scripts/*.cs` apps need the .NET 10 SDK. If your `PATH` SDK is older,
 > run them under `~/.dotnet/dotnet`.
@@ -139,15 +146,17 @@ failed on any drift — CC, CL, DIT, SLOC and ELOC exact, MI within ±2. In prac
 - **The files were a pure function of `src/`.** Regenerating them from the tree reproduced the
   committed copies line for line, so they recorded nothing the code did not already say.
 - **Every change to `src/` tripped the gate.** Touching a method moves its `SLOC`, so nearly every
-  pull request needed a refresh commit (or `/update-golden`), and the thousand-line churn that came
-  with it buried the few lines worth reading.
+  pull request needed a refresh commit (or the since-retired `/update-golden` comment), and the
+  thousand-line churn that came with it buried the few lines worth reading.
 - **The gate was on change, never on level.** It could not reject anything; the answer to a red
   build was always "refresh and commit". The analyzers are what reject code.
 
-So the numbers are now derived when they are wanted: every CI run publishes them as the
-`code-metrics` artifact and a step summary, and anyone can regenerate them locally. The **generated**
-code keeps its checked-in baselines ([22](./22-GENERATED-CODE-METRICS.md)): those live beside the
-golden files, already change only when the golden files do, and are refreshed in the same commit.
+So the numbers are now derived when they are wanted: every CI run publishes them in the
+`derived-outputs` artifact and a step summary, every pull request shows how they moved against its
+merge base, and anyone can regenerate them locally. The **generated**-code baselines
+([22](./22-GENERATED-CODE-METRICS.md)) at first stayed checked in beside the golden files; they
+followed once the golden files themselves stopped being checked in
+([17](./17-GENERATED-API-BASELINES.md#why-none-of-it-is-checked-in)).
 
 ## The analyzer rules
 
@@ -235,7 +244,7 @@ refactor of that method, not with a number tuned to pass.
 
 These numbers were recorded when this page was written and are **not** kept current — several of
 the worst cases below have since been decomposed (see above). Run `scripts/CodeMetrics.cs` or open
-a CI run's `code-metrics` artifact for today's numbers.
+a CI run's `derived-outputs` artifact for today's numbers.
 
 Measured across `src/Parquet.SourceGenerator`, `src/Parquet.SourceGenerator.Legacy` and
 `src/Parquet.SourceGenerator.Attributes`. `TargetParser` and its neighbours are compiled into both
@@ -328,8 +337,8 @@ and comprehension problem, not a codegen one.
 
 ## Related
 
-- [17 - Generated Public API Baselines](./17-GENERATED-API-BASELINES.md) — the checked-in-artifact
-  pattern this borrows wholesale.
+- [17 - Generated Public API Baselines](./17-GENERATED-API-BASELINES.md) — the line-per-entity
+  rendering this borrows wholesale, and the base-vs-head review diff these reports now share.
 - [22 - Generated Code Metrics](./22-GENERATED-CODE-METRICS.md) — layer 2, the emitted half.
 - [18 - The API Change Contract](./18-API-CHANGE-CONTRACT.md) — the gating philosophy. Note that the
   metrics reports are **not** a governed API surface, and changing the code they measure needs no

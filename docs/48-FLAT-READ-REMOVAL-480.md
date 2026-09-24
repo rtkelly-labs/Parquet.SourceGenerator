@@ -79,7 +79,7 @@ The contract narrowed; the implementation breadth did not.
 
 ## Measured shrinkage
 
-From the `test/Parquet.SourceGenerator.Tests/GoldenFiles/*.api.shape.txt` baselines
+From the `*.api.shape.txt` baselines, then checked in under `test/Parquet.SourceGenerator.Tests/GoldenFiles/`
 ([document 19](19-PUBLIC-API-SURFACE.md) decision D5):
 
 | Golden model | Members before | Members after | Δ | Parameters before | Parameters after | Δ |

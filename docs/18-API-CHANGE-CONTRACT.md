@@ -10,6 +10,10 @@ this document and [17 - Generated Public API Baselines](./17-GENERATED-API-BASEL
 made the emitted surface *visible*. Visibility is necessary and is not sufficient: a listing that
 only a test consults is a listing that grows while nobody is looking.
 
+Two surfaces are governed by catalogues today. The third — the emitted consumer API — was, until its
+checked-in baselines were retired; it is now **reviewed** rather than catalogue-gated, through the
+derived-output diff CI posts on every pull request ([below](#the-emitted-surface-reviewed-not-catalogued)).
+
 This exists to serve [#230](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/230), the
 `0.1.0` API freeze. At the freeze, the ledger *is* the record of what was decided and why. A ledger
 that was filled in retrospectively would record nothing, which is why the seeding decision below is
@@ -19,11 +23,11 @@ deliberate.
 
 | # | Surface | What it is | Catalogue | Gate | Enforced by |
 |:--|:---|:---|:---|:---|:---|
-| 1 | **Emitted consumer API** | Everything the emitters write into a consumer's own compilation. Exists in no shipped assembly. | `*.api.txt` beside each golden file | `PARQAPI001` | `EmittedApiGateAnalyzer` (build **error**) |
+| 1 | **Emitted consumer API** | Everything the emitters write into a consumer's own compilation. Exists in no shipped assembly. | none — each golden model's `.api.txt` is derived in CI, not checked in | review | the "Emitted public API" section of the derived-output PR comment (`PARQAPI001` retired) |
 | 2 | **Shipped package API** | `public` members of `Parquet.SourceGenerator.Attributes`. (The generator assemblies ship only as analyzers and have no public surface; their types are `internal` since #461.) | `PublicAPI.Shipped.txt` / `PublicAPI.Unshipped.txt` | `RS0016` | `Microsoft.CodeAnalysis.PublicApiAnalyzers` (pre-existing; unchanged) |
 | 3 | **Internal seams** | Members in `src/` widened past `private` so another component can call them. | `src/api/seams.txt` | `PARQAPI002` | `InternalSeamGateAnalyzer` (build **error**) |
 
-All three catalogues use **one grammar** — the one
+Both catalogues, and the derived emitted `.api.txt`, use **one grammar** — the one
 [17 §The grammar](./17-GENERATED-API-BASELINES.md#the-grammar) documents, which is the grammar
 `PublicAPI.Shipped.txt` already used. One signature per line, self-contained, ordinal-sorted,
 `->` introducing the return type. Learn it once.
@@ -34,43 +38,71 @@ Reimplementing it would have been a downgrade dressed as consistency.
 
 ## What triggers a gate, and what does not
 
-**This is the point of the whole design.** A golden `.g.cs` file holds the full emitted body, so a
-retuned buffer loop and a new public overload produce diffs of the same visual shape. The `.api.txt`
-baseline holds only signatures. Therefore:
+**This is the point of the whole design.** A golden model's `.g.cs` holds the full emitted body, so
+a retuned buffer loop and a new public overload produce diffs of the same visual shape. The
+`.api.txt` rendering holds only signatures. Therefore:
 
-| Change | Golden `.g.cs` | `.api.txt` | Gate fires? | Ledger entry? |
+| Change | Emitted `.g.cs` | API listing | Gate fires? | Ledger entry? |
 |:---|:---:|:---:|:---:|:---:|
 | Retune a buffer loop, change an allocation strategy | changes | unchanged | no | no |
 | Reword an XML doc comment on emitted code | changes | unchanged | no | no |
 | Reorder emitted statements, rename a local | changes | unchanged | no | no |
-| Add a public method, overload, property or nested type | changes | **gains a line** | **yes** | **yes** |
-| Change a parameter type, name, default, or return type | changes | **line changes** | **yes** | **yes** |
-| Remove a public member | changes | loses a line | test failure, not a build error (see below) | **yes** |
-| Widen a `private` member in `src/` to `internal` | — | `seams.txt` gains a line | **yes** | **yes** |
+| Add a public method, overload, property or nested type | changes | `.api.txt` **gains a line** | no — shown in the PR comment for review | not required |
+| Change a parameter type, name, default, or return type | changes | `.api.txt` **line changes** | no — shown in the PR comment for review | not required |
+| Remove a public member | changes | `.api.txt` loses a line | no — shown in the PR comment for review | not required |
+| Widen a `private` member in `src/` to `internal` | — | `seams.txt` gains a line | **yes** (`PARQAPI002`) | **yes** |
 | Add a `public` member to the `Attributes` package | — | `PublicAPI.Unshipped.txt` gains a line | **yes** (`RS0016`) | **yes** |
 
 Body, perf and comment changes are not API changes, and the contract must not tax them — a gate
-that fires on every performance commit is a gate that gets suppressed.
+that fires on every performance commit is a gate that gets suppressed. The derived-output diff keeps
+that property for the emitted surface: those changes leave its "Emitted public API" section empty.
+
+A model-specific surface claim in `GoldenCodeGenRegressionTests` (a `ShouldContain` /
+`ShouldNotContain` on the emitted source) still fails the test run when a change breaks it, and
+`BackendCompatibilityPolicyTests` still holds the classic backend to its declared core surface
+([14](./14-COMPATIBILITY-MATRIX.md)). Those are behavioural claims about specific members, not a
+catalogue.
 
 ### Division of labour between the build and CI
 
 Each gate enforces the half of the rule it can actually see.
 
-- **The build** can see whether a member exists outside its catalogue, so `PARQAPI001` and
-  `PARQAPI002` enforce *"nothing exists that is not catalogued"*. A hand-edited golden file, a
-  half-applied refresh, a newly widened member — all fail `dotnet build`, in the IDE, before a test
-  is ever run.
+- **The build** can see whether a member exists outside its catalogue, so `RS0016` and
+  `PARQAPI002` enforce *"nothing exists that is not catalogued"*. A newly widened member or a new
+  public attribute member fails `dotnet build`, in the IDE, before a test is ever run.
 - **CI** can see the diff against the pull request's base, which is the only place *"new"* is
   definable, so `scripts/CheckApiLedger.cs` enforces *"nothing is catalogued without a ledger
-  entry"*.
+  entry"* for `src/api/seams.txt` and every `PublicAPI.Unshipped.txt`.
 
-Neither half is redundant and neither can do the other's job. Note in particular that
-`UPDATE_GOLDEN_FILES=true` rewrites the `.g.cs` and the `.api.txt` from the same emitted string (by
-design — see [17](./17-GENERATED-API-BASELINES.md), it is what makes the two unable to drift), so
-after a refresh the build is green again and the CI check is what demands the rationale. Removals
-are the one case handled only by the test suite: a removal is not "something entering a surface",
-and `GoldenCodeGenRegressionTests` already compares the two files byte for byte and names the
-removed member.
+Neither half is redundant and neither can do the other's job.
+
+## The emitted surface: reviewed, not catalogued
+
+`PARQAPI001` used to apply the same two halves to the emitted surface: an analyzer compared each
+checked-in golden `.g.cs` with its checked-in `.api.txt`, and `CheckApiLedger.cs` demanded a ledger
+entry whenever an `.api.txt` changed. Both halves depended on those files being checked in. When
+the golden output became a derived CI artifact ([17](./17-GENERATED-API-BASELINES.md#why-none-of-it-is-checked-in))
+there was nothing left for either to compare, so `PARQAPI001` and its analyzer were deleted — the
+ID is retired and will not be reused — and `CheckApiLedger.cs` no longer looks at `*.api.txt`.
+
+What replaced them is the **"Emitted public API"** section of the sticky derived-output comment the
+`derived` CI job posts on every pull request. It is the base-to-head diff of every golden model's
+`.api.txt` and `.api.shape.txt`, rendered from the same string as the emitted source, expanded at
+the top of the comment. The reviewer's job is:
+
+1. **If the section is empty**, the pull request changed no emitted signature, whatever the size of
+   the "Emitted code" diff below it.
+2. **If it is not**, every added, removed or changed line must be one the pull request says it
+   intends. An unexplained line is a defect in the pull request — ask for it to be explained or
+   removed, exactly as the old gate would have.
+3. **For a deliberate `generated-shape` or `breaking-major` change**, the ledger is still the place
+   to keep the reasoning; entries with `**Surface:** emitted` remain valid, and the buckets below
+   still describe them. CI no longer requires one.
+
+The pull-request template carries this as a checkbox. This is a weaker guarantee than a build
+error, stated rather than hidden: a reviewer who does not read the section can let a change
+through. It was accepted because the old guarantee cost a refresh commit on every emitter change,
+and because the diff the reviewer reads is the same diff the gate used to demand they read.
 
 ## The buckets
 
@@ -131,12 +163,12 @@ exactly the set of entries dated on or after 2026-09-10.
 
 ## The escape hatch
 
-A ledger entry marked `**Unapproved-by-design:**` suppresses `PARQAPI001` / `PARQAPI002` for the
-signature it names.
+A ledger entry marked `**Unapproved-by-design:**` suppresses `PARQAPI002` for the signature it
+names. (It also suppressed `PARQAPI001` while that gate existed.)
 
 ```markdown
 ### 2026-09-12 — `TryReadColumnSlice(int, int)`
-- **Surface:** emitted
+- **Surface:** seam
 - **Unapproved-by-design:** spike for #222; measuring whether a slice read beats a row-group read
   before deciding whether this member should exist at all.
 ```
@@ -194,17 +226,15 @@ remaining `public` member spellings are effectively `internal` and neither assem
 
 Four steps.
 
-1. **Make the change.** If it touches the emitted surface, refresh the baselines:
-   ```bash
-   UPDATE_GOLDEN_FILES=true dotnet test test/Parquet.SourceGenerator.Tests/Parquet.SourceGenerator.Tests.csproj \
-     --configuration Release --filter "FullyQualifiedName~GoldenCodeGenRegressionTests"
-   ```
-   Or comment `/update-golden` on the pull request. If it widens a member in `src/`, build once and
-   paste the signature `PARQAPI002` prints into `src/api/seams.txt` — the message contains the exact
-   line, so there is nothing to transcribe.
-2. **Read the catalogue diff.** `git diff -- '*.api.txt' src/api/seams.txt '**/PublicAPI.Unshipped.txt'`
-   is the review-sized statement of what your change does to the API. If it is empty, you changed an
-   implementation, and steps 3 and 4 do not apply.
+1. **Make the change.** If it widens a member in `src/`, build once and paste the signature
+   `PARQAPI002` prints into `src/api/seams.txt` — the message contains the exact line, so there is
+   nothing to transcribe. If it touches the emitted surface there is nothing to refresh; the
+   emitted API is derived in CI.
+2. **Read the API diffs.** `git diff -- src/api/seams.txt '**/PublicAPI.Unshipped.txt'` is the
+   review-sized statement of what your change does to the catalogued surfaces, and the "Emitted
+   public API" section of the derived-output comment is the same statement for the emitted surface
+   (run `dotnet run scripts/DerivedOutputs.cs` on both commits to see it before pushing). If both
+   are empty, you changed an implementation, and steps 3 and 4 do not apply.
 3. **Write the ledger entry**, newest first, one per added or changed signature. Pick the bucket.
    Fill in *Alternatives considered* — that is the field with a reader in a year's time.
 4. **Verify.**
@@ -215,17 +245,18 @@ Four steps.
 
 ## Mechanism, and why
 
-Both new gates are **Roslyn analyzers fed their catalogues as `AdditionalFiles`**, referenced by
-path with `OutputItemType="Analyzer" ReferenceOutputAssembly="false" PrivateAssets="all"`. They live
-in `tools/Parquet.SourceGenerator.ApiGates`.
+The gates this contract added were **Roslyn analyzers fed their catalogues as `AdditionalFiles`**,
+referenced by path with `OutputItemType="Analyzer" ReferenceOutputAssembly="false"
+PrivateAssets="all"`. They live in `tools/Parquet.SourceGenerator.ApiGates`; `PARQAPI002` is the one
+that remains.
 
 An analyzer was chosen over an MSBuild target for three reasons:
 
 1. **It is the mechanism already in the repository.** Surface 2 is guarded by
    `Microsoft.CodeAnalysis.PublicApiAnalyzers` reading `PublicAPI.Shipped.txt` as an
-   `AdditionalFile`. Making surfaces 1 and 3 work the same way means one mental model, one failure
+   `AdditionalFile`. Making surfaces 1 and 3 work the same way meant one mental model, one failure
    shape, and one place a contributor learns to look.
-2. **The rules need to parse C#.** `PARQAPI001` re-derives the signature grammar from the golden
+2. **The rules need to parse C#.** `PARQAPI001` re-derived the signature grammar from the golden
    source; `PARQAPI002` needs symbols to render a fully-qualified, canonically-ordered signature. An
    MSBuild target could only shell out to a program that does that — which is a second executable,
    a second build-ordering problem, and a second copy of the renderer.
@@ -235,23 +266,23 @@ An analyzer was chosen over an MSBuild target for three reasons:
 
 ### One renderer, not two
 
-`GeneratedApiBaseline.cs` is compiled into **both** the analyzer and the test assembly. The build
-gate and the test gate therefore cannot disagree about what a signature looks like — there is no
-second implementation to drift. It moved from
-`test/Parquet.SourceGenerator.Tests/` to `tools/Parquet.SourceGenerator.ApiGates/` for this reason,
-and the test project compiles it by link.
+`GeneratedApiBaseline.cs` was compiled into **both** the `PARQAPI001` analyzer and the test
+assembly, so the build gate and the test gate could not disagree about what a signature looks like.
+It moved from `test/Parquet.SourceGenerator.Tests/` to `tools/Parquet.SourceGenerator.ApiGates/`
+for that reason, and the test project still compiles it by link — it is the renderer that produces
+every derived `.api.txt`.
 
 ### Why it can never run in a consumer's compilation
 
-A consumer's own models appear in none of this repository's baselines, so a gate running in their
+A consumer's own code appears in none of this repository's catalogues, so a gate running in their
 build would fail every compilation. Three independent guards, any one of which suffices:
 
 1. `tools/Parquet.SourceGenerator.ApiGates` is `IsPackable=false`.
 2. Both generator packages build their nupkg payload from `$(TargetPath)` alone (see the
    `PackBuildOutputs` target in each `.csproj`), so no transitive analyzer is packed; the project
    references are additionally `PrivateAssets="all"`.
-3. Both rules short-circuit unless the compilation was handed their catalogue as an
-   `AdditionalFile`. No `.api.txt`, no `PARQAPI001`; no `seams.txt`, no `PARQAPI002`.
+3. The rule short-circuits unless the compilation was handed its catalogue as an
+   `AdditionalFile`: no `seams.txt`, no `PARQAPI002`.
 
 CI proves it rather than asserting it: `PackageConsumption` and `PackageConsumptionLegacy` restore
 the built `.nupkg` files from a local feed and compile against them on four target frameworks.
@@ -261,9 +292,10 @@ the built `.nupkg` files from a local feed and compile against them on four targ
 | Thing | Where |
 |:---|:---|
 | Grammar for every catalogue line | [17 - Generated Public API Baselines](./17-GENERATED-API-BASELINES.md) |
+| Emitted API review diff | `derived` job in `.github/workflows/ci.yml`; `scripts/DerivedOutputs.cs`, `scripts/RenderDerivedDiff.cs` |
 | The ledger | [`docs/api/LEDGER.md`](./api/LEDGER.md) |
 | Seam catalogue | [`src/api/seams.txt`](../src/api/seams.txt) |
-| Analyzers | `tools/Parquet.SourceGenerator.ApiGates/` |
+| Analyzer (`PARQAPI002`) | `tools/Parquet.SourceGenerator.ApiGates/` |
 | CI check | `scripts/CheckApiLedger.cs` |
 | `0.1.0` freeze | [#230](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/230) |
 | Surface audit and naming grammar | [#216](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/216) |

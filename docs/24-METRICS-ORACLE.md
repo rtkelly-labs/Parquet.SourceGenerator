@@ -21,8 +21,10 @@ last self-reported number in the quality stack without a cross-check.
 
 `.github/workflows/metrics-oracle.yml`, nightly (`30 5 * * *`) plus manual dispatch:
 
-1. `scripts/CodeMetrics.cs -- --out $RUNNER_TEMP/metrics` measures the checkout. Nothing is
-   read from a checked-in file: both tools measure the same commit, in the same job.
+1. `scripts/CodeMetrics.cs -- --src-only --out $RUNNER_TEMP/metrics` measures the checkout's
+   `src/` (layer 1 only — the generated-code layer needs the golden models the test suite
+   publishes, and the oracle does not compare it). Nothing is read from a checked-in file: both
+   tools measure the same commit, in the same job.
 2. `nuget install Microsoft.CodeAnalysis.Metrics` (version pinned in the workflow env), stage
    the matching Roslyn MSBuild build host, and run `Metrics.exe` over both generator projects in
    one invocation, emitting one XML report.

@@ -86,9 +86,14 @@ If you publish numbers anywhere, include the machine and runtime they came from.
    via `dotnet csharpier check .`). Do not run `dotnet format` on C# — its Roslyn formatter
    conflicts with CSharpier and `IDE0055` is disabled in `.editorconfig` by design.
 3. **Tests**: The suite must pass cleanly (`dotnet test`).
-4. **PR Title**: Must follow Conventional Commits — CI validates it (`feat:`, `fix:`, `perf:`,
+4. **Derived outputs**: emitted golden source and API, code metrics, duplication and call-graph
+   edges are generated, not committed (`dotnet run scripts/DerivedOutputs.cs` writes them to the
+   gitignored `artifacts/`). CI posts their diff against the merge base as one comment on the pull
+   request; check its "Emitted public API" section shows only the changes you intend
+   ([docs/17](docs/17-GENERATED-API-BASELINES.md), [docs/18](docs/18-API-CHANGE-CONTRACT.md)).
+5. **PR Title**: Must follow Conventional Commits — CI validates it (`feat:`, `fix:`, `perf:`,
    `docs:`, `style:`, `refactor:`, `test:`, `chore:`, `ci:`, `build:`).
-5. **Commit Message**: Use Conventional Commit messages too.
+6. **Commit Message**: Use Conventional Commit messages too.
 
 ### Stacked pull requests
 

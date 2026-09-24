@@ -13,26 +13,35 @@ capable?**
 Nothing could answer that before. The generated code is the code users actually run and actually
 debug through, it exists in no shipped assembly, and no off-the-shelf .NET quality tool can see it.
 `*.api.txt` ([17](./17-GENERATED-API-BASELINES.md)) made the emitted *surface* visible; this makes
-the emitted *volume and shape* visible, and puts the two in the same file so the ratio between them
-can be watched.
+the emitted *volume and shape* visible, and puts the two in the same report so the ratio between
+them can be watched.
 
 ## Where the numbers live
 
-Beside the golden files, one baseline per model:
+Nowhere in the repository. Like the golden models they measure, the numbers are derived from the
+code on every run and never checked in ([17](./17-GENERATED-API-BASELINES.md#why-none-of-it-is-checked-in)).
+One report per model:
 
 ```
-test/Parquet.SourceGenerator.Tests/GoldenFiles/
-  OrderEventParquetExtensions.g.cs          <- the emitted source (golden-gated)
-  OrderEventParquetExtensions.api.txt       <- its public surface  (docs/17)
-  OrderEventParquetExtensions.metrics.txt   <- its metrics         (this page)
-  Models/OrderEvent.cs                      <- the consumer-side declaration it extends
+artifacts/golden/                           <- published by GoldenCodeGenRegressionTests (docs/17)
+  OrderEventParquetExtensions.g.cs          <- the emitted source
+  OrderEventParquetExtensions.api.txt       <- its public surface
+artifacts/metrics/generated/
+  OrderEventParquetExtensions.metrics.txt   <- its metrics (this page)
+test/Parquet.SourceGenerator.Tests/GoldenModels/
+  OrderEvent.cs                             <- the consumer-side declaration it extends (checked in)
 ```
+
+`scripts/CodeMetrics.cs` reads the published golden models (`--golden`, default
+`artifacts/golden`), so the golden suite runs first; `scripts/DerivedOutputs.cs` does both in that
+order. In CI the `derived` job produces the reports for the pull request's head and its merge base,
+and the difference appears in the "Generated-code metrics" section of the sticky derived-output
+comment and in the `derived-outputs` artifact.
 
 **Per model, not one aggregate file.** The `.api.txt` convention is already per model, a reviewer
-already reads these three files as a set, and the diff for a change to one model stays inside that
+already reads these files as a set, and the diff for a change to one model stays inside that
 model's file instead of rewriting a shared table. The cross-model view that an aggregate would have
-given is produced on demand into the CI job summary by
-`dotnet run scripts/CodeMetrics.cs -- --summary <file>`.
+given is produced into the CI job summary by `dotnet run scripts/CodeMetrics.cs -- --summary <file>`.
 
 ### The format
 
@@ -55,7 +64,7 @@ declaration and a namespace total would not be a number about emitted code.
 |:--|:--|
 | `EMITTER` | `v6` (`Parquet.SourceGenerator`) or `V5` (`Parquet.SourceGenerator.Legacy`) |
 | `MEMBERS` | Emitted public members — **read from the sibling `.api.txt`**, never recomputed |
-| `CC` `CL` `SLOC` `ELOC` | Totals over the types the golden file declares |
+| `CC` `CL` `SLOC` `ELOC` | Totals over the types the golden model's emitted source declares |
 | `ERRORS` | C# compile errors in the emitted code (see [below](#errors-is-a-metric-not-an-exception)) |
 | `METHODS` / `MAXCC` | Emitted method count and the worst single method's cyclomatic complexity |
 | `ELOC_PER_MEMBER` | The size-per-capability ratio |
@@ -70,9 +79,8 @@ declaration and a namespace total would not be a number about emitted code.
   is the cost this ratio is meant to price.
 - **The denominator is the `.api.txt` member count**, read from the file rather than recomputed.
   That count is already this repository's definition of emitted surface, already governed by the
-  API change contract ([18](./18-API-CHANGE-CONTRACT.md)), and #244 established that this
-  repository cannot afford two definitions of it. `GeneratedCodeMetricsBaselineTests` asserts the
-  number on the summary line is the one `GeneratedApiBaseline.CountMembers` gives.
+  API change review ([18](./18-API-CHANGE-CONTRACT.md)), and #244 established that this
+  repository cannot afford two definitions of it.
 - **Reading it.** Rising means each unit of capability now costs more emitted machinery — the
   generator is getting heavier without getting more useful. Falling means the emitter gained
   leverage. It is the number to quote when arguing that a feature "paid for itself".
@@ -88,17 +96,21 @@ Generated code is not written to be read. A long flat emitted method with no bra
 where the same shape hand-written would be a smell. So layer 1's metric set was re-examined against
 the 264 emitted methods and 35 emitted types in the five golden models rather than imported.
 
+When this page was written every field but `MI` was drift-gated against a checked-in baseline. That
+gate is retired (see [below](#the-gate-that-remains)); the verdicts now say which fields are worth a
+reviewer's attention when they move in the derived-output diff.
+
 | Metric | Verdict | Evidence |
 |:--|:--|:--|
-| `CC` cyclomatic complexity | **Gated.** The strongest signal. | Median 2, p90 15, max 97. 49 of 264 methods exceed 7 and 9 exceed 25. Real spread, and it tracks something a consumer feels: the number of paths through the code they are stepping into. |
-| `SLOC` / `ELOC` | **Gated.** | The volume the emitter imposes on every consuming compilation; the input to the ratio above. |
-| `CL` class coupling | **Gated.** | Median 7 per method, max 32; types range 1–76. It measures how much of the Parquet.Net surface the emitted code binds to, which is exactly the thing that breaks on a dependency upgrade. |
-| `ERRORS` | **Gated.** | Does the emitted code compile. Zero spread is the point. |
-| `MEMBERS` | **Gated.** | Cross-reference with `.api.txt`; a mismatch means the two artefacts were refreshed apart. |
-| `DIT` depth of inheritance | **Gated, but carries no signal today.** | Constant 1 across every emitted type — the emitter emits no hierarchies. Gating a constant costs nothing and a change would be genuinely notable, so it stays; nobody should read anything into it. |
-| `MI` maintainability index | **Reported, NOT gated.** | See below. |
+| `CC` cyclomatic complexity | **Signal.** The strongest. | Median 2, p90 15, max 97. 49 of 264 methods exceed 7 and 9 exceed 25. Real spread, and it tracks something a consumer feels: the number of paths through the code they are stepping into. |
+| `SLOC` / `ELOC` | **Signal.** | The volume the emitter imposes on every consuming compilation; the input to the ratio above. |
+| `CL` class coupling | **Signal.** | Median 7 per method, max 32; types range 1–76. It measures how much of the Parquet.Net surface the emitted code binds to, which is exactly the thing that breaks on a dependency upgrade. |
+| `ERRORS` | **Gated — the only gated field.** | Does the emitted code compile. Zero spread is the point. |
+| `MEMBERS` | **Signal.** | Read from the published `.api.txt`, so it moves exactly when the "Emitted public API" section of the diff does. |
+| `DIT` depth of inheritance | **Reported, carries no signal today.** | Constant 1 across every emitted type — the emitter emits no hierarchies. A change would be genuinely notable; nobody should read anything into it otherwise. |
+| `MI` maintainability index | **Reported, little signal.** | See below. |
 
-### Why the Maintainability Index is reported but not gated
+### Why the Maintainability Index was never gated
 
 [21](./21-CODE-METRICS.md) already notes that MI is a poor absolute judgement of quality and keeps
 it only as a *change detector* for hand-written code. For generated code even that justification
@@ -118,8 +130,8 @@ method is evidence of a human failing to decompose. A long emitted method is a d
 the emitter — inlining a per-column ladder rather than emitting a loop is the whole performance
 argument ([11](./11-PERFORMANCE-OPTIMIZATION-FINDINGS.md)). Gating MI here would gate the design.
 
-So MI is written into the baseline for the reader, and the gate ignores it. It is the one number in
-the file that may be stale between refreshes; that is the deliberate cost of keeping one grammar.
+So MI is written into the report for the reader and was never compared, even while the other
+fields were; it is kept only so the two layers share one grammar.
 
 ## `ERRORS` is a metric, not an exception
 
@@ -128,26 +140,29 @@ unresolved reference in `src/` means a broken measurement host. Layer 2 delibera
 opposite: emitted code that does not compile is a defect in the emitter, not a broken host, and
 throwing would hide it behind a stack trace instead of recording it in a file a reviewer reads.
 
-So the count is a gated field on the summary line. `ERRORS=0` is the expectation. A non-zero
-baseline is a recorded, reviewable defect that a reviewer can see the size of, and the gate stops
-it getting any bigger.
+So the count is recorded on the summary line of every report — and `ERRORS > 0` then fails the run,
+once every model has been measured, so the report is written *and* the defect cannot merge. It is
+the one gate layer 2 keeps: emitted code that does not compile is not a number that moved.
 
-Today one model is non-zero: **`NestedOrderParquetExtensions` at `ERRORS=6`**. The emitted writer
-dereferences a nullable value-type compound member directly —
+That was not always the policy. While the numbers were checked in, a non-zero count was a recorded
+baseline that the drift gate stopped growing, and when this page was written one model was non-zero:
+**`NestedOrderParquetExtensions` at `ERRORS=6`**. The emitted writer dereferenced a nullable
+value-type compound member directly —
 
 ```csharp
 var ca_7_0 = item.Start;   // Start is Point?
 var cv_7 = ca_7_0.X;       // CS1061: 'Point?' has no definition for 'X'
 ```
 
-— in both the `NET6_0_OR_GREATER` and legacy write paths, and the emitted definition level is
-hard-coded to "present" besides. Tracked as
-[#255](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/255); layer 2 measures it rather
-than fixing it, and the gate stops the count growing.
+— in both the `NET6_0_OR_GREATER` and legacy write paths, and the emitted definition level was
+hard-coded to "present" besides. Tracked and fixed as
+[#255](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/255); every model now measures
+`ERRORS=0`, which is what lets the gate be absolute.
 
-That this was undiscovered until now is itself a finding: `GoldenCodeGenRegressionTests` parses the
-emitted source and asserts zero **syntax** diagnostics, but never binds it against Parquet.Net, so
-a semantic error in emitted code could not fail any gate. It can now.
+That it was undiscovered until layer 2 is itself a finding: `GoldenCodeGenRegressionTests` then
+parsed the emitted source and asserted zero **syntax** diagnostics, but never bound it against
+Parquet.Net, so a semantic error in emitted code could not fail any gate. It can now — here, and in
+that suite's in-memory compilation of the driver-generated models.
 
 ## How the emitted code is compiled in order to be measured
 
@@ -155,18 +170,18 @@ Generated code is a *fragment*: it extends a type the consumer wrote. On its own
 compile, and metrics over a compilation with unresolved types are fiction — `IOperation` trees
 degrade and the Halstead counts MI and coupling are built from become meaningless.
 
-So each golden file is compiled together with the model declaration it was generated for, checked
-in at `GoldenFiles/Models/<Model>.cs`. Those files mirror the models
-`GoldenCodeGenRegressionTests` generates from; they are inputs to the measurement, not artefacts of
-it, and they are not compiled into the test assembly (`GoldenFiles/**/*.cs` is `Compile`-removed).
-They cannot drift silently: if the emitter starts referencing a member the declaration does not
-have, `ERRORS` moves and the gate fires.
+So each published golden model is compiled together with the model declaration it was generated
+for, checked in at `test/Parquet.SourceGenerator.Tests/GoldenModels/<Model>.cs`. Those files mirror
+the models `GoldenCorpus` declares; they are hand-written inputs to the measurement, not artefacts
+of it, and they are not compiled into the test assembly (`GoldenModels/**/*.cs` is
+`Compile`-removed). They cannot drift silently: if the emitter starts referencing a member the
+declaration does not have, `ERRORS` moves and the run fails.
 
 Two more decisions worth knowing:
 
-- **References come from the project the golden files live in**, not from a second set of package
-  pins — Parquet.Net 6.1.0 and Apache.Arrow 23.0.0, exactly what a consumer of this repository's
-  tests gets. The one exception is the legacy golden file: the V5 emitter targets the classic
+- **References come from the test project that owns the golden models**, not from a second set of
+  package pins — Parquet.Net 6.1.0 and Apache.Arrow 23.0.0, exactly what a consumer of this
+  repository's tests gets. The one exception is the legacy golden model: the V5 emitter targets the classic
   `DataColumn` API and its output does not compile against Parquet.Net 6 **at all**, so it is
   measured against **4.25.0**, the same pin `test/PackageConsumptionLegacy` uses.
 - **Parse options come from that project too**, so the preprocessor symbols are a modern consumer's
@@ -184,59 +199,51 @@ Every ordering is `StringComparer.Ordinal`. `ELOC_PER_MEMBER` is a quotient of t
 rendered to one decimal place with `CultureInfo.InvariantCulture`.
 
 Verified by regenerating twice (byte-identical) and once under `LC_ALL=tr_TR.UTF-8`
-(byte-identical). Cross-platform determinism is re-proven on every CI run, which regenerates these
-baselines on `ubuntu-latest` / x64 from files generated on macOS / arm64 and compares them with no
-tolerance at all.
+(byte-identical). While the baselines were checked in, every CI run regenerated them on
+`ubuntu-latest` / x64 and compared them, with no tolerance, against files generated on macOS / arm64.
+Determinism now matters for the review diff instead: base and head are measured on the same runner,
+and any nondeterminism would appear in every pull request's comment as a change nobody made.
 
-## The tolerance, and the gate
+## The gate that remains
 
-| Metric | Tolerance |
-|:--|:--|
-| `MEMBERS`, `CC`, `CL`, `SLOC`, `ELOC`, `DIT`, `ERRORS`, `METHODS`, `MAXCC`, `ELOC_PER_MEMBER` | **Exact** |
-| `MI` | **Not compared at all** |
+**`ERRORS` must be 0.** That is the only condition under which layer 2 fails, and it fails on level,
+not on change — a single compile error in emitted code is a defect whatever the base had.
 
-**Exact, where layer 1 allowed MI ±2.** Every gated field is an integer count of a syntactic fact
-over a checked-in input file, computed by a pinned Roslyn — there is nothing left for a tolerance to
-absorb, and the only field that needed one is the field that is no longer compared.
+Every other field is a report. Until the derived-output change, `MEMBERS`, `CC`, `CL`, `SLOC`,
+`ELOC`, `DIT`, `ERRORS`, `METHODS`, `MAXCC` and `ELOC_PER_MEMBER` were compared **exactly** against
+checked-in `*.metrics.txt` baselines beside the golden files (`MI` was not compared at all), and a
+pull request that legitimately made the emitted code larger refreshed them. That drift gate is gone
+for the same reasons as the golden files' own
+([17](./17-GENERATED-API-BASELINES.md#why-none-of-it-is-checked-in)): the refresh commit was
+mechanical, it arrived on nearly every emitter change, and what the reviewer actually needed was the
+diff — which the "Generated-code metrics" section of the derived-output comment now gives them,
+per model and per entity, without anyone committing it.
 
-**The gate is on change, not on level.** Nothing here is measured against an absolute "good" value,
-and that is not squeamishness: emitted code legitimately has characteristics that would be smells
-if hand-written, so a level-based threshold imported from layer 1 would fail honest code. A pull
-request that legitimately makes the emitted code larger refreshes the baseline, and the refreshed
-diff is what the reviewer approves.
+**There is still no absolute threshold on the other fields**, and that is not squeamishness:
+emitted code legitimately has characteristics that would be smells if hand-written, so a
+level-based threshold imported from layer 1 would fail honest code.
 
-A failure names the model and the metric:
-
-```
-Generated code metrics drifted for model 'OrderEventParquetExtensions': test/.../OrderEventParquetExtensions.metrics.txt
-  ~ summary: OrderEventParquetExtensions
-      CC 310 -> 311
-      SLOC 2735 -> 2739
-      ELOC 890 -> 892
-  ~ changed: M:SampleDomain.Models.OrderEventParquetExtensions.ResolveSchemaField(...)
-      CC 8 -> 9
-      CL 7 -> 8
-      SLOC 52 -> 56
-```
-
-## Refreshing
-
-The same verb as the golden files themselves:
+## Producing the reports
 
 ```bash
-UPDATE_GOLDEN_FILES=true dotnet test test/Parquet.SourceGenerator.Tests/Parquet.SourceGenerator.Tests.csproj \
-  --filter "FullyQualifiedName~GoldenCodeGenRegressionTests"   # *.g.cs and *.api.txt
-UPDATE_GOLDEN_FILES=true dotnet run scripts/CodeMetrics.cs      # GoldenFiles/*.metrics.txt
+dotnet test test/Parquet.SourceGenerator.Tests/Parquet.SourceGenerator.Tests.csproj \
+  --configuration Release --filter "FullyQualifiedName~GoldenCodeGenRegressionTests"  # artifacts/golden/
+dotnet run scripts/CodeMetrics.cs          # artifacts/metrics/ and artifacts/metrics/generated/
+# or all derived outputs at once:
+dotnet run scripts/DerivedOutputs.cs
 ```
 
-Or comment `/update-golden` on a pull request, which runs both in that order and commits the result
-— the golden sources first, then the metrics measured over them, so the three artefacts cannot
-drift apart.
+`--src-only` measures layer 1 alone; the nightly metrics oracle ([24](./24-METRICS-ORACLE.md)) uses
+it, because the oracle is about the hand-written code.
 
 > The file-based `dotnet run scripts/*.cs` apps need the .NET 10 SDK. If your `PATH` SDK is older,
 > run them under `~/.dotnet/dotnet`.
 
-## The baseline as it stands
+## Historical snapshot: the numbers when this page was written
+
+Read from the then-checked-in baselines, before #255 was fixed and before later emitter work moved
+every number. Not maintained — current figures are in the `derived-outputs` artifact — but the
+analysis below was made against them and still reads correctly as a statement about that emitter.
 
 | Model | Emitter | Members | SLOC | ELOC | CC | Max method CC | CL | Errors | ELOC/member |
 |:--|:--|--:|--:|--:|--:|--:|--:|--:|--:|
@@ -434,7 +441,7 @@ One more thing the measurement put in perspective: the *read* methods emit state
 the largest state machine the generator produces. Size in source lines and cost at runtime are not
 the same axis, which is the whole point of having measured.
 
-**So: keep the metric, keep the drift gate, and read it for what it is** — "a consumer debugging a
+**So: keep the metric, watch it in the review diff, and read it for what it is** — "a consumer debugging a
 failing write lands in 1,148 lines", and "this emitter change made the generated code materially
 bigger". Neither of those is a reason to split the method, and nothing in this document should be
 cited as one without new measurements.
@@ -481,19 +488,20 @@ Treat the throughput and cold-start figures as indicative to about ±3% (Server 
   `[src/**.cs]` ([21](./21-CODE-METRICS.md#the-analyzer-rules)) and stay there. Enabling them on
   emitted code would fail every consumer's build for a design decision they did not make, which is
   why the emitted files carry `#pragma warning disable` headers in the first place.
-- **Beside the golden files.** These baselines live next to the files they describe because their
-  lifecycle is the golden files' lifecycle, not `src/`'s. That is also why they stay checked in
-  while layer 1's `src/` numbers no longer are ([21](./21-CODE-METRICS.md#why-the-hand-written-numbers-are-not-checked-in)):
-  they change only when the emitted code does, in the same commit.
-- **Not a governed API surface.** [18](./18-API-CHANGE-CONTRACT.md) governs `*.api.txt`,
-  `src/api/seams.txt` and the `PublicAPI.*.txt` files. A `*.metrics.txt` is not a catalogue and
-  adds no public member, and `GoldenFiles/Models/*.cs` is `Compile`-removed from every assembly, so
-  neither needs a `docs/api/LEDGER.md` entry.
+- **No checked-in baseline.** These reports used to live beside the golden files, and stayed
+  checked in after layer 1's `src/` numbers stopped being
+  ([21](./21-CODE-METRICS.md#why-the-hand-written-numbers-are-not-checked-in)), on the argument that
+  they changed only when the emitted code did. Once the emitted code itself stopped being checked
+  in, that argument went with it.
+- **Not a governed API surface.** [18](./18-API-CHANGE-CONTRACT.md) governs `src/api/seams.txt` and
+  the `PublicAPI.*.txt` files. A `*.metrics.txt` is not a catalogue and adds no public member, and
+  `GoldenModels/*.cs` is `Compile`-removed from every assembly, so neither needs a
+  `docs/api/LEDGER.md` entry.
 
 ## Related
 
 - [17 - Generated Public API Baselines](./17-GENERATED-API-BASELINES.md) — the `.api.txt`
-  companion, and the source of the `MEMBERS` count.
+  companion, the source of the `MEMBERS` count, and the derived-output review diff.
 - [21 - Code Metrics & The Complexity Ratchet](./21-CODE-METRICS.md) — layer 1, the
   hand-written half, and the shared format rationale.
 - [11 - Performance Optimization Findings](./11-PERFORMANCE-OPTIMIZATION-FINDINGS.md) — why the

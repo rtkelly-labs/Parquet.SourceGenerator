@@ -73,16 +73,19 @@ evidence the refactor case rests on; #263 and #264 are its first two debtors.
 
 ## In CI
 
-`ci.yml` runs `dotnet run scripts/Duplication.cs -- --summary duplication.md` beside the code
-metrics step, appends the summary (totals and the largest clusters) to the job summary, and
-uploads the full report in the `code-metrics` artifact. It does not fail the build.
+The `derived` job in `ci.yml` runs `scripts/Duplication.cs` as part of
+`scripts/DerivedOutputs.cs`, beside the code metrics, appends the summary (totals and the largest
+clusters) to the job summary, and uploads the full report in the `derived-outputs` artifact (under
+`metrics/`). On a pull request the report is also produced for the merge base, and any difference
+appears in the "Duplication" section of the derived-output comment
+([17](./17-GENERATED-API-BASELINES.md#the-review-diff)). It does not fail the build.
 
 It used to: the report was checked in as `metrics/duplication.txt` and any difference failed CI
 with zero tolerance. That was removed for the reasons in
 [21 § Why the hand-written numbers are not checked in](./21-CODE-METRICS.md#why-the-hand-written-numbers-are-not-checked-in)
 — the file was a pure function of `src/`, and the answer to a red build was always to refresh it.
 A new cluster is still a question with a name attached — fold it, or justify carrying it — and the
-way to ask it is to diff two reports:
+way to ask it is to diff two reports, which that comment now does on every pull request. Locally:
 
 ```bash
 dotnet run scripts/Duplication.cs                     # artifacts/metrics/duplication.txt

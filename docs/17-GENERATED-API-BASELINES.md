@@ -15,18 +15,20 @@ The second is the **generated** surface — everything the emitters write into a
 compilation. It is the surface consumers actually call, and it was invisible to review:
 
 - It exists in no shipped assembly, so no .NET API documentation or API-diff tool can see it.
-- The golden files under `test/Parquet.SourceGenerator.Tests/GoldenFiles/*.g.cs` contain the full
-  emitted body. A new public overload and a retuned buffer loop produce diffs of the same visual
-  shape, so a reviewer cannot tell an API change from an implementation change by looking.
+- The emitted source of a golden model contains the full body. A new public overload and a
+  retuned buffer loop produce diffs of the same visual shape, so a reviewer cannot tell an API
+  change from an implementation change by looking.
 
-The `.api.txt` baselines close that gap. Every golden `Name.g.cs` has a companion `Name.api.txt`
-holding **only** the signatures of the public members that file emits: no bodies, no comments, no
-`#nullable` scaffolding beyond the header.
+The `.api.txt` rendering closes that gap. Every golden model's `Name.g.cs` has a companion
+`Name.api.txt` holding **only** the signatures of the public members that file emits: no bodies, no
+comments, no `#nullable` scaffolding beyond the header.
 
 > Introduced by issue #215. #216 (the API surface audit) reads these files rather than
 > hand-transcribing signatures; #217 uses them to demonstrate the surface *shrinking*; #227's
-> profile matrix is a post-freeze follow-up recorded in [document 38](38-FEATURE-PROFILE-MATRIX-SCOPE-227.md);
-> #229 renders the docs-site API grid from the checked-in contracts.
+> profile matrix is a post-freeze follow-up recorded in [document 38](38-FEATURE-PROFILE-MATRIX-SCOPE-227.md).
+> #229 rendered the docs-site API grid from the checked-in contracts; those files are no longer
+> checked in (see [below](#why-none-of-it-is-checked-in)), so the grid needs another source — the
+> `derived-outputs` CI artifact, or a run of the golden suite in the docs build.
 
 ## The grammar
 
@@ -73,8 +75,8 @@ Rules that hold for every line:
 
 ### Two deliberate deviations from `PublicAPI.txt`
 
-Both follow from the baseline being derived from **syntax** rather than from symbols: at the point
-the golden files are produced, the emitted source has not been compiled against the consumer's
+Both follow from the rendering being derived from **syntax** rather than from symbols: at the point
+the golden models are rendered, the emitted source has not been compiled against the consumer's
 references, so no semantic model exists.
 
 - **The `!` non-null reference marker is not synthesized.** Whether a type name denotes a reference
@@ -87,16 +89,31 @@ references, so no semantic model exists.
 
 ## How the files are produced
 
-`GoldenCodeGenRegressionTests.AssertGoldenMatch` writes the golden `.g.cs` and the `.api.txt`
-**from the same emitted string, in the same call**. The two cannot drift, because there is no code
-path that produces one without the other. The renderer lives in
-`tools/Parquet.SourceGenerator.ApiGates/GeneratedApiBaseline.cs` (compiled into both the test
-assembly and the `PARQAPI001` analyzer) and parses the emitted source with
-Roslyn (`CSharpSyntaxTree.ParseText`), walking declaration syntax — never regex over text, never
-reflection, never symbol enumeration order.
+The golden models are declared in code, in `test/Parquet.SourceGenerator.Tests/GoldenCorpus.cs`:
+seven of them — `OrderEvent`, `ScalarMetric`, `LegacyRecord`, `NestedOrder`, `ListOrder`,
+`PocoOrder` and `SortedShipment`. The consumer-side declarations they extend are hand-written
+inputs, checked in under `test/Parquet.SourceGenerator.Tests/GoldenModels/` and `Compile`-removed
+from the test assembly.
+
+`GoldenCorpus.Publish` writes each model's `.g.cs`, its `.api.txt` and its `.api.shape.txt`
+([19](./19-PUBLIC-API-SURFACE.md)) **from the same emitted string, in the same call**. The three
+cannot drift, because there is no code path that produces one without the others. They go to
+`artifacts/golden/` (gitignored; `GOLDEN_OUTPUT_DIR` overrides it). The renderer lives in
+`tools/Parquet.SourceGenerator.ApiGates/GeneratedApiBaseline.cs`, is linked into the test assembly,
+and parses the emitted source with Roslyn (`CSharpSyntaxTree.ParseText`), walking declaration
+syntax — never regex over text, never reflection, never symbol enumeration order.
 
 Both emitters are covered: `Parquet.SourceGenerator` (Parquet.Net v6) and
-`Parquet.SourceGenerator.Legacy` (V5) each have golden models, and each golden file has a baseline.
+`Parquet.SourceGenerator.Legacy` (V5) each have golden models, and each model is rendered.
+
+To produce them locally:
+
+```bash
+dotnet test test/Parquet.SourceGenerator.Tests/Parquet.SourceGenerator.Tests.csproj \
+  --configuration Release --filter "FullyQualifiedName~GoldenCodeGenRegressionTests"
+# or everything derived — golden models, metrics, duplication, call graph — into artifacts/:
+dotnet run scripts/DerivedOutputs.cs
+```
 
 ### Determinism
 
@@ -104,44 +121,83 @@ Ordering is by `StringComparer.Ordinal`. This is not incidental: a culture-sensi
 identifiers differently on different machines and locales, and this repository has already paid for
 that once (the MA0002 fix in `tools/BenchmarkSummaryGenerator`). `GeneratedApiBaselineTests`
 asserts that rendering under `tr-TR` and under the invariant culture produces byte-identical
-output.
+output. It matters more now than when the files were checked in: the review diff compares two
+renderings made on two runs, and any nondeterminism would show up in every pull request as a
+change nobody made.
 
-### Refreshing
+### What the golden suite asserts
 
-Exactly the same mechanism as the golden files:
+`GoldenCodeGenRegressionTests` asserts invariants, not equality with a stored copy:
 
-```bash
-UPDATE_GOLDEN_FILES=true dotnet test test/Parquet.SourceGenerator.Tests/Parquet.SourceGenerator.Tests.csproj \
-  --configuration Release --filter "FullyQualifiedName~GoldenCodeGenRegressionTests"
+- every model's emitted source parses with no errors;
+- the driver-generated models compile, in memory against Parquet.Net, with zero errors;
+- each model's specific surface claims hold (`ShouldContain` / `ShouldNotContain` — for example,
+  `SortedShipment` emits `TryPruneSortedRowGroups<` and no `ReadParquetByCarrierAsync(`);
+- every model emits a non-empty public API.
+
+`BackendCompatibilityPolicyTests` ([14](./14-COMPATIBILITY-MATRIX.md)) applies the classic/modern
+policy to the same models' API, rendered in memory by `GeneratedApiBaseline.Create`.
+
+A change to what the emitters write therefore fails the suite only when it breaks one of those
+claims. Every other change is shown, not gated.
+
+## Why none of it is checked in
+
+Until this change the `.g.cs`, `.api.txt`, `.api.shape.txt` and `.metrics.txt` files lived in
+`test/Parquet.SourceGenerator.Tests/GoldenFiles/`, the suite failed on any difference from them,
+and `UPDATE_GOLDEN_FILES=true` (or the `/update-golden` pull-request comment) rewrote and committed
+them. That arrangement is retired, for three reasons:
+
+1. **The code is the source of truth.** A checked-in rendering of the emitter is a second copy of a
+   fact the emitter already states. The only thing the copy could say that the code does not is
+   "this is what the output was last time" — and git already knows what the code was last time.
+2. **Refresh commits polluted history and diffs.** Every emitter change carried a mechanical
+   refresh commit of hundreds or thousands of lines, by hand or from the `/update-golden`
+   workflow. Those commits swamped the change that caused them and made `git log -p` and blame on
+   the test directory hard to use.
+3. **The review value survives without the files.** What the `.api.txt` convention was *for* is a
+   reviewer seeing an API change as an API change. That needs a base-to-head diff of the rendering,
+   not a stored rendering, and CI now produces exactly that.
+
+## The review diff
+
+The `derived` job in `.github/workflows/ci.yml` runs beside `build`:
+
+1. `scripts/DerivedOutputs.cs` produces every derived output for the head — `golden/` (this page),
+   `metrics/` ([21](./21-CODE-METRICS.md), [22](./22-GENERATED-CODE-METRICS.md),
+   [23](./23-DUPLICATION.md)) and `callgraph/` ([25](./25-CALL-GRAPH.md)). The gates that remain run
+   here, so a failing gate fails the job.
+2. On a pull request it produces the same outputs for the merge base, in a `git worktree`. A base
+   commit that predates this change has no `GoldenCorpus`; for it the checked-in files *were* its
+   derived output, so they are copied into the same layout rather than regenerated.
+3. `scripts/RenderDerivedDiff.cs` diffs the two trees and renders one Markdown comment: a summary
+   table, then sections in the order **Emitted public API** (expanded) → Emitted code →
+   Generated-code metrics → Duplication → Hand-written code metrics (src/) → Call graph (collapsed).
+   The root change reads first; the numbers that follow from it come after. GitHub caps a comment
+   at 65,536 characters, so per-file and total budgets apply, and anything past them is named with
+   its line counts and left to the artifact.
+4. Both trees, the full `review.patch` and the rendered `review-diff.md` are uploaded as the
+   `derived-outputs` artifact, and the diff is appended to the job's step summary.
+5. The job creates, or edits in place, **one** sticky comment on the pull request, marked
+   `<!-- derived-review-diff -->`. A fork's token cannot write comments; that step is
+   `continue-on-error`, and the diff is still in the step summary and the artifact.
+
+The "Emitted public API" section is the review surface for the emitted consumer API. A diff there
+reads exactly as the old baseline diff did:
+
+```diff
+-SampleDomain.Models.OrderEventColumnarBatch.RowCount -> long
++SampleDomain.Models.OrderEventColumnarBatch.RowCount -> int
 ```
 
-Or comment `/update-golden` on a pull request, which dispatches
-`.github/workflows/update-golden-files.yml`. That workflow stages the whole `GoldenFiles/`
-directory, so baselines are committed alongside the `.g.cs` files without further plumbing.
+An empty section on a pull request that only retunes a loop is the evidence that it changed no
+signature. [18](./18-API-CHANGE-CONTRACT.md) states what the reviewer is expected to do with it.
 
-### The gate
+## Historical snapshot: what the baselines said when this page was written
 
-Running the golden suite *without* `UPDATE_GOLDEN_FILES` fails when the emitted surface no longer
-matches the checked-in baseline, and the failure names the file and the members rather than dumping
-two multi-thousand-character strings:
-
-```
-Generated public API baseline drifted: GoldenFiles/OrderEventParquetExtensions.api.txt
-The emitted public surface no longer matches the checked-in baseline. If the change is intended,
-refresh it with UPDATE_GOLDEN_FILES=true (or comment /update-golden on the PR) and commit the result.
-  - removed: SampleDomain.Models.OrderEventColumnarBatch.RowCount -> long
-  + added:   SampleDomain.Models.OrderEventColumnarBatch.RowCount -> int
-  1 removed, 1 added, 55 public members emitted in total.
-```
-
-Because the ordinary CI test run executes this suite, an unreviewed API change cannot land. Since
-[18](./18-API-CHANGE-CONTRACT.md), the same comparison also runs at **build** time as `PARQAPI001`,
-from the same renderer — `GeneratedApiBaseline.cs` is compiled into both this test assembly and the
-analyzer in `tools/Parquet.SourceGenerator.ApiGates`, so the build gate and the test gate cannot
-disagree about what a signature looks like. The build error covers additions; this test still
-covers removals and ordering.
-
-## What the baselines currently say
+The table below was read from the checked-in baselines while they existed. It is not maintained;
+current numbers are in the `derived-outputs` artifact and the generated-code metrics report
+([22](./22-GENERATED-CODE-METRICS.md)).
 
 | Golden model | Emitter | Public members | Emitted ELOC | ELOC per member |
 |:---|:---|---:|---:|---:|
@@ -152,21 +208,22 @@ covers removals and ordering.
 | `LegacyRecordParquetLegacyExtensions` | V5 (legacy) | 7 | 115 | 16.4 |
 | **Total** | | **263** | **4,429** | |
 
-A bare nine-property `OrderEvent` model emits 82 public members from a single
-`[ParquetSerializable]` attribute. That number is the point of this document: it was not previously
-visible anywhere, and #216 and #217 exist to bring it down. It was **159** across all five models
-when this page was written and is **263** today, which is the growth those issues are about.
+A bare nine-property `OrderEvent` model emitted 82 public members from a single
+`[ParquetSerializable]` attribute. That number was the point of this document: it was not previously
+visible anywhere, and #216 and #217 existed to bring it down. It was **159** across all five models
+when this page was first written and **263** at the time of the table, which is the growth those
+issues were about.
 
-The last two columns come from the `*.metrics.txt` companion introduced by layer 2 of #251 — see
-[22 - Generated Code Metrics](./22-GENERATED-CODE-METRICS.md). Those baselines read their member
-count out of the `.api.txt` files above rather than recomputing it, so the two artefacts cannot
-disagree about what an emitted member is; `GeneratedCodeMetricsBaselineTests` asserts that.
+The last two columns come from the generated-code metrics of layer 2 of #251 — see
+[22 - Generated Code Metrics](./22-GENERATED-CODE-METRICS.md). That report reads its member count
+out of the published `.api.txt` files rather than recomputing it, so the two cannot disagree about
+what an emitted member is.
 
 ## Stability contract
 
-[18 - The API Change Contract](./18-API-CHANGE-CONTRACT.md) now enforces this format as a **build
-error** (`PARQAPI001`) and requires a `docs/api/LEDGER.md` entry per added line, so the format is
-fixed in the two ways that matter:
+The format no longer backs a build gate — `PARQAPI001`, which enforced it at build time, is retired
+([18](./18-API-CHANGE-CONTRACT.md)) — but it backs the review diff, and a diff is only readable if
+the format is fixed in the two ways that matter:
 
 - **A line is self-contained.** It never depends on another line's presence or position.
 - **A line is stable.** It changes only when the member it describes changes.
