@@ -8,7 +8,24 @@ on:
       - 'docs/**'
       - 'README.md'
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag whose derived-outputs.tar.gz the docs site should render (empty: docs only)'
+        required: false
+        default: ''
+  # From release.yml, once a full release and its derived-outputs.tar.gz asset exist.
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: false
+        default: ''
 
+# The payload's `tag` names a GitHub release of this repository. Its derived-outputs.tar.gz asset
+# (https://github.com/rtkelly13/Parquet.SourceGenerator/releases/download/<tag>/derived-outputs.tar.gz)
+# holds golden/*.api.txt — the emitted public API of every golden model at that release — plus
+# golden/*.g.cs, metrics/ and callgraph/, and a manifest.json naming the version and commit. An
+# empty tag means only the docs changed; keep rendering the API grid from the last tag.
 permissions:
   contents: read
 
@@ -20,13 +37,15 @@ jobs:
       - name: Trigger docs.ryankelly.dev repository dispatch
         env:
           GH_TOKEN: ${{ secrets.DOCS_DISPATCH_TOKEN }}
+          TAG: ${{ inputs.tag }}
         run: |
           if [ -z "$GH_TOKEN" ]; then
             echo "::notice::DOCS_DISPATCH_TOKEN secret is not set; skipping cross-repo dispatch."
             exit 0
           fi
-          echo "Dispatching docs_update event to rtkelly13/docs.ryankelly.dev..."
+          echo "Dispatching docs_update event to rtkelly13/docs.ryankelly.dev (tag: ${TAG:-none})..."
           gh api repos/rtkelly13/docs.ryankelly.dev/dispatches \
             -X POST \
             -H "Accept: application/vnd.github+json" \
-            -f event_type=docs_update
+            -f event_type=docs_update \
+            -f "client_payload[tag]=$TAG"

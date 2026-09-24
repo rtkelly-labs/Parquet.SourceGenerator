@@ -217,6 +217,28 @@ jobs:
           path: ./artifacts/*.nupkg
           if-no-files-found: error
 
+      # The emitted source and public API of every golden model, code metrics and the call graph
+      # for exactly this commit (docs/17-GENERATED-API-BASELINES.md). None of it is checked in, so
+      # the release is where a version's output is kept: it is attached to the GitHub release as
+      # derived-outputs.tar.gz, and consumers such as the docs site fetch it by tag.
+      - name: Produce Derived Outputs
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/derived"
+          dotnet run scripts/DerivedOutputs.cs -- --out "$out"
+          printf '{"version":"%s","tag":"%s","commit":"%s"}\n' "$VERSION" "$TAG" "$GITHUB_SHA" > "$out/manifest.json"
+          tar -czf "$RUNNER_TEMP/derived-outputs.tar.gz" -C "$out" manifest.json golden metrics callgraph
+
+      - name: Upload Derived Outputs
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: derived-outputs
+          path: ${{ runner.temp }}/derived-outputs.tar.gz
+          if-no-files-found: error
+
   publish:
     name: Publish packages
     needs: [prepare, build]
@@ -238,6 +260,12 @@ jobs:
         with:
           name: release-info
           path: ./release-info
+
+      - name: Download Derived Outputs
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: derived-outputs
+          path: ./release-assets
 
       - name: Login to NuGet via OIDC (Trusted Publishing)
         uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1
@@ -265,4 +293,17 @@ jobs:
           name: ${{ needs.prepare.outputs.version }}
           target_commitish: ${{ github.sha }}
           body_path: ./release-info/release-notes.md
-          files: ./artifacts/*.nupkg
+          files: |
+            ./artifacts/*.nupkg
+            ./release-assets/derived-outputs.tar.gz
+
+  # Tell the docs site which tag to render the API grid from. Called directly rather than left to a
+  # `release: published` trigger, because a release created with GITHUB_TOKEN starts no workflows.
+  docs:
+    name: Dispatch docs rebuild for the release
+    needs: [prepare, publish]
+    if: ${{ !inputs.dry_run && needs.prepare.outputs.is_prerelease == 'false' }}
+    uses: ./.github/workflows/docs-dispatch.yml
+    with:
+      tag: ${{ needs.prepare.outputs.tag }}
+    secrets: inherit

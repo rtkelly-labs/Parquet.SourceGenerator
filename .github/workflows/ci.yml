@@ -432,14 +432,16 @@ jobs:
   # model, its signature-only public API, code metrics (src/ and generated), duplication and the
   # call graph are generated from the code here and never checked in; every run uploads them as the
   # `derived-outputs` artifact. On a push to main the same tree is also kept as
-  # `derived-baseline-<sha>`, the baseline pull requests based on that commit are compared against.
-  # Runs beside `test` rather than inside it, so it adds no wall-clock time; `build` below requires
-  # both.
+  # `derived-baseline-<sha>`. On a pull request the merge base's tree is fetched from that artifact
+  # (or regenerated when it is missing), diffed against the head, and posted as ONE sticky comment,
+  # API changes first. Runs beside `test` rather than inside it, so it adds no wall-clock time;
+  # `build` below requires both.
   #
   # The gates that remain live here, on the head: golden models parse and compile, emitted code
   # compiles against its GoldenModels/ declaration (ERRORS=0), CodeMetricsConfig.txt is valid
   # (a malformed entry silently disables CA1502/CA1505/CA1506), and the call graph satisfies its
-  # cycle, fan-out and layering rules (docs/25-CALL-GRAPH.md).
+  # cycle, fan-out and layering rules (docs/25-CALL-GRAPH.md). Nothing about the merge base can
+  # fail this job: the base already passed its own gates on its branch.
   #
   # NU1903 warnings on Microsoft.Build.Tasks.Core and Snappier from `dotnet run
   # scripts/CodeMetrics.cs` are expected: transitive dependencies of Workspaces.MSBuild and of the
@@ -450,10 +452,17 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      # Find and download the merge base's `derived-baseline-<sha>` artifact from its main run.
+      actions: read
+      pull-requests: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # The merge base must be reachable, to name it and, when its baseline is missing, to
+          # regenerate its side of the diff.
+          fetch-depth: 0
 
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
@@ -466,20 +475,13 @@ jobs:
         run: dotnet restore Parquet.SourceGenerator.slnx
 
       - name: Produce Derived Outputs (head)
+        id: head
         run: |
           dotnet run scripts/DerivedOutputs.cs -- --out "$RUNNER_TEMP/derived/head"
           for f in code-metrics.md duplication.md callgraph/callgraph-summary.md; do
             cat "$RUNNER_TEMP/derived/head/$f" >> "$GITHUB_STEP_SUMMARY"
             echo >> "$GITHUB_STEP_SUMMARY"
           done
-
-      - name: Upload Derived Outputs
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: derived-outputs
-          path: ${{ runner.temp }}/derived/
-          if-no-files-found: warn
 
       # The baseline for every commit on main, named by its SHA so a pull request can fetch exactly
       # its merge base's outputs instead of rebuilding them. Only a head that passed its gates is
@@ -492,6 +494,124 @@ jobs:
           path: ${{ runner.temp }}/derived/head/
           retention-days: 90
           if-no-files-found: error
+
+      # The merge base's outputs. Fetched from the main run that published them; regenerated here
+      # in a worktree only when there is no such artifact — the base is another branch of a stack,
+      # its main run has not finished yet, or the artifact expired (90 days). Outputs are
+      # byte-identical across runs and runners, so a fetched baseline equals a regenerated one.
+      # Best effort: a failure here is reported in the comment, never as a failed check.
+      - name: Resolve Merge Base Outputs
+        id: base
+        if: github.event_name == 'pull_request' && steps.head.outcome == 'success'
+        continue-on-error: true
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          base=$(git merge-base "origin/$BASE_REF" HEAD)
+          echo "label=$BASE_REF @ ${base:0:7}" >> "$GITHUB_OUTPUT"
+          out="$RUNNER_TEMP/derived/base"
+          name="derived-baseline-$base"
+          # The name alone proves nothing: any workflow run — a pull request that edits this file,
+          # a fork's run — can upload an artifact called derived-baseline-<sha>. Accept only one
+          # uploaded from this repository by a push run of ci.yml on main, at exactly this commit.
+          candidates=$(gh api --paginate "repos/$REPO/actions/artifacts?name=$name" --jq ".artifacts[]
+            | select((.expired | not)
+                and .workflow_run.head_sha == \"$base\"
+                and .workflow_run.head_branch == \"main\"
+                and .workflow_run.head_repository_id == .workflow_run.repository_id)
+            | .workflow_run.id" || true)
+          run_id=""
+          for candidate in $candidates; do
+            origin=$(gh api "repos/$REPO/actions/runs/$candidate" --jq '"\(.event) \(.path)"' || true)
+            if [ "$origin" = "push .github/workflows/ci.yml" ]; then
+              run_id=$candidate
+              break
+            fi
+            echo "Ignoring $name from run $candidate ($origin): not a push run of ci.yml."
+          done
+          if [ -n "$run_id" ] && gh run download "$run_id" --repo "$REPO" --name "$name" --dir "$out"; then
+            echo "source=\`$name\` from run $run_id" >> "$GITHUB_OUTPUT"
+          else
+            echo "No usable $name artifact; regenerating the merge base's outputs."
+            rm -rf "$out"
+            git worktree add "$RUNNER_TEMP/base-tree" "$base"
+            dotnet run scripts/DerivedOutputs.cs -- --repo "$RUNNER_TEMP/base-tree" --out "$out"
+            echo "source=regenerated in this run (no \`$name\` artifact)" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Runs whatever happened above, so the comment always describes this run: a diff, or a
+      # statement that the head failed or the base could not be produced.
+      - name: Render Derived Output Diff
+        if: always() && github.event_name == 'pull_request'
+        env:
+          HEAD_STATUS: ${{ steps.head.outcome }}
+          BASE_STATUS: ${{ steps.base.outcome }}
+          BASE_LABEL: ${{ steps.base.outputs.label || github.base_ref }}
+          BASE_SOURCE: ${{ steps.base.outputs.source }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          args=(
+            --base "$RUNNER_TEMP/derived/base"
+            --head "$RUNNER_TEMP/derived/head"
+            --comment "$RUNNER_TEMP/derived/review-diff.md"
+            --patch "$RUNNER_TEMP/derived/review.patch"
+            --base-label "$BASE_LABEL"
+            --artifact-url "$RUN_URL#artifacts"
+            --head-status "${HEAD_STATUS:-skipped}"
+            --base-status "${BASE_STATUS:-skipped}"
+          )
+          if [ -n "$BASE_SOURCE" ]; then
+            args+=(--base-source "$BASE_SOURCE")
+          fi
+          dotnet run scripts/RenderDerivedDiff.cs -- "${args[@]}"
+          cat "$RUNNER_TEMP/derived/review-diff.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Derived Outputs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: derived-outputs
+          path: ${{ runner.temp }}/derived/
+          if-no-files-found: warn
+
+      # One comment per pull request, edited in place on every run, found by its marker. If the
+      # renderer itself failed, a minimal body still replaces the previous run's diff. A fork's
+      # token cannot write comments; the result is still in the step summary and the artifact, so
+      # that is not a failure.
+      - name: Update Sticky Review Comment
+        if: always() && github.event_name == 'pull_request'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          # A re-run keeps its original event, so an old run re-run after a newer push would
+          # otherwise replace the current head's diff with its own. Only the current head posts.
+          current=$(gh api "repos/$REPO/pulls/$PR_NUMBER" --jq .head.sha)
+          if [ "$current" != "$HEAD_SHA" ]; then
+            echo "The PR head is now ${current:0:7}; this run is for ${HEAD_SHA:0:7}. Leaving the comment alone."
+            exit 0
+          fi
+          body="$RUNNER_TEMP/derived/review-diff.md"
+          if [ ! -s "$body" ]; then
+            mkdir -p "$(dirname "$body")"
+            printf '%s\n## Derived output: not rendered\n\nThe `derived` job failed before it could render a diff. See [the run](%s).\n' \
+              '<!-- derived-review-diff -->' "$RUN_URL" > "$body"
+          fi
+          id=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" --paginate \
+            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | contains("<!-- derived-review-diff -->"))) | .id' \
+            | head -n 1)
+          if [ -n "$id" ]; then
+            gh api --method PATCH "repos/$REPO/issues/comments/$id" -F "body=@$body" > /dev/null
+          else
+            gh pr comment "$PR_NUMBER" --repo "$REPO" --body-file "$body"
+          fi
 
   # The required status check. The job name is the check name that branch protection matches on
   # (.github/BRANCH_PROTECTION.md, REPO_REQUIRED_CHECKS_MAP in shared-utilities), so it is

@@ -26,9 +26,29 @@ comments, no `#nullable` scaffolding beyond the header.
 > Introduced by issue #215. #216 (the API surface audit) reads these files rather than
 > hand-transcribing signatures; #217 uses them to demonstrate the surface *shrinking*; #227's
 > profile matrix is a post-freeze follow-up recorded in [document 38](38-FEATURE-PROFILE-MATRIX-SCOPE-227.md).
-> #229 rendered the docs-site API grid from the checked-in contracts; those files are no longer
-> checked in (see [below](#why-none-of-it-is-checked-in)), so the grid needs another source — the
-> `derived-outputs` CI artifact, or a run of the golden suite in the docs build.
+> #229 rendered the docs-site API grid from the checked-in contracts on `main`. Those files are no
+> longer checked in (see [below](#why-none-of-it-is-checked-in)); a version's output now lives on its
+> release instead (see [Per-release output](#per-release-output)), which also pins the grid to what
+> was actually shipped rather than to whatever `main` held.
+
+## Per-release output
+
+`release.yml` runs `scripts/DerivedOutputs.cs` on the commit it publishes and attaches the result
+to the GitHub release as `derived-outputs.tar.gz`:
+
+```
+manifest.json    {"version": "...", "tag": "v...", "commit": "<sha>"}
+golden/          *.g.cs, *.api.txt, *.api.shape.txt for every golden model
+metrics/         src/ metrics, generated/ metrics, duplication.txt
+callgraph/       edges and Mermaid pages
+```
+
+The tag is the address: `https://github.com/rtkelly13/Parquet.SourceGenerator/releases/download/<tag>/derived-outputs.tar.gz`.
+After a full release, `release.yml` calls `docs-dispatch.yml` with that tag, and the `docs_update`
+dispatch carries it as `client_payload.tag`. An empty tag (a docs-only change on `main`) means
+"keep the API grid on the last tag". Prereleases publish to NuGet.org only and have no GitHub
+release, so they carry no asset. Releases before this change (`v0.0.1`–`v0.0.3`) predate the
+`.api.txt` files entirely.
 
 ## The grammar
 
@@ -167,21 +187,34 @@ passes only when both succeed, so the gates below block a merge:
 1. `scripts/DerivedOutputs.cs` produces every derived output for the head — `golden/` (this page),
    `metrics/` ([21](./21-CODE-METRICS.md), [22](./22-GENERATED-CODE-METRICS.md),
    [23](./23-DUPLICATION.md)) and `callgraph/` ([25](./25-CALL-GRAPH.md)). The gates that remain run
-   here, so a failing gate fails the job.
-2. On a pull request it produces the same outputs for the merge base, in a `git worktree`. A base
-   commit that predates this change has no `GoldenCorpus`; for it the checked-in files *were* its
-   derived output, so they are copied into the same layout rather than regenerated.
+   here, so a failing gate fails the job. On a push to main the tree is also uploaded as
+   `derived-baseline-<sha>` (kept 90 days). Every main commit gets one: main runs have a
+   concurrency group per commit and are never cancelled.
+2. On a pull request the merge base's tree is downloaded from its `derived-baseline-<sha>`
+   artifact, accepted only when it was uploaded from this repository by a push run of `ci.yml` on
+   `main` at exactly that commit (the name alone proves nothing: any run can upload one). Only when there is none — the base is another branch of a stack, its main run has not
+   finished, or the artifact expired — is it regenerated here in a `git worktree`. Outputs are
+   byte-identical across runs and between Linux and macOS, so the two are interchangeable; the
+   comment's footer says which was used. A base commit that predates this change has no
+   `GoldenCorpus`; for it the checked-in files *were* its derived output, so they are copied into
+   the same layout rather than regenerated. Nothing about the base can fail the job: if it cannot
+   be produced, the comment says so and the head's gates alone decide the check.
 3. `scripts/RenderDerivedDiff.cs` diffs the two trees and renders one Markdown comment: a summary
    table, then sections in the order **Emitted public API** (expanded) → Emitted code →
-   Generated-code metrics → Duplication → Hand-written code metrics (src/) → Call graph (collapsed).
-   The root change reads first; the numbers that follow from it come after. GitHub caps a comment
-   at 65,536 characters, so per-file and total budgets apply, and anything past them is named with
-   its line counts and left to the artifact.
+   Generated-code metrics → Duplication → Hand-written code metrics (src/) → Call graph → Other
+   (collapsed). The root change reads first; the numbers that follow from it come after. GitHub caps
+   a comment at 65,536 characters, so per-file and total budgets apply, and anything past them is
+   named with its line counts and left to the artifact. The body depends only on the two trees,
+   plus the run link and baseline source in its footer.
 4. Both trees, the full `review.patch` and the rendered `review-diff.md` are uploaded as the
    `derived-outputs` artifact, and the diff is appended to the job's step summary.
 5. The job creates, or edits in place, **one** sticky comment on the pull request, marked
-   `<!-- derived-review-diff -->`. A fork's token cannot write comments; that step is
-   `continue-on-error`, and the diff is still in the step summary and the artifact.
+   `<!-- derived-review-diff -->`. It is updated on every run, including failed ones: a head that
+   failed its gates, or a base that could not be produced, replaces the previous diff with a
+   statement saying so, so a stale diff never stands as current. Only a run for the PR's current
+   head posts: an older run re-run after a newer push leaves the comment alone. A fork's token cannot write
+   comments; that step is `continue-on-error`, and the result is still in the step summary and the
+   artifact.
 
 The "Emitted public API" section is the review surface for the emitted consumer API. A diff there
 reads exactly as the old baseline diff did:
