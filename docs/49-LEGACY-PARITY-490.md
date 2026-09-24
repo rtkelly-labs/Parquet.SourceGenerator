@@ -46,8 +46,10 @@ upstream change that would remove it are recorded in
    type names, member names, signatures and semantics as the modern backend. That includes the
    `NotSupportedException` combinations recorded under [47 §4.2](./47-0.1-CONTRACT-AND-DESIGN-GOALS.md#42-generated-read-api).
 2. **Differences are listed, not implied.** A member missing from the legacy surface must appear
-   in the parity allowlist with a reason and a tracking issue. The allowlist can only shrink: an
-   entry that no longer differs fails the gate.
+   in the parity allowlist with a reason and a tracking issue. Each entry is either **temporary**
+   (a gap to close; the allowlist can only shrink, and an entry that no longer differs fails the
+   gate) or **permanent** (a recorded owner decision that the capability is modern-only). A new
+   permanent entry needs its own decision record or an amendment to this one.
 3. **One implementation of the surface.** The reader, metadata, pruning, write entry points and
    validation are emitted once and shared. Only column I/O has a per-backend implementation (#492).
 4. **Performance is per backend.** Allocation and throughput differences are recorded in the
@@ -56,10 +58,17 @@ upstream change that would remove it are recorded in
 
 ## Initial allowlist
 
+### Permanent (modern-only by decision)
+
+| Capability | Why | Decision |
+|:---|:---|:---|
+| `<Model>ParquetReader.Batches()` / `ColumnBatch` | Batch reading is part of the **stable modern API** (net8+). It is the zero-POCO read path whose point is caller-visible pooled column buffers. The v4 `DataColumn` API allocates each column itself, so a legacy `Batches()` would have the same shape without the benefit. The legacy backend does not emit it at all. It is absent, not a member that throws, so multi-target callers get a compile-time error and guard it with `#if NET8_0_OR_GREATER` rather than a runtime failure. | Owner decision, 2026-09-24 (#490) |
+
+### Temporary (gaps to close)
+
 | Capability | Why the legacy backend lacks it today | Tracking |
 |:---|:---|:---|
 | Nested types (structs, lists, maps) | The legacy emitter is flat-only. Parquet.Net 4.x can represent repeated and group columns, so this is emitter work, not a platform limit. | #176, [42](./42-NESTED-BACKEND-SCOPE-176.md) |
-| `Batches()` / `ColumnBatch` | The ownership shape is undecided on the modern backend too. Porting it before the decision would freeze it twice. | #369 |
 | `ReadOnlyMemory<byte>` / `ReadOnlyMemory<char>` members (PARQ011) | The v4 `DataColumn` API has no `ReadOnlyMemory` column representation, so the classic parser rejects these today. They can be mapped onto `byte[]` / `string` columns at one copy per value on write and read. That is emitter work, recorded in [UPSTREAM_DEPENDENCY_LIMITATIONS.md](../UPSTREAM_DEPENDENCY_LIMITATIONS.md). | #494 |
 | Arrow `RecordBatch` bridge | Not yet built for v4. Apache.Arrow supports `netstandard2.0`, so it is possible. | #490 |
 
@@ -72,7 +81,8 @@ batched writes.
 
 - **API parity gate (#493).** The same model is generated through both backends. After normalising
   the extension class name, the `.api.txt` lines are diffed, and any difference not in the
-  allowlist fails.
+  allowlist fails. The allowlist file marks each entry temporary or permanent. Only temporary
+  entries fail when they stop differing.
 - **Shared behavioural suite (#493).** The round-trip, reader and pruning tests run against both
   backends from one test source.
 - **Multi-target consumer (#493).** One test project with `TargetFrameworks` of `net472;net8.0`
