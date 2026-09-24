@@ -18,11 +18,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # The job name is the check name that branch protection matches on, so it is deliberately short,
-  # lowercase, and free of characters that are easy to mistype or that GitHub HTML-escapes when a
-  # doc is rendered. Treat it as an identifier: renaming it silently breaks any ruleset requiring it.
-  build:
-    name: build
+  # Restore, build, test, pack and interop. Not itself a required check: the `build` job at the
+  # end of this file aggregates it with `derived`, and that is what branch protection requires.
+  test:
+    name: test
     runs-on: ubuntu-latest
 
     steps:
@@ -429,7 +428,7 @@ jobs:
   # call graph are generated from the code here and never checked in. On a pull request the same
   # outputs are produced for the merge base, and the difference is uploaded as the
   # `derived-outputs` artifact and posted as ONE sticky comment, API changes first. Runs beside
-  # `build` rather than inside it, so it adds no wall-clock time to that check.
+  # `test` rather than inside it, so it adds no wall-clock time; `build` below requires both.
   #
   # The gates that remain live here, on the head: golden models parse and compile, emitted code
   # compiles against its GoldenModels/ declaration (ERRORS=0), CodeMetricsConfig.txt is valid
@@ -524,4 +523,27 @@ jobs:
             gh api --method PATCH "repos/$REPO/issues/comments/$id" -F "body=@$body" > /dev/null
           else
             gh pr comment "$PR_NUMBER" --repo "$REPO" --body-file "$body"
+          fi
+
+  # The required status check. The job name is the check name that branch protection matches on
+  # (.github/BRANCH_PROTECTION.md, REPO_REQUIRED_CHECKS_MAP in shared-utilities), so it is
+  # deliberately short, lowercase, and free of characters that are easy to mistype or that GitHub
+  # HTML-escapes. Treat it as an identifier: renaming it silently breaks the ruleset. It exists so
+  # the gates in `derived` (emitted code compiles, call-graph rules, CodeMetricsConfig.txt) block a
+  # merge exactly as the ones in `test` do, while the two jobs still run in parallel.
+  build:
+    name: build
+    if: always()
+    needs: [test, derived]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require test and derived
+        env:
+          TEST_RESULT: ${{ needs.test.result }}
+          DERIVED_RESULT: ${{ needs.derived.result }}
+        run: |
+          echo "test: $TEST_RESULT, derived: $DERIVED_RESULT"
+          if [ "$TEST_RESULT" != "success" ] || [ "$DERIVED_RESULT" != "success" ]; then
+            echo "::error::Required jobs did not all succeed (test=$TEST_RESULT, derived=$DERIVED_RESULT)."
+            exit 1
           fi

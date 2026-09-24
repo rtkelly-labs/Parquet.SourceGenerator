@@ -161,7 +161,8 @@ them. That arrangement is retired, for three reasons:
 
 ## The review diff
 
-The `derived` job in `.github/workflows/ci.yml` runs beside `build`:
+The `derived` job in `.github/workflows/ci.yml` runs beside `test`; the required `build` check
+passes only when both succeed, so the gates below block a merge:
 
 1. `scripts/DerivedOutputs.cs` produces every derived output for the head — `golden/` (this page),
    `metrics/` ([21](./21-CODE-METRICS.md), [22](./22-GENERATED-CODE-METRICS.md),
