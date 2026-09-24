@@ -17,25 +17,29 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 // #252: the shape of the call graph is load-bearing in a source generator — the
 // defects that have actually cost this repository time were graph defects (four
 // copies of ResolveSchemaField; two pruning components reading one footer) — and
-// until now nothing observed the graph. This script extracts a deterministic,
-// checked-in call graph for each generator project, gates the properties that
-// encode the architecture, and renders a type-level Mermaid picture that lives
-// beside it.
+// until now nothing observed the graph. This script extracts a deterministic
+// call graph for each generator project, gates the properties that encode the
+// architecture, and renders type-level Mermaid pictures of it. The graph itself is
+// derived from the code on every run and never checked in; CI publishes it as an
+// artifact and diffs it against the pull request's base.
 //
-//   graph/<project>.callgraph.txt   one E: line per static edge; drift-gated like
-//                                   metrics/*.metrics.txt
-//   graph/callgraph.allowlist.txt   every self-loop, with a stated reason
-//   docs/callgraph.md               type-level Mermaid, refreshed by the same command
-//   docs/callgraph-generated.md     the generated code's graph, as documentation
+//   <out>/<project>.callgraph.txt   one E: line per static edge (report)
+//   <out>/callgraph.md              type-level Mermaid of the generator (report)
+//   <out>/callgraph-generated.md    the generated code's graph, from the golden
+//                                   models the test suite publishes (report)
+//   graph/callgraph.allowlist.txt   every self-loop, with a stated reason (input,
+//                                   checked in — it is a decision, not an output)
 //
-// What is gated:
-//   1. Edge drift — the baseline grammar every other artifact in this repo uses.
-//   2. Cycles: no multi-node strongly-connected component; a direct self-loop is
+// <out> defaults to artifacts/callgraph (gitignored); --out overrides it, and
+// --golden points at the published golden models (default artifacts/golden).
+//
+// What is gated, on the fresh computation:
+//   1. Cycles: no multi-node strongly-connected component; a direct self-loop is
 //      legitimate ONLY if it is on the allowlist with a reason. Mutual recursion
 //      across components is a design smell with no legitimate use here, so it has
 //      no allowlist kind.
-//   3. Fan-out: CA-fanout ratchet, thresholds only ever come down (docs/21 policy).
-//   4. Layering: Emitter.Components.* must not call back into CodeEmitter /
+//   2. Fan-out: CA-fanout ratchet, thresholds only ever come down (docs/21 policy).
+//   3. Layering: Emitter.Components.* must not call back into CodeEmitter /
 //      LegacyCodeEmitter — a hub that its own spokes call into is how a component
 //      silently stops being a component.
 //
@@ -52,8 +56,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 //   the blind spot is measured, not waved away.
 //
 // Determinism: same pinned Roslyn (4.14.0) as layers 1 and 3; every enumeration
-// and every ordering ordinal. Refresh with UPDATE_GOLDEN_FILES=true (same verb as
-// every baseline in this repository).
+// and every ordering ordinal, so two runs' edge lists diff cleanly.
 // -----------------------------------------------------------------------------
 
 string repoRoot = FindRepoRoot() ?? Directory.GetCurrentDirectory();
@@ -69,8 +72,7 @@ var projects = new[]
         new[]
         {
             "src/Parquet.SourceGenerator.Legacy",
-            // Compile Include globs in the .csproj, restated here; the drift gate
-            // compares the restated set with the csproj so the two cannot diverge.
+            // Compile Include globs in the .csproj, restated here.
             "src/Parquet.SourceGenerator/Diagnostics",
             "src/Parquet.SourceGenerator/Models",
             "src/Parquet.SourceGenerator/Parser",
@@ -82,9 +84,18 @@ var projects = new[]
     },
 };
 
-string graphDir = Path.Combine(repoRoot, "graph");
-string docsDir = Path.Combine(repoRoot, "docs");
-string allowlistPath = Path.Combine(graphDir, "callgraph.allowlist.txt");
+string outDir = Path.Combine(repoRoot, "artifacts", "callgraph");
+string goldenDir = Path.Combine(repoRoot, "artifacts", "golden");
+string[] argv = Environment.GetCommandLineArgs();
+for (int i = 1; i < argv.Length - 1; i++)
+{
+    if (argv[i] == "--out")
+        outDir = Path.GetFullPath(argv[i + 1]);
+    else if (argv[i] == "--golden")
+        goldenDir = Path.GetFullPath(argv[i + 1]);
+}
+
+string allowlistPath = Path.Combine(repoRoot, "graph", "callgraph.allowlist.txt");
 
 var allowSelfLoops = new HashSet<string>(StringComparer.Ordinal);
 var allowMultiNode = new HashSet<string>(StringComparer.Ordinal);
@@ -109,14 +120,7 @@ if (File.Exists(allowlistPath))
     }
 }
 
-bool update = string.Equals(
-    Environment.GetEnvironmentVariable("UPDATE_GOLDEN_FILES"),
-    "true",
-    StringComparison.OrdinalIgnoreCase
-);
-
-Directory.CreateDirectory(graphDir);
-Directory.CreateDirectory(Path.Combine(docsDir));
+Directory.CreateDirectory(outDir);
 
 int failures = 0;
 var summaries = new List<string>();
@@ -128,38 +132,11 @@ foreach (ProjectConfig project in projects)
     ProjectGraph graph = BuildGraph(repoRoot, project);
     allGraphs.Add(graph);
 
-    string artifact = RenderArtifact(graph);
-    string baselinePath = Path.Combine(graphDir, project.Name + ".callgraph.txt");
+    string artifactPath = Path.Combine(outDir, project.Name + ".callgraph.txt");
+    File.WriteAllText(artifactPath, RenderArtifact(graph));
+    Console.WriteLine($"wrote {Show(repoRoot, artifactPath)} ({graph.Edges.Count} edges)");
 
-    if (update)
-    {
-        File.WriteAllText(baselinePath, artifact);
-        Console.WriteLine($"wrote {Show(repoRoot, baselinePath)} ({graph.Edges.Count} edges)");
-    }
-    else if (!File.Exists(baselinePath))
-    {
-        Console.Error.WriteLine(
-            $"No call-graph baseline at {Show(repoRoot, baselinePath)}. Create with UPDATE_GOLDEN_FILES=true dotnet run scripts/CallGraph.cs"
-        );
-        failures++;
-    }
-    else if (File.ReadAllText(baselinePath) != artifact)
-    {
-        Console.Error.WriteLine(
-            $"Call-graph drift in {project.Name}: the static edges no longer match the baseline.\n"
-                + "  A new edge is a new dependency — review it. A removed edge is a decoupling — celebrate it, then refresh.\n"
-                + "  UPDATE_GOLDEN_FILES=true dotnet run scripts/CallGraph.cs"
-        );
-        failures++;
-    }
-    else
-    {
-        Console.WriteLine(
-            $"{project.Name}: call graph matches baseline ({graph.Edges.Count} edges)."
-        );
-    }
-
-    // Gates that run on the FRESH computation regardless of baseline state.
+    // The architectural gates, on the fresh computation.
     var (sccFailures, selfLoopFailures) = CheckCycles(graph, allowSelfLoops, allowMultiNode);
     foreach (string f in selfLoopFailures)
     {
@@ -204,24 +181,23 @@ foreach (ProjectConfig project in projects)
 // same linked sources and a second picture of them documents nothing.
 AppendTypeMermaid(mermaidTypes, allGraphs[0]);
 
-string docsPath = Path.Combine(docsDir, "callgraph.md");
+string docsPath = Path.Combine(outDir, "callgraph.md");
 string docs =
     "# Call Graph — the shape #252 makes visible\n\n"
-    + "<!-- Generated by scripts/CallGraph.cs. Refresh it with the same command as the\n"
-    + "     baselines: UPDATE_GOLDEN_FILES=true dotnet run scripts/CallGraph.cs -->\n\n"
+    + "<!-- Generated by scripts/CallGraph.cs from src/. Not checked in. -->\n\n"
     + "Type-level view of the main generator (edges aggregated between types; numbers are\n"
     + "statically-resolvable call sites; delegates and virtual dispatch are invisible to it —\n"
-    + "see docs/25-CALL-GRAPH.md). Full method-level edges: `graph/Parquet.SourceGenerator.callgraph.txt`.\n\n"
+    + "see docs/25-CALL-GRAPH.md). Full method-level edges: `Parquet.SourceGenerator.callgraph.txt`\n"
+    + "beside this file.\n\n"
     + "```mermaid\n"
     + "graph TD\n"
     + mermaidTypes
     + "```\n";
-if (update || !File.Exists(docsPath) || File.ReadAllText(docsPath) != docs)
-    File.WriteAllText(docsPath, docs);
+File.WriteAllText(docsPath, docs);
 
-WriteGeneratedGraph(repoRoot, docsDir, update);
+WriteGeneratedGraph(goldenDir, outDir);
 
-string summaryPath = Path.Combine(graphDir, "callgraph-summary.md");
+string summaryPath = Path.Combine(outDir, "callgraph-summary.md");
 File.WriteAllText(
     summaryPath,
     "## Call graph (#252)\n\n" + string.Join("\n", summaries.Select(s => $"- {s}")) + "\n"
@@ -413,7 +389,7 @@ static void AppendTypeMermaid(StringBuilder sb, ProjectGraph graph)
 
     // Stable ids must not come from string.GetHashCode: .NET randomizes it per
     // process, and a Mermaid artifact that changes on every regeneration would
-    // fail the committed-picture freshness check like a tampered baseline.
+    // show up as noise in every diff of two runs.
     string Label(string name)
     {
         var cleaned = new StringBuilder("t");
@@ -454,20 +430,19 @@ static string? FindRepoRoot()
     return null;
 }
 
-static void WriteGeneratedGraph(string repoRoot, string docsDir, bool update)
+static void WriteGeneratedGraph(string goldenDir, string outDir)
 {
     // The generated code's graph, as documentation (the issue's second graph): the
     // shape a consumer's debugger walks — entry point → schema resolution → column
-    // read → materialisation. Rendered for every golden model. Not gated: it is a
-    // description of what the emitter outputs, and layer 2 already gates the emitter.
-    string goldenDir = Path.Combine(
-        repoRoot,
-        "test",
-        "Parquet.SourceGenerator.Tests",
-        "GoldenFiles"
-    );
+    // read → materialisation. Rendered for every golden model the test suite has
+    // published. Not gated: it is a description of what the emitter outputs.
     if (!Directory.Exists(goldenDir))
+    {
+        Console.WriteLine(
+            $"No golden models at {goldenDir}; skipping the generated-code graph (run the golden tests first)."
+        );
         return;
+    }
 
     var sb = new StringBuilder();
     sb.AppendLine("# The generated code's call graph — documentation (#252)\n");
@@ -475,12 +450,9 @@ static void WriteGeneratedGraph(string repoRoot, string docsDir, bool update)
         "Static view of the golden models' emitted code: what a consumer's debugger walks."
     );
     sb.AppendLine(
-        "Same extractor, same limits (delegates/virtuals invisible). Not a gate — the golden"
+        "Same extractor, same limits (delegates/virtuals invisible). Not a gate — this page is"
     );
-    sb.AppendLine("files themselves are the contract; this page is the map. Refresh alongside the");
-    sb.AppendLine(
-        "call-graph baselines: `UPDATE_GOLDEN_FILES=true dotnet run scripts/CallGraph.cs`.\n"
-    );
+    sb.AppendLine("the map. Generated by scripts/CallGraph.cs; not checked in.\n");
 
     foreach (
         string file in Directory
@@ -500,9 +472,7 @@ static void WriteGeneratedGraph(string repoRoot, string docsDir, bool update)
         sb.AppendLine("```\n");
     }
 
-    string path = Path.Combine(docsDir, "callgraph-generated.md");
-    if (update || !File.Exists(path) || File.ReadAllText(path) != sb.ToString())
-        File.WriteAllText(path, sb.ToString());
+    File.WriteAllText(Path.Combine(outDir, "callgraph-generated.md"), sb.ToString());
 }
 
 static ProjectGraph BuildSingleFileGraph(string file, string stem)
@@ -716,11 +686,12 @@ static string MethodId(SyntaxNode holder, string rel)
 static string RenderArtifact(ProjectGraph graph)
 {
     var sb = new StringBuilder();
-    sb.AppendLine("# Call-graph baseline (#252): one static call edge per line.");
-    sb.AppendLine("# Generated by scripts/CallGraph.cs. Do not edit by hand.");
-    sb.AppendLine("# Refresh: UPDATE_GOLDEN_FILES=true dotnet run scripts/CallGraph.cs");
+    sb.AppendLine("# Call-graph report (#252): one static call edge per line.");
+    sb.AppendLine("# Generated by scripts/CallGraph.cs from src/. Not checked in.");
     sb.AppendLine("# E:<caller> | <callee> — dotted namespaced.Type.method/arity, ordinal-sorted.");
-    sb.AppendLine("# Gates: edge drift; cycles (graph/callgraph.allowlist.txt); fan-out ratchet;");
+    sb.AppendLine(
+        "# Gates (on the fresh graph): cycles (graph/callgraph.allowlist.txt); fan-out ratchet;"
+    );
     sb.AppendLine("#        components-must-not-call-the-emitter-hub layering.");
     sb.AppendLine("# Unresolved call sites (delegates, virtuals, framework): measured in the");
     sb.AppendLine("# header below so the blind spot is visible, never silently absent.");

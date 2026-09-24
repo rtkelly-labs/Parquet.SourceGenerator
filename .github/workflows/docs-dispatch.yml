@@ -6,8 +6,6 @@ on:
       - main
     paths:
       - 'docs/**'
-      - 'test/**/GoldenFiles/**'
-      - 'metrics/**'
       - 'README.md'
   workflow_dispatch:
 

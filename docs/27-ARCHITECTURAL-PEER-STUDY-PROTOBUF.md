@@ -20,9 +20,9 @@ This study investigates design choices across three serialization engines target
 PSG is demonstrably ahead of both reference ecosystems in several engineering and governance dimensions:
 
 1. **Emitted API Surface Governance**:
-   - PSG enforces `.api.txt` baselines beside every golden model with `PARQAPI001` / `PARQAPI002` build-error gates and semver classification in [`docs/api/LEDGER.md`](./api/LEDGER.md) (see [`17 - Generated Public API Baselines`](./17-GENERATED-API-BASELINES.md) and [`18 - The API Change Contract`](./18-API-CHANGE-CONTRACT.md)). Neither protobuf repository enforces automated compile-time gates against emitted surface drift.
+   - PSG renders a signature-only `.api.txt` for every golden model and posts its diff against the merge base on every pull request, alongside `RS0016` / `PARQAPI002` build-error gates on the shipped and internal surfaces and semver classification in [`docs/api/LEDGER.md`](./api/LEDGER.md) (see [`17 - Generated Public API Baselines`](./17-GENERATED-API-BASELINES.md) and [`18 - The API Change Contract`](./18-API-CHANGE-CONTRACT.md)). (When this study was written the emitted surface was also build-gated, by the since-retired `PARQAPI001`.) Neither protobuf repository surfaces emitted-API changes for review automatically.
 2. **Deterministic Triple-Golden System**:
-   - Generated code is verified against a full three-way contract: exact emitted text, public API signatures (`.api.txt`), and Roslyn complexity/ELOC metrics (`.metrics.txt`), bound against a real `CSharpCompilation` in `GoldenCodeGenRegressionTests`. Google.Protobuf tests generated code by compiling and executing its test suite, with no assertion against emitted text drift.
+   - Generated code is published in three derived views — exact emitted text, public API signatures (`.api.txt`), and Roslyn complexity/ELOC metrics (`.metrics.txt`) — each diffed against the pull request's base, and bound against a real `CSharpCompilation` in `GoldenCodeGenRegressionTests` and in `scripts/CodeMetrics.cs` (`ERRORS=0`). (When this study was written the three were checked-in, drift-gated baselines.) Google.Protobuf tests generated code by compiling and executing its test suite, with no review of emitted text changes.
 3. **Incremental Pipeline Hygiene**:
    - Strict `EquatableArray<T>` caching discipline across generator pipeline steps, immutable domain models, and aggressive pruning of non-cacheable Roslyn semantic types (see [`03 - Incremental Generator Pipeline`](./03-INCREMENTAL-GENERATOR-PIPELINE.md)).
 4. **Empirical Dremel Spike Artifacts**:
@@ -48,7 +48,7 @@ PSG is demonstrably ahead of both reference ecosystems in several engineering an
 * **Peer Pattern**: Protobuf-net’s `src/AotDifferential/Program.cs` sweeps every contract declared in test assemblies and byte-diffs generated output against the reference engine:
   > *"The coverage sweep proves the generated code compiles. That is not the property that matters: every serious bug this generator has had … compiled perfectly and wrote the wrong bytes."*
 * **PSG Assessment**: **High Priority Adoption (Quick Win).**
-  - *Current state*: PSG tests 5 golden models with exact text diffs, combined with property-based fuzzing.
+  - *Current state*: PSG tests 7 golden models with invariant and surface assertions plus a base-vs-head emitted-text diff on every pull request, combined with property-based fuzzing.
   - *The gap*: Breadth across diverse property shapes (combinations of nullables, enums, strings, primitives, and dates).
   - *Action*: Add an automated test sweep iterating across all `[ParquetSerializable]` types in `test/` and `benchmarks/`.
   - *Oracle Rule*:

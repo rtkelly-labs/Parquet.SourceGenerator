@@ -13,16 +13,20 @@ permissions:
   contents: read
   pull-requests: write
 
+# A pull request's runs share one group, so a new push cancels the stale run. Each push to main gets
+# a group of its own and is never cancelled: its `derived` job publishes the baseline that pull
+# requests are diffed against, so every main commit has to finish. A shared group with
+# cancel-in-progress off would not be enough — GitHub keeps one pending run per group, and a third
+# push replaces the pending second.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # The job name is the check name that branch protection matches on, so it is deliberately short,
-  # lowercase, and free of characters that are easy to mistype or that GitHub HTML-escapes when a
-  # doc is rendered. Treat it as an identifier: renaming it silently breaks any ruleset requiring it.
-  build:
-    name: build
+  # Restore, build, test, pack and interop. Not itself a required check: the `build` job at the
+  # end of this file aggregates it with `derived`, and that is what branch protection requires.
+  test:
+    name: test
     runs-on: ubuntu-latest
 
     steps:
@@ -116,7 +120,7 @@ jobs:
         run: dotnet csharpier check .
 
       # The CI half of the API change contract (docs/18-API-CHANGE-CONTRACT.md). Build errors
-      # PARQAPI001 and PARQAPI002 enforce "nothing exists outside a catalogue"; this enforces the
+      # RS0016 and PARQAPI002 enforce "nothing exists outside a catalogue"; this enforces the
       # other half — "nothing is catalogued without a recorded semver decision" — which needs the
       # diff against the pull request's base and so cannot live in an analyzer. It also rejects the
       # `**Unapproved-by-design:**` escape-hatch marker, which suppresses those build errors for a
@@ -128,62 +132,6 @@ jobs:
 
       - name: Build solution (Release)
         run: dotnet build Parquet.SourceGenerator.slnx --configuration Release --no-restore -warnaserror
-
-      # Layers 1 and 2 of #251 (docs/21-CODE-METRICS.md, docs/22-GENERATED-CODE-METRICS.md). The
-      # build above already enforces CA1502 / CA1505 / CA1506 against the thresholds in
-      # CodeMetricsConfig.txt, which is an absolute judgement and therefore the weaker half. This
-      # is the other half: checked-in, ordinal baselines of Roslyn's maintainability index,
-      # cyclomatic complexity, class coupling, inheritance depth and line counts, gated on DRIFT
-      # rather than on an absolute number — for every namespace, type and member under src/
-      # (metrics/*.metrics.txt), and for every emitted golden model
-      # (GoldenFiles/*.metrics.txt). It also validates CodeMetricsConfig.txt, because a single
-      # unrecognised entry in that file silently disables all three analyzers.
-      #
-      # This step is what proves cross-platform determinism: the baselines are regenerated here on
-      # ubuntu-latest / x64 from files a contributor generated on their own machine, and compared
-      # with no tolerance at all on every metric but one.
-      #
-      # It runs `dotnet run` on a file-based app whose Roslyn version is pinned in the script, so
-      # the numbers do not move when the runner's SDK does. NU1903 on Microsoft.Build.Tasks.Core
-      # and on Snappier is expected and unavoidable here: they are transitive dependencies of
-      # Microsoft.CodeAnalysis.Workspaces.MSBuild and of the Parquet.Net 4.25.0 pin the legacy
-      # golden file is measured against, no code from either is executed (MSBuildLocator binds the
-      # SDK's copy of the former; the latter is loaded only as a Roslyn metadata reference), and
-      # both are outside the solution the audit step above governs.
-      - name: Verify Code Metrics Baselines
-        run: |
-          status=0
-          dotnet run scripts/CodeMetrics.cs -- --summary code-metrics.md || status=$?
-          if [ -f code-metrics.md ]; then
-            cat code-metrics.md >> "$GITHUB_STEP_SUMMARY"
-          fi
-          exit $status
-
-      # Layer 3 of #251 (docs/23-DUPLICATION.md): token-level duplication across src/, gated on
-      # drift with zero tolerance — the layers 1 and 2 grammar. Emitted code is out of scope by
-      # design; generated output repeating itself is the design, not a defect.
-      - name: Verify Duplication Baseline
-        run: |
-          status=0
-          dotnet run scripts/Duplication.cs -- --summary duplication.md || status=$?
-          if [ -f duplication.md ]; then
-            cat duplication.md >> "$GITHUB_STEP_SUMMARY"
-          fi
-          exit $status
-
-      # #252: the call graph — structure as a gated artifact. Edge drift, declared
-      # cycles (graph/callgraph.allowlist.txt), the fan-out ratchet, and the
-      # components-must-not-call-the-hub layering rule. docs/25-CALL-GRAPH.md states
-      # what the static approximation cannot see; the unresolved count rides in the
-      # baseline header so the blind spot is measured, not hidden.
-      - name: Verify Call-Graph Baselines
-        run: |
-          status=0
-          dotnet run scripts/CallGraph.cs || status=$?
-          if [ -f graph/callgraph-summary.md ]; then
-            cat graph/callgraph-summary.md >> "$GITHUB_STEP_SUMMARY"
-          fi
-          exit $status
 
       # #259: accepted property kinds and nesting shapes are derived from the parser and backend
       # dials, then checked against the committed evidence map. A source change cannot silently
@@ -479,3 +427,91 @@ jobs:
         with:
           name: nuget-packages
           path: ./artifacts/*.nupkg
+
+  # Derived review outputs (docs/17-GENERATED-API-BASELINES.md). The emitted source of each golden
+  # model, its signature-only public API, code metrics (src/ and generated), duplication and the
+  # call graph are generated from the code here and never checked in; every run uploads them as the
+  # `derived-outputs` artifact. On a push to main the same tree is also kept as
+  # `derived-baseline-<sha>`, the baseline pull requests based on that commit are compared against.
+  # Runs beside `test` rather than inside it, so it adds no wall-clock time; `build` below requires
+  # both.
+  #
+  # The gates that remain live here, on the head: golden models parse and compile, emitted code
+  # compiles against its GoldenModels/ declaration (ERRORS=0), CodeMetricsConfig.txt is valid
+  # (a malformed entry silently disables CA1502/CA1505/CA1506), and the call graph satisfies its
+  # cycle, fan-out and layering rules (docs/25-CALL-GRAPH.md).
+  #
+  # NU1903 warnings on Microsoft.Build.Tasks.Core and Snappier from `dotnet run
+  # scripts/CodeMetrics.cs` are expected: transitive dependencies of Workspaces.MSBuild and of the
+  # Parquet.Net 4.25.0 pin the legacy golden model is measured against; neither executes here and
+  # both are outside the solution the audit step governs.
+  derived:
+    name: derived
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Restore dependencies
+        run: dotnet restore Parquet.SourceGenerator.slnx
+
+      - name: Produce Derived Outputs (head)
+        run: |
+          dotnet run scripts/DerivedOutputs.cs -- --out "$RUNNER_TEMP/derived/head"
+          for f in code-metrics.md duplication.md callgraph/callgraph-summary.md; do
+            cat "$RUNNER_TEMP/derived/head/$f" >> "$GITHUB_STEP_SUMMARY"
+            echo >> "$GITHUB_STEP_SUMMARY"
+          done
+
+      - name: Upload Derived Outputs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: derived-outputs
+          path: ${{ runner.temp }}/derived/
+          if-no-files-found: warn
+
+      # The baseline for every commit on main, named by its SHA so a pull request can fetch exactly
+      # its merge base's outputs instead of rebuilding them. Only a head that passed its gates is
+      # published; a missing baseline (a failed or expired run) is regenerated by the consumer.
+      - name: Publish Main Baseline
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: derived-baseline-${{ github.sha }}
+          path: ${{ runner.temp }}/derived/head/
+          retention-days: 90
+          if-no-files-found: error
+
+  # The required status check. The job name is the check name that branch protection matches on
+  # (.github/BRANCH_PROTECTION.md, REPO_REQUIRED_CHECKS_MAP in shared-utilities), so it is
+  # deliberately short, lowercase, and free of characters that are easy to mistype or that GitHub
+  # HTML-escapes. Treat it as an identifier: renaming it silently breaks the ruleset. It exists so
+  # the gates in `derived` (emitted code compiles, call-graph rules, CodeMetricsConfig.txt) block a
+  # merge exactly as the ones in `test` do, while the two jobs still run in parallel.
+  build:
+    name: build
+    if: always()
+    needs: [test, derived]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require test and derived
+        env:
+          TEST_RESULT: ${{ needs.test.result }}
+          DERIVED_RESULT: ${{ needs.derived.result }}
+        run: |
+          echo "test: $TEST_RESULT, derived: $DERIVED_RESULT"
+          if [ "$TEST_RESULT" != "success" ] || [ "$DERIVED_RESULT" != "success" ]; then
+            echo "::error::Required jobs did not all succeed (test=$TEST_RESULT, derived=$DERIVED_RESULT)."
+            exit 1
+          fi

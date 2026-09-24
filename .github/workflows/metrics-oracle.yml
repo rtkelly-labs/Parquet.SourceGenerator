@@ -3,8 +3,9 @@ name: Metrics Oracle (nightly)
 # #254: the independent check on scripts/CodeMetrics.cs. Metrics.exe (the Windows-only
 # Microsoft.CodeAnalysis.Metrics tool) and our bespoke computation both derive from
 # Roslyn's CodeAnalysisMetricData and should agree by construction; nothing else in the
-# repo verifies that they do. If they ever diverge, every baseline number is wrong in the
-# same direction and the drift gate is holding a wrong baseline stable.
+# repo verifies that they do. If they ever diverge, every number CodeMetrics.cs reports is
+# wrong in the same direction. Both tools measure the same checkout in this job; nothing
+# is compared against a checked-in file.
 #
 # It cannot run per-PR because the entry point is a .NET Framework Windows executable
 # (see docs/21-CODE-METRICS.md), and it is scheduled rather than push-triggered because
@@ -48,6 +49,13 @@ jobs:
       - name: Restore solution dependencies
         run: dotnet restore Parquet.SourceGenerator.slnx
 
+      # The numbers under test: CodeMetrics.cs over this checkout, written outside the repo. It
+      # runs before Metrics.exe so a failure here is classified as infrastructure, not as a
+      # disagreement, by the issue step below.
+      - name: Measure with CodeMetrics.cs
+        shell: bash
+        run: dotnet run scripts/CodeMetrics.cs -- --src-only --out "$RUNNER_TEMP/metrics"
+
       - name: Install Microsoft.CodeAnalysis.Metrics
         shell: bash
         run: |
@@ -80,23 +88,19 @@ jobs:
             /out:"$RUNNER_TEMP/oracle.xml" /quiet
           test -s "$RUNNER_TEMP/oracle.xml"
 
-      - name: Compare against checked-in baselines
+      - name: Compare Metrics.exe against CodeMetrics.cs
         id: compare
         shell: bash
         run: |
           set -uo pipefail
           export MSYS_NO_PATHCONV=1
           status=0
-          for pair in \
-            "Parquet.SourceGenerator:metrics/Parquet.SourceGenerator.metrics.txt:Parquet.SourceGenerator.csproj" \
-            "Parquet.SourceGenerator.Legacy:metrics/Parquet.SourceGenerator.Legacy.metrics.txt:Parquet.SourceGenerator.Legacy.csproj"
+          for name in Parquet.SourceGenerator Parquet.SourceGenerator.Legacy
           do
-            baseline=$(printf '%s' "$pair" | cut -d: -f2)
-            target=$(printf '%s' "$pair" | cut -d: -f3)
             dotnet run scripts/MetricsOracleCompare.cs -- \
               --xml "$RUNNER_TEMP/oracle.xml" \
-              --baseline "$baseline" \
-              --target "$target" \
+              --baseline "$RUNNER_TEMP/metrics/$name.metrics.txt" \
+              --target "$name.csproj" \
               --summary oracle-report.md --append 2>&1 | tee -a oracle-output.log || status=1
           done
           echo "## Full oracle output" >> oracle-report.md
@@ -110,6 +114,7 @@ jobs:
           name: metrics-oracle-report
           path: |
             oracle-report.md
+            ${{ runner.temp }}/metrics/
           if-no-files-found: warn
 
       - name: Open or update the oracle failure issue
@@ -125,10 +130,10 @@ jobs:
 
           if [ "$metrics_outcome" = "success" ] && [ "$compare_outcome" != "success" ]; then
             label=metrics-oracle
-            title="metrics oracle: Metrics.exe disagrees with CodeMetrics.cs baselines"
-            body="The nightly Metrics.exe oracle (#254) did not agree with the checked-in
-            \`metrics/*.metrics.txt\` baselines. The per-PR gate may be measuring the wrong
-            numbers until this is resolved.
+            title="metrics oracle: Metrics.exe disagrees with CodeMetrics.cs"
+            body="The nightly Metrics.exe oracle (#254) did not agree with the numbers
+            scripts/CodeMetrics.cs reports for the same commit. The per-PR metrics reports may
+            be wrong until this is resolved.
 
             [Run]($RUN_URL) — full report in the \`metrics-oracle-report\` artifact.
 
@@ -136,10 +141,10 @@ jobs:
             docs/24-METRICS-ORACLE.md for why)."
           else
             label=metrics-oracle-infrastructure
-            title="metrics oracle: Metrics.exe execution failed"
+            title="metrics oracle: CodeMetrics.cs or Metrics.exe execution failed"
             body="The nightly Metrics.exe oracle could not complete its tool execution, so no metric comparison was performed.
 
-            [Run]($RUN_URL) — inspect the Metrics.exe provisioning and execution logs.
+            [Run]($RUN_URL) — inspect the CodeMetrics.cs measurement and the Metrics.exe provisioning and execution logs.
 
             This is an oracle infrastructure failure, not evidence that Metrics.exe disagrees with CodeMetrics.cs."
           fi

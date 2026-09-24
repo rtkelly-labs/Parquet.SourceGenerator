@@ -48,7 +48,7 @@ the builder (`<Model>Parquet.From(...)`); its flat `ReadParquet*Async` methods w
 flat `ReadParquetAsync` and `ReadParquetArrayAsync` stay: they are its declared read subset.
 
 This is a product boundary, not an accidental emitter gap. `BackendCompatibilityPolicyTests` checks
-every checked-in classic `.api.txt` baseline and fails if a modern-only member name appears there or
+the signature-only API of every classic golden model, rendered from the live emitter output, and fails if a modern-only member name appears there or
 if a required core member disappears. A future feature must either stay within the declared core or
 update this policy, the compatibility matrix, README files, and the corresponding API evidence in
 the same pull request.

@@ -14,11 +14,14 @@ about the trap that makes a naive version worthless.
 
 ## The trap: golden files make mutation scores meaningless
 
-The golden-file tests compare the **full emitted text**, character for character. So *any*
-mutation of the emitter — every operator flip, boundary change and deleted branch — changes
-the emitted string and is trivially "killed". A Stryker run that includes them reports a
-score approaching 100% while proving nothing about semantic coverage: the golden files
-detect **change**, not **wrongness**. Worse than useless, an inflated number would claim
+The golden-file tests compared the **full emitted text**, character for character, against
+checked-in copies. So *any* mutation of the emitter — every operator flip, boundary change and
+deleted branch — changed the emitted string and was trivially "killed". A Stryker run that
+included them would report a score approaching 100% while proving nothing about semantic
+coverage: snapshot suites detect **change**, not **wrongness**. The copies are no longer checked
+in ([17](./17-GENERATED-API-BASELINES.md#why-none-of-it-is-checked-in)) — the golden suite now
+asserts invariants and surface claims over the emitted text — but those claims share the
+property to a lesser degree, so the suite stays excluded. Worse than useless, an inflated number would claim
 the behavioural suite is stronger than it is.
 
 That is the entire substance of this layer: the exclusion is the design, not a detail.
@@ -28,9 +31,8 @@ That is the entire substance of this layer: the exclusion is the design, not a d
 `stryker-config.json` (repo root) + the nightly `mutation.yml`:
 
 - **Excluded from the mutation run** (`test-case-filter`, VSTest syntax):
-  `GoldenCodeGenRegressionTests` (emitted-text match), `GeneratedApiBaselineTests`
-  (`.api.txt` signature baselines), `GeneratedCodeMetricsBaselineTests` (`.metrics.txt`),
-  and `IlInterrogationTests` (IL-shape assertions — same change-not-wrongness property as
+  `GoldenCodeGenRegressionTests` (surface claims over the emitted text), `GeneratedApiBaselineTests`
+  (the `.api.txt` signature renderer), and `IlInterrogationTests` (IL-shape assertions — same change-not-wrongness property as
   the text suites). **If you are about to remove one of these filters to raise the score,
   stop: you are inverting the measurement.** The comment in the config file says so where
   the damage would be done.

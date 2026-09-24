@@ -1,6 +1,6 @@
 {
   "stryker-config": {
-    "test-case-filter": "FullyQualifiedName!~GoldenCodeGenRegressionTests&FullyQualifiedName!~GeneratedApiBaselineTests&FullyQualifiedName!~GeneratedCodeMetricsBaselineTests&FullyQualifiedName!~IlInterrogationTests&Category!=ExternalInterop&Category!=DatasetIntegrity",
+    "test-case-filter": "FullyQualifiedName!~GoldenCodeGenRegressionTests&FullyQualifiedName!~GeneratedApiBaselineTests&FullyQualifiedName!~IlInterrogationTests&Category!=ExternalInterop&Category!=DatasetIntegrity",
     "solution": "Parquet.SourceGenerator.slnx",
     "test-projects": [
       "test/Parquet.SourceGenerator.Tests/Parquet.SourceGenerator.Tests.csproj"

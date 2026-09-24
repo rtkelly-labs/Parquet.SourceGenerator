@@ -5,10 +5,10 @@
 // docs/21-CODE-METRICS.md), so scripts/CodeMetrics.cs compiles each golden file together with the
 // declaration below and REQUIRES zero errors. That makes this file the thing that keeps the
 // generated-code metrics honest, and it also buys a real compile check on the emitted output,
-// which the golden suite's syntax-only parse never gave.
+// which the test suite's syntax-only parse of the EmitSource-based models never gave.
 //
-// This mirrors GoldenCodeGenRegressionTests.GoldenMasterComprehensiveModernV6Model. It is not
-// compiled into the test assembly (GoldenFiles/**/*.cs is Compile-Removed).
+// This mirrors the GoldenCorpus model behind GoldenCodeGenRegressionTests.GoldenMasterComprehensiveModernV6Model. It is not
+// compiled into the test assembly (GoldenModels/**/*.cs is Compile-Removed).
 namespace SampleDomain.Models;
 
 public sealed class OrderEvent

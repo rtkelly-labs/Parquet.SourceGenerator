@@ -1,0 +1,111 @@
+name: Stack
+
+# Links a chain of pull requests into a GitHub native stack (CONTRIBUTING.md, "Stacked pull
+# requests"). Label the BOTTOM pull request `stack:link`:
+# the job walks upward through the open pull requests whose base is the previous one's head branch,
+# requires the chain to be strictly linear, and runs `gh stack link` over it bottom to top. It can
+# also be dispatched by hand with explicit pull request numbers.
+#
+# `gh stack link` takes pull request numbers and needs no local tracking, so it runs from any
+# checkout of the repository. Linking fails for a pull request with auto-merge enabled; disable it
+# first. Once linked, merge with `gh stack merge <top> --squash --yes` — `gh pr merge` refuses
+# stacked pull requests.
+
+on:
+  pull_request:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      prs:
+        description: Pull request numbers, bottom to top, space separated
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: stack-link
+  cancel-in-progress: false
+
+jobs:
+  link:
+    name: stack-link
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'stack:link'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Setup Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: '1.26'
+          cache: false
+
+      # Built from source at the commit behind v0.1.0, not `--pin v0.1.0`: a tag and its release
+      # binary can be replaced, and this job holds a write token. `go install` of a commit is
+      # verified against the Go checksum database, so the code that runs is fixed by content.
+      - name: Install gh-stack
+        env:
+          GH_STACK_COMMIT: a1b4a3d4d0bcde9ec3a78ab99b2d63af121857a9 # v0.1.0
+        run: |
+          set -euo pipefail
+          export GOBIN="$RUNNER_TEMP/gh-stack"
+          go install "github.com/github/gh-stack@$GH_STACK_COMMIT"
+          cd "$GOBIN"
+          gh extension install .
+
+      - name: Resolve the chain
+        id: chain
+        env:
+          DISPATCHED: ${{ inputs.prs }}
+          BOTTOM: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          if [ -n "${DISPATCHED:-}" ]; then
+            chain="$DISPATCHED"
+          else
+            chain="$BOTTOM"
+            current="$BOTTOM"
+            while true; do
+              head=$(gh pr view "$current" --json headRefName --jq .headRefName)
+              children=$(gh pr list --state open --base "$head" --json number --jq '.[].number')
+              count=$(printf '%s' "$children" | grep -c . || true)
+              if [ "$count" -eq 0 ]; then
+                break
+              fi
+              if [ "$count" -gt 1 ]; then
+                echo "::error::#$current has $count open children ($children); a stack is strictly linear"
+                exit 1
+              fi
+              current="$children"
+              chain="$chain $current"
+            done
+          fi
+          echo "Linking, bottom to top: $chain"
+          echo "prs=$chain" >> "$GITHUB_OUTPUT"
+
+      - name: Link
+        env:
+          PRS: ${{ steps.chain.outputs.prs }}
+          # A pull request checkout is a detached merge ref, so gh-stack cannot infer the trunk;
+          # the stack's base is the repository's default branch.
+          BASE: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC2086 # the list is deliberately word-split into arguments
+          gh stack link --base "$BASE" $PRS
+
+      - name: Report
+        if: always()
+        run: gh api "repos/${{ github.repository }}/stacks" || true
+
+      - name: Remove the trigger label
+        if: always() && github.event_name == 'pull_request'
+        run: gh pr edit "${{ github.event.pull_request.number }}" --remove-label stack:link || true

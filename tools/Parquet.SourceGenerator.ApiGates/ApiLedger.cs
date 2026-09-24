@@ -6,7 +6,7 @@ namespace Parquet.SourceGenerator.ApiGates;
 
 /// <summary>
 /// The escape hatch. A <c>docs/api/LEDGER.md</c> entry marked <c>**Unapproved-by-design:**</c>
-/// suppresses <c>PARQAPI001</c> / <c>PARQAPI002</c> for the signature it names.
+/// suppresses <c>PARQAPI002</c> for the signature it names.
 /// </summary>
 /// <remarks>
 /// <para>The strict gate exists so that nothing enters a governed surface unreviewed. That is the

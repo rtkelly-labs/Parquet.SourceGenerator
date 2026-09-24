@@ -30,7 +30,8 @@ Applied with `enforcement: active`, targeting `refs/heads/main`.
   one check per job, so requiring a workflow name means the check never reports and every pull
   request blocks indefinitely on "N of N required status checks are expected", with nothing naming
   what it is waiting for:
-    - `build` (`ci.yml`)
+    - `build` (`ci.yml`) — an aggregate job that succeeds only when both `test` (restore, build,
+      tests, pack, interop) and `derived` (derived outputs and their gates) succeed
     - `pr-title` (`pr-title.yml`)
   - These two strings are an API between the workflows here and
     `REPO_REQUIRED_CHECKS_MAP` in shared-utilities. Renaming a job silently breaks the ruleset, so

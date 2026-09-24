@@ -1,7 +1,6 @@
 # 24 — The Metrics Oracle (#254): Metrics.exe against CodeMetrics.cs
 
-Layer 1's baselines (`metrics/*.metrics.txt`, [21 — Code Metrics](./21-CODE-METRICS.md)) are
-computed by `scripts/CodeMetrics.cs` — a bespoke, cross-platform program. It exists because
+Layer 1's numbers ([21 — Code Metrics](./21-CODE-METRICS.md)) are computed by `scripts/CodeMetrics.cs` — a bespoke, cross-platform program. It exists because
 `Microsoft.CodeAnalysis.Metrics` ships `Metrics.exe`, a .NET Framework **Windows-only**
 executable, which cannot run on this repository's `ubuntu-latest` CI.
 
@@ -12,9 +11,8 @@ computation can never answer about itself:
 > **Is our ruler accurate?**
 
 If `CodeMetrics.cs` enumerates members differently from Microsoft's tool — a treatment of
-accessors, partials or nested types that quietly diverges — then every number in every
-baseline is wrong **in the same direction**, and the drift gate holds that wrong baseline
-stable forever with perfect confidence. Drift detection has no opinion about correctness;
+accessors, partials or nested types that quietly diverges — then every number it reports is
+wrong **in the same direction**, and nothing downstream has an opinion about correctness;
 only an independent oracle does. This is the same reasoning that put PyArrow (#165), DuckDB
 (#166) and pinned `parquet-cli` (#183) around the *generated files*; the metrics were the
 last self-reported number in the quality stack without a cross-check.
@@ -23,20 +21,24 @@ last self-reported number in the quality stack without a cross-check.
 
 `.github/workflows/metrics-oracle.yml`, nightly (`30 5 * * *`) plus manual dispatch:
 
-1. `nuget install Microsoft.CodeAnalysis.Metrics` (version pinned in the workflow env), stage
+1. `scripts/CodeMetrics.cs -- --src-only --out $RUNNER_TEMP/metrics` measures the checkout's
+   `src/` (layer 1 only — the generated-code layer needs the golden models the test suite
+   publishes, and the oracle does not compare it). Nothing is read from a checked-in file: both
+   tools measure the same commit, in the same job.
+2. `nuget install Microsoft.CodeAnalysis.Metrics` (version pinned in the workflow env), stage
    the matching Roslyn MSBuild build host, and run `Metrics.exe` over both generator projects in
    one invocation, emitting one XML report.
-2. `scripts/MetricsOracleCompare.cs` reads the XML and the matching `metrics/*.metrics.txt`
-   baseline and compares them **per type**: MI within ±2 (the layer-1 cross-machine policy —
-   the index bottoms out in a cube root), CC / CL / SLOC exact.
-3. Any disagreement fails the job **and** opens or updates a `metrics-oracle`-labelled
+3. `scripts/MetricsOracleCompare.cs` reads the XML and the matching report from step 1 and
+   compares them **per type**: MI within ±2 (the index bottoms out in a cube root), CC / CL /
+   SLOC exact.
+4. Any disagreement fails the job **and** opens or updates a `metrics-oracle`-labelled
    GitHub issue with the run link. A silently-red schedule gets muted; an issue gets acted
    on — the reporting lesson of #189, which #261 also adopts.
 
 ## What is gated, and what is only reported
 
-**Gated: type-level agreement.** The baseline lists every hand-written type in each
-assembly; the oracle must report the same metrics for each. A baseline type the oracle does
+**Gated: type-level agreement.** The report lists every hand-written type in each
+assembly; the oracle must report the same metrics for each. A reported type the oracle does
 not name is itself a failure (it means the two tools disagree about what exists).
 
 **Reported, never gated: assembly totals.** The two tools disagree about scope before they
@@ -83,9 +85,10 @@ copied in full because its runtime configuration, dependency manifest and compan
 are part of the launch contract. The workflow checks those files before invoking the vendor tool,
 so a future package change fails at provisioning with an actionable error.
 
-Failures before the comparison are reported with the separate `metrics-oracle-infrastructure`
-label. Only a successful Metrics.exe run followed by a failed comparison is reported as a genuine
-`metrics-oracle` disagreement.
+Failures before the comparison — including `CodeMetrics.cs` itself failing, which is why it runs
+first — are reported with the separate `metrics-oracle-infrastructure` label. Only a successful
+Metrics.exe run followed by a failed comparison is reported as a genuine `metrics-oracle`
+disagreement.
 
 Refs: #251 (epic), #253 (layer 1), #254 (this oracle), #21 (the tooling split this page
 schedules around).

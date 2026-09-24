@@ -1,5 +1,5 @@
 // Model declaration for LegacyRecordParquetLegacyExtensions.g.cs. See OrderEvent.cs for why this
-// exists. Mirrors GoldenCodeGenRegressionTests.GoldenMasterLegacyV4V5DataColumnModel.
+// exists. Mirrors the GoldenCorpus model behind GoldenCodeGenRegressionTests.GoldenMasterLegacyV4V5DataColumnModel.
 //
 // This one is compiled against Parquet.Net 4.25.0, not 6.1.0: the V5 emitter targets the classic
 // DataColumn API and its output does not compile against Parquet.Net 6 at all.
