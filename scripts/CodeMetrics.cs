@@ -30,15 +30,19 @@ using Microsoft.CodeAnalysis.MSBuild;
 // -----------------------------------------------------------------------------
 // CodeMetrics.cs
 //
-// Layers 1 and 2 of #251. Emits deterministic, checked-in code-metrics baselines and gates CI on
-// drift against them. See docs/21-CODE-METRICS.md and docs/22-GENERATED-CODE-METRICS.md.
+// Layers 1 and 2 of #251. See docs/21-CODE-METRICS.md and docs/22-GENERATED-CODE-METRICS.md.
 //
-//   Layer 1 — the hand-written product code under src/, one baseline per project in metrics/.
-//   Layer 2 — the GENERATED code, one baseline per golden model beside its .api.txt in
-//             test/Parquet.SourceGenerator.Tests/GoldenFiles/. Same computation, same grammar,
-//             same ordinal sorting; a different tolerance policy, because emitted code has
-//             different characteristics from hand-written code and importing layer 1's judgement
-//             unexamined would be wrong.
+//   Layer 1 — the hand-written product code under src/, one report per project, written to
+//             artifacts/metrics/ (gitignored). NOT checked in and NOT gated on drift: the numbers
+//             are a pure function of src/, so a committed copy only restated the code and forced
+//             a refresh commit on every change. CI publishes the reports as a build artifact and
+//             step summary; the gate on hand-written code is CA1502/CA1505/CA1506 against
+//             CodeMetricsConfig.txt, which this script validates.
+//   Layer 2 — the GENERATED code, one checked-in baseline per golden model beside its .api.txt in
+//             test/Parquet.SourceGenerator.Tests/GoldenFiles/, gated on drift. Same computation,
+//             same grammar, same ordinal sorting; a different tolerance policy, because emitted
+//             code has different characteristics from hand-written code and importing layer 1's
+//             judgement unexamined would be wrong.
 //
 // The metrics are Roslyn's own — Maintainability Index, Cyclomatic Complexity, Class Coupling,
 // Depth of Inheritance, Source/Executable Lines — computed by
@@ -59,10 +63,12 @@ using Microsoft.CodeAnalysis.MSBuild;
 // that matters here).
 //
 // Usage:
-//   dotnet run scripts/CodeMetrics.cs                        # gate: compare against the baseline
-//   UPDATE_GOLDEN_FILES=true dotnet run scripts/CodeMetrics.cs   # refresh the baseline
+//   dotnet run scripts/CodeMetrics.cs                        # report src/, gate the generated code
+//   UPDATE_GOLDEN_FILES=true dotnet run scripts/CodeMetrics.cs   # refresh the generated baselines
 //   dotnet run scripts/CodeMetrics.cs -- --update            # same, explicit flag
 //   dotnet run scripts/CodeMetrics.cs -- --summary out.md    # also write a Markdown report
+//   dotnet run scripts/CodeMetrics.cs -- --out <dir>         # where the src/ reports go
+//                                                            # (default artifacts/metrics)
 // -----------------------------------------------------------------------------
 
 // The measured set is the hand-written product code. Test, benchmark, sample and tooling projects
@@ -81,8 +87,6 @@ var measured = new (string Project, string? TargetFramework)[]
     ),
 };
 
-const string BaselineDirectory = "metrics";
-
 // Layer 2. The golden files are checked-in C#, written from the same emitted string as their
 // .api.txt companions (see docs/17-GENERATED-API-BASELINES.md), so metrics over them are metrics
 // over the emitter's real output. The model declarations under GoldenFiles/Models/ are the
@@ -93,13 +97,6 @@ const string GoldenModelDirectory = GoldenDirectory + "/Models";
 const string GoldenHostProject =
     "test/Parquet.SourceGenerator.Tests/Parquet.SourceGenerator.Tests.csproj";
 
-// The tolerance. Cyclomatic complexity, class coupling, depth of inheritance and the two line
-// counts are integer counts of syntactic facts: they are reproduced exactly by a pinned Roslyn, so
-// they are compared exactly. The maintainability index is a rounded floating-point function of a
-// Halstead volume, so it is allowed a +/-2 band to absorb rounding and reference-assembly noise
-// without the gate crying wolf. See docs/21-CODE-METRICS.md.
-const int MaintainabilityIndexTolerance = 2;
-
 bool update =
     string.Equals(
         Environment.GetEnvironmentVariable("UPDATE_GOLDEN_FILES"),
@@ -107,17 +104,23 @@ bool update =
         StringComparison.OrdinalIgnoreCase
     ) || args.Contains("--update", StringComparer.Ordinal);
 string? summaryPath = null;
+string reportDirectory = Path.Combine("artifacts", "metrics");
 for (int i = 0; i < args.Length; i++)
 {
     if (string.Equals(args[i], "--summary", StringComparison.Ordinal) && i + 1 < args.Length)
     {
         summaryPath = args[i + 1];
     }
+
+    if (string.Equals(args[i], "--out", StringComparison.Ordinal) && i + 1 < args.Length)
+    {
+        reportDirectory = args[i + 1];
+    }
 }
 
 string repoRoot = FindRepositoryRoot();
 Directory.SetCurrentDirectory(repoRoot);
-Directory.CreateDirectory(BaselineDirectory);
+Directory.CreateDirectory(reportDirectory);
 
 ValidateCodeMetricsConfig("CodeMetricsConfig.txt");
 
@@ -134,36 +137,9 @@ foreach (var (projectPath, tfm) in measured)
     var rows = await MeasureAsync(projectPath, tfm).ConfigureAwait(false);
     allRows.AddRange(rows);
 
-    string rendered = Render(name, rows);
-    string baselinePath = Path.Combine(BaselineDirectory, name + ".metrics.txt");
-
-    if (update)
-    {
-        WriteIfChanged(baselinePath, rendered);
-        Console.WriteLine($"  wrote {baselinePath} ({rows.Count} entries)");
-        continue;
-    }
-
-    if (!File.Exists(baselinePath))
-    {
-        failures.Add(
-            $"Code metrics baseline missing: {baselinePath}\n"
-                + "  No baseline exists for this project. Generate it with\n"
-                + "  UPDATE_GOLDEN_FILES=true dotnet run scripts/CodeMetrics.cs\n"
-                + "  and commit the result."
-        );
-        continue;
-    }
-
-    string drift = Compare(baselinePath, ReadAllLines(baselinePath), rows);
-    if (drift.Length > 0)
-    {
-        failures.Add(drift);
-    }
-    else
-    {
-        Console.WriteLine($"  {baselinePath} OK ({rows.Count} entries)");
-    }
+    string reportPath = Path.Combine(reportDirectory, name + ".metrics.txt");
+    WriteIfChanged(reportPath, Render(name, rows));
+    Console.WriteLine($"  wrote {reportPath} ({rows.Count} entries)");
 }
 
 // -------------------------------------------------------------------------------------------
@@ -285,14 +261,18 @@ if (failures.Count > 0)
     }
     Console.Error.WriteLine(
         "Refresh with: UPDATE_GOLDEN_FILES=true dotnet run scripts/CodeMetrics.cs, then commit the\n"
-            + "changed files under metrics/ and test/Parquet.SourceGenerator.Tests/GoldenFiles/. The diff\n"
-            + "is the point: it shows the reviewer exactly which types and members got harder to maintain.\n"
-            + "See docs/21-CODE-METRICS.md (hand-written) and docs/22-GENERATED-CODE-METRICS.md (emitted)."
+            + "changed files under test/Parquet.SourceGenerator.Tests/GoldenFiles/. The diff is the point:\n"
+            + "it shows the reviewer exactly how the shape of the emitted code changed.\n"
+            + "See docs/22-GENERATED-CODE-METRICS.md."
     );
     return 1;
 }
 
-Console.WriteLine(update ? "Baselines refreshed." : "Code metrics baselines match.");
+Console.WriteLine(
+    update
+        ? "Generated code metrics baselines refreshed."
+        : "Generated code metrics baselines match."
+);
 return 0;
 
 // ---------------------------------------------------------------------------------------------
@@ -484,14 +464,14 @@ static string? KeyFor(ISymbol symbol) =>
 static string Render(string projectName, List<MetricRow> rows)
 {
     var sb = new StringBuilder();
-    sb.Append("# Code metrics baseline: ").Append(projectName).Append('\n');
-    sb.Append("# Generated by scripts/CodeMetrics.cs. Do not edit by hand.\n");
-    sb.Append("# Refresh: UPDATE_GOLDEN_FILES=true dotnet run scripts/CodeMetrics.cs\n");
+    sb.Append("# Code metrics report: ").Append(projectName).Append('\n');
+    sb.Append("# Generated by scripts/CodeMetrics.cs from src/. Not checked in.\n");
+    sb.Append("# Regenerate: dotnet run scripts/CodeMetrics.cs\n");
     sb.Append("# Kinds: A assembly, N namespace, T type, M method, P property, E event.\n");
     sb.Append(
         "# MI maintainability index 0-100 (higher is better), CC cyclomatic complexity,\n"
             + "# CL class coupling, DIT depth of inheritance, SLOC source lines, ELOC executable lines.\n"
-            + "# Ordinal-sorted. MI is compared with a +/-2 tolerance; every other metric exactly.\n"
+            + "# Ordinal-sorted, so two reports diff cleanly.\n"
     );
     foreach (var row in rows)
     {
@@ -503,70 +483,6 @@ static string Render(string projectName, List<MetricRow> rows)
 
 static string[] ReadAllLines(string path) =>
     File.ReadAllText(path).Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
-
-static string Compare(string baselinePath, string[] baselineLines, List<MetricRow> current)
-{
-    var baseline = new Dictionary<string, MetricRow>(StringComparer.Ordinal);
-    var baselineOrder = new List<string>();
-    foreach (string line in baselineLines)
-    {
-        if (line.Length == 0 || line[0] == '#')
-        {
-            continue;
-        }
-
-        var row = MetricRow.Parse(line);
-        baseline[row.Key] = row;
-        baselineOrder.Add(row.Key);
-    }
-
-    var currentByKey = current.ToDictionary(r => r.Key, StringComparer.Ordinal);
-    var messages = new List<string>();
-
-    foreach (string key in baselineOrder)
-    {
-        if (!currentByKey.ContainsKey(key))
-        {
-            messages.Add($"  - removed: {key}");
-        }
-    }
-
-    foreach (var row in current)
-    {
-        if (!baseline.TryGetValue(row.Key, out var old))
-        {
-            messages.Add($"  + added:   {row.Key} | {row.Metrics}");
-            continue;
-        }
-
-        var changes = row.DriftAgainst(old, MaintainabilityIndexTolerance);
-        if (changes.Count > 0)
-        {
-            messages.Add($"  ~ changed: {row.Key}");
-            foreach (string change in changes)
-            {
-                messages.Add("      " + change);
-            }
-        }
-    }
-
-    if (messages.Count == 0)
-    {
-        // Ordering is part of the artifact: a reordered file is a drifted file.
-        var currentKeys = current.Select(r => r.Key).ToList();
-        if (!currentKeys.SequenceEqual(baselineOrder, StringComparer.Ordinal))
-        {
-            messages.Add("  ~ ordering: the baseline is not in ordinal order; refresh it.");
-        }
-    }
-
-    if (messages.Count == 0)
-    {
-        return string.Empty;
-    }
-
-    return $"Code metrics baseline drifted: {baselinePath}\n" + string.Join("\n", messages);
-}
 
 static string RenderSummary(List<MetricRow> allRows)
 {
@@ -616,7 +532,7 @@ static void AppendTable(StringBuilder sb, string title, IEnumerable<MetricRow> r
     sb.Append("| Entity | MI | CC | CL | SLOC |\n|:--|--:|--:|--:|--:|\n");
     foreach (var r in rows)
     {
-        // The parameter list is what makes an entity unique in the baseline; in a report it is
+        // The parameter list is what makes an entity unique in the full report; in a summary it is
         // unreadable noise, so the summary shows the name and an arity.
         string name = r.Key[2..];
         int paren = name.IndexOf('(', StringComparison.Ordinal);

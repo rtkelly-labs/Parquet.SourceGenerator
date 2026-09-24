@@ -83,6 +83,14 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   number is known is vacuous or permanently red.
 
 ### Changed
+- **Code metrics for `src/` are derived, not checked in.** `metrics/*.metrics.txt` and
+  `metrics/duplication.txt` are removed, along with the CI steps that failed on any drift from them:
+  both files were a pure function of `src/` and needed a refresh commit on nearly every change.
+  `scripts/CodeMetrics.cs` and `scripts/Duplication.cs` now write reports to `artifacts/metrics/`
+  (gitignored), and CI publishes them as the `code-metrics` artifact and in the job summary. The
+  gate on hand-written code is unchanged — `CA1502`/`CA1505`/`CA1506` against
+  `CodeMetricsConfig.txt` — as are the checked-in generated-code baselines in `GoldenFiles/`. The
+  nightly metrics oracle now compares `Metrics.exe` against `CodeMetrics.cs` run on the same commit.
 - **BREAKING: generated implementation plumbing is no longer public (#459, #481, part of #477).**
   The `{T}RowGroupMetadata` constructor (whose parameters were emitter slot indices such as
   `column_0, column_2`) is now `internal`; the struct and its properties stay public for pruning

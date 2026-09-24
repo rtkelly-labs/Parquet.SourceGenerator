@@ -23,7 +23,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 // beside it.
 //
 //   graph/<project>.callgraph.txt   one E: line per static edge; drift-gated like
-//                                   metrics/*.metrics.txt
+//                                   the golden *.api.txt baselines
 //   graph/callgraph.allowlist.txt   every self-loop, with a stated reason
 //   docs/callgraph.md               type-level Mermaid, refreshed by the same command
 //   docs/callgraph-generated.md     the generated code's graph, as documentation

@@ -221,12 +221,12 @@ Generated code metrics drifted for model 'OrderEventParquetExtensions': test/...
 
 ## Refreshing
 
-The same one command as layer 1 and the golden files themselves:
+The same verb as the golden files themselves:
 
 ```bash
 UPDATE_GOLDEN_FILES=true dotnet test test/Parquet.SourceGenerator.Tests/Parquet.SourceGenerator.Tests.csproj \
   --filter "FullyQualifiedName~GoldenCodeGenRegressionTests"   # *.g.cs and *.api.txt
-UPDATE_GOLDEN_FILES=true dotnet run scripts/CodeMetrics.cs      # metrics/*.metrics.txt and GoldenFiles/*.metrics.txt
+UPDATE_GOLDEN_FILES=true dotnet run scripts/CodeMetrics.cs      # GoldenFiles/*.metrics.txt
 ```
 
 Or comment `/update-golden` on a pull request, which runs both in that order and commits the result
@@ -481,19 +481,20 @@ Treat the throughput and cold-start figures as indicative to about ±3% (Server 
   `[src/**.cs]` ([21](./21-CODE-METRICS.md#the-analyzer-rules)) and stay there. Enabling them on
   emitted code would fail every consumer's build for a design decision they did not make, which is
   why the emitted files carry `#pragma warning disable` headers in the first place.
-- **No `metrics/` entry.** These baselines live beside the golden files they describe, not in
-  `metrics/`, because their lifecycle is the golden files' lifecycle, not `src/`'s.
+- **Beside the golden files.** These baselines live next to the files they describe because their
+  lifecycle is the golden files' lifecycle, not `src/`'s. That is also why they stay checked in
+  while layer 1's `src/` numbers no longer are ([21](./21-CODE-METRICS.md#why-the-hand-written-numbers-are-not-checked-in)):
+  they change only when the emitted code does, in the same commit.
 - **Not a governed API surface.** [18](./18-API-CHANGE-CONTRACT.md) governs `*.api.txt`,
   `src/api/seams.txt` and the `PublicAPI.*.txt` files. A `*.metrics.txt` is not a catalogue and
   adds no public member, and `GoldenFiles/Models/*.cs` is `Compile`-removed from every assembly, so
-  neither needs a `docs/api/LEDGER.md` entry. Same conclusion layer 1 reached for `metrics/*`,
-  reached independently for these files.
+  neither needs a `docs/api/LEDGER.md` entry.
 
 ## Related
 
 - [17 - Generated Public API Baselines](./17-GENERATED-API-BASELINES.md) — the `.api.txt`
   companion, and the source of the `MEMBERS` count.
-- [21 - Code Metrics Baselines & The Complexity Ratchet](./21-CODE-METRICS.md) — layer 1, the
+- [21 - Code Metrics & The Complexity Ratchet](./21-CODE-METRICS.md) — layer 1, the
   hand-written half, and the shared format rationale.
 - [11 - Performance Optimization Findings](./11-PERFORMANCE-OPTIMIZATION-FINDINGS.md) — why the
   emitted methods are long on purpose.

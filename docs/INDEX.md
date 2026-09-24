@@ -126,8 +126,9 @@ The documentation is organized into three distinct tiers based on audience and i
      - What stays generated, what ships, and the measurements that decide it.
      - Its current-release boundary decision is recorded in [31 - Generated/Shipped Boundary Decision](./31-GENERATED-SHIPPED-BOUNDARY-DECISION.md).
 
-15. **[21 - Code Metrics Baselines & The Complexity Ratchet](./21-CODE-METRICS.md)**
-     - Checked-in Roslyn metrics baselines under `metrics/`, gated on drift rather than on absolute values.
+15. **[21 - Code Metrics & The Complexity Ratchet](./21-CODE-METRICS.md)**
+     - Roslyn metrics for every entity under `src/`, derived on demand and published as a CI artifact;
+       the gate is `CA1502`/`CA1505`/`CA1506`, and why the numbers are no longer checked in.
      - What the Maintainability Index does *not* tell you, and why `CA1502` is calibrated below the
        cited guidance, with the history of its two named exceptions (#263 deleted both).
      - The measured evidence: `CodeEmitter` at 2,536 lines / complexity 144 (a size problem with
@@ -141,9 +142,9 @@ The documentation is organized into three distinct tiers based on audience and i
      - `ELOC_PER_MEMBER`, the size-per-capability ratio: 10 executable lines per emitted member for
        flat models, 33 for row-level lists.
 
-17. **[23 - Duplication Measurement & The Drift Gate](./23-DUPLICATION.md)**
-     - Layer 3 of #251: token-level duplication across `src/`, checked in as `metrics/duplication.txt`
-       and gated on drift — the `*.api.txt` grammar again.
+17. **[23 - Duplication Measurement](./23-DUPLICATION.md)**
+     - Layer 3 of #251: token-level duplication across `src/`, reported per CI run in the
+       `code-metrics` artifact rather than checked in.
      - Calibrated against the repo's demonstrated failure: the tool names the historical
        `ResolveSchemaField` copies and the three read paths that all broke on #196 before it was
        adopted.

@@ -131,17 +131,12 @@ jobs:
 
       # Layers 1 and 2 of #251 (docs/21-CODE-METRICS.md, docs/22-GENERATED-CODE-METRICS.md). The
       # build above already enforces CA1502 / CA1505 / CA1506 against the thresholds in
-      # CodeMetricsConfig.txt, which is an absolute judgement and therefore the weaker half. This
-      # is the other half: checked-in, ordinal baselines of Roslyn's maintainability index,
-      # cyclomatic complexity, class coupling, inheritance depth and line counts, gated on DRIFT
-      # rather than on an absolute number — for every namespace, type and member under src/
-      # (metrics/*.metrics.txt), and for every emitted golden model
-      # (GoldenFiles/*.metrics.txt). It also validates CodeMetricsConfig.txt, because a single
-      # unrecognised entry in that file silently disables all three analyzers.
-      #
-      # This step is what proves cross-platform determinism: the baselines are regenerated here on
-      # ubuntu-latest / x64 from files a contributor generated on their own machine, and compared
-      # with no tolerance at all on every metric but one.
+      # CodeMetricsConfig.txt — that is the gate on hand-written code. This step validates that
+      # file (a single unrecognised entry silently disables all three analyzers), measures Roslyn's
+      # maintainability index, cyclomatic complexity, class coupling, inheritance depth and line
+      # counts for every entity under src/ into artifacts/metrics/ (a report, derived from the code
+      # on every run and never checked in), and gates the emitted golden models against their
+      # checked-in GoldenFiles/*.metrics.txt baselines.
       #
       # It runs `dotnet run` on a file-based app whose Roslyn version is pinned in the script, so
       # the numbers do not move when the runner's SDK does. NU1903 on Microsoft.Build.Tasks.Core
@@ -150,7 +145,7 @@ jobs:
       # golden file is measured against, no code from either is executed (MSBuildLocator binds the
       # SDK's copy of the former; the latter is loaded only as a Roslyn metadata reference), and
       # both are outside the solution the audit step above governs.
-      - name: Verify Code Metrics Baselines
+      - name: Code Metrics (report src/, gate generated baselines)
         run: |
           status=0
           dotnet run scripts/CodeMetrics.cs -- --summary code-metrics.md || status=$?
@@ -159,17 +154,23 @@ jobs:
           fi
           exit $status
 
-      # Layer 3 of #251 (docs/23-DUPLICATION.md): token-level duplication across src/, gated on
-      # drift with zero tolerance — the layers 1 and 2 grammar. Emitted code is out of scope by
-      # design; generated output repeating itself is the design, not a defect.
-      - name: Verify Duplication Baseline
+      # Layer 3 of #251 (docs/23-DUPLICATION.md): token-level duplication across src/, reported
+      # into artifacts/metrics/duplication.txt. Report-only; emitted code is out of scope by design.
+      - name: Duplication Report
         run: |
-          status=0
-          dotnet run scripts/Duplication.cs -- --summary duplication.md || status=$?
-          if [ -f duplication.md ]; then
-            cat duplication.md >> "$GITHUB_STEP_SUMMARY"
-          fi
-          exit $status
+          dotnet run scripts/Duplication.cs -- --summary duplication.md
+          cat duplication.md >> "$GITHUB_STEP_SUMMARY"
+
+      # The full per-entity reports from the two steps above. Download two runs' artifacts and
+      # diff them to see what a change did to the numbers — the files are ordinal-sorted and
+      # line-per-entity for exactly that.
+      - name: Upload Code Metrics Reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: code-metrics
+          path: artifacts/metrics/
+          if-no-files-found: warn
 
       # #252: the call graph — structure as a gated artifact. Edge drift, declared
       # cycles (graph/callgraph.allowlist.txt), the fan-out ratchet, and the

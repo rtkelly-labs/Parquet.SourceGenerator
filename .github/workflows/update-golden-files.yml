@@ -3,10 +3,11 @@ name: Update Golden Code Generation Files
 # Refreshes every artefact the golden suite owns: the full generated sources
 # (GoldenFiles/*.g.cs), the signature-only public API baselines emitted beside them
 # (GoldenFiles/*.api.txt, see docs/17-GENERATED-API-BASELINES.md) — both written by the same
-# UPDATE_GOLDEN_FILES pass, so they cannot drift apart — and then the code metrics over both the
-# hand-written source (metrics/*.metrics.txt, docs/21-CODE-METRICS.md) and the regenerated emitted
-# source (GoldenFiles/*.metrics.txt, docs/22-GENERATED-CODE-METRICS.md). The order matters: the
-# metrics are measured over the golden files this job has just rewritten.
+# UPDATE_GOLDEN_FILES pass, so they cannot drift apart — and then the code metrics over the
+# regenerated emitted source (GoldenFiles/*.metrics.txt, docs/22-GENERATED-CODE-METRICS.md). The
+# order matters: the metrics are measured over the golden files this job has just rewritten.
+# Metrics over the hand-written src/ are not checked in (docs/21-CODE-METRICS.md), so there is
+# nothing of theirs to refresh.
 
 on:
   workflow_dispatch:
@@ -90,10 +91,9 @@ jobs:
             --configuration Release \
             --filter "FullyQualifiedName~GoldenCodeGenRegressionTests"
 
-      # docs/21-CODE-METRICS.md and docs/22-GENERATED-CODE-METRICS.md. Same refresh verb, same
-      # commit, so a change that moves the emitted surface, the maintainability of the code that
-      # emits it, and the shape of what it emits lands as one reviewable diff. This must run AFTER
-      # the golden regeneration above: it measures the *.g.cs files that step writes.
+      # docs/22-GENERATED-CODE-METRICS.md. Same refresh verb, same commit, so a change that moves
+      # the emitted surface and the shape of what it emits lands as one reviewable diff. This must
+      # run AFTER the golden regeneration above: it measures the *.g.cs files that step writes.
       - name: Regenerate Code Metrics Baselines
         run: UPDATE_GOLDEN_FILES=true dotnet run scripts/CodeMetrics.cs
 
@@ -104,7 +104,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add test/Parquet.SourceGenerator.Tests/GoldenFiles/ metrics/
+          git add test/Parquet.SourceGenerator.Tests/GoldenFiles/
           if ! git diff --cached --quiet; then
             git commit -m "test(generator): update golden generated code, API baselines and code metrics"
             git push origin "$BRANCH"

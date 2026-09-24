@@ -1,10 +1,10 @@
-# 23 — Duplication Measurement & The Drift Gate (Layer 3 of #251)
+# 23 — Duplication Measurement (Layer 3 of #251)
 
 Layers 1 ([21 — Code Metrics](./21-CODE-METRICS.md)) and 2 ([22 — Generated Code
 Metrics](./22-GENERATED-CODE-METRICS.md)) measure *volume and branching*. Neither can see the
 thing that has actually cost this project time: **the same code written twice**. This page
-documents layer 3 — `scripts/Duplication.cs`, `metrics/duplication.txt`, and the CI gate on
-drift between them.
+documents layer 3 — `scripts/Duplication.cs` and the report it writes to
+`artifacts/metrics/duplication.txt`.
 
 ## Why this repo, specifically
 
@@ -33,15 +33,15 @@ A sliding window of **16 units** is FNV-hashed; every window hash shared by two 
 diagonal alignment between them; a maximal consecutive run along a diagonal is one duplicated
 span, reported if it covers at least **40 tokens**. The knobs are calibrated, not picked (below).
 
-The artifact is `metrics/duplication.txt`, in the same grammar as every other baseline in this
-repository: a comment header explaining it, ordinal-sorted lines, one refresh command:
+The report is `artifacts/metrics/duplication.txt` (gitignored), in the same grammar as the other
+metrics reports: a comment header explaining it, ordinal-sorted lines, one command to regenerate:
 
 ```
 K | span=180 copies=2 | src/.../CodeEmitter.cs:CodeEmitter.EmitReadArrayAsync | src/.../CodeEmitter.cs:CodeEmitter.EmitReadAsync
 ```
 
 Cluster lines carry **method identities, not line numbers**. A refactor that moves code without
-changing the overlap must not trip the gate — position is not duplication.
+changing the overlap must not show up when two reports are diffed — position is not duplication.
 
 ## What is deliberately NOT measured
 
@@ -71,20 +71,22 @@ copy — and on the current tree the same configuration reports **93 clusters / 
 tokens** (worst pair: `EmitReadArrayAsync` ↔ `EmitReadAsync`, 180 tokens). That number is the
 evidence the refactor case rests on; #263 and #264 are its first two debtors.
 
-## The drift gate
+## In CI
 
 `ci.yml` runs `dotnet run scripts/Duplication.cs -- --summary duplication.md` beside the code
-metrics step. Any difference between the recomputed artifact and the baseline fails the build,
-with the diff naming the clusters that appeared or changed. Tolerance is **zero**, as in layers
-1 and 2 — the gate exists to make duplication visible at the moment it is introduced, and a
-tolerance would only postpone that by a review conversation.
+metrics step, appends the summary (totals and the largest clusters) to the job summary, and
+uploads the full report in the `code-metrics` artifact. It does not fail the build.
 
-Drift is *not* a verdict. A new cluster line in the diff is a question with a name attached:
-fold it, justify carrying it (like a deliberate template pair), or explain in the PR why the
-baseline move is the right trade. Refresh the baseline after the conversation:
+It used to: the report was checked in as `metrics/duplication.txt` and any difference failed CI
+with zero tolerance. That was removed for the reasons in
+[21 § Why the hand-written numbers are not checked in](./21-CODE-METRICS.md#why-the-hand-written-numbers-are-not-checked-in)
+— the file was a pure function of `src/`, and the answer to a red build was always to refresh it.
+A new cluster is still a question with a name attached — fold it, or justify carrying it — and the
+way to ask it is to diff two reports:
 
 ```bash
-UPDATE_GOLDEN_FILES=true dotnet run scripts/Duplication.cs
+dotnet run scripts/Duplication.cs                     # artifacts/metrics/duplication.txt
+dotnet run scripts/Duplication.cs -- --report -       # to stdout
 ```
 
 Determinism contract: same Roslyn version pinned as layer 1 (`Microsoft.CodeAnalysis.CSharp
