@@ -116,7 +116,7 @@ jobs:
         run: dotnet csharpier check .
 
       # The CI half of the API change contract (docs/18-API-CHANGE-CONTRACT.md). Build errors
-      # PARQAPI001 and PARQAPI002 enforce "nothing exists outside a catalogue"; this enforces the
+      # RS0016 and PARQAPI002 enforce "nothing exists outside a catalogue"; this enforces the
       # other half — "nothing is catalogued without a recorded semver decision" — which needs the
       # diff against the pull request's base and so cannot live in an analyzer. It also rejects the
       # `**Unapproved-by-design:**` escape-hatch marker, which suppresses those build errors for a
@@ -128,63 +128,6 @@ jobs:
 
       - name: Build solution (Release)
         run: dotnet build Parquet.SourceGenerator.slnx --configuration Release --no-restore -warnaserror
-
-      # Layers 1 and 2 of #251 (docs/21-CODE-METRICS.md, docs/22-GENERATED-CODE-METRICS.md). The
-      # build above already enforces CA1502 / CA1505 / CA1506 against the thresholds in
-      # CodeMetricsConfig.txt — that is the gate on hand-written code. This step validates that
-      # file (a single unrecognised entry silently disables all three analyzers), measures Roslyn's
-      # maintainability index, cyclomatic complexity, class coupling, inheritance depth and line
-      # counts for every entity under src/ into artifacts/metrics/ (a report, derived from the code
-      # on every run and never checked in), and gates the emitted golden models against their
-      # checked-in GoldenFiles/*.metrics.txt baselines.
-      #
-      # It runs `dotnet run` on a file-based app whose Roslyn version is pinned in the script, so
-      # the numbers do not move when the runner's SDK does. NU1903 on Microsoft.Build.Tasks.Core
-      # and on Snappier is expected and unavoidable here: they are transitive dependencies of
-      # Microsoft.CodeAnalysis.Workspaces.MSBuild and of the Parquet.Net 4.25.0 pin the legacy
-      # golden file is measured against, no code from either is executed (MSBuildLocator binds the
-      # SDK's copy of the former; the latter is loaded only as a Roslyn metadata reference), and
-      # both are outside the solution the audit step above governs.
-      - name: Code Metrics (report src/, gate generated baselines)
-        run: |
-          status=0
-          dotnet run scripts/CodeMetrics.cs -- --summary code-metrics.md || status=$?
-          if [ -f code-metrics.md ]; then
-            cat code-metrics.md >> "$GITHUB_STEP_SUMMARY"
-          fi
-          exit $status
-
-      # Layer 3 of #251 (docs/23-DUPLICATION.md): token-level duplication across src/, reported
-      # into artifacts/metrics/duplication.txt. Report-only; emitted code is out of scope by design.
-      - name: Duplication Report
-        run: |
-          dotnet run scripts/Duplication.cs -- --summary duplication.md
-          cat duplication.md >> "$GITHUB_STEP_SUMMARY"
-
-      # The full per-entity reports from the two steps above. Download two runs' artifacts and
-      # diff them to see what a change did to the numbers — the files are ordinal-sorted and
-      # line-per-entity for exactly that.
-      - name: Upload Code Metrics Reports
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: code-metrics
-          path: artifacts/metrics/
-          if-no-files-found: warn
-
-      # #252: the call graph — structure as a gated artifact. Edge drift, declared
-      # cycles (graph/callgraph.allowlist.txt), the fan-out ratchet, and the
-      # components-must-not-call-the-hub layering rule. docs/25-CALL-GRAPH.md states
-      # what the static approximation cannot see; the unresolved count rides in the
-      # baseline header so the blind spot is measured, not hidden.
-      - name: Verify Call-Graph Baselines
-        run: |
-          status=0
-          dotnet run scripts/CallGraph.cs || status=$?
-          if [ -f graph/callgraph-summary.md ]; then
-            cat graph/callgraph-summary.md >> "$GITHUB_STEP_SUMMARY"
-          fi
-          exit $status
 
       # #259: accepted property kinds and nesting shapes are derived from the parser and backend
       # dials, then checked against the committed evidence map. A source change cannot silently
@@ -480,3 +423,105 @@ jobs:
         with:
           name: nuget-packages
           path: ./artifacts/*.nupkg
+
+  # Derived review outputs (docs/17-GENERATED-API-BASELINES.md). The emitted source of each golden
+  # model, its signature-only public API, code metrics (src/ and generated), duplication and the
+  # call graph are generated from the code here and never checked in. On a pull request the same
+  # outputs are produced for the merge base, and the difference is uploaded as the
+  # `derived-outputs` artifact and posted as ONE sticky comment, API changes first. Runs beside
+  # `build` rather than inside it, so it adds no wall-clock time to that check.
+  #
+  # The gates that remain live here, on the head: golden models parse and compile, emitted code
+  # compiles against its GoldenModels/ declaration (ERRORS=0), CodeMetricsConfig.txt is valid
+  # (a malformed entry silently disables CA1502/CA1505/CA1506), and the call graph satisfies its
+  # cycle, fan-out and layering rules (docs/25-CALL-GRAPH.md).
+  #
+  # NU1903 warnings on Microsoft.Build.Tasks.Core and Snappier from `dotnet run
+  # scripts/CodeMetrics.cs` are expected: transitive dependencies of Workspaces.MSBuild and of the
+  # Parquet.Net 4.25.0 pin the legacy golden model is measured against; neither executes here and
+  # both are outside the solution the audit step governs.
+  derived:
+    name: derived
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # The merge base must be reachable to build its side of the diff.
+          fetch-depth: 0
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Restore dependencies
+        run: dotnet restore Parquet.SourceGenerator.slnx
+
+      - name: Produce Derived Outputs (head)
+        run: |
+          dotnet run scripts/DerivedOutputs.cs -- --out "$RUNNER_TEMP/derived/head"
+          for f in code-metrics.md duplication.md callgraph/callgraph-summary.md; do
+            cat "$RUNNER_TEMP/derived/head/$f" >> "$GITHUB_STEP_SUMMARY"
+            echo >> "$GITHUB_STEP_SUMMARY"
+          done
+
+      - name: Produce Derived Outputs (merge base)
+        id: base
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          base=$(git merge-base "origin/$BASE_REF" HEAD)
+          echo "label=$BASE_REF @ ${base:0:7}" >> "$GITHUB_OUTPUT"
+          git worktree add "$RUNNER_TEMP/base-tree" "$base"
+          dotnet run scripts/DerivedOutputs.cs -- --repo "$RUNNER_TEMP/base-tree" --out "$RUNNER_TEMP/derived/base"
+
+      - name: Render Derived Output Diff
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_LABEL: ${{ steps.base.outputs.label }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          dotnet run scripts/RenderDerivedDiff.cs -- \
+            --base "$RUNNER_TEMP/derived/base" \
+            --head "$RUNNER_TEMP/derived/head" \
+            --comment "$RUNNER_TEMP/derived/review-diff.md" \
+            --patch "$RUNNER_TEMP/derived/review.patch" \
+            --base-label "$BASE_LABEL" \
+            --artifact-url "$RUN_URL#artifacts"
+          cat "$RUNNER_TEMP/derived/review-diff.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Derived Outputs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: derived-outputs
+          path: ${{ runner.temp }}/derived/
+          if-no-files-found: warn
+
+      # One comment per pull request, edited in place on every push. A fork's token cannot write
+      # comments; the diff is still in the step summary and the artifact, so that is not a failure.
+      - name: Update Sticky Review Comment
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          body="$RUNNER_TEMP/derived/review-diff.md"
+          id=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" --paginate \
+            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | contains("<!-- derived-review-diff -->"))) | .id' \
+            | head -n 1)
+          if [ -n "$id" ]; then
+            gh api --method PATCH "repos/$REPO/issues/comments/$id" -F "body=@$body" > /dev/null
+          else
+            gh pr comment "$PR_NUMBER" --repo "$REPO" --body-file "$body"
+          fi

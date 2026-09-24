@@ -5,12 +5,12 @@
 // docs/21-CODE-METRICS.md), so scripts/CodeMetrics.cs compiles each golden file together with the
 // declaration below and REQUIRES zero errors. That makes this file the thing that keeps the
 // generated-code metrics honest, and it also buys a real compile check on the emitted output,
-// which the golden suite's syntax-only parse never gave.
+// which the test suite's syntax-only parse of the EmitSource-based models never gave.
 //
-// This mirrors GoldenCodeGenRegressionTests.GoldenMasterSortedAndPrunableModel (#264's combined
+// This mirrors the GoldenCorpus model behind GoldenCodeGenRegressionTests.GoldenMasterSortedAndPrunableModel (#264's combined
 // coverage: predicate pushdown and sorted-key pruning emitted into one model, deliberately on
 // both sides of the eligibility boundary). It is not compiled into the test assembly
-// (GoldenFiles/**/*.cs is Compile-Removed).
+// (GoldenModels/**/*.cs is Compile-Removed).
 namespace SampleDomain.Models;
 
 public sealed class SortedShipment

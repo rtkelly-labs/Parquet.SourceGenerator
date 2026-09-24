@@ -12,10 +12,11 @@ using System.Text;
 // which need a diff and therefore cannot live in an analyzer:
 //
 //   1. A pull request that ADDS a line to a governed catalogue must also ADD an entry to
-//      docs/api/LEDGER.md. The catalogues are the emitted-API `*.api.txt` baselines,
-//      `src/api/seams.txt`, and every `PublicAPI.Unshipped.txt`. Build-time gates PARQAPI001 and
-//      PARQAPI002 make sure a member cannot exist outside a catalogue; this makes sure a catalogue
-//      line cannot exist without a recorded semver decision.
+//      docs/api/LEDGER.md. The catalogues are `src/api/seams.txt` and every
+//      `PublicAPI.Unshipped.txt`. Build-time gates RS0016 and PARQAPI002 make sure a member cannot
+//      exist outside a catalogue; this makes sure a catalogue line cannot exist without a recorded
+//      semver decision. The emitted consumer API is no longer a checked-in catalogue: CI derives
+//      it from the emitter and posts its diff against the base on the pull request.
 //
 //   2. The escape hatch is rejected here. A ledger entry marked `**Unapproved-by-design:**`
 //      suppresses the build errors so a spike can compile, and this workflow only ever runs on
@@ -32,7 +33,6 @@ const string UnapprovedMarker = "**Unapproved-by-design:**";
 
 string[] catalogueGlobs =
 {
-    "*.api.txt",
     "src/api/seams.txt",
     "PublicAPI.Unshipped.txt",
     "**/PublicAPI.Unshipped.txt",
@@ -75,7 +75,7 @@ if (File.Exists(LedgerPath))
 
         Console.Error.WriteLine();
         Console.Error.WriteLine(
-            "  The marker exists so a spike or experiment branch can compile past PARQAPI001 and"
+            "  The marker exists so a spike or experiment branch can compile past PARQAPI002 and"
         );
         Console.Error.WriteLine(
             "  PARQAPI002 without writing a rationale it does not yet have. It is not a merge path."
@@ -84,9 +84,7 @@ if (File.Exists(LedgerPath))
         Console.Error.WriteLine(
             "    (a) replace the marker with a real **Semver:** bucket and **Rationale:**, and add"
         );
-        Console.Error.WriteLine(
-            "        the member to its catalogue (the .api.txt baseline or src/api/seams.txt); or"
-        );
+        Console.Error.WriteLine("        the member to its catalogue (src/api/seams.txt); or");
         Console.Error.WriteLine(
             "    (b) revert the member and drop the ledger entry, keeping the spike off main."
         );

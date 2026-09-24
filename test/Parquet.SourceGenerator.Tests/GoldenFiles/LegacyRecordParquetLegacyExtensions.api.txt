@@ -1,7 +1,0 @@
-#nullable enable
-SampleDomain.Models.LegacyRecordParquetLegacyExtensions
-static SampleDomain.Models.LegacyRecordParquetLegacyExtensions.ReadParquetArrayAsync(System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<LegacyRecord[]>
-static SampleDomain.Models.LegacyRecordParquetLegacyExtensions.ReadParquetAsync(System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<System.Collections.Generic.List<LegacyRecord>>
-static SampleDomain.Models.LegacyRecordParquetLegacyExtensions.WriteParquetAsync(this System.Collections.Generic.IReadOnlyList<LegacyRecord> items, System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task
-static SampleDomain.Models.LegacyRecordParquetLegacyExtensions.WriteParquetBatchedAsync(this System.Collections.Generic.IEnumerable<LegacyRecord> items, System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task
-static readonly SampleDomain.Models.LegacyRecordParquetLegacyExtensions.Schema -> Parquet.Schema.ParquetSchema

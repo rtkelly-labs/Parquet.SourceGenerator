@@ -61,21 +61,14 @@
     </ItemGroup>
 
     <ItemGroup>
-        <Compile Remove="GoldenFiles\**\*.cs" />
-        <None Include="GoldenFiles\**\*.cs">
-            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        </None>
+        <Compile Remove="GoldenModels\**\*.cs" />
+        <None Include="GoldenModels\**\*.cs" />
     </ItemGroup>
 
     <!--
-    PARQAPI001 (docs/18-API-CHANGE-CONTRACT.md). The emitted-API gate is a build error, not just a
-    test failure, and it lives here because this is the project that owns GoldenFiles/.
-
-    The renderer is shared rather than duplicated: GeneratedApiBaseline.cs is compiled into both
-    this assembly (where GoldenCodeGenRegressionTests uses it to write and diff the baselines) and
-    into the analyzer (where PARQAPI001 uses it to re-derive the surface at build time). One
-    physical file means the build gate and the test gate cannot disagree about what a signature
-    looks like.
+    The signature-only API renderer (docs/17-GENERATED-API-BASELINES.md) is shared with the
+    ApiGates project rather than duplicated: GoldenCorpus uses it to derive each golden model's
+    .api.txt, and the policy tests read that in memory.
   -->
     <ItemGroup>
         <Compile
@@ -95,15 +88,6 @@
             Include="..\..\tools\Parquet.SourceGenerator.ApiGates\ApiLedger.cs"
             Link="ApiLedger.cs"
         />
-        <ProjectReference
-            Include="..\..\tools\Parquet.SourceGenerator.ApiGates\Parquet.SourceGenerator.ApiGates.csproj"
-            OutputItemType="Analyzer"
-            ReferenceOutputAssembly="false"
-            PrivateAssets="all"
-        />
-        <AdditionalFiles Include="GoldenFiles\**\*.g.cs" />
-        <AdditionalFiles Include="GoldenFiles\**\*.api.txt" />
-        <AdditionalFiles Include="..\..\docs\api\LEDGER.md" />
         <AdditionalFiles Include="BannedSymbols.txt" />
     </ItemGroup>
 </Project>

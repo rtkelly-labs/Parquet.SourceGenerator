@@ -1,5 +1,5 @@
 // Model declaration for ScalarMetricParquetExtensions.g.cs. See OrderEvent.cs for why this exists.
-// Mirrors GoldenCodeGenRegressionTests.GoldenMasterScalarsAndEnumsModel.
+// Mirrors the GoldenCorpus model behind GoldenCodeGenRegressionTests.GoldenMasterScalarsAndEnumsModel.
 namespace SampleDomain.Models;
 
 public enum ProcessStatus

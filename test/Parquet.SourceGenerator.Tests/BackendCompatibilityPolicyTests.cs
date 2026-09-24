@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using Shouldly;
 using Xunit;
@@ -10,16 +9,17 @@ namespace Parquet.SourceGenerator.Tests;
 /// <summary>
 /// Enforces the declared-subset policy from issue #246: the classic backend remains a stable core
 /// compatibility surface while modern-only features are allowed to grow in the v6 backend.
+/// Checked against the signature-only API of every <see cref="GoldenCorpus"/> model, rendered
+/// from the live emitter output.
 /// </summary>
 public sealed class BackendCompatibilityPolicyTests
 {
-    private static readonly string GoldenFilesDir = Path.Combine(
-        AppDomain.CurrentDomain.BaseDirectory,
-        "..",
-        "..",
-        "..",
-        "GoldenFiles"
-    );
+    private static IEnumerable<GoldenEmission> Classic => GoldenCorpus.All.Where(IsClassic);
+
+    private static IEnumerable<GoldenEmission> Modern => GoldenCorpus.All.Where(e => !IsClassic(e));
+
+    private static bool IsClassic(GoldenEmission emission) =>
+        emission.FileName.EndsWith("LegacyExtensions.g.cs", StringComparison.Ordinal);
 
     private static readonly HashSet<string> ClassicCoreSignatures = new(StringComparer.Ordinal)
     {
@@ -33,24 +33,24 @@ public sealed class BackendCompatibilityPolicyTests
     [Fact]
     public void EveryClassicBaselineContainsOnlyTheDeclaredCoreSurface()
     {
-        string[] paths = Directory.GetFiles(GoldenFilesDir, "*LegacyExtensions.api.txt");
-        paths.Length.ShouldBeGreaterThan(0, "At least one classic API baseline must be checked.");
+        GoldenEmission[] classic = Classic.ToArray();
+        classic.Length.ShouldBeGreaterThan(0, "At least one classic model must be checked.");
 
-        foreach (string path in paths)
+        foreach (GoldenEmission emission in classic)
         {
-            string[] signatures = ReadMembers(path).Select(NormalizeClassicSignature).ToArray();
+            string[] signatures = ReadMembers(emission).Select(NormalizeClassicSignature).ToArray();
 
             signatures
                 .Except(ClassicCoreSignatures, StringComparer.Ordinal)
                 .ShouldBeEmpty(
-                    $"The classic backend baseline {Path.GetFileName(path)} contains a signature "
+                    $"The classic backend API of {emission.FileName} contains a signature "
                         + "outside the declared core surface. A new member or overload requires an "
                         + "explicit compatibility-policy decision in docs/14-COMPATIBILITY-MATRIX.md."
                 );
 
             foreach (string required in ClassicCoreSignatures)
             {
-                signatures.ShouldContain(required, $"Missing from {Path.GetFileName(path)}");
+                signatures.ShouldContain(required, $"Missing from {emission.FileName}");
             }
         }
     }
@@ -60,9 +60,9 @@ public sealed class BackendCompatibilityPolicyTests
     {
         // #481: the per-row-group writer is the strategy the flat and batched writes are built
         // from, not a caller intent. It stays emitted (internal) and leaves the core surface.
-        foreach (string path in Directory.GetFiles(GoldenFilesDir, "*LegacyExtensions.api.txt"))
+        foreach (GoldenEmission emission in Classic)
         {
-            ReadMembers(path)
+            ReadMembers(emission)
                 .ShouldNotContain(line =>
                     line.Contains(".WriteRowGroupAsync(", StringComparison.Ordinal)
                 );
@@ -81,11 +81,7 @@ public sealed class BackendCompatibilityPolicyTests
     [Fact]
     public void ModernBaselinesRetainTheModernOnlyCapabilities()
     {
-        string[] lines = Directory
-            .GetFiles(GoldenFilesDir, "*.api.txt")
-            .Where(path => !path.EndsWith("LegacyExtensions.api.txt", StringComparison.Ordinal))
-            .SelectMany(ReadMembers)
-            .ToArray();
+        string[] lines = Modern.SelectMany(ReadMembers).ToArray();
 
         lines.ShouldContain(line => line.Contains("Where(", StringComparison.Ordinal));
         lines.ShouldContain(line => line.Contains("Parallel()", StringComparison.Ordinal));
@@ -95,7 +91,7 @@ public sealed class BackendCompatibilityPolicyTests
 
     /// <summary>
     /// #480: the builder is the only modern read surface. The flat <c>ReadParquet*Async</c>
-    /// methods are gone from every modern baseline, while the classic backend — which has no
+    /// methods are gone from every modern model's API, while the classic backend — which has no
     /// builder — keeps its flat reads as its declared subset (checked above).
     /// </summary>
     [Fact]
@@ -111,26 +107,24 @@ public sealed class BackendCompatibilityPolicyTests
             "ReadParquetStreamAsync(",
         ];
 
-        string[] paths = Directory
-            .GetFiles(GoldenFilesDir, "*.api.txt")
-            .Where(path => !path.EndsWith("LegacyExtensions.api.txt", StringComparison.Ordinal))
-            .ToArray();
-        paths.Length.ShouldBeGreaterThan(0);
+        GoldenEmission[] modern = Modern.ToArray();
+        modern.Length.ShouldBeGreaterThan(0);
 
-        foreach (string path in paths)
+        foreach (GoldenEmission emission in modern)
         {
-            foreach (string line in ReadMembers(path))
+            foreach (string line in ReadMembers(emission))
             {
                 flatReads
                     .Where(name => line.Contains("Extensions." + name, StringComparison.Ordinal))
-                    .ShouldBeEmpty($"{Path.GetFileName(path)} still exposes a flat read: {line}");
+                    .ShouldBeEmpty($"{emission.FileName} still exposes a flat read: {line}");
             }
         }
     }
 
-    private static string[] ReadMembers(string path) =>
-        global::System
-            .IO.File.ReadAllLines(path)
+    private static string[] ReadMembers(GoldenEmission emission) =>
+        GoldenCorpus
+            .ApiOf(emission)
+            .Split('\n')
             .Where(line =>
                 line.Length > 0
                 && !line.StartsWith('#')

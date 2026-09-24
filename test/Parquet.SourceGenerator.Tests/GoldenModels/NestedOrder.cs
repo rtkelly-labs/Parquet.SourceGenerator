@@ -1,5 +1,5 @@
 // Model declarations for NestedOrderParquetExtensions.g.cs. See OrderEvent.cs for why this exists.
-// Mirrors GoldenCodeGenRegressionTests.GoldenMasterNestedStructModel — Point is a struct on
+// Mirrors the GoldenCorpus model behind GoldenCodeGenRegressionTests.GoldenMasterNestedStructModel — Point is a struct on
 // purpose, because the emitted value-type ladder depends on it.
 namespace SampleDomain.Models;
 

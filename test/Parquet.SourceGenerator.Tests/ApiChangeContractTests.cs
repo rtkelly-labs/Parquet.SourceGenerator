@@ -11,9 +11,8 @@ namespace Parquet.SourceGenerator.Tests;
 /// signature (<c>docs/18-API-CHANGE-CONTRACT.md</c>).
 /// </summary>
 /// <remarks>
-/// The gates themselves are proven by the build: <c>PARQAPI001</c> runs over
-/// <c>GoldenFiles/*.g.cs</c> in this project's own compilation, and <c>PARQAPI002</c> over the
-/// three <c>src/</c> projects. What is not proven by the build is the matching rule — an
+/// The gate itself is proven by the build: <c>PARQAPI002</c> runs over the three <c>src/</c>
+/// projects. What is not proven by the build is the matching rule — an
 /// over-eager one would silently exempt members nobody meant to exempt, and that failure is
 /// invisible precisely because it produces no error.
 /// </remarks>
@@ -145,7 +144,7 @@ public sealed class ApiChangeContractTests
     [Fact]
     public void TheCheckedInLedgerCarriesNoEscapeHatchEntry()
     {
-        // A committed `**Unapproved-by-design:**` marker suppresses PARQAPI001/PARQAPI002 for the
+        // A committed `**Unapproved-by-design:**` marker suppresses PARQAPI002 for the
         // signature it names. CI rejects it on main; this fails a developer's local run too.
         string ledgerPath = System.IO.Path.Combine(
             AppDomain.CurrentDomain.BaseDirectory,

@@ -83,14 +83,23 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   number is known is vacuous or permanently red.
 
 ### Changed
-- **Code metrics for `src/` are derived, not checked in.** `metrics/*.metrics.txt` and
-  `metrics/duplication.txt` are removed, along with the CI steps that failed on any drift from them:
-  both files were a pure function of `src/` and needed a refresh commit on nearly every change.
-  `scripts/CodeMetrics.cs` and `scripts/Duplication.cs` now write reports to `artifacts/metrics/`
-  (gitignored), and CI publishes them as the `code-metrics` artifact and in the job summary. The
-  gate on hand-written code is unchanged — `CA1502`/`CA1505`/`CA1506` against
-  `CodeMetricsConfig.txt` — as are the checked-in generated-code baselines in `GoldenFiles/`. The
-  nightly metrics oracle now compares `Metrics.exe` against `CodeMetrics.cs` run on the same commit.
+- **Derived outputs are generated in CI, not checked in.** The golden files
+  (`GoldenFiles/*.g.cs`, `*.api.txt`, `*.api.shape.txt`, `*.metrics.txt`), the `src/` metrics and
+  duplication baselines (`metrics/`), the call-graph edge baselines (`graph/*.callgraph.txt`) and
+  `docs/callgraph*.md` are removed. They were all a pure function of the code, and keeping them
+  meant a refresh commit (or `/update-golden`) on most pull requests. A new `derived` CI job runs
+  `scripts/DerivedOutputs.cs` for the pull request and its merge base, uploads both trees as the
+  `derived-outputs` artifact, and posts the difference as one sticky PR comment with the emitted
+  public API first (`scripts/RenderDerivedDiff.cs`). The golden models now live in
+  `GoldenCorpus`; `GoldenCodeGenRegressionTests` checks their invariants and publishes them to
+  `artifacts/golden/`. The remaining gates are unchanged in intent: golden models must parse and
+  compile, emitted code must compile against `GoldenModels/` (ERRORS=0), `CodeMetricsConfig.txt`
+  must be valid, the call graph must satisfy its cycle, fan-out and layering rules, and
+  `CA1502`/`CA1505`/`CA1506` still gate `src/`. **PARQAPI001 is retired**: the emitted consumer API
+  is no longer a catalogue gated by a `docs/api/LEDGER.md` entry, and is reviewed from the PR
+  comment instead; `PARQAPI002`, `RS0016` and the ledger rule for `src/api/seams.txt` and
+  `PublicAPI.Unshipped.txt` are unchanged. The `/update-golden` workflow is removed. The nightly
+  metrics oracle compares `Metrics.exe` against `CodeMetrics.cs --src-only` run on the same commit.
 - **BREAKING: generated implementation plumbing is no longer public (#459, #481, part of #477).**
   The `{T}RowGroupMetadata` constructor (whose parameters were emitter slot indices such as
   `column_0, column_2`) is now `internal`; the struct and its properties stay public for pruning

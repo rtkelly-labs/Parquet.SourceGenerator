@@ -1,5 +1,5 @@
 // Model declarations for PocoOrderParquetExtensions.g.cs. See OrderEvent.cs for why this exists.
-// Mirrors GoldenCodeGenRegressionTests.GoldenMasterListOfPocoModel.
+// Mirrors the GoldenCorpus model behind GoldenCodeGenRegressionTests.GoldenMasterListOfPocoModel.
 namespace SampleDomain.Models;
 
 public partial class PitStop

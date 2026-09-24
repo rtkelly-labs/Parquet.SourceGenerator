@@ -38,11 +38,12 @@ using Microsoft.CodeAnalysis.MSBuild;
 //             a refresh commit on every change. CI publishes the reports as a build artifact and
 //             step summary; the gate on hand-written code is CA1502/CA1505/CA1506 against
 //             CodeMetricsConfig.txt, which this script validates.
-//   Layer 2 — the GENERATED code, one checked-in baseline per golden model beside its .api.txt in
-//             test/Parquet.SourceGenerator.Tests/GoldenFiles/, gated on drift. Same computation,
-//             same grammar, same ordinal sorting; a different tolerance policy, because emitted
-//             code has different characteristics from hand-written code and importing layer 1's
-//             judgement unexamined would be wrong.
+//   Layer 2 — the GENERATED code: every golden model the test suite publishes to artifacts/golden/
+//             (GoldenCorpus), compiled against its declaration in
+//             test/Parquet.SourceGenerator.Tests/GoldenModels/, one report per model in
+//             artifacts/metrics/generated/. Also a report, not a drift gate — CI diffs it against
+//             the pull request's base. The one thing that fails the run is emitted code that does
+//             not compile (ERRORS > 0): that is an emitter defect, not a number that moved.
 //
 // The metrics are Roslyn's own — Maintainability Index, Cyclomatic Complexity, Class Coupling,
 // Depth of Inheritance, Source/Executable Lines — computed by
@@ -62,13 +63,15 @@ using Microsoft.CodeAnalysis.MSBuild;
 // SDK. Every ordering is `StringComparer.Ordinal` (see docs/17-GENERATED-API-BASELINES.md for why
 // that matters here).
 //
-// Usage:
-//   dotnet run scripts/CodeMetrics.cs                        # report src/, gate the generated code
-//   UPDATE_GOLDEN_FILES=true dotnet run scripts/CodeMetrics.cs   # refresh the generated baselines
-//   dotnet run scripts/CodeMetrics.cs -- --update            # same, explicit flag
+// Usage (layer 2 reads the golden models the test suite publishes, so run
+// `dotnet test --filter GoldenCodeGenRegressionTests` first):
+//   dotnet run scripts/CodeMetrics.cs                        # report src/ and the generated code
 //   dotnet run scripts/CodeMetrics.cs -- --summary out.md    # also write a Markdown report
-//   dotnet run scripts/CodeMetrics.cs -- --out <dir>         # where the src/ reports go
-//                                                            # (default artifacts/metrics)
+//   dotnet run scripts/CodeMetrics.cs -- --out <dir>         # where reports go (default
+//                                                            # artifacts/metrics)
+//   dotnet run scripts/CodeMetrics.cs -- --golden <dir>      # published golden models (default
+//                                                            # artifacts/golden)
+//   dotnet run scripts/CodeMetrics.cs -- --src-only          # layer 1 only
 // -----------------------------------------------------------------------------
 
 // The measured set is the hand-written product code. Test, benchmark, sample and tooling projects
@@ -87,26 +90,25 @@ var measured = new (string Project, string? TargetFramework)[]
     ),
 };
 
-// Layer 2. The golden files are checked-in C#, written from the same emitted string as their
-// .api.txt companions (see docs/17-GENERATED-API-BASELINES.md), so metrics over them are metrics
-// over the emitter's real output. The model declarations under GoldenFiles/Models/ are the
-// consumer-side types the emitted fragments extend: without them the compilation has unresolved
-// types and the metrics are fiction.
-const string GoldenDirectory = "test/Parquet.SourceGenerator.Tests/GoldenFiles";
-const string GoldenModelDirectory = GoldenDirectory + "/Models";
+// Layer 2. The golden models are the emitter's real output, published by the test suite together
+// with their .api.txt (see docs/17-GENERATED-API-BASELINES.md). The model declarations under
+// GoldenModels/ are the consumer-side types the emitted fragments extend: without them the
+// compilation has unresolved types and the metrics are fiction.
+const string GoldenModelDirectory = "test/Parquet.SourceGenerator.Tests/GoldenModels";
 const string GoldenHostProject =
     "test/Parquet.SourceGenerator.Tests/Parquet.SourceGenerator.Tests.csproj";
 
-bool update =
-    string.Equals(
-        Environment.GetEnvironmentVariable("UPDATE_GOLDEN_FILES"),
-        "true",
-        StringComparison.OrdinalIgnoreCase
-    ) || args.Contains("--update", StringComparer.Ordinal);
+bool srcOnly = args.Contains("--src-only", StringComparer.Ordinal);
 string? summaryPath = null;
 string reportDirectory = Path.Combine("artifacts", "metrics");
+string goldenDirectory = Path.Combine("artifacts", "golden");
 for (int i = 0; i < args.Length; i++)
 {
+    if (string.Equals(args[i], "--golden", StringComparison.Ordinal) && i + 1 < args.Length)
+    {
+        goldenDirectory = args[i + 1];
+    }
+
     if (string.Equals(args[i], "--summary", StringComparison.Ordinal) && i + 1 < args.Length)
     {
         summaryPath = args[i + 1];
@@ -145,99 +147,85 @@ foreach (var (projectPath, tfm) in measured)
 // -------------------------------------------------------------------------------------------
 // Layer 2: the generated code.
 //
-// Every *.g.cs in GoldenFiles/ is measured against the model declaration it was generated for and
-// gets a *.metrics.txt beside its *.api.txt. The member count on the summary line is READ from
-// that .api.txt rather than recomputed, so there is exactly one definition of "an emitted public
-// member" in the repository (docs/17-GENERATED-API-BASELINES.md owns it).
+// Every published *.g.cs is measured against the model declaration it was generated for. The
+// member count on the summary line is READ from the published .api.txt rather than recomputed, so
+// there is exactly one definition of "an emitted public member" in the repository
+// (docs/17-GENERATED-API-BASELINES.md owns it).
 // -------------------------------------------------------------------------------------------
 
-Console.WriteLine("Measuring generated code...");
-var goldenFiles = Directory
-    .GetFiles(GoldenDirectory, "*.g.cs")
-    .OrderBy(p => p, StringComparer.Ordinal)
-    .ToList();
-if (goldenFiles.Count == 0)
-{
-    throw new InvalidOperationException(
-        $"No golden files found under {GoldenDirectory}. Layer 2 of the metrics gate measures the\n"
-            + "generated code through them; an empty directory means the gate is silently measuring nothing."
-    );
-}
-
-var host = await LoadGoldenHostAsync(GoldenHostProject).ConfigureAwait(false);
 var generatedSummaries = new List<GeneratedSummary>();
 var generatedRows = new List<MetricRow>();
 
-foreach (string goldenPath in goldenFiles)
+if (!srcOnly)
 {
-    string stem = Path.GetFileName(goldenPath)[..^".g.cs".Length];
-    string modelPath = Path.Combine(GoldenModelDirectory, ModelFileNameFor(stem));
-    string apiBaselinePath = Path.Combine(GoldenDirectory, stem + ".api.txt");
-    string baselinePath = Path.Combine(GoldenDirectory, stem + ".metrics.txt");
-
-    if (!File.Exists(modelPath))
+    Console.WriteLine($"Measuring generated code in {goldenDirectory}...");
+    var goldenFiles = Directory.Exists(goldenDirectory)
+        ? Directory
+            .GetFiles(goldenDirectory, "*.g.cs")
+            .OrderBy(p => p, StringComparer.Ordinal)
+            .ToList()
+        : new List<string>();
+    if (goldenFiles.Count == 0)
     {
         throw new InvalidOperationException(
-            $"{goldenPath} has no model declaration at {modelPath}.\n"
-                + "  Generated code is a fragment: it extends a type the consumer wrote, so it cannot be\n"
-                + "  compiled — and therefore cannot be measured — on its own. Add the declaration the\n"
-                + "  golden test generates from. See docs/22-GENERATED-CODE-METRICS.md."
+            $"No golden models found under {goldenDirectory}. They are published by the test suite:\n"
+                + "  dotnet test test/Parquet.SourceGenerator.Tests --filter GoldenCodeGenRegressionTests\n"
+                + "Run that first, or pass --src-only to measure the hand-written code alone."
         );
     }
 
-    if (!File.Exists(apiBaselinePath))
-    {
-        throw new InvalidOperationException(
-            $"{goldenPath} has no API baseline at {apiBaselinePath}; the emitted member count on the\n"
-                + "  metrics summary line is read from it and must not be recomputed here."
-        );
-    }
+    string generatedDirectory = Path.Combine(reportDirectory, "generated");
+    Directory.CreateDirectory(generatedDirectory);
+    var host = await LoadGoldenHostAsync(GoldenHostProject).ConfigureAwait(false);
 
-    var (rows, summary) = await MeasureGeneratedAsync(
-            goldenPath,
-            modelPath,
-            apiBaselinePath,
-            stem,
-            host
-        )
-        .ConfigureAwait(false);
-    generatedSummaries.Add(summary);
-    generatedRows.AddRange(rows);
-
-    string rendered = RenderGenerated(stem, summary, rows);
-
-    if (update)
+    foreach (string goldenPath in goldenFiles)
     {
-        WriteIfChanged(baselinePath, rendered);
-        Console.WriteLine($"  wrote {baselinePath} ({rows.Count} entries)");
-        continue;
-    }
+        string stem = Path.GetFileName(goldenPath)[..^".g.cs".Length];
+        string modelPath = Path.Combine(GoldenModelDirectory, ModelFileNameFor(stem));
+        string apiBaselinePath = Path.Combine(goldenDirectory, stem + ".api.txt");
 
-    if (!File.Exists(baselinePath))
-    {
-        failures.Add(
-            $"Generated code metrics baseline missing: {baselinePath}\n"
-                + "  No baseline exists for this golden model. Generate it with\n"
-                + "  UPDATE_GOLDEN_FILES=true dotnet run scripts/CodeMetrics.cs\n"
-                + "  and commit the result."
-        );
-        continue;
-    }
+        if (!File.Exists(modelPath))
+        {
+            throw new InvalidOperationException(
+                $"{goldenPath} has no model declaration at {modelPath}.\n"
+                    + "  Generated code is a fragment: it extends a type the consumer wrote, so it cannot be\n"
+                    + "  compiled — and therefore cannot be measured — on its own. Add the declaration the\n"
+                    + "  golden model generates from. See docs/22-GENERATED-CODE-METRICS.md."
+            );
+        }
 
-    string generatedDrift = CompareGenerated(
-        baselinePath,
-        stem,
-        ReadAllLines(baselinePath),
-        summary,
-        rows
-    );
-    if (generatedDrift.Length > 0)
-    {
-        failures.Add(generatedDrift);
-    }
-    else
-    {
-        Console.WriteLine($"  {baselinePath} OK ({rows.Count} entries)");
+        if (!File.Exists(apiBaselinePath))
+        {
+            throw new InvalidOperationException(
+                $"{goldenPath} has no API file at {apiBaselinePath}; the emitted member count on the\n"
+                    + "  metrics summary line is read from it and must not be recomputed here."
+            );
+        }
+
+        var (rows, summary) = await MeasureGeneratedAsync(
+                goldenPath,
+                modelPath,
+                apiBaselinePath,
+                stem,
+                host
+            )
+            .ConfigureAwait(false);
+        generatedSummaries.Add(summary);
+        generatedRows.AddRange(rows);
+
+        string reportPath = Path.Combine(generatedDirectory, stem + ".metrics.txt");
+        WriteIfChanged(reportPath, RenderGenerated(stem, summary, rows));
+        Console.WriteLine($"  wrote {reportPath} ({rows.Count} entries)");
+
+        if (summary.CompileErrors > 0)
+        {
+            failures.Add(
+                $"Emitted code for '{stem}' does not compile against {modelPath}: "
+                    + $"{summary.CompileErrors} error(s), listed above. This is an emitter defect "
+                    + "(or a model declaration that no longer mirrors its GoldenCorpus entry). "
+                    + "See docs/22-GENERATED-CODE-METRICS.md."
+            );
+        }
     }
 }
 
@@ -245,7 +233,8 @@ if (summaryPath is not null)
 {
     File.WriteAllText(
         summaryPath,
-        RenderSummary(allRows) + RenderGeneratedSummary(generatedSummaries, generatedRows),
+        RenderSummary(allRows)
+            + (srcOnly ? string.Empty : RenderGeneratedSummary(generatedSummaries, generatedRows)),
         new UTF8Encoding(false)
     );
     Console.WriteLine($"Wrote metrics summary to {summaryPath}");
@@ -259,20 +248,10 @@ if (failures.Count > 0)
         Console.Error.WriteLine(f);
         Console.Error.WriteLine();
     }
-    Console.Error.WriteLine(
-        "Refresh with: UPDATE_GOLDEN_FILES=true dotnet run scripts/CodeMetrics.cs, then commit the\n"
-            + "changed files under test/Parquet.SourceGenerator.Tests/GoldenFiles/. The diff is the point:\n"
-            + "it shows the reviewer exactly how the shape of the emitted code changed.\n"
-            + "See docs/22-GENERATED-CODE-METRICS.md."
-    );
     return 1;
 }
 
-Console.WriteLine(
-    update
-        ? "Generated code metrics baselines refreshed."
-        : "Generated code metrics baselines match."
-);
+Console.WriteLine($"Code metrics written to {reportDirectory}.");
 return 0;
 
 // ---------------------------------------------------------------------------------------------
@@ -703,10 +682,9 @@ static async Task<(List<MetricRow> Rows, GeneratedSummary Summary)> MeasureGener
         )
     );
 
-    // Unlike layer 1 this does NOT throw on a compile error, and the count is a gated metric
-    // instead. Emitted code that does not compile is a defect in the emitter, not a broken
-    // measurement host, and burying it behind an exception would hide it. ERRORS is expected to
-    // be 0; a non-zero baseline is a recorded, reviewable defect. See
+    // Unlike layer 1 this does NOT throw on a compile error: the errors are listed, counted as
+    // ERRORS on the summary line, and fail the run once every model has been measured. Emitted
+    // code that does not compile is a defect in the emitter, not a broken measurement host. See
     // docs/22-GENERATED-CODE-METRICS.md.
     var errors = compilation
         .GetDiagnostics()
@@ -840,13 +818,12 @@ static int CountApiMembers(string apiBaselinePath) =>
 static string RenderGenerated(string stem, GeneratedSummary summary, List<MetricRow> rows)
 {
     var sb = new StringBuilder();
-    sb.Append("# Generated code metrics baseline: ").Append(stem).Append('\n');
-    sb.Append("# Generated by scripts/CodeMetrics.cs (layer 2 of #251). Do not edit by hand.\n");
-    sb.Append("# Refresh: UPDATE_GOLDEN_FILES=true dotnet run scripts/CodeMetrics.cs\n");
+    sb.Append("# Generated code metrics report: ").Append(stem).Append('\n');
+    sb.Append("# Generated by scripts/CodeMetrics.cs (layer 2 of #251). Not checked in.\n");
     sb.Append(
         "# Measured over "
             + stem
-            + ".g.cs compiled against Models/"
+            + ".g.cs compiled against GoldenModels/"
             + ModelFileNameFor(stem)
             + ".\n"
     );
@@ -856,8 +833,8 @@ static string RenderGenerated(string stem, GeneratedSummary summary, List<Metric
             + "# complexity, CL class coupling, SLOC source lines, ELOC executable lines, ERRORS C#\n"
             + "# compile errors in the emitted code, METHODS emitted methods, MAXCC worst method CC,\n"
             + "# ELOC_PER_MEMBER emitted executable lines per emitted public member.\n"
-            + "# Ordinal-sorted. CC, CL, SLOC, ELOC, DIT, ERRORS and MEMBERS are gated exactly; MI is\n"
-            + "# REPORTED BUT NOT GATED for generated code. See docs/22-GENERATED-CODE-METRICS.md.\n"
+            + "# Ordinal-sorted, so two reports diff cleanly. ERRORS must be 0. MI carries little\n"
+            + "# signal for generated code. See docs/22-GENERATED-CODE-METRICS.md.\n"
     );
     sb.Append(summary.Render()).Append('\n');
     foreach (var row in rows)
@@ -866,93 +843,6 @@ static string RenderGenerated(string stem, GeneratedSummary summary, List<Metric
     }
 
     return sb.ToString();
-}
-
-static string CompareGenerated(
-    string baselinePath,
-    string stem,
-    string[] baselineLines,
-    GeneratedSummary summary,
-    List<MetricRow> current
-)
-{
-    GeneratedSummary? baselineSummary = null;
-    var baseline = new Dictionary<string, MetricRow>(StringComparer.Ordinal);
-    var baselineOrder = new List<string>();
-    foreach (string line in baselineLines)
-    {
-        if (line.Length == 0 || line[0] == '#')
-        {
-            continue;
-        }
-
-        if (line.StartsWith("S:", StringComparison.Ordinal))
-        {
-            baselineSummary = GeneratedSummary.Parse(line);
-            continue;
-        }
-
-        var row = MetricRow.Parse(line);
-        baseline[row.Key] = row;
-        baselineOrder.Add(row.Key);
-    }
-
-    var messages = new List<string>();
-    if (baselineSummary is null)
-    {
-        messages.Add("  ~ the baseline has no S: summary line; refresh it.");
-    }
-    else
-    {
-        messages.AddRange(summary.DriftAgainst(baselineSummary));
-    }
-
-    var currentByKey = current.ToDictionary(r => r.Key, StringComparer.Ordinal);
-    foreach (string key in baselineOrder)
-    {
-        if (!currentByKey.ContainsKey(key))
-        {
-            messages.Add($"  - removed: {key}");
-        }
-    }
-
-    foreach (var row in current)
-    {
-        if (!baseline.TryGetValue(row.Key, out var old))
-        {
-            messages.Add($"  + added:   {row.Key} | {row.Metrics}");
-            continue;
-        }
-
-        // MaintainabilityIndexTolerance is deliberately not applied here: MI is not gated on
-        // generated code at all. int.MaxValue is the "report only" tolerance.
-        var changes = row.DriftAgainst(old, int.MaxValue);
-        if (changes.Count > 0)
-        {
-            messages.Add($"  ~ changed: {row.Key}");
-            foreach (string change in changes)
-            {
-                messages.Add("      " + change);
-            }
-        }
-    }
-
-    if (messages.Count == 0)
-    {
-        var currentKeys = current.Select(r => r.Key).ToList();
-        if (!currentKeys.SequenceEqual(baselineOrder, StringComparer.Ordinal))
-        {
-            messages.Add("  ~ ordering: the baseline is not in ordinal order; refresh it.");
-        }
-    }
-
-    if (messages.Count == 0)
-    {
-        return string.Empty;
-    }
-
-    return $"Generated code metrics drifted for model '{stem}': {baselinePath}\n"
-        + string.Join("\n", messages);
 }
 
 static string RenderGeneratedSummary(
@@ -995,7 +885,7 @@ static string RenderGeneratedSummary(
     }
 
     sb.Append(
-        "\n> The Maintainability Index is reported for generated code but NOT gated: it is dominated\n"
+        "\n> The Maintainability Index carries little signal for generated code: it is dominated\n"
             + "> by method length, and emitted methods are long by construction. See\n"
             + "> `docs/22-GENERATED-CODE-METRICS.md`.\n"
     );
@@ -1030,73 +920,6 @@ internal sealed record MetricRow(
             CultureInfo.InvariantCulture,
             $"MI={MaintainabilityIndex} CC={CyclomaticComplexity} CL={ClassCoupling} DIT={(DepthOfInheritance.HasValue ? DepthOfInheritance.Value.ToString(CultureInfo.InvariantCulture) : "-")} SLOC={SourceLines} ELOC={ExecutableLines}"
         );
-
-    public static MetricRow Parse(string line)
-    {
-        int bar = line.LastIndexOf(" | ", StringComparison.Ordinal);
-        if (bar < 0)
-        {
-            throw new InvalidOperationException($"Malformed metrics baseline line: {line}");
-        }
-
-        string key = line[..bar];
-        var fields = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (
-            string token in line[(bar + 3)..].Split(' ', StringSplitOptions.RemoveEmptyEntries)
-        )
-        {
-            int eq = token.IndexOf('=', StringComparison.Ordinal);
-            fields[token[..eq]] = token[(eq + 1)..];
-        }
-
-        return new MetricRow(
-            key,
-            int.Parse(fields["MI"], CultureInfo.InvariantCulture),
-            int.Parse(fields["CC"], CultureInfo.InvariantCulture),
-            int.Parse(fields["CL"], CultureInfo.InvariantCulture),
-            string.Equals(fields["DIT"], "-", StringComparison.Ordinal)
-                ? null
-                : int.Parse(fields["DIT"], CultureInfo.InvariantCulture),
-            long.Parse(fields["SLOC"], CultureInfo.InvariantCulture),
-            long.Parse(fields["ELOC"], CultureInfo.InvariantCulture)
-        );
-    }
-
-    public List<string> DriftAgainst(MetricRow baseline, int maintainabilityIndexTolerance)
-    {
-        var changes = new List<string>();
-        if (
-            Math.Abs(MaintainabilityIndex - baseline.MaintainabilityIndex)
-            > maintainabilityIndexTolerance
-        )
-        {
-            changes.Add(
-                $"MI {baseline.MaintainabilityIndex} -> {MaintainabilityIndex} (tolerance +/-{maintainabilityIndexTolerance})"
-            );
-        }
-
-        Exact(changes, "CC", baseline.CyclomaticComplexity, CyclomaticComplexity);
-        Exact(changes, "CL", baseline.ClassCoupling, ClassCoupling);
-        if (baseline.DepthOfInheritance != DepthOfInheritance)
-        {
-            changes.Add($"DIT {Show(baseline.DepthOfInheritance)} -> {Show(DepthOfInheritance)}");
-        }
-
-        Exact(changes, "SLOC", baseline.SourceLines, SourceLines);
-        Exact(changes, "ELOC", baseline.ExecutableLines, ExecutableLines);
-        return changes;
-
-        static void Exact(List<string> into, string name, long was, long now)
-        {
-            if (was != now)
-            {
-                into.Add($"{name} {was} -> {now}");
-            }
-        }
-
-        static string Show(int? value) =>
-            value.HasValue ? value.Value.ToString(CultureInfo.InvariantCulture) : "-";
-    }
 }
 
 /// <summary>
@@ -1141,88 +964,6 @@ internal sealed record GeneratedSummary(
             CultureInfo.InvariantCulture,
             $"S:{Model} | EMITTER={Emitter} MEMBERS={Members} CC={CyclomaticComplexity} CL={ClassCoupling} SLOC={SourceLines} ELOC={ExecutableLines} ERRORS={CompileErrors} METHODS={Methods} MAXCC={MaxMethodComplexity} ELOC_PER_MEMBER={ExecutableLinesPerMember}"
         );
-
-    public static GeneratedSummary Parse(string line)
-    {
-        int bar = line.LastIndexOf(" | ", StringComparison.Ordinal);
-        if (bar < 0)
-        {
-            throw new InvalidOperationException(
-                $"Malformed generated metrics summary line: {line}"
-            );
-        }
-
-        var fields = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (
-            string token in line[(bar + 3)..].Split(' ', StringSplitOptions.RemoveEmptyEntries)
-        )
-        {
-            int eq = token.IndexOf('=', StringComparison.Ordinal);
-            fields[token[..eq]] = token[(eq + 1)..];
-        }
-
-        return new GeneratedSummary(
-            line[2..bar],
-            fields["EMITTER"],
-            int.Parse(fields["MEMBERS"], CultureInfo.InvariantCulture),
-            int.Parse(fields["CC"], CultureInfo.InvariantCulture),
-            int.Parse(fields["CL"], CultureInfo.InvariantCulture),
-            long.Parse(fields["SLOC"], CultureInfo.InvariantCulture),
-            long.Parse(fields["ELOC"], CultureInfo.InvariantCulture),
-            int.Parse(fields["ERRORS"], CultureInfo.InvariantCulture),
-            int.Parse(fields["METHODS"], CultureInfo.InvariantCulture),
-            int.Parse(fields["MAXCC"], CultureInfo.InvariantCulture)
-        );
-    }
-
-    public List<string> DriftAgainst(GeneratedSummary baseline)
-    {
-        var changes = new List<string>();
-        Text(changes, "EMITTER", baseline.Emitter, Emitter);
-        Exact(changes, "MEMBERS", baseline.Members, Members);
-        Exact(changes, "CC", baseline.CyclomaticComplexity, CyclomaticComplexity);
-        Exact(changes, "CL", baseline.ClassCoupling, ClassCoupling);
-        Exact(changes, "SLOC", baseline.SourceLines, SourceLines);
-        Exact(changes, "ELOC", baseline.ExecutableLines, ExecutableLines);
-        Exact(changes, "ERRORS", baseline.CompileErrors, CompileErrors);
-        Exact(changes, "METHODS", baseline.Methods, Methods);
-        Exact(changes, "MAXCC", baseline.MaxMethodComplexity, MaxMethodComplexity);
-        Text(
-            changes,
-            "ELOC_PER_MEMBER",
-            baseline.ExecutableLinesPerMember,
-            ExecutableLinesPerMember
-        );
-
-        if (changes.Count == 0)
-        {
-            return changes;
-        }
-
-        changes.Insert(0, $"  ~ summary: {Model}");
-        for (int i = 1; i < changes.Count; i++)
-        {
-            changes[i] = "      " + changes[i];
-        }
-
-        return changes;
-
-        static void Exact(List<string> into, string name, long was, long now)
-        {
-            if (was != now)
-            {
-                into.Add($"{name} {was} -> {now}");
-            }
-        }
-
-        static void Text(List<string> into, string name, string was, string now)
-        {
-            if (!string.Equals(was, now, StringComparison.Ordinal))
-            {
-                into.Add($"{name} {was} -> {now}");
-            }
-        }
-    }
 }
 
 internal static class Display

@@ -1,5 +1,5 @@
 // Model declarations for ListOrderParquetExtensions.g.cs. See OrderEvent.cs for why this exists.
-// Mirrors GoldenCodeGenRegressionTests.GoldenMasterRowLevelListsModel.
+// Mirrors the GoldenCorpus model behind GoldenCodeGenRegressionTests.GoldenMasterRowLevelListsModel.
 namespace SampleDomain.Models;
 
 public partial record ListOrder

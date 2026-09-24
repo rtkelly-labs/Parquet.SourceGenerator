@@ -54,7 +54,7 @@ jobs:
       # disagreement, by the issue step below.
       - name: Measure with CodeMetrics.cs
         shell: bash
-        run: dotnet run scripts/CodeMetrics.cs -- --out "$RUNNER_TEMP/metrics"
+        run: dotnet run scripts/CodeMetrics.cs -- --src-only --out "$RUNNER_TEMP/metrics"
 
       - name: Install Microsoft.CodeAnalysis.Metrics
         shell: bash

@@ -3,7 +3,7 @@ name: Mutation Testing (nightly)
 # #261, layer 4 of #251: does a mutated line of the generator still get caught by a
 # failing TEST, or only by a text diff? Coverage says a line executed; mutation testing
 # says a test would have noticed if the line were wrong — and per the issue, Stryker
-# runs here with the snapshot-style suites (golden files, API/metrics baselines, IL
+# runs here with the snapshot-style suites (golden models, API rendering, IL
 # shape) EXCLUDED, because those "kill" any mutation trivially and would report a
 # flattering lie. The exclusion and its reasoning live in stryker-config.json and
 # docs/26-MUTATION-TESTING.md; read them before touching the filter.
