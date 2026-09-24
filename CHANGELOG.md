@@ -91,7 +91,9 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   `scripts/DerivedOutputs.cs` for the pull request and its merge base, uploads both trees as the
   `derived-outputs` artifact, and posts the difference as one sticky PR comment with the emitted
   public API first (`scripts/RenderDerivedDiff.cs`). The required `build` check is now an aggregate of
-  the `test` job (the former `build`) and `derived`, so both block a merge. The golden models now live in
+  the `test` job (the former `build`) and `derived`, so both block a merge. Each full release attaches its
+  derived outputs as `derived-outputs.tar.gz` and dispatches the docs site with the tag, so the API
+  grid renders what that version shipped. The golden models now live in
   `GoldenCorpus`; `GoldenCodeGenRegressionTests` checks their invariants and publishes them to
   `artifacts/golden/`. The remaining gates are unchanged in intent: golden models must parse and
   compile, emitted code must compile against `GoldenModels/` (ERRORS=0), `CodeMetricsConfig.txt`

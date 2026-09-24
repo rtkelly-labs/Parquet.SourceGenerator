@@ -26,9 +26,29 @@ comments, no `#nullable` scaffolding beyond the header.
 > Introduced by issue #215. #216 (the API surface audit) reads these files rather than
 > hand-transcribing signatures; #217 uses them to demonstrate the surface *shrinking*; #227's
 > profile matrix is a post-freeze follow-up recorded in [document 38](38-FEATURE-PROFILE-MATRIX-SCOPE-227.md).
-> #229 rendered the docs-site API grid from the checked-in contracts; those files are no longer
-> checked in (see [below](#why-none-of-it-is-checked-in)), so the grid needs another source — the
-> `derived-outputs` CI artifact, or a run of the golden suite in the docs build.
+> #229 rendered the docs-site API grid from the checked-in contracts on `main`. Those files are no
+> longer checked in (see [below](#why-none-of-it-is-checked-in)); a version's output now lives on its
+> release instead (see [Per-release output](#per-release-output)), which also pins the grid to what
+> was actually shipped rather than to whatever `main` held.
+
+## Per-release output
+
+`release.yml` runs `scripts/DerivedOutputs.cs` on the commit it publishes and attaches the result
+to the GitHub release as `derived-outputs.tar.gz`:
+
+```
+manifest.json    {"version": "...", "tag": "v...", "commit": "<sha>"}
+golden/          *.g.cs, *.api.txt, *.api.shape.txt for every golden model
+metrics/         src/ metrics, generated/ metrics, duplication.txt
+callgraph/       edges and Mermaid pages
+```
+
+The tag is the address: `https://github.com/rtkelly13/Parquet.SourceGenerator/releases/download/<tag>/derived-outputs.tar.gz`.
+After a full release, `release.yml` calls `docs-dispatch.yml` with that tag, and the `docs_update`
+dispatch carries it as `client_payload.tag`. An empty tag (a docs-only change on `main`) means
+"keep the API grid on the last tag". Prereleases publish to NuGet.org only and have no GitHub
+release, so they carry no asset. Releases before this change (`v0.0.1`–`v0.0.3`) predate the
+`.api.txt` files entirely.
 
 ## The grammar
 
