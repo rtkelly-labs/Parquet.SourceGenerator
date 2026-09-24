@@ -87,10 +87,10 @@ Every ledger entry carries exactly one.
 
 Feature-level changes are governed as generated-shape changes. The default remains
 `Level2CompoundPreview`; consumers can pin `Level1Flat` or opt into `Level3ModernCSharp` through the
-shared MSBuild/assembly configuration channel documented in [29](./29-FEATURE-LEVELS.md).
+shared MSBuild/assembly configuration channel documented in [02 § Feature levels](./02-API-DESIGN-AND-ATTRIBUTES.md#4-feature-levels).
 
-`0.0.x` permits breaking changes without a major bump; the release-cadence note in
-[04 - Roadmap](./04-ROADMAP-AND-CONTRIBUTING.md) says so, and that is not changing here. The bucket
+`0.0.x` permits breaking changes without a major bump; the release framing in
+[47 - 0.1 Contract](./47-0.1-CONTRACT-AND-DESIGN-GOALS.md) says so, and that is not changing here. The bucket
 on an entry therefore does not gate a release today. **It is recorded anyway, because the point is
 that the decision was made** — that someone looked at a `breaking-major` label and shipped it
 knowingly rather than discovering it from a consumer's bug report. At `0.1.0` the ledger becomes the

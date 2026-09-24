@@ -313,7 +313,7 @@ The rule, the three surfaces and the author process are in
 
   Purely additive: no existing member changes or is removed. The flat `Read*` methods remain and are
   what the builders delegate to through the `0.1.0` compatibility window, per docs/19 decision D3.
-  Remove them only after the later removal gate in [document 41](../41-FLAT-READ-FREEZE-SCOPE-262.md).
+  Remove them only after the later removal gate in [#262](../DECISIONS.md#262--flat-read-freeze-superseded) (since superseded by #480).
 
   The structs are type-state rather than one builder validating at runtime, so the grid's four empty
   cells are absent members rather than members that throw: no `Parallel()` on a stream source, no

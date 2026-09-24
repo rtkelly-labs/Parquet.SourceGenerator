@@ -1,91 +1,32 @@
 # 02 - API Design & Attributes
 
-## Overview
+Decorate a partial class, record or struct with `[ParquetSerializable]`; the generator discovers the
+schema and emits the column readers and writers. The attribute source in
+`src/Parquet.SourceGenerator.Attributes/` is authoritative — this page summarises it.
 
-`Parquet.SourceGenerator` provides an intuitive attribute-driven API. Developers decorate their target C# types (classes, records, or structs) with `[ParquetSerializable]`, and the Roslyn source generator handles schema discovery, column array flattening, and Parquet stream writing/reading.
+## 1. Attributes
 
----
+| Attribute | Target | Effect |
+|:---|:---|:---|
+| `[ParquetSerializable]` | class, record, struct | Triggers generation. The type must be `partial` (`PARQ001`). |
+| `[ParquetColumn]` | property, field | `Name` (defaults to the member name), `Order` (default `-1` = declaration order), `Deduplicate` (share identical strings within a row group), `Encoding` hint (`Default`, `Dictionary`, `DeltaBinaryPacked`, `ByteSplitStream`). `[ParquetColumn(Order = 2)]` reorders without renaming. |
+| `[ParquetIgnore]` | property, field | Excludes the member from the schema. |
+| `[ParquetDecimal(precision, scale)]` | `decimal` | Explicit precision and scale (`PARQ005` if invalid). |
+| `[ParquetTimestamp(unit)]` | `DateTime` | `Milliseconds` or `Microseconds`. Parquet.Net has no nanosecond format. |
+| `[ParquetSortKey]` | property, field | Opts a flat, non-nullable, totally ordered root column into sorted row-group pruning. Other types report `PARQ014`; `string` is excluded because Parquet orders it bytewise. |
+| `[assembly: ParquetGeneratorOptions]` | assembly | Sets the feature level — see §4. |
 
-## 1. Attributes Specification
+Nullability follows nullable reference annotations where nullable analysis is enabled: `string` is a
+required column, `string?` optional. In an oblivious context reference types stay optional.
 
-### `[ParquetSerializable]`
-Decorates a class, record, or struct to trigger code generation.
+Which member types and shapes are accepted: [14 - Compatibility Matrix](./14-COMPATIBILITY-MATRIX.md)
+and [28 - Coverage Map](./28-COVERAGE-MAP.md). What is rejected, and why:
+[13 - Compiler Diagnostics](./13-COMPILER-DIAGNOSTICS.md).
 
-```csharp
-namespace Parquet.SourceGenerator;
-
-[AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct, AllowMultiple = false, Inherited = true)]
-public sealed class ParquetSerializableAttribute : Attribute
-{
-}
-```
-
-### `[ParquetColumn]`
-Customizes the column binding for a specific property or field.
-
-```csharp
-namespace Parquet.SourceGenerator;
-
-[AttributeUsage(AttributeTargets.Property | AttributeTargets.Field, AllowMultiple = false)]
-public sealed class ParquetColumnAttribute : Attribute
-{
-    public ParquetColumnAttribute(string name)
-    {
-        Name = name;
-    }
-
-    /// <summary>
-    /// Overrides the Parquet DataField column name.
-    /// </summary>
-    public string Name { get; }
-
-    /// <summary>
-    /// Specifies explicit order index for columns.
-    /// </summary>
-    public int Order { get; set; } = -1;
-
-    /// <summary>
-    /// Explicitly flags whether the column can contain null values.
-    /// </summary>
-    public bool Nullable { get; set; }
-}
-```
-
-### `[ParquetIgnore]`
-Excludes a property or field from being written to or read from Parquet.
+## 2. Example
 
 ```csharp
-namespace Parquet.SourceGenerator;
-
-[AttributeUsage(AttributeTargets.Property | AttributeTargets.Field, AllowMultiple = false)]
-public sealed class ParquetIgnoreAttribute : Attribute
-{
-}
-```
-
-### Specialized Data Format Attributes
-
-#### `[ParquetTimestamp]`
-Specifies how `DateTime` / `DateTimeOffset` values are stored in Parquet (Milliseconds or Microseconds; Parquet.Net has no nanosecond format, so that unit is not offered).
-
-#### `[ParquetDecimal]`
-Specifies explicit precision and scale for `decimal` properties.
-
-```csharp
-[ParquetDecimal(precision: 18, scale: 4)]
-public decimal Price { get; init; }
-```
-
----
-
-## 2. Developer Experience & Code Examples
-
-### Target Domain Model
-```csharp
-using System;
 using Parquet.SourceGenerator;
-
-namespace Analytics.Models;
 
 [ParquetSerializable]
 public partial record TransactionLog
@@ -106,93 +47,46 @@ public partial record TransactionLog
     [ParquetIgnore]
     public string LocalSessionCache { get; init; } = string.Empty;
 }
+
+await logs.WriteParquetAsync(stream);                                   // write
+List<TransactionLog> read = await TransactionLogParquet.From(stream).ToListAsync(); // read builder
 ```
 
-### Generated Extension Usage
+The full read and write surface — sources, shapes, execution modes and pushdown — is in
+[19 - Public API Surface](./19-PUBLIC-API-SURFACE.md).
 
-#### Writing Parquet Files
-```csharp
-using System.IO;
-using System.Threading.Tasks;
-using Analytics.Models;
+## 3. What gets generated
 
-public async Task SaveLogsAsync(Stream stream, List<TransactionLog> logs)
-{
-    // WriteParquetAsync is generated at compile time with zero reflection!
-    await logs.WriteParquetAsync(stream);
-}
+Don't rely on a hand-written sample here; read the golden files, which CI keeps exact:
+
+- `test/Parquet.SourceGenerator.Tests/GoldenFiles/*.g.cs` — emitted source per model
+  (`OrderEventParquetExtensions.g.cs` is the simplest flat case,
+  `LegacyRecordParquetLegacyExtensions.g.cs` the classic backend).
+- `*.api.txt` beside each — the signature-only public surface
+  ([17 - Generated API Baselines](./17-GENERATED-API-BASELINES.md)).
+
+## 4. Feature levels
+
+A small named compatibility policy rather than independent boolean switches:
+
+| Level | Meaning |
+|:---|:---|
+| `Level1Flat` | Flat models and the compatibility-safe surface. |
+| `Level2CompoundPreview` | **Default.** Enables the supported compound preview shapes. |
+| `Level3ModernCSharp` | Opts into the latest modern generator shapes. |
+
+```xml
+<PropertyGroup>
+  <ParquetGeneratorFeatureLevel>Level2CompoundPreview</ParquetGeneratorFeatureLevel>
+</PropertyGroup>
 ```
-
-#### Reading Parquet Files
-```csharp
-using System.IO;
-using System.Threading.Tasks;
-using Analytics.Models;
-
-public async Task ReadLogsAsync(Stream stream)
-{
-    // The generated read builder reads column arrays directly into strong typed records
-    List<TransactionLog> logs = await TransactionLogParquet.From(stream).ToListAsync();
-}
-```
-
-#### Accessing Compiled Schema
-```csharp
-using Parquet.Data;
-
-// Static schema definition generated at compile time
-ParquetSchema schema = TransactionLogParquetExtensions.Schema;
-```
-
----
-
-## 3. Generated Code Anatomy
-
-For the `TransactionLog` model above, the source generator emits the following C# code:
 
 ```csharp
-// <auto-generated/>
-#nullable enable
-
-namespace Analytics.Models;
-
-public static partial class TransactionLogParquetExtensions
-{
-    public static readonly global::Parquet.Data.ParquetSchema Schema = new global::Parquet.Data.ParquetSchema(
-        new global::Parquet.Data.DataField<global::System.Guid>("tx_id"),
-        new global::Parquet.Data.DataField<string>("user_id"),
-        new global::Parquet.Data.DataField<decimal>("amount"),
-        new global::Parquet.Data.DataField<global::System.DateTime>("timestamp")
-    );
-
-    public static async global::System.Threading.Tasks.Task WriteParquetAsync(
-        this global::System.Collections.Generic.IReadOnlyCollection<TransactionLog> items,
-        global::System.IO.Stream stream,
-        global::System.Threading.CancellationToken cancellationToken = default)
-    {
-        int count = items.Count;
-        var col0 = new global::System.Guid[count];
-        var col1 = new string[count];
-        var col2 = new decimal[count];
-        var col3 = new global::System.DateTime[count];
-
-        int i = 0;
-        foreach (var item in items)
-        {
-            col0[i] = item.Id;
-            col1[i] = item.UserId;
-            col2[i] = item.Amount;
-            col3[i] = item.Timestamp;
-            i++;
-        }
-
-        using var writer = await global::Parquet.ParquetWriter.CreateAsync(Schema, stream, cancellationToken: cancellationToken);
-        using var groupWriter = writer.CreateRowGroup();
-
-        await groupWriter.WriteColumnAsync(new global::Parquet.Data.DataColumn(Schema.DataFields[0], col0), cancellationToken);
-        await groupWriter.WriteColumnAsync(new global::Parquet.Data.DataColumn(Schema.DataFields[1], col1), cancellationToken);
-        await groupWriter.WriteColumnAsync(new global::Parquet.Data.DataColumn(Schema.DataFields[2], col2), cancellationToken);
-        await groupWriter.WriteColumnAsync(new global::Parquet.Data.DataColumn(Schema.DataFields[3], col3), cancellationToken);
-    }
-}
+// When MSBuild cannot be changed:
+[assembly: ParquetGeneratorOptions(FeatureLevel = ParquetGeneratorFeatureLevel.Level3ModernCSharp)]
 ```
+
+MSBuild takes precedence over the assembly attribute. An invalid value reports `PARQ015`. Every
+generated file records the selected level and generator version in its header, so output can be
+audited without reflection. Named profiles and per-type overrides are deferred
+([DECISIONS #225](./DECISIONS.md#225--feature-profiles-and-per-type-overrides)).

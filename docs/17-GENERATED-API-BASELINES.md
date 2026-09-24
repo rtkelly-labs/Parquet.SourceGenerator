@@ -25,7 +25,7 @@ holding **only** the signatures of the public members that file emits: no bodies
 
 > Introduced by issue #215. #216 (the API surface audit) reads these files rather than
 > hand-transcribing signatures; #217 uses them to demonstrate the surface *shrinking*; #227's
-> profile matrix is a post-freeze follow-up recorded in [document 38](38-FEATURE-PROFILE-MATRIX-SCOPE-227.md);
+> profile matrix is a post-freeze follow-up recorded in [DECISIONS #227](DECISIONS.md#227--feature-profile-golden-matrix);
 > #229 renders the docs-site API grid from the checked-in contracts.
 
 ## The grammar

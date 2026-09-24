@@ -210,8 +210,8 @@ emitted members and 222 fewer parameter slots across the six modern golden model
 
 The full decision, including how document 41's removal gate was answered, is
 [document 48](48-FLAT-READ-REMOVAL-480.md). It supersedes
-[document 41](41-FLAT-READ-FREEZE-SCOPE-262.md) (#262), which recorded the earlier decision to keep
-the methods through the `0.1.0` window and is retained unedited as history.
+the #262 freeze ([DECISIONS #262](DECISIONS.md#262--flat-read-freeze-superseded)), which kept
+the methods through the `0.1.0` window.
 
 ### D4 — The decision is kept honest by the baselines
 

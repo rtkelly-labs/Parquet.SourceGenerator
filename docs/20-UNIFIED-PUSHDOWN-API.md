@@ -1,7 +1,7 @@
 # 20 - Unified Pushdown & the Generated/Shipped Boundary
 
 > **Status**: future design proposal, superseded for the current release by the
-> [generated/shipped boundary decision](./31-GENERATED-SHIPPED-BOUNDARY-DECISION.md). It specifies
+> [generated/shipped boundary decision](./DECISIONS.md#237--generatedshipped-boundary). It specifies
 > the public API shape only; the portability experiment remains tracked in #237.
 > Prerequisites for a future implementation: #220 (column catalog), #221 (accessor interface).
 >

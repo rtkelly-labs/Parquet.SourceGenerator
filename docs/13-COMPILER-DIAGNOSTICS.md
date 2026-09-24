@@ -21,6 +21,9 @@ This document details all diagnostic codes, their severity, rationale, and remed
 | **[`PARQ009`](#parq009-nested-type-not-supported)** | **Error** | Nested types not supported | Target type is nested within another type. |
 | **[`PARQ010`](#parq010-generic-type-not-supported)** | **Error** | Generic types not supported | Target type is generic. |
 | **[`PARQ011`](#parq011-type-unsupported-on-classic-v5-api)** | **Error** | Unsupported on classic API | Member type is supported by Parquet.Net 6 but not by the 4.x/5.x API. |
+| **[`PARQ012`](#parq012-cyclic-compound-type)** | **Error** | Cyclic compound type | A struct member or list element reaches its own type, so it has no finite column layout. |
+| **[`PARQ013`](#parq013-compound-nesting-too-deep)** | **Error** | Compound nesting too deep | Compound types nest beyond the depth the emitter will expand. |
+| **[`PARQ014`](#parq014-member-cannot-be-a-sort-key)** | **Error** | Member cannot be a sort key | A `[ParquetSortKey]` member cannot drive row-group pruning. |
 | **[`PARQ015`](#parq015-invalid-generator-feature-level)** | **Error** | Invalid generator feature level | `ParquetGeneratorFeatureLevel` is present but is not a defined level. |
 
 ---
@@ -163,6 +166,38 @@ This document details all diagnostic codes, their severity, rationale, and remed
 - **Cause**: The member uses a type supported by Parquet.Net 6 (e.g., `ReadOnlyMemory<byte>`, `ReadOnlyMemory<char>`, `BigDecimal`), but the project references the legacy `Parquet.SourceGenerator.V5` package.
 - **Why**: Parquet.Net 4.x/5.x lacks the primitive APIs required for these types.
 - **Remediation**: Upgrade to the main `Parquet.SourceGenerator` package, or change the property to a type compatible with Parquet.Net 4.x/5.x (such as `byte[]` or `string`).
+
+---
+
+### PARQ012: Cyclic Compound Type
+
+- **Severity**: Error
+- **Cause**: A member reaches its declaring type again through struct members or list elements.
+- **Why**: Parquet schemas are trees; a self-referencing type has no finite column layout. Without
+  the rule the parser would recurse until the build failed with CS8785 and no pointer to the cause.
+- **Remediation**: Mark the cyclic member `[ParquetIgnore]` or break the cycle.
+
+---
+
+### PARQ013: Compound Nesting Too Deep
+
+- **Severity**: Error
+- **Cause**: Compound members nest more levels deep than the emitter's maximum (six).
+- **Why**: Record shredding is unrolled per leaf at generation time, so emitted size grows with leaf
+  count and path depth.
+- **Remediation**: Flatten the model or mark the deep member `[ParquetIgnore]`.
+
+---
+
+### PARQ014: Member Cannot Be a Sort Key
+
+- **Severity**: Error
+- **Cause**: `[ParquetSortKey]` is on a member that is not a flat, non-nullable root column of a type
+  whose Parquet statistics order matches `Comparer<T>.Default` (integral types, `float`, `double`,
+  `DateTime`). `string` is excluded: Parquet orders it bytewise, `string.CompareTo` does not.
+- **Why**: Pruning binary-searches footer min/max statistics; an ineligible marker would otherwise
+  silently emit nothing.
+- **Remediation**: Remove the marker or use an eligible column.
 
 ---
 

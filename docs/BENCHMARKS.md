@@ -115,9 +115,29 @@ The GitHub Actions performance workflow (`.github/workflows/benchmarks.yml`) aut
 2. Executes the native .NET tool `tools/BenchmarkSummaryGenerator` to format a clean 4-row executive summary table.
 3. Automatically opens a Pull Request updating `README.md` and `PACKAGE_README.md` whenever performance baseline numbers change.
 
+### Regression gate
+
+`benchmarks.yml` compares each run against `benchmarks/baseline.json`:
+
+| Input | Effect |
+|:---|:---|
+| _(none)_ | Compare against the baseline; fail on an allocation regression. |
+| `update_baseline` | Record this run as the new baseline, for review in the generated PR. |
+| `fail_on_time` | Also fail on wall-clock regressions. Only meaningful on a quiet machine. |
+
+**Allocated bytes gate; wall-clock is reported only.** Allocations on a fixed input are
+near-deterministic, so a change is a real change in the code. Wall-clock on a shared runner moves
+tens of percent between identical runs, and a gate nobody can act on ends up switched off. A first
+run with no baseline records one and passes. The comparison logic is unit-tested in
+`BenchmarkRegressionTests`, so a broken gate surfaces in normal CI.
+
+Open: the classic backend (`.V5`) has no benchmark row yet — `DataColumn` allocates its own arrays,
+so it should not inherit the main package's figures.
+
 ---
 
 ## 🔗 Related Documentation
 
-* [Testing Strategy & Benchmarks (05)](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/05-TESTING-STRATEGY-AND-BENCHMARKS.md)
-* [Vision & Architecture (01)](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/01-VISION-AND-ARCHITECTURE.md)
+* [05 - Testing Strategy](./05-TESTING-STRATEGY-AND-BENCHMARKS.md)
+* [11 - Performance Optimization Findings](./11-PERFORMANCE-OPTIMIZATION-FINDINGS.md)
+* [12 - Buffer Reuse & Extraction Strategies](./12-BUFFER-REUSE-AND-EXTRACTION-STRATEGIES.md)

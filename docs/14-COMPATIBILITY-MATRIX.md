@@ -97,7 +97,7 @@ enabled. In an oblivious context, reference types remain conservatively optional
 | Reference types without an accessible parameterless constructor | Unsupported | Rejected by `PARQ008` |
 | Positional records | Unsupported | Rejected when no accessible parameterless construction is available |
 
-The backend-specific boundary in [document 42](42-NESTED-BACKEND-SCOPE-176.md) qualifies these rows:
+The backend-specific boundary in [DECISIONS #176](DECISIONS.md#176--nested-types-by-backend) qualifies these rows:
 modern generated nested paths are limited to the tested golden models, while classic generated models
 remain flat-only. Native AOT evidence is currently limited to flat models.
 

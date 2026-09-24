@@ -1,8 +1,8 @@
 # Flat-read removal before 0.1 (#480)
 
-> **Status:** decided and implemented. **Supersedes** [document 41](41-FLAT-READ-FREEZE-SCOPE-262.md)
-> (#262, closed by PR #344). Document 41 is left unedited as the historical record of the earlier
-> decision; this document is the one in force.
+> **Status:** decided and implemented. **Supersedes** the #262 flat-read freeze
+> (formerly document 41, closed by PR #344; summarised in [DECISIONS #262](DECISIONS.md#262--flat-read-freeze-superseded)).
+> This document is the one in force.
 
 ## Decision
 

@@ -79,6 +79,19 @@ If you publish numbers anywhere, include the machine and runtime they came from.
 
 ---
 
+## ✍️ Conventions
+
+- Modern C# with file-scoped namespaces, nullable reference types and pattern matching; format with
+  `dotnet tool run csharpier`.
+- Never hold raw `ISymbol` or `SyntaxNode` references in incremental-pipeline state — pass
+  value-equatable models ([03 - Incremental Generator Pipeline](docs/03-INCREMENTAL-GENERATOR-PIPELINE.md)).
+- Any change to a governed API surface needs a catalogue line and a `docs/api/LEDGER.md` entry
+  ([18 - API Change Contract](docs/18-API-CHANGE-CONTRACT.md)).
+- Scoping and deferral decisions go in [`docs/DECISIONS.md`](docs/DECISIONS.md), not a new numbered
+  document.
+
+---
+
 ## 📥 Submitting Pull Requests
 
 1. **Create a Feature Branch**: `git checkout -b feat/your-feature-name`
