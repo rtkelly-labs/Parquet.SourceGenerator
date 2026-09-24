@@ -341,7 +341,7 @@ public static class Program
 
         sb.AppendLine();
         sb.AppendLine(
-            "> 📌 **Note**: BenchmarkDotNet results captured on GitHub Actions. Detailed multi-scale reports (1K, 10K, 100K, 1M rows) are in [docs/BENCHMARKS.md](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/BENCHMARKS.md)."
+            "> 📌 **Note**: BenchmarkDotNet results captured on GitHub Actions. Detailed multi-scale reports (1K, 10K, 100K, 1M rows) are in [docs/guide/benchmarks.md](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/guide/benchmarks.md)."
         );
 
         return sb.ToString();

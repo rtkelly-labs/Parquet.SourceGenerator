@@ -8,8 +8,8 @@ namespace Parquet.SourceGenerator.Emitter.Compound;
 /// <summary>
 /// Compound write extraction and read reconstruction for the v6 emitter (issue #176 M2).
 /// The definition-ladder conventions implemented here are the ones verified against
-/// Parquet.Net 6.1.0 and PyArrow in docs/15 §1-2. v6-only by design; the classic backend's
-/// equivalent lands in M5 on the 4.x conventions (docs/15 §3).
+/// Parquet.Net 6.1.0 and PyArrow in docs/internals/nested-types.md §1-2. v6-only by design; the classic backend's
+/// equivalent lands in M5 on the 4.x conventions (docs/internals/nested-types.md §3).
 /// </summary>
 internal static class CompoundMapping
 {
@@ -205,7 +205,7 @@ internal static class CompoundMapping
 
     /// <summary>
     /// Row-level list/array extraction (M3a): foreach keeps every collection shape uniform —
-    /// the empty-list marker is emitted when the loop body never ran (docs/15 §1.2: one entry
+    /// the empty-list marker is emitted when the loop body never ran (docs/internals/nested-types.md §1.2: one entry
     /// per row at minimum, markers are not phantom slots).
     /// </summary>
     public static void EmitListExtraction(

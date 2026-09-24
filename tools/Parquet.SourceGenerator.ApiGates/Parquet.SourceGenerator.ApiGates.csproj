@@ -24,7 +24,7 @@
       consumers of a *published* analyzer package can see which rules arrived in which version.
       This assembly is never published: it is repository build policy, referenced by path, versioned
       by the commit that changes it. The rules are documented where their audience reads —
-      docs/18-API-CHANGE-CONTRACT.md — rather than in a release file nobody receives.
+      docs/quality/api-change-contract.md — rather than in a release file nobody receives.
     -->
         <NoWarn>$(NoWarn);RS2008</NoWarn>
     </PropertyGroup>

@@ -11,7 +11,7 @@ namespace Parquet.SourceGenerator.Tests;
 /// <summary>
 /// M3a of issue #176: row-level lists/arrays with leaf elements. Null-vs-empty list
 /// distinction, null elements, element conversions (string, Guid, byte[], DateTime?),
-/// and the repetition-level entry walk — per docs/15 §1.
+/// and the repetition-level entry walk — per docs/internals/nested-types.md §1.
 /// </summary>
 public sealed class NestedListRoundTripTests
 {

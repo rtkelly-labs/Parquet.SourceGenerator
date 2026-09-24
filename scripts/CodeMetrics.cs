@@ -31,7 +31,7 @@ using Microsoft.CodeAnalysis.MSBuild;
 // CodeMetrics.cs
 //
 // Layers 1 and 2 of #251. Emits deterministic, checked-in code-metrics baselines and gates CI on
-// drift against them. See docs/21-CODE-METRICS.md and docs/22-GENERATED-CODE-METRICS.md.
+// drift against them. See docs/quality/code-metrics.md and docs/quality/generated-code-metrics.md.
 //
 //   Layer 1 — the hand-written product code under src/, one baseline per project in metrics/.
 //   Layer 2 — the GENERATED code, one baseline per golden model beside its .api.txt in
@@ -55,7 +55,7 @@ using Microsoft.CodeAnalysis.MSBuild;
 //
 // Determinism: the Roslyn version that parses the source and computes the metrics is pinned above,
 // not taken from the SDK, so the numbers do not move when a developer or a runner updates their
-// SDK. Every ordering is `StringComparer.Ordinal` (see docs/17-GENERATED-API-BASELINES.md for why
+// SDK. Every ordering is `StringComparer.Ordinal` (see docs/quality/api-baselines.md for why
 // that matters here).
 //
 // Usage:
@@ -84,7 +84,7 @@ var measured = new (string Project, string? TargetFramework)[]
 const string BaselineDirectory = "metrics";
 
 // Layer 2. The golden files are checked-in C#, written from the same emitted string as their
-// .api.txt companions (see docs/17-GENERATED-API-BASELINES.md), so metrics over them are metrics
+// .api.txt companions (see docs/quality/api-baselines.md), so metrics over them are metrics
 // over the emitter's real output. The model declarations under GoldenFiles/Models/ are the
 // consumer-side types the emitted fragments extend: without them the compilation has unresolved
 // types and the metrics are fiction.
@@ -97,7 +97,7 @@ const string GoldenHostProject =
 // counts are integer counts of syntactic facts: they are reproduced exactly by a pinned Roslyn, so
 // they are compared exactly. The maintainability index is a rounded floating-point function of a
 // Halstead volume, so it is allowed a +/-2 band to absorb rounding and reference-assembly noise
-// without the gate crying wolf. See docs/21-CODE-METRICS.md.
+// without the gate crying wolf. See docs/quality/code-metrics.md.
 const int MaintainabilityIndexTolerance = 2;
 
 bool update =
@@ -172,7 +172,7 @@ foreach (var (projectPath, tfm) in measured)
 // Every *.g.cs in GoldenFiles/ is measured against the model declaration it was generated for and
 // gets a *.metrics.txt beside its *.api.txt. The member count on the summary line is READ from
 // that .api.txt rather than recomputed, so there is exactly one definition of "an emitted public
-// member" in the repository (docs/17-GENERATED-API-BASELINES.md owns it).
+// member" in the repository (docs/quality/api-baselines.md owns it).
 // -------------------------------------------------------------------------------------------
 
 Console.WriteLine("Measuring generated code...");
@@ -205,7 +205,7 @@ foreach (string goldenPath in goldenFiles)
             $"{goldenPath} has no model declaration at {modelPath}.\n"
                 + "  Generated code is a fragment: it extends a type the consumer wrote, so it cannot be\n"
                 + "  compiled — and therefore cannot be measured — on its own. Add the declaration the\n"
-                + "  golden test generates from. See docs/22-GENERATED-CODE-METRICS.md."
+                + "  golden test generates from. See docs/quality/generated-code-metrics.md."
         );
     }
 
@@ -287,7 +287,7 @@ if (failures.Count > 0)
         "Refresh with: UPDATE_GOLDEN_FILES=true dotnet run scripts/CodeMetrics.cs, then commit the\n"
             + "changed files under metrics/ and test/Parquet.SourceGenerator.Tests/GoldenFiles/. The diff\n"
             + "is the point: it shows the reviewer exactly which types and members got harder to maintain.\n"
-            + "See docs/21-CODE-METRICS.md (hand-written) and docs/22-GENERATED-CODE-METRICS.md (emitted)."
+            + "See docs/quality/code-metrics.md (hand-written) and docs/quality/generated-code-metrics.md (emitted)."
     );
     return 1;
 }
@@ -476,7 +476,7 @@ static string? KeyFor(ISymbol symbol) =>
         SymbolKind.Property => "P:" + symbol.ToDisplayString(Display.Format),
         SymbolKind.Event => "E:" + symbol.ToDisplayString(Display.Format),
         // Fields carry no complexity — every field is MI=100, CC=0 — so a line per field would be
-        // pure churn on rename with no signal. Deliberately omitted; see docs/21-CODE-METRICS.md.
+        // pure churn on rename with no signal. Deliberately omitted; see docs/quality/code-metrics.md.
         SymbolKind.Field => null,
         _ => null,
     };
@@ -605,7 +605,7 @@ static string RenderSummary(List<MetricRow> allRows)
     sb.Append(
         "\n> The Maintainability Index is a Halstead-derived 1990s formula and a poor absolute\n"
             + "> judgement of quality. It is used here as a change detector, not a score to optimise.\n"
-            + "> See `docs/21-CODE-METRICS.md`.\n"
+            + "> See `docs/quality/code-metrics.md`.\n"
     );
     return sb.ToString();
 }
@@ -791,7 +791,7 @@ static async Task<(List<MetricRow> Rows, GeneratedSummary Summary)> MeasureGener
     // instead. Emitted code that does not compile is a defect in the emitter, not a broken
     // measurement host, and burying it behind an exception would hide it. ERRORS is expected to
     // be 0; a non-zero baseline is a recorded, reviewable defect. See
-    // docs/22-GENERATED-CODE-METRICS.md.
+    // docs/quality/generated-code-metrics.md.
     var errors = compilation
         .GetDiagnostics()
         .Where(d =>
@@ -941,7 +941,7 @@ static string RenderGenerated(string stem, GeneratedSummary summary, List<Metric
             + "# compile errors in the emitted code, METHODS emitted methods, MAXCC worst method CC,\n"
             + "# ELOC_PER_MEMBER emitted executable lines per emitted public member.\n"
             + "# Ordinal-sorted. CC, CL, SLOC, ELOC, DIT, ERRORS and MEMBERS are gated exactly; MI is\n"
-            + "# REPORTED BUT NOT GATED for generated code. See docs/22-GENERATED-CODE-METRICS.md.\n"
+            + "# REPORTED BUT NOT GATED for generated code. See docs/quality/generated-code-metrics.md.\n"
     );
     sb.Append(summary.Render()).Append('\n');
     foreach (var row in rows)
@@ -1081,7 +1081,7 @@ static string RenderGeneratedSummary(
     sb.Append(
         "\n> The Maintainability Index is reported for generated code but NOT gated: it is dominated\n"
             + "> by method length, and emitted methods are long by construction. See\n"
-            + "> `docs/22-GENERATED-CODE-METRICS.md`.\n"
+            + "> `docs/quality/generated-code-metrics.md`.\n"
     );
     return sb.ToString();
 }

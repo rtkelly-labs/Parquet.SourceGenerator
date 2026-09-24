@@ -1,13 +1,13 @@
 # Internal seams — members widened past `private` for cross-component reuse.
 #
 # Governed by PARQAPI002. Adding a member here also requires an entry in docs/api/LEDGER.md
-# (bucket: `internal`). The grammar is the one documented in docs/17-GENERATED-API-BASELINES.md
+# (bucket: `internal`). The grammar is the one documented in docs/quality/api-baselines.md
 # and used by the emitted-API `.api.txt` baselines and by PublicAPI.Shipped.txt: one signature per
 # line, self-contained, ordinal-sorted. Lines starting with `#` are comments.
 #
 # Type declarations are NOT listed. An `internal` type is this repository's ordinary unit of
 # composition and is already unreachable outside the assembly; compiler polyfills such as
-# `IsExternalInit` are excluded by rule. See docs/18-API-CHANGE-CONTRACT.md.
+# `IsExternalInit` are excluded by rule. See docs/quality/api-change-contract.md.
 static Parquet.SourceGenerator.Emitter.CodeEmitter.EmitReadWithNullBypass(System.Text.StringBuilder builder, Parquet.SourceGenerator.Emitter.Compound.LeafColumn col, string fieldAccess, string bufName, string indent = "                ") -> void
 static Parquet.SourceGenerator.Emitter.CodeEmitter.EmitResolveFieldLine(Parquet.SourceGenerator.Emitter.Compound.LeafColumn col, string indent) -> string
 static Parquet.SourceGenerator.Emitter.CodeEmitter.GetBranchlessNonNullExpression(Parquet.SourceGenerator.Models.PropertyModel prop, string valVar) -> string

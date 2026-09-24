@@ -8,7 +8,7 @@
 # compile errors in the emitted code, METHODS emitted methods, MAXCC worst method CC,
 # ELOC_PER_MEMBER emitted executable lines per emitted public member.
 # Ordinal-sorted. CC, CL, SLOC, ELOC, DIT, ERRORS and MEMBERS are gated exactly; MI is
-# REPORTED BUT NOT GATED for generated code. See docs/22-GENERATED-CODE-METRICS.md.
+# REPORTED BUT NOT GATED for generated code. See docs/quality/generated-code-metrics.md.
 S:OrderEventParquetExtensions | EMITTER=v6 MEMBERS=64 CC=759 CL=96 SLOC=3976 ELOC=1571 ERRORS=0 METHODS=115 MAXCC=90 ELOC_PER_MEMBER=24.5
 M:SampleDomain.Models.OrderEventParquet.From(System.IO.Stream) | MI=90 CC=2 CL=5 DIT=- SLOC=3 ELOC=1
 M:SampleDomain.Models.OrderEventParquet.From(System.ReadOnlyMemory<byte>) | MI=94 CC=1 CL=3 DIT=- SLOC=3 ELOC=1

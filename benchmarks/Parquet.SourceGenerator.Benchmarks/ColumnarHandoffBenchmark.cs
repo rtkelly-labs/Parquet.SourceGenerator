@@ -11,7 +11,7 @@ namespace Parquet.SourceGenerator.Benchmarks;
 
 /// <summary>
 /// Issue #137 — direct columnar hand-off. Measures what the hand-off actually buys on the wide
-/// analytical schema docs/12 uses (<see cref="BenchmarkTpchLineItem"/>, 16 columns, 11 nullable
+/// analytical schema docs/internals/buffer-reuse.md uses (<see cref="BenchmarkTpchLineItem"/>, 16 columns, 11 nullable
 /// value columns + 5 nullable string columns).
 /// </summary>
 /// <remarks>

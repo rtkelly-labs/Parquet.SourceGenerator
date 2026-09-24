@@ -106,7 +106,7 @@ Zero-reflection C# source generation vs **`ParquetSerializer` v6** reflection ba
 | **Streaming Read (IAsyncEnumerable)** | 100,000 items | 12.41 ms (12.30 MB) | **5.18 ms** (**8.22 MB**) | ⚡ **2.4x faster** | 📉 **33% less memory** |
 | **Guid Serialization** | 100,000 items | 15.82 ms (17.71 MB) | **10.39 ms** (**10.70 MB**) | ⚡ **1.5x faster** | 📉 **40% less memory** |
 
-> 📌 **Note**: BenchmarkDotNet results captured on GitHub Actions. Detailed multi-scale reports (1K, 10K, 100K, 1M rows) are in [docs/BENCHMARKS.md](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/BENCHMARKS.md).
+> 📌 **Note**: BenchmarkDotNet results captured on GitHub Actions. Detailed multi-scale reports (1K, 10K, 100K, 1M rows) are in [docs/guide/benchmarks.md](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/guide/benchmarks.md).
 
 
 ## 🌐 Real-World Provenanced Dataset Benchmarks
@@ -179,6 +179,6 @@ matrix documents the supported model and file envelope.
 
 * [Documentation Portal](https://docs.ryankelly.dev/parquet-sourcegenerator)
 * [GitHub Repository](https://github.com/rtkelly13/Parquet.SourceGenerator)
-* [Design Documentation](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/INDEX.md)
+* [Design Documentation](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/index.md)
 * [Contributing Guide](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/CONTRIBUTING.md)
 * [MIT License](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/LICENSE)

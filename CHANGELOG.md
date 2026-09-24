@@ -16,7 +16,7 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   requests upward, requires the chain to be linear, and runs `gh stack link` over it. Merge a linked
   stack with `gh stack merge <top> --squash --yes`; `gh pr merge` refuses stacked pull requests.
 - **Code metrics baselines and a complexity ratchet** (`metrics/*.metrics.txt`,
-  `docs/21-CODE-METRICS.md`). Roslyn's maintainability index, cyclomatic complexity, class
+  `docs/quality/code-metrics.md`). Roslyn's maintainability index, cyclomatic complexity, class
   coupling, inheritance depth and line counts are now recorded per namespace, type and member for
   the hand-written code under `src/`, checked in as a deterministic ordinal text artifact, and
   gated in CI on **drift** rather than on absolute values — the `*.api.txt` pattern applied to
@@ -27,7 +27,7 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   one 463-line method — fifteen times the recommended maximum, and the worst maintainability index
   in the repository at 14.
 - **Generated-code metrics** (`test/Parquet.SourceGenerator.Tests/GoldenFiles/*.metrics.txt`,
-  `docs/22-GENERATED-CODE-METRICS.md`). The same computation turned on the code the generator
+  `docs/quality/generated-code-metrics.md`). The same computation turned on the code the generator
   *emits*: one baseline beside every `*.api.txt`, covering both emitters, refreshed by the same
   `UPDATE_GOLDEN_FILES=true` / `/update-golden` command as the golden files themselves, and gated
   on drift. Each carries a size-per-capability ratio — emitted executable lines per emitted public
@@ -40,7 +40,7 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   the repository. Compiling each golden file in order to measure it also found that the emitted
   writer does not compile for a nullable value-type compound member (#255).
 - **Duplication measurement with a drift gate** (`metrics/duplication.txt`,
-  `docs/23-DUPLICATION.md`, layer 3 of #251). Token-level clones across the hand-written sources —
+  `docs/quality/duplication.md`, layer 3 of #251). Token-level clones across the hand-written sources —
   identifier-blind, literal-sensitive, 16-token windows extended along diagonal alignments, spans
   of 40+ tokens reported per method pair — checked in with the `*.api.txt` grammar and gated on
   drift in CI. Emitted code is excluded by design (repetition in generated output is the design,
@@ -50,7 +50,7 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   12,034 duplicated tokens**, worst pair `EmitReadArrayAsync` ↔ `EmitReadAsync` at 180 tokens.
 - **Metrics oracle — `Metrics.exe` cross-checks the bespoke computation**
   (`.github/workflows/metrics-oracle.yml`, `scripts/MetricsOracleCompare.cs`,
-  `docs/24-METRICS-ORACLE.md`, #254). A nightly `windows-latest` job runs Microsoft's own
+  `docs/quality/metrics-oracle.md`, #254). A nightly `windows-latest` job runs Microsoft's own
   (Windows-only) metrics tool over both generator projects and compares it, type by type,
   against the layer-1 baselines: MI within ±2, CC/CL/SLOC exact. Assembly totals are
   reported but not gated — enumeration scope differs between the tools, and a tolerance
@@ -59,7 +59,7 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   The check `CodeMetrics.cs` could never run on itself.
 - **Deterministic call-graph artifact with cycle, fan-out and layering gates**
   (`scripts/CallGraph.cs`, `graph/*.callgraph.txt`, `graph/callgraph.allowlist.txt`,
-  `docs/callgraph.md`, `docs/callgraph-generated.md`, `docs/25-CALL-GRAPH.md`, #252).
+  `docs/internals/callgraph.md`, `docs/internals/callgraph-generated.md`, `docs/quality/call-graph.md`, #252).
   This repo's defects have been graph defects — #252 makes the graph an artifact: static
   edges per method as an ordinal baseline gated on drift, no multi-node cycle without a
   catalogued reason (today's entire cycle inventory is the #176 compound parser and the
@@ -71,7 +71,7 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   call-site count rides in the baseline header.
 - **Mutation testing for the behavioural suite** (`stryker-config.json`,
   `.github/workflows/mutation.yml`, `scripts/MutationSummary.cs`,
-  `docs/26-MUTATION-TESTING.md`, layer 4 of #251). Stryker.NET runs nightly and answers the
+  `docs/quality/mutation-testing.md`, layer 4 of #251). Stryker.NET runs nightly and answers the
   question coverage cannot: would a test notice if a line were *wrong*? The defining decision
   is what it leaves out — the golden-file, API-baseline, metrics-baseline and IL-shape suites
   are excluded, because they assert the *text/shape* of emitted output and would "kill" every
@@ -123,7 +123,7 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   warn). Measured on the golden models: **66 fewer emitted members and 222 fewer parameter slots**
   (e.g. `OrderEventParquetExtensions` 82 → 70 members, 104 → 64 parameters). The
   `Parquet.SourceGenerator.Legacy` package has no builder and **keeps** its flat `ReadParquetAsync`
-  and `ReadParquetArrayAsync`. Decision record: `docs/48-FLAT-READ-REMOVAL-480.md`, superseding
+  and `ReadParquetArrayAsync`. Decision record: `docs/design/flat-read-removal.md`, superseding
   `docs/41`. Every call maps 1:1 onto a builder chain:
 
   | Before (`XParquetExtensions.…`) | After |
@@ -165,7 +165,7 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
 
 This release introduces the generated read builder (`{T}Parquet.From(...)`) and keeps every
 existing flat read method working as a forwarder. Both surfaces ship together while the compatibility
-window remains open. `docs/19-PUBLIC-API-SURFACE.md` decision D3 retains the flat methods through
+window remains open. `docs/reference/api-surface.md` decision D3 retains the flat methods through
 the `0.1.0` window; document 41 records the later removal gate. Callers can adopt the builder now;
 the flat methods are not yet marked
 `[Obsolete]` because the two surfaces are still being validated against each other.
@@ -180,7 +180,7 @@ the flat methods are not yet marked
   concurrent row-group reads corrupt each other; `Where()` and `Parallel()` are mutually absent
   until a parallel reader accepts a predicate. `Where` also closes a gap in the flat methods,
   where pushdown existed on the `Stream` overloads but not the buffer ones. Rationale and the
-  full axis grid are in `docs/19-PUBLIC-API-SURFACE.md` (decision D2).
+  full axis grid are in `docs/reference/api-surface.md` (decision D2).
 - **Row-group predicate pushdown from footer statistics**: a predicate over a generated per-column
   `[Min, Max]` metadata view skips row groups that cannot contain a match, so they are never
   decompressed. This is the mechanism the builder's `Where()` exposes.
@@ -197,7 +197,7 @@ the flat methods are not yet marked
   `**Unapproved-by-design:**` ledger entry suppresses the build error for spikes and is rejected by
   CI on `main`. Both gates are analyzers in `tools/Parquet.SourceGenerator.ApiGates`, are never
   packed, and short-circuit unless handed their catalogue as an `AdditionalFile`, so they cannot
-  run in a consumer's compilation. See `docs/18-API-CHANGE-CONTRACT.md`.
+  run in a consumer's compilation. See `docs/quality/api-change-contract.md`.
 - **Direct columnar handoff (write)**: flat `[ParquetSerializable]` models now also emit a
   `{Type}ColumnarBatch` struct plus `WriteParquetRowGroupAsync(batch)`,
   `WriteParquetRowGroupColumnarAsync(rowCount, ...)` and a stream-level `batch.WriteParquetAsync`.
@@ -205,7 +205,7 @@ the flat methods are not yet marked
   its `ArrayPool` rentals entirely — buffers reach Parquet.Net verbatim. Nullable value columns take
   packed values plus explicit definition levels. Measured at ~7% of end-to-end write time on a
   16-column schema, identical in Workstation and Server GC, with allocation unchanged; see
-  `docs/12-BUFFER-REUSE-AND-EXTRACTION-STRATEGIES.md` §6. Models with struct, list or map members
+  `docs/internals/buffer-reuse.md` §6. Models with struct, list or map members
   are unaffected and keep the row-oriented API only.
 - **Apache Arrow `RecordBatch` ingestion (experimental, #177)**: when — and only when — the consumer
   compilation references Apache.Arrow, the generator emits an extra `{Namespace}.{Type}.Arrow.g.cs`
@@ -270,7 +270,7 @@ the flat methods are not yet marked
   about it. One behaviour change beyond the removal: a non-positive `maxDegreeOfParallelism` used to
   be discarded without error, so a caller who passed `0` got the options value or
   `Environment.ProcessorCount`; there is now no argument to discard. The rule this applies is
-  recorded in `docs/19-PUBLIC-API-SURFACE.md`. `0.0.x` permits the break; the decision is recorded
+  recorded in `docs/reference/api-surface.md`. `0.0.x` permits the break; the decision is recorded
   as `breaking-major` in `docs/api/LEDGER.md`.
 - **Formatting tooling consolidated on CSharpier.** `dotnet format whitespace` is removed from CI:
   its Roslyn formatter disagrees with CSharpier on layout (case-body and pattern-arm indentation),
@@ -305,7 +305,7 @@ the flat methods are not yet marked
   package's allocation characteristics, and it offers no streaming or parallel reader.
 - IronCompress ships no `win-x86` native binary, so 32-bit .NET Framework applications fail at
   runtime on any compressed write.
-- See [docs/07-KNOWN-LIMITATIONS.md](docs/07-KNOWN-LIMITATIONS.md) for the full audit.
+- See [docs/guide/limitations.md](./docs/guide/limitations.md) for the full audit.
 
 ---
 
@@ -395,7 +395,7 @@ the flat methods are not yet marked
   types with no parameterless constructor, and nested or generic target types. Shapes that
   previously emitted uncompilable code or failed at runtime — positional records, get-only
   members, unsupported types — now fail the build with a pointer to the declaration responsible.
-- **`docs/BENCHMARKS.md`** as a standalone document, and a dedicated `PACKAGE_README.md` for
+- **`docs/guide/benchmarks.md`** as a standalone document, and a dedicated `PACKAGE_README.md` for
   NuGet packaging.
 
 ### Changed

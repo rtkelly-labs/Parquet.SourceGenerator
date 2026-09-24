@@ -45,7 +45,7 @@ public sealed class BackendCompatibilityPolicyTests
                 .ShouldBeEmpty(
                     $"The classic backend baseline {Path.GetFileName(path)} contains a signature "
                         + "outside the declared core surface. A new member or overload requires an "
-                        + "explicit compatibility-policy decision in docs/14-COMPATIBILITY-MATRIX.md."
+                        + "explicit compatibility-policy decision in docs/reference/compatibility.md."
                 );
 
             foreach (string required in ClassicCoreSignatures)

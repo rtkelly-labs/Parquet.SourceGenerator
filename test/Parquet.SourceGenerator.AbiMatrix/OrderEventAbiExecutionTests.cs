@@ -10,7 +10,7 @@ using Xunit;
 namespace Parquet.SourceGenerator.AbiMatrix;
 
 /// <summary>
-/// ABI Execution verification for frozen v1.0 generated code (issue #289, docs/27 §2.1).
+/// ABI Execution verification for frozen v1.0 generated code (issue #289, docs/design/protobuf-peer-study.md §2.1).
 ///
 /// Verifies that historical, pre-generated OrderEventParquetExtensions compiled into a consumer
 /// project continues to execute cleanly against the runtime Parquet.Net package without

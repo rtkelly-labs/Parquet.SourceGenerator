@@ -26,6 +26,6 @@
     not test failures. Body, performance and comment changes alter the golden `.g.cs` but not the
     `.api.txt`, and are not API changes. A ledger entry marked `**Unapproved-by-design:**`
     suppresses the build error for spikes and cannot merge to `main`. Full rule:
-    `docs/18-API-CHANGE-CONTRACT.md`.
+    `docs/quality/api-change-contract.md`.
 
 12. **Upstream Dependency Limitations**: Track package limitations and candidate upstream improvements in `UPSTREAM_DEPENDENCY_LIMITATIONS.md`, not in this file.

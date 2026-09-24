@@ -80,7 +80,7 @@ public sealed class GoldenCodeGenRegressionTests
     /// <summary>
     /// Asserts the signature-only baseline that sits next to each golden file. Format and its
     /// rationale are documented on <see cref="GeneratedApiBaseline"/> and in
-    /// <c>docs/17-GENERATED-API-BASELINES.md</c>.
+    /// <c>docs/quality/api-baselines.md</c>.
     /// </summary>
     private static void AssertApiBaselineMatch(
         string goldenFileName,

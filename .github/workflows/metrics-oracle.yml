@@ -7,7 +7,7 @@ name: Metrics Oracle (nightly)
 # same direction and the drift gate is holding a wrong baseline stable.
 #
 # It cannot run per-PR because the entry point is a .NET Framework Windows executable
-# (see docs/21-CODE-METRICS.md), and it is scheduled rather than push-triggered because
+# (see docs/quality/code-metrics.md), and it is scheduled rather than push-triggered because
 # the question it answers — "is our ruler accurate?" — is a nightly question, not a
 # per-commit one. Disagreement opens (or updates) a GitHub issue rather than leaving a
 # red schedule: failing nightlies get muted; issues get acted on.
@@ -133,7 +133,7 @@ jobs:
             [Run]($RUN_URL) — full report in the \`metrics-oracle-report\` artifact.
 
             Tolerance: MI ±2, every other metric exact; type-level only (see
-            docs/24-METRICS-ORACLE.md for why)."
+            docs/quality/metrics-oracle.md for why)."
           else
             label=metrics-oracle-infrastructure
             title="metrics oracle: Metrics.exe execution failed"

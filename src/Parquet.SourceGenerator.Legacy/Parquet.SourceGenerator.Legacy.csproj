@@ -70,7 +70,7 @@
     </Target>
 
     <!--
-    PARQAPI002 (docs/18-API-CHANGE-CONTRACT.md). The gate is an analyzer, referenced build-time
+    PARQAPI002 (docs/quality/api-change-contract.md). The gate is an analyzer, referenced build-time
     only: ReferenceOutputAssembly="false" keeps it out of the compile scope and PrivateAssets="all"
     keeps it out of the produced package. It short-circuits unless it is handed src/api/seams.txt,
     which only the projects in this ItemGroup supply.
@@ -82,7 +82,7 @@
             ReferenceOutputAssembly="false"
             PrivateAssets="all"
         />
-        <!-- CA1502 / CA1505 / CA1506 thresholds. See docs/21-CODE-METRICS.md. -->
+        <!-- CA1502 / CA1505 / CA1506 thresholds. See docs/quality/code-metrics.md. -->
         <AdditionalFiles Include="..\..\CodeMetricsConfig.txt" />
         <AdditionalFiles Include="..\api\seams.txt" />
         <AdditionalFiles Include="..\..\docs\api\LEDGER.md" />

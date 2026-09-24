@@ -4,7 +4,7 @@ Every line added to a governed catalogue — an emitted-API `*.api.txt`, `src/ap
 `PublicAPI.Unshipped.txt` — needs an entry here classifying its semver impact. Newest first.
 
 The rule, the three surfaces and the author process are in
-[18 - API Change Contract](../18-API-CHANGE-CONTRACT.md). The buckets are `additive-minor`,
+[API Change Contract](../quality/api-change-contract.md). The buckets are `additive-minor`,
 `breaking-major`, `internal` and `generated-shape`.
 
 > **Everything dated before 2026-09-10 was catalogued retrospectively.** The single
@@ -57,14 +57,14 @@ The rule, the three surfaces and the author process are in
     (`OrderEvent` both, `SortedShipment` text; 3 lines).
   - Classic emitter: `WriteRowGroupAsync(this ParquetWriter writer, IReadOnlyList<T> items, CancellationToken)`
     on `LegacyRecordParquetLegacyExtensions` (1 line). `BackendCompatibilityPolicyTests` and
-    [14](../14-COMPATIBILITY-MATRIX.md) drop row-group write from the classic core surface.
+    [Compatibility Matrix](../reference/compatibility.md) drop row-group write from the classic core surface.
 - **Rationale:** the rule applied member by member was *does this describe user intent or an
   implementation strategy?* Each of these is the strategy the intent-level writers are built from:
   `items.WriteParquetAsync(stream, …)`, `asyncItems.WriteParquetAsync(stream, …)`,
   `items.WriteParquetBatchedAsync(stream, …)` and `{T}ColumnarBatch.WriteParquetAsync(stream, …)`
   all remain public and cover writing a collection, a stream of rows, and caller-owned column
   buffers. The positional `WriteParquetRowGroupColumnarAsync` in particular is defect 8 of
-  [19](../19-PUBLIC-API-SURFACE.md): adding a property silently re-means every later argument.
+  [Public API Surface](../reference/api-surface.md): adding a property silently re-means every later argument.
   The `ParquetWriter`-taking overloads also leaked Parquet.Net's writer type into the 0.1 contract.
   Because generated code is emitted into the consumer's own assembly, `internal` keeps every one of
   these callable by the model's owning project — only downstream assemblies lose them.
@@ -95,10 +95,10 @@ The rule, the three surfaces and the author process are in
 - **Rationale:** Removed from every modern model; the builder already expresses this cell as
   `<Model>Parquet.From(source).ToListAsync(ct)`, with `.WithOptions(options)` and `.Where(predicate)` as members. The builder's stream and memory terminals already delegated here; the bodies stay as the `internal` `ReadListCoreAsync`, outside the contract.
   Keeping both surfaces into `0.1.0` would make the first stable contract the widest one; see
-  [docs/48](../48-FLAT-READ-REMOVAL-480.md), which supersedes docs/41. Measured across the six modern
+  [docs/design/flat-read-removal.md](../design/flat-read-removal.md), which supersedes the #262 freeze. Measured across the six modern
   golden models, #480 removes 66 members and 222 parameter slots in total. The legacy emitter keeps
   its flat reads (#246 declared subset).
-- **Alternatives considered:** keep as forwarders through `0.1.0` (docs/41) — rejected by the #477
+- **Alternatives considered:** keep as forwarders through `0.1.0` (#262) — rejected by the #477
   contract-narrowing direction; ship one `[Obsolete]` release first — rejected, `0.0.x` has no
   published consumers to warn; keep the members under the same names as `internal` — rejected, a
   consumer's own assembly could keep calling them and the removal would not be visible to it.
@@ -111,10 +111,10 @@ The rule, the three surfaces and the author process are in
 - **Rationale:** Removed from every modern model; the builder already expresses this cell as
   `<Model>Parquet.From(source).ToArrayAsync(ct)`. The bodies stay as the `internal` `ReadArrayCoreAsync`.
   Keeping both surfaces into `0.1.0` would make the first stable contract the widest one; see
-  [docs/48](../48-FLAT-READ-REMOVAL-480.md), which supersedes docs/41. Measured across the six modern
+  [docs/design/flat-read-removal.md](../design/flat-read-removal.md), which supersedes the #262 freeze. Measured across the six modern
   golden models, #480 removes 66 members and 222 parameter slots in total. The legacy emitter keeps
   its flat reads (#246 declared subset).
-- **Alternatives considered:** keep as forwarders through `0.1.0` (docs/41) — rejected by the #477
+- **Alternatives considered:** keep as forwarders through `0.1.0` (#262) — rejected by the #477
   contract-narrowing direction; ship one `[Obsolete]` release first — rejected, `0.0.x` has no
   published consumers to warn; keep the members under the same names as `internal` — rejected, a
   consumer's own assembly could keep calling them and the removal would not be visible to it.
@@ -125,12 +125,12 @@ The rule, the three surfaces and the author process are in
 - **Semver:** breaking-major
 - **Issue:** [#480](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/480)
 - **Rationale:** Removed from every modern model; the builder already expresses this cell as
-  `<Model>Parquet.From(source).AsAsyncEnumerable(ct)`; the name also carried defect 1 of docs/19 ("Stream" denoting both source and shape). The bodies stay as the `internal` `ReadEnumerableCoreAsync`.
+  `<Model>Parquet.From(source).AsAsyncEnumerable(ct)`; the name also carried defect 1 of docs/reference/api-surface.md ("Stream" denoting both source and shape). The bodies stay as the `internal` `ReadEnumerableCoreAsync`.
   Keeping both surfaces into `0.1.0` would make the first stable contract the widest one; see
-  [docs/48](../48-FLAT-READ-REMOVAL-480.md), which supersedes docs/41. Measured across the six modern
+  [docs/design/flat-read-removal.md](../design/flat-read-removal.md), which supersedes the #262 freeze. Measured across the six modern
   golden models, #480 removes 66 members and 222 parameter slots in total. The legacy emitter keeps
   its flat reads (#246 declared subset).
-- **Alternatives considered:** keep as forwarders through `0.1.0` (docs/41) — rejected by the #477
+- **Alternatives considered:** keep as forwarders through `0.1.0` (#262) — rejected by the #477
   contract-narrowing direction; ship one `[Obsolete]` release first — rejected, `0.0.x` has no
   published consumers to warn; keep the members under the same names as `internal` — rejected, a
   consumer's own assembly could keep calling them and the removal would not be visible to it.
@@ -143,10 +143,10 @@ The rule, the three surfaces and the author process are in
 - **Rationale:** Removed from every modern model; the builder already expresses this cell as
   `<Model>Parquet.From(source).Batches(ct)`, unchanged (batch read ownership is #369). Flat models only. The bodies stay as the `internal` `ReadBatchesCoreAsync`.
   Keeping both surfaces into `0.1.0` would make the first stable contract the widest one; see
-  [docs/48](../48-FLAT-READ-REMOVAL-480.md), which supersedes docs/41. Measured across the six modern
+  [docs/design/flat-read-removal.md](../design/flat-read-removal.md), which supersedes the #262 freeze. Measured across the six modern
   golden models, #480 removes 66 members and 222 parameter slots in total. The legacy emitter keeps
   its flat reads (#246 declared subset).
-- **Alternatives considered:** keep as forwarders through `0.1.0` (docs/41) — rejected by the #477
+- **Alternatives considered:** keep as forwarders through `0.1.0` (#262) — rejected by the #477
   contract-narrowing direction; ship one `[Obsolete]` release first — rejected, `0.0.x` has no
   published consumers to warn; keep the members under the same names as `internal` — rejected, a
   consumer's own assembly could keep calling them and the removal would not be visible to it.
@@ -157,12 +157,12 @@ The rule, the three surfaces and the author process are in
 - **Semver:** breaking-major
 - **Issue:** [#480](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/480)
 - **Rationale:** Removed from every modern model; the builder already expresses this cell as
-  `<Model>Parquet.From(bytes).Parallel().ToListAsync(ct)`. The memory body stays as the `internal` `ReadParallelListCoreAsync`. The `Stream` overload is deleted with its body: it read sequentially (defect 5 of docs/19), nothing delegated to it, and the builder already states the same fact by offering no `Parallel()` on the stream source.
+  `<Model>Parquet.From(bytes).Parallel().ToListAsync(ct)`. The memory body stays as the `internal` `ReadParallelListCoreAsync`. The `Stream` overload is deleted with its body: it read sequentially (defect 5 of docs/reference/api-surface.md), nothing delegated to it, and the builder already states the same fact by offering no `Parallel()` on the stream source.
   Keeping both surfaces into `0.1.0` would make the first stable contract the widest one; see
-  [docs/48](../48-FLAT-READ-REMOVAL-480.md), which supersedes docs/41. Measured across the six modern
+  [docs/design/flat-read-removal.md](../design/flat-read-removal.md), which supersedes the #262 freeze. Measured across the six modern
   golden models, #480 removes 66 members and 222 parameter slots in total. The legacy emitter keeps
   its flat reads (#246 declared subset).
-- **Alternatives considered:** keep as forwarders through `0.1.0` (docs/41) — rejected by the #477
+- **Alternatives considered:** keep as forwarders through `0.1.0` (#262) — rejected by the #477
   contract-narrowing direction; ship one `[Obsolete]` release first — rejected, `0.0.x` has no
   published consumers to warn; keep the members under the same names as `internal` — rejected, a
   consumer's own assembly could keep calling them and the removal would not be visible to it.
@@ -175,10 +175,10 @@ The rule, the three surfaces and the author process are in
 - **Rationale:** Removed from every modern model; the builder already expresses this cell as
   `<Model>Parquet.From(bytes).Parallel().ToArrayAsync(ct)`. The memory body stays as the `internal` `ReadParallelArrayCoreAsync`; the sequential `Stream` overload is deleted, as for `ReadParquetParallelAsync`.
   Keeping both surfaces into `0.1.0` would make the first stable contract the widest one; see
-  [docs/48](../48-FLAT-READ-REMOVAL-480.md), which supersedes docs/41. Measured across the six modern
+  [docs/design/flat-read-removal.md](../design/flat-read-removal.md), which supersedes the #262 freeze. Measured across the six modern
   golden models, #480 removes 66 members and 222 parameter slots in total. The legacy emitter keeps
   its flat reads (#246 declared subset).
-- **Alternatives considered:** keep as forwarders through `0.1.0` (docs/41) — rejected by the #477
+- **Alternatives considered:** keep as forwarders through `0.1.0` (#262) — rejected by the #477
   contract-narrowing direction; ship one `[Obsolete]` release first — rejected, `0.0.x` has no
   published consumers to warn; keep the members under the same names as `internal` — rejected, a
   consumer's own assembly could keep calling them and the removal would not be visible to it.
@@ -221,7 +221,7 @@ The rule, the three surfaces and the author process are in
   was reachable. Governing them as package API made every internal refactor of the parser and the
   models a ledger event, and the compat overloads existed only to satisfy that governance. Bucketed
   `internal` rather than `breaking-major` because no consumer can observe the change; the members'
-  own `public` spellings inside now-`internal` types are not seams (docs/18 §What counts as a seam).
+  own `public` spellings inside now-`internal` types are not seams (docs/quality/api-change-contract.md §What counts as a seam).
 - **Alternatives considered:** keeping the `[Generator]` classes `public` — rejected: Roslyn
   instantiates generators by reflection and loads `internal` ones (verified by the sample and the
   package-consumption projects), so public-ness buys nothing. Keeping the `PublicAPI.*.txt` files
@@ -309,11 +309,11 @@ The rule, the three surfaces and the author process are in
   execution into method names — twelve members for a four-axis grid, heading for forty-five once
   #146, #148 and #178 land. Each axis becomes a member instead, so a new axis adds members linearly
   rather than multiplying names. The full argument is in
-  [docs/19](../19-PUBLIC-API-SURFACE.md) decision D2.
+  [docs/reference/api-surface.md](../reference/api-surface.md) decision D2.
 
   Purely additive: no existing member changes or is removed. The flat `Read*` methods remain and are
-  what the builders delegate to through the `0.1.0` compatibility window, per docs/19 decision D3.
-  Remove them only after the later removal gate in [#262](../DECISIONS.md#262--flat-read-freeze-superseded) (since superseded by #480).
+  what the builders delegate to through the `0.1.0` compatibility window, per docs/reference/api-surface.md decision D3.
+  Remove them only after the later removal gate in [#262](../design/decisions.md#262--flat-read-freeze-superseded) (since superseded by #480).
 
   The structs are type-state rather than one builder validating at runtime, so the grid's four empty
   cells are absent members rather than members that throw: no `Parallel()` on a stream source, no
@@ -350,7 +350,7 @@ The rule, the three surfaces and the author process are in
   for the same concept is the discoverability defect #216 catalogues, not a fix for it.
 - **Note:** pre-1.0 break. `0.0.x` permits it without a major bump; the bucket records that the
   call was made deliberately. The rule it applies is
-  [19 - Public API Surface](../19-PUBLIC-API-SURFACE.md).
+  [Public API Surface](../reference/api-surface.md).
 
 ### 2026-09-10 — `WriteParquetBatchedAsync(...)` / `WriteParquetAsync(IAsyncEnumerable<T>, ...)`: `rowGroupSize` parameter removed
 

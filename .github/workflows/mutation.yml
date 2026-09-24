@@ -6,7 +6,7 @@ name: Mutation Testing (nightly)
 # runs here with the snapshot-style suites (golden files, API/metrics baselines, IL
 # shape) EXCLUDED, because those "kill" any mutation trivially and would report a
 # flattering lie. The exclusion and its reasoning live in stryker-config.json and
-# docs/26-MUTATION-TESTING.md; read them before touching the filter.
+# docs/quality/mutation-testing.md; read them before touching the filter.
 #
 # Reporting follows #189's lesson: a scheduled job that merely fails gets muted, so
 # this one never gates on the score. It maintains ONE PR (mutation/headline branch),
@@ -106,18 +106,18 @@ jobs:
             echo "# Mutation testing headline — latest nightly run"
             echo
             echo "Score computed over the behavioural suite only (snapshot-style tests"
-            echo "excluded — see docs/26-MUTATION-TESTING.md before reading a number)."
+            echo "excluded — see docs/quality/mutation-testing.md before reading a number)."
             echo
             echo "_Updated nightly from the [mutation workflow]($RUN_URL)._"
             echo
             cat mutation-headline.md
-          } > docs/MUTATION-HEADLINE.md
+          } > docs/quality/mutation-headline.md
           git checkout -B "$branch"
-          git add docs/MUTATION-HEADLINE.md
+          git add docs/quality/mutation-headline.md
           git commit -m "chore(mutation): nightly mutation score refresh"
           git push -f -u origin "$branch"
           existing=$(gh pr list --repo "$REPO" --head "$branch" --state open --json number --jq '.[0].number // empty')
-          body="Nightly mutation score over the **behavioural suite only** — golden-file, API-baseline, metrics-baseline and IL-shape tests are deliberately excluded (they kill every mutation trivially; the score would be a flattering lie). Full reasoning: docs/26-MUTATION-TESTING.md. The floor is intentionally unset until this baseline is established (#261 AC); merge or close — this PR is a report, not a request."
+          body="Nightly mutation score over the **behavioural suite only** — golden-file, API-baseline, metrics-baseline and IL-shape tests are deliberately excluded (they kill every mutation trivially; the score would be a flattering lie). Full reasoning: docs/quality/mutation-testing.md. The floor is intentionally unset until this baseline is established (#261 AC); merge or close — this PR is a report, not a request."
           if [ -n "$existing" ]; then
             gh pr edit "$existing" --repo "$REPO" --body "$body"
           else

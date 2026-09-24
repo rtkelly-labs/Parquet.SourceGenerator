@@ -26,7 +26,7 @@ using System.Xml.Linq;
 // *scope* — how generated and partial code is enumerated is not identical — while
 // the oracle question is "is our ruler accurate?", and a ruler is accurate iff it
 // reads the same on every object both can see. Assembly totals are reported
-// (informational) but never gated; docs/24-METRICS-ORACLE.md records the split.
+// (informational) but never gated; docs/quality/metrics-oracle.md records the split.
 //
 // Tolerance: Maintainability Index +/- 2 — exactly the policy layer 1 uses for
 // cross-machine comparison, because MI involves a cube root whose last digit is
@@ -125,7 +125,7 @@ if (baseline.Assembly is not null && oracle.TryGetValue(assemblyName, out Oracle
     infos.Add(
         $"assembly {assemblyName}: hand-computed MI={baseline.Assembly.Mi} CC={baseline.Assembly.Cc} "
             + $"CL={baseline.Assembly.Cl} SLOC={baseline.Assembly.Sloc}; oracle MI={asm.Mi} CC={asm.Cc} "
-            + $"CL={asm.Cl} SLOC={asm.Sloc} — reported, not gated (enumeration scope differs; docs/24)."
+            + $"CL={asm.Cl} SLOC={asm.Sloc} — reported, not gated (enumeration scope differs; docs/quality/metrics-oracle.md)."
     );
 }
 else

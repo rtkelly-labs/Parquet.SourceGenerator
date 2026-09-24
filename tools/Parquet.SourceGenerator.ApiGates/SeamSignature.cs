@@ -10,7 +10,7 @@ namespace Parquet.SourceGenerator.ApiGates;
 /// </summary>
 /// <remarks>
 /// <para>The grammar is deliberately the same one the emitted-API baselines use (see
-/// <c>docs/17-GENERATED-API-BASELINES.md</c>), so a contributor learns one line format and applies
+/// <c>docs/quality/api-baselines.md</c>), so a contributor learns one line format and applies
 /// it to all three governed surfaces. The renderer differs only in its input: baselines are
 /// rendered from <i>syntax</i>, because the emitted source has no semantic model at the point the
 /// golden files are produced, whereas seams are rendered from <i>symbols</i>, because the gate runs

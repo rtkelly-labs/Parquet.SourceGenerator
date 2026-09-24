@@ -7,7 +7,7 @@ namespace Parquet.SourceGenerator.Emitter.Compound;
 /// <summary>
 /// Buffer rental/return lifecycle for models containing compound members. v6-only by design:
 /// the classic backend's compound support (issue #176 M5) needs the 4.x-aligned-array
-/// conventions from docs/15 §3, not these, so nothing here is shared source — the Legacy
+/// conventions from docs/internals/nested-types.md §3, not these, so nothing here is shared source — the Legacy
 /// project's source links never see it. For the compound-free properties inside a mixed
 /// model, these mirror BufferPoolComponent's exact rental shapes so flat column output is
 /// unchanged wherever it lands in the slot order.
@@ -17,7 +17,7 @@ internal static class CompoundBuffers
     /// <summary>
     /// Buffer element type for a compound-path leaf: packed (no null holes), definition
     /// levels carry the ladder, so strings/binary take the struct-typed Memory views the
-    /// level-based WriteAllPartsAsync/ReadRawAsync require (docs/15 §2.1).
+    /// level-based WriteAllPartsAsync/ReadRawAsync require (docs/internals/nested-types.md §2.1).
     /// </summary>
     public static string GetPackedType(PropertyModel leaf)
     {

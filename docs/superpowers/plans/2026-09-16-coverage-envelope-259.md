@@ -4,7 +4,7 @@
 
 **Goal:** Check in an evidence-based coverage map for accepted property kinds, nesting, nullability, and modern/classic backends, with a deterministic gate that detects contract drift.
 
-**Architecture:** `scripts/CoverageMap.cs` reads the parser and generator source with the pinned Roslyn package, derives the accepted leaf and compound envelope, and validates a checked-in evidence catalogue. It renders `docs/28-COVERAGE-MAP.md` with stable ordering and explicit evidence status, so the map is reviewable while acceptance remains tied to code. A focused test validates the renderer and catalogue rules through the normal test project.
+**Architecture:** `scripts/CoverageMap.cs` reads the parser and generator source with the pinned Roslyn package, derives the accepted leaf and compound envelope, and validates a checked-in evidence catalogue. It renders `docs/reference/coverage-map.md` with stable ordering and explicit evidence status, so the map is reviewable while acceptance remains tied to code. A focused test validates the renderer and catalogue rules through the normal test project.
 
 **Tech Stack:** C# file-based `dotnet run` script, Roslyn syntax APIs, Markdown, xUnit/Shouldly.
 
@@ -27,7 +27,7 @@
 
 **Interfaces:**
 - Consumes: `src/Parquet.SourceGenerator/Models/PropertyModel.cs`, `src/Parquet.SourceGenerator/Parser/TargetParser.cs`, `src/Parquet.SourceGenerator/ParquetIncrementalGenerator.cs`, `src/Parquet.SourceGenerator.Legacy/ParquetLegacyIncrementalGenerator.cs`.
-- Produces: `--update` rendering of `docs/28-COVERAGE-MAP.md` and default `--check` drift validation.
+- Produces: `--update` rendering of `docs/reference/coverage-map.md` and default `--check` drift validation.
 
 - [x] **Step 1: Define the evidence rows and parser-source extraction.**
 
@@ -44,9 +44,9 @@
 ### Task 2: Check in the map and wire the CI gate
 
 **Files:**
-- Create: `docs/28-COVERAGE-MAP.md`
+- Create: `docs/reference/coverage-map.md`
 - Modify: `.github/workflows/ci.yml`
-- Modify: `docs/INDEX.md`
+- Modify: `docs/index.md`
 
 **Interfaces:**
 - Consumes: the renderer and derived contract from Task 1.

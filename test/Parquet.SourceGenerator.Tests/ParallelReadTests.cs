@@ -356,7 +356,7 @@ public sealed class ParallelReadTests
     public async Task ParallelToArrayAsyncReturnsNativeArray()
     {
         // The stream half of this test covered the removed stream "parallel" overload, which read
-        // sequentially; the builder offers Parallel() only on a buffer (#480, docs/48).
+        // sequentially; the builder offers Parallel() only on a buffer (#480, docs/design/flat-read-removal.md).
         byte[] bytes = await WriteAsync(rowCount: 100, rowGroupSize: 25);
 
         ParallelRow[] fromBuffer = await ParallelRowParquet

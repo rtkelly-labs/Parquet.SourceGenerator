@@ -2,7 +2,7 @@
 //
 // Generated code is a fragment: it extends a type the consumer wrote, and on its own it does not
 // compile. Metrics computed over a compilation with unresolved types are fiction (see
-// docs/21-CODE-METRICS.md), so scripts/CodeMetrics.cs compiles each golden file together with the
+// docs/quality/code-metrics.md), so scripts/CodeMetrics.cs compiles each golden file together with the
 // declaration below and REQUIRES zero errors. That makes this file the thing that keeps the
 // generated-code metrics honest, and it also buys a real compile check on the emitted output,
 // which the golden suite's syntax-only parse never gave.

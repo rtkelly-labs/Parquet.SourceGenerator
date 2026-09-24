@@ -1,0 +1,283 @@
+---
+description: "What 0.1 means, the visibility tiers and the release gate."
+order: 20
+---
+
+# 0.1 Contract & Design Goals (#477)
+
+> **Status:** Direction adopted; tracked by
+> [#477](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/477).
+> Replaces the former roadmap's release cadence and the #230 readiness report. Earlier decision
+> records are superseded, not rewritten — see [DECISIONS](./decisions.md) (for example, #480
+> supersedes the #262 flat-read freeze).
+
+## 1. What 0.1 means
+
+`0.1` is a **confidence and product-shape milestone**, not a declaration that every feature or
+internal API is frozen. The release should establish that:
+
+- the supported paths are well tested;
+- security-sensitive behaviour has explicit, tested failure modes;
+- generated code is correct across the supported type matrix;
+- the public consumer API is small enough to understand and maintain;
+- implementation experiments can continue without continuously expanding the compatibility burden;
+- the architecture can accommodate a future Arrow source generator without making either generator
+  depend on the other.
+
+Breaking changes are acceptable before `0.1` where they reduce accidental API, remove duplicated
+concepts, or make unsafe contracts unrepresentable.
+
+> **Keep useful implementation breadth in the repository; keep the durable public contract narrow.**
+
+## 2. The member test
+
+Every public member has to pass one question:
+
+> **Does this member describe user intent, or an implementation strategy?**
+
+The stable surface answers user questions. How do I annotate a type or describe a column? How do I
+read, stream or filter rows? How do I write rows, or data I already hold in columnar form? How do I
+configure codec, execution and resource limits?
+
+It does not answer implementation questions: which reader state type is active, which emitter slot
+a column occupies, which pooled array backs a batch, which SIMD helper performs a transform, which
+definition-level parameter sits at a given ordinal, which parser object the generator uses.
+Implementation strategy stays internal.
+
+## 3. Three visibility tiers
+
+| Tier | What lives there | Governed by |
+|:---|:---|:---|
+| **Stable public contract** | Attributes, `ParquetSerializerOptions`, the core read/write entry points, and the minimum generated types needed to express them | `*.api.txt`, `PublicAPI.*.txt`, ledger |
+| **Internal generated capability** | Generated into the consumer assembly but not exported: borrowed pooled batch readers while #369 is open, low-level row-group writers, conversion helpers, pruning instrumentation, Arrow helpers | Golden `.g.cs` only |
+| **Repository implementation detail** | Parser models, emitters, planning types, SIMD helpers, test adapters, benchmark helpers, backend plumbing | `internal` + `InternalsVisibleTo` |
+
+A capability moving from tier 1 to tier 2 or 3 is **not a deletion**. The implementation, its
+tests and its benchmarks stay; only the compatibility promise goes.
+
+## 4. Target consumer surface
+
+A normal user should need to learn approximately this, and nothing else:
+
+```text
+[ParquetSerializable]
+[ParquetColumn(...)]
+ParquetSerializerOptions
+
+<Model>Parquet.From(source)
+    .WithOptions(...)
+    .Where(...)
+    .Parallel()
+    .ToArrayAsync(...)
+    / .AsAsyncEnumerable(...)
+
+rows.WriteParquetAsync(...)
+columnarBatch.WriteParquetAsync(...)
+```
+
+Everything beyond that has to justify why a consumer needs to name it.
+
+### 4.1 Package-level API
+
+The `Parquet.SourceGenerator.Attributes` assembly should be dominated by model annotations and
+runtime options:
+
+- **Attributes:** `ParquetSerializableAttribute`, `ParquetColumnAttribute`,
+  `ParquetIgnoreAttribute`, `ParquetDecimalAttribute`, `ParquetTimestampAttribute`,
+  `ParquetSortKeyAttribute`.
+- **Supporting enums**, only where those attributes or the options require them:
+  `ParquetTimestampUnit`, `ParquetColumnEncoding`, `ParquetCompressionMethod`,
+  `ParquetCompressionLevel`.
+- **`ParquetSerializerOptions`** remains the single configuration object. A broad options object is
+  not itself a problem: row-group sizing, compression, encoding, parallelism, allocation, nesting,
+  string, dictionary and decompression limits all belong there.
+- **Shared runtime types** stay public only when the generated public contract needs them.
+  `ParquetColumnStatistics<T>` is the expected example, for row-group filtering.
+
+The following should not be public merely because they exist: `CodeEmitter`, `TargetParser`,
+`TargetClassModel`, `PropertyModel`, `DiagnosticInfo`, `EquatableArray<T>`,
+`VectorizedColumnTransforms` and `NullableColumnExtractor`. See
+[#461](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/461).
+
+### 4.2 Generated read API
+
+The first builder pass (#217) solved the **method-name cross-product**. The remaining multiplier is
+the **public state-type cross-product**: `StreamSource`, `MemorySource`, `ParallelSource` and
+`FilteredSource`, each with its own terminal set. The endpoint is one public reader per model
+([#478](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/478)):
+
+```csharp
+public static class OrderEventParquet
+{
+    public static OrderEventParquetReader From(Stream stream);
+    public static OrderEventParquetReader From(ReadOnlyMemory<byte> bytes);
+}
+
+public readonly struct OrderEventParquetReader
+{
+    public OrderEventParquetReader WithOptions(ParquetSerializerOptions options);
+    public OrderEventParquetReader Where(Func<OrderEventRowGroupMetadata, bool> predicate);
+    public OrderEventParquetReader Parallel();
+
+    public Task<OrderEvent[]> ToArrayAsync(CancellationToken cancellationToken = default);
+    public IAsyncEnumerable<OrderEvent> AsAsyncEnumerable(CancellationToken cancellationToken = default);
+}
+```
+
+Collapsing the states makes combinations callable that the separate state types make
+unrepresentable today. The contract must define them, never silently ignore a requested policy:
+
+| Combination | Why it is invalid today | Default semantics |
+|:---|:---|:---|
+| `From(Stream).Parallel()` | One `ParquetReader` seeks within an arbitrary stream; row groups cannot be read concurrently | Throws `NotSupportedException` at the terminal, naming `From(ReadOnlyMemory<byte>)` as the parallel source |
+| `.Parallel().AsAsyncEnumerable()` / `.Parallel().Batches()` | The parallel backend only produces materialised results | Throws `NotSupportedException`; streaming is sequential by definition |
+| `.Where(...).Parallel()` | No filtered parallel path exists yet | Throws `NotSupportedException` until one does |
+
+Throwing is the default because silently degrading to sequential reads would hide a policy the
+caller asked for. #478 may choose otherwise, but its ledger entry must record the choice, and a
+test must cover each row. Keeping capability-specific public states would also be valid, but it
+reintroduces the state-type cross-product this section exists to remove.
+
+- **One materialised shape.** `ToArrayAsync` and `AsAsyncEnumerable` are the stable terminals.
+  `List<T>` versus `T[]` is a collection preference, not a storage-engine capability
+  ([#479](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/479)).
+- **Execution is policy, not a method family.** `.Parallel()` is reader state. There is no
+  permanent `ReadParquetParallel*Async` family
+  ([#480](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/480)).
+- **Filtering is reader state.** `.Where(...)` composes on the same reader, with no separate public
+  `FilteredSource`.
+
+### 4.3 Row-group metadata is externally read-only
+
+`<Model>RowGroupMetadata` is a useful public capability: consumers inspect it to prune row groups.
+Consumers do not construct it. Its constructor and slot-level plumbing are therefore non-public,
+so emitter ordinals such as `column_0` never become source-level commitments
+([#459](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/459)).
+
+### 4.4 Generated write API
+
+Writes stay extension based and discoverable from the source collection:
+
+```csharp
+await items.WriteParquetAsync(stream, options, ct);
+await asyncItems.WriteParquetAsync(stream, options, ct);
+await batch.WriteParquetAsync(stream, options, ct);
+```
+
+Counted collections, synchronous and asynchronous enumerables, row-group chunking and direct
+columnar buffers are different implementation paths. They do not need different permanent method
+names.
+
+`<Model>ColumnarBatch` expresses a genuine user intent: *I already have columnar data; do not
+materialise rows only to transpose them again.* It keeps a public representation. The raw
+generated signatures with one `ReadOnlyMemory<T>` per property (`WriteParquetRowGroupColumnarAsync`,
+`WriteParquetRowGroupAsync(ParquetWriter, ...)`) and the conversion helpers do not
+([#481](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/481)).
+
+## 5. Capabilities that stay, contracts that wait
+
+### 5.1 Columnar read batches
+
+The zero-POCO read path is valuable and stays. The current **ownership shape** does not become
+stable yet. `IAsyncEnumerable<ColumnBatch>` over borrowed pooled arrays is a copyable value that
+aliases storage returned when the iterator advances
+([#369](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/369)).
+
+If a mechanically safe lifetime model is not ready, the capability ships internal or preview rather
+than freezing the current shape. The candidate models are owned batches, callback-scoped borrowing,
+and lease/token validation.
+
+### 5.2 Decompression and hostile-input guards
+
+The guards stay in this project. The open issues (#358, #359, #360, #374, #463) are reasons to
+harden them, not to remove them:
+
+- every relevant read path is covered;
+- page-header parsing cannot silently accept only one narrow Thrift shape;
+- sequentially reached pages cannot bypass validation;
+- validation happens before the allocation or decompression it bounds;
+- fail-open behaviour is observable or eliminated.
+
+> **Keep the feature; make its safety contract true.**
+
+### 5.3 Feature profiles and optional integrations
+
+Feature profiles remain useful configuration machinery, but the public API is not designed around a
+taxonomy of profile levels. The default surface is clear on its own, and optional or preview
+capabilities may be gated. Arbitrary combinations do not create a combinatorial compatibility
+promise.
+
+`ParquetGeneratorFeatureLevel`, `ParquetGeneratorOptionsAttribute`, the Arrow bridge and batch
+reads each get an explicit stability classification rather than inheriting one from
+`PublicAPI.Unshipped.txt` ([#482](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/482)).
+
+### 5.4 Legacy backend
+
+The Parquet.Net v4/v5 backend is a declared **core subset** (#246): schema generation, core read,
+core write and required compatibility behaviour. Modern-only capabilities are documented as such,
+not copied into the legacy emitter to make API counts match. The legacy flat read methods remain
+its read surface because it has no builder.
+
+## 6. Architecture target
+
+```text
+Syntax/Symbol discovery
+        ↓
+TargetParser
+        ↓
+backend-neutral compile-time model      (internal, #483)
+        ↓
+EmissionPlan (computed once, #449)
+        ↓
+capability-focused emitters (#434, #451)
+        ↓
+generated source
+```
+
+- Parser outputs are value-like and incremental-generator friendly.
+- `EmissionPlan` is computed once per model, not reconstructed at emitter call sites.
+- Emitters consume explicit plan data instead of booleans and variable-name strings.
+- Modern and legacy entry points share the orchestration that is genuinely common (#442).
+- Parquet-specific logic stays Parquet-specific. A future Arrow generator reuses the neutral model
+  without importing Parquet semantics. The seam is **internal and source-level**, not a public
+  `*.Core` package.
+
+The neutral model holds CLR type, nullability, member and logical names, nested/list/map shape,
+child members, enum underlying type, and safe emitted identifiers. It never holds definition or
+repetition levels, compression settings, Arrow array classes, buffer ownership, or backend schema
+objects.
+
+## 7. Explicit non-goals for 0.1
+
+`0.1` does not require:
+
+- full nested feature parity across modern and legacy backends;
+- every experimental SIMD path becoming public;
+- public access to generator parser/emitter types;
+- a generic source-generator framework package;
+- a public shared Parquet/Arrow runtime abstraction;
+- Arrow export, if its ownership/performance contract is not ready;
+- LINQ/`IQueryable` support;
+- every diagnostic or observability experiment being part of the stable API;
+- every internal high-performance path being user-selectable.
+
+## 8. Release gate
+
+`0.1` is cut when all of the following hold. This replaces the former roadmap's "cut `0.1.0` at the next API freeze":
+
+- [ ] Critical/high correctness and security paths are addressed, or scoped out of the stable
+      contract.
+- [ ] Coverage, golden, IL, AOT and performance gates are non-vacuous. They fail when they examine
+      nothing: #416, #422, #407, #404, #412, #413.
+- [ ] Public API contraction is complete (#459, #461, #478–#481).
+- [ ] Every remaining public capability carries a stability classification (#482).
+- [ ] Modern and legacy supported subsets are documented.
+- [ ] Arrow ingestion status reflects what actually shipped, and Arrow export is not listed as
+      complete.
+- [ ] Nested-support scope matches the actually tested backend matrix ([DECISIONS #176](./decisions.md#176--nested-types-by-backend)).
+- [ ] README examples use only the stable surface.
+
+Implementation experiments may remain internal or preview at release time. That is the point of the
+tiers.
+
+> **Broad implementation, narrow contract, strong tests, explicit safety boundaries.**

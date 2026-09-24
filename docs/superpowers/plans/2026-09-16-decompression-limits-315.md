@@ -8,7 +8,7 @@
 
 **Tech Stack:** C# source generators, generated C# targeting Parquet.Net 6.1.0 and 4/5-compatible APIs, xUnit/Shouldly, CSharpier, .NET SDK.
 
-**Spec:** GitHub issue #315, with repository API contract in `docs/18-API-CHANGE-CONTRACT.md`.
+**Spec:** GitHub issue #315, with repository API contract in `docs/quality/api-change-contract.md`.
 
 ## Global Constraints
 

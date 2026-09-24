@@ -68,7 +68,7 @@
     </ItemGroup>
 
     <!--
-    PARQAPI001 (docs/18-API-CHANGE-CONTRACT.md). The emitted-API gate is a build error, not just a
+    PARQAPI001 (docs/quality/api-change-contract.md). The emitted-API gate is a build error, not just a
     test failure, and it lives here because this is the project that owns GoldenFiles/.
 
     The renderer is shared rather than duplicated: GeneratedApiBaseline.cs is compiled into both

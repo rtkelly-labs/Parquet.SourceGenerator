@@ -115,7 +115,7 @@ jobs:
       - name: Verify C# Code Formatting (CSharpier)
         run: dotnet csharpier check .
 
-      # The CI half of the API change contract (docs/18-API-CHANGE-CONTRACT.md). Build errors
+      # The CI half of the API change contract (docs/quality/api-change-contract.md). Build errors
       # PARQAPI001 and PARQAPI002 enforce "nothing exists outside a catalogue"; this enforces the
       # other half — "nothing is catalogued without a recorded semver decision" — which needs the
       # diff against the pull request's base and so cannot live in an analyzer. It also rejects the
@@ -129,7 +129,7 @@ jobs:
       - name: Build solution (Release)
         run: dotnet build Parquet.SourceGenerator.slnx --configuration Release --no-restore -warnaserror
 
-      # Layers 1 and 2 of #251 (docs/21-CODE-METRICS.md, docs/22-GENERATED-CODE-METRICS.md). The
+      # Layers 1 and 2 of #251 (docs/quality/code-metrics.md, docs/quality/generated-code-metrics.md). The
       # build above already enforces CA1502 / CA1505 / CA1506 against the thresholds in
       # CodeMetricsConfig.txt, which is an absolute judgement and therefore the weaker half. This
       # is the other half: checked-in, ordinal baselines of Roslyn's maintainability index,
@@ -159,7 +159,7 @@ jobs:
           fi
           exit $status
 
-      # Layer 3 of #251 (docs/23-DUPLICATION.md): token-level duplication across src/, gated on
+      # Layer 3 of #251 (docs/quality/duplication.md): token-level duplication across src/, gated on
       # drift with zero tolerance — the layers 1 and 2 grammar. Emitted code is out of scope by
       # design; generated output repeating itself is the design, not a defect.
       - name: Verify Duplication Baseline
@@ -173,7 +173,7 @@ jobs:
 
       # #252: the call graph — structure as a gated artifact. Edge drift, declared
       # cycles (graph/callgraph.allowlist.txt), the fan-out ratchet, and the
-      # components-must-not-call-the-hub layering rule. docs/25-CALL-GRAPH.md states
+      # components-must-not-call-the-hub layering rule. docs/quality/call-graph.md states
       # what the static approximation cannot see; the unresolved count rides in the
       # baseline header so the blind spot is measured, not hidden.
       - name: Verify Call-Graph Baselines

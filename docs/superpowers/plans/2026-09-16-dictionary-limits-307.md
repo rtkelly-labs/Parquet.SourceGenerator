@@ -8,7 +8,7 @@
 
 **Tech Stack:** C# source generators, Parquet.Net 6.1.0 and legacy 4.25.0 generated APIs, xUnit/Shouldly, CSharpier, Roslyn API analyzers, checked-in generated goldens and metrics.
 
-**Spec:** GitHub issue #307 and `docs/18-API-CHANGE-CONTRACT.md`.
+**Spec:** GitHub issue #307 and `docs/quality/api-change-contract.md`.
 
 ## Global Constraints
 

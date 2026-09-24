@@ -21,7 +21,7 @@ internal static class CompoundSchema
         if (prop.Kind == PropertyKind.List)
         {
             // M3a: row-level lists standard 3-level. ListField synthesizes the optional
-            // group + repeated list wrapper with no nullability knobs (docs/15 §2.4
+            // group + repeated list wrapper with no nullability knobs (docs/internals/nested-types.md §2.4
             // semantics for groups apply to the list group too).
             string listName = Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(
                 prop.ParquetColumnName,
@@ -38,7 +38,7 @@ internal static class CompoundSchema
         if (prop.Kind != PropertyKind.Struct)
             return SchemaComponent.GetFieldCreationExpression(prop);
 
-        // Parquet.Net 6's StructField is always an optional group (docs/15 §2.4) — the
+        // Parquet.Net 6's StructField is always an optional group (docs/internals/nested-types.md §2.4) — the
         // definition ladder in CompoundMapping counts that rung unconditionally.
         string name = Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(
             prop.ParquetColumnName,

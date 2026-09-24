@@ -104,7 +104,7 @@ public sealed class ReadBuilderTests
         // The removed flat methods grew `predicate` on the stream overloads of ReadParquetAsync
         // and ReadParquetArrayAsync but never on the buffer ones, so buffer + List and buffer +
         // array were the two cells of the grid where pushdown was simply unavailable (defect 3 in
-        // docs/19). The builder routes those through the streaming core that does accept a
+        // docs/reference/api-surface.md). The builder routes those through the streaming core that does accept a
         // predicate, so the same filter is reachable from every source.
         byte[] bytes = await WriteAsync(200);
 

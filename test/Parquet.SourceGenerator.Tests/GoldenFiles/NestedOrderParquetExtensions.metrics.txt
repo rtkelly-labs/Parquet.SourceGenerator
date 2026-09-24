@@ -8,7 +8,7 @@
 # compile errors in the emitted code, METHODS emitted methods, MAXCC worst method CC,
 # ELOC_PER_MEMBER emitted executable lines per emitted public member.
 # Ordinal-sorted. CC, CL, SLOC, ELOC, DIT, ERRORS and MEMBERS are gated exactly; MI is
-# REPORTED BUT NOT GATED for generated code. See docs/22-GENERATED-CODE-METRICS.md.
+# REPORTED BUT NOT GATED for generated code. See docs/quality/generated-code-metrics.md.
 S:NestedOrderParquetExtensions | EMITTER=v6 MEMBERS=35 CC=720 CL=84 SLOC=3907 ELOC=1717 ERRORS=0 METHODS=83 MAXCC=99 ELOC_PER_MEMBER=49.1
 M:SampleDomain.Models.NestedOrderParquet.From(System.IO.Stream) | MI=90 CC=2 CL=5 DIT=- SLOC=3 ELOC=1
 M:SampleDomain.Models.NestedOrderParquet.From(System.ReadOnlyMemory<byte>) | MI=94 CC=1 CL=3 DIT=- SLOC=3 ELOC=1

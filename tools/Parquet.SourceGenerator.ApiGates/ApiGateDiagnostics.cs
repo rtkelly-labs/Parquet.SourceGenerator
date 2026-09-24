@@ -4,7 +4,7 @@ namespace Parquet.SourceGenerator.ApiGates;
 
 /// <summary>
 /// The two build-time API-contract rules. Both are errors rather than warnings on purpose: the
-/// contract in <c>docs/18-API-CHANGE-CONTRACT.md</c> is that nothing enters a governed surface
+/// contract in <c>docs/quality/api-change-contract.md</c> is that nothing enters a governed surface
 /// without appearing in a catalogue file, and a warning is something a build can carry.
 /// </summary>
 public static class ApiGateDiagnostics
@@ -38,8 +38,8 @@ public static class ApiGateDiagnostics
         isEnabledByDefault: true,
         description: "Every member of the emitted consumer API must appear in the signature-only "
             + "'.api.txt' baseline beside its golden file and carry a ledger entry. See "
-            + "docs/17-GENERATED-API-BASELINES.md for the grammar and "
-            + "docs/18-API-CHANGE-CONTRACT.md for the contract."
+            + "docs/quality/api-baselines.md for the grammar and "
+            + "docs/quality/api-change-contract.md for the contract."
     );
 
     /// <summary>PARQAPI002 — a member widened past <c>private</c> with no line in <c>src/api/seams.txt</c>.</summary>
@@ -59,6 +59,6 @@ public static class ApiGateDiagnostics
         description: "Members widened past 'private' so another component can call them are the "
             + "repository's internal seams. They are catalogued in src/api/seams.txt using the same "
             + "one-per-line grammar as the emitted API baselines. See "
-            + "docs/18-API-CHANGE-CONTRACT.md."
+            + "docs/quality/api-change-contract.md."
     );
 }

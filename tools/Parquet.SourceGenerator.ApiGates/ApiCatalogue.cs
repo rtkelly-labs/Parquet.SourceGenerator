@@ -9,7 +9,7 @@ namespace Parquet.SourceGenerator.ApiGates;
 /// into the set of signatures it declares.
 /// </summary>
 /// <remarks>
-/// Both catalogues use the grammar documented in <c>docs/17-GENERATED-API-BASELINES.md</c>: one
+/// Both catalogues use the grammar documented in <c>docs/quality/api-baselines.md</c>: one
 /// signature per line, self-contained, ordinal-sorted. Blank lines and lines beginning with
 /// <c>#</c> carry no signature — that covers both the <c>#nullable enable</c> header the baselines
 /// inherit from <c>PublicAPI.Shipped.txt</c> and the explanatory comments at the top of

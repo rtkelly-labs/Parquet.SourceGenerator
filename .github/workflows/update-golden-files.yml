@@ -2,10 +2,10 @@ name: Update Golden Code Generation Files
 
 # Refreshes every artefact the golden suite owns: the full generated sources
 # (GoldenFiles/*.g.cs), the signature-only public API baselines emitted beside them
-# (GoldenFiles/*.api.txt, see docs/17-GENERATED-API-BASELINES.md) — both written by the same
+# (GoldenFiles/*.api.txt, see docs/quality/api-baselines.md) — both written by the same
 # UPDATE_GOLDEN_FILES pass, so they cannot drift apart — and then the code metrics over both the
-# hand-written source (metrics/*.metrics.txt, docs/21-CODE-METRICS.md) and the regenerated emitted
-# source (GoldenFiles/*.metrics.txt, docs/22-GENERATED-CODE-METRICS.md). The order matters: the
+# hand-written source (metrics/*.metrics.txt, docs/quality/code-metrics.md) and the regenerated emitted
+# source (GoldenFiles/*.metrics.txt, docs/quality/generated-code-metrics.md). The order matters: the
 # metrics are measured over the golden files this job has just rewritten.
 
 on:
@@ -90,7 +90,7 @@ jobs:
             --configuration Release \
             --filter "FullyQualifiedName~GoldenCodeGenRegressionTests"
 
-      # docs/21-CODE-METRICS.md and docs/22-GENERATED-CODE-METRICS.md. Same refresh verb, same
+      # docs/quality/code-metrics.md and docs/quality/generated-code-metrics.md. Same refresh verb, same
       # commit, so a change that moves the emitted surface, the maintainability of the code that
       # emits it, and the shape of what it emits lands as one reviewable diff. This must run AFTER
       # the golden regeneration above: it measures the *.g.cs files that step writes.

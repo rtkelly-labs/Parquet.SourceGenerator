@@ -8,7 +8,7 @@
 # compile errors in the emitted code, METHODS emitted methods, MAXCC worst method CC,
 # ELOC_PER_MEMBER emitted executable lines per emitted public member.
 # Ordinal-sorted. CC, CL, SLOC, ELOC, DIT, ERRORS and MEMBERS are gated exactly; MI is
-# REPORTED BUT NOT GATED for generated code. See docs/22-GENERATED-CODE-METRICS.md.
+# REPORTED BUT NOT GATED for generated code. See docs/quality/generated-code-metrics.md.
 S:LegacyRecordParquetLegacyExtensions | EMITTER=V5 MEMBERS=6 CC=144 CL=49 SLOC=968 ELOC=294 ERRORS=0 METHODS=52 MAXCC=27 ELOC_PER_MEMBER=49.0
 M:SampleDomain.Models.LegacyRecordParquetLegacyExtensions.ApplyCompression(Parquet.ParquetWriter, Parquet.SourceGenerator.ParquetSerializerOptions) | MI=72 CC=6 CL=7 DIT=- SLOC=50 ELOC=3
 M:SampleDomain.Models.LegacyRecordParquetLegacyExtensions.BuildFormatOptions(Parquet.SourceGenerator.ParquetSerializerOptions) | MI=100 CC=1 CL=2 DIT=- SLOC=13 ELOC=1

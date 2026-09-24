@@ -36,7 +36,7 @@ internal sealed class LeafColumn
 
     /// <summary>
     /// def == MaxDef ⇔ the leaf carries a value. Every struct ancestor contributes one rung
-    /// (groups are optional regardless of the C# annotation — docs/15 §2.4) and the leaf's own
+    /// (groups are optional regardless of the C# annotation — docs/internals/nested-types.md §2.4) and the leaf's own
     /// optionality another.
     /// </summary>
     public int MaxDef { get; set; }
@@ -218,7 +218,7 @@ internal sealed class EmissionPlan
                 }
 
                 // M3b stack 2: List<POCO> — one lane column per element leaf. The element
-                // struct group (always optional per docs/15 §2.4) contributes the rung at
+                // struct group (always optional per docs/internals/nested-types.md §2.4) contributes the rung at
                 // StepDefBase[1]; an element-null entry carries that def.
                 for (int c = 0; c < element.Children.Length; c++)
                 {
@@ -355,7 +355,7 @@ internal sealed class EmissionPlan
                 continue;
             }
 
-            // Leaf. Rungs: one per ancestor struct (all optional groups, docs/15 §2.4) plus
+            // Leaf. Rungs: one per ancestor struct (all optional groups, docs/internals/nested-types.md §2.4) plus
             // the leaf's own optionality. Presence threshold for ancestor k: the def a row
             // carries when that ancestor exists and everything below it is absent.
             int ancestors = childPath.Length;

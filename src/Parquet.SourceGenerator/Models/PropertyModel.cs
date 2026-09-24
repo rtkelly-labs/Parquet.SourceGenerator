@@ -125,7 +125,7 @@ internal sealed record PropertyModel(
 
     /// <summary>
     /// Struct members: whether the nested C# type is a value type. Every Parquet group is
-    /// optional (docs/15 §2.4) so the definition-level ladder counts the rung either way, but
+    /// optional (docs/internals/nested-types.md §2.4) so the definition-level ladder counts the rung either way, but
     /// the write extraction emits the ancestor null test only for reference types — a struct
     /// member can never be null at runtime.
     /// </summary>

@@ -153,8 +153,8 @@ internal static class CodeEmitter
         }
 
         // Read entry point and builder structs (#217). Each axis of the read grid becomes a
-        // member rather than a name segment; see docs/19-PUBLIC-API-SURFACE.md. The builder is the
-        // only public read surface (#480, docs/48): the internal Read*CoreAsync methods above are
+        // member rather than a name segment; see docs/reference/api-surface.md. The builder is the
+        // only public read surface (#480, docs/design/flat-read-removal.md): the internal Read*CoreAsync methods above are
         // the implementations its terminals delegate to, and are not part of the consumer contract.
         ReadBuilderComponent.Emit(builder, model);
 
@@ -440,7 +440,7 @@ internal static class CodeEmitter
     {
         if (col.IsListLeaf)
         {
-            // List lane: values + def + rep arrays sized by written entries (docs/15 §1.2).
+            // List lane: values + def + rep arrays sized by written entries (docs/internals/nested-types.md §1.2).
             string packedL = col.PackedType;
             return $"{indent}await groupWriter.WriteAllPartsAsync<{packedL}>(\n"
                 + $"{indent}    {fieldAccess},\n"
@@ -453,7 +453,7 @@ internal static class CodeEmitter
         if (col.IsCompound)
         {
             // Compound-path leaf: packed values plus a definition ladder; the group's own
-            // optionality means even a non-nullable leaf needs levels (docs/15 §1).
+            // optionality means even a non-nullable leaf needs levels (docs/internals/nested-types.md §1).
             string packed = col.PackedType;
             return $"{indent}await groupWriter.WriteAllPartsAsync<{packed}>(\n"
                 + $"{indent}    {fieldAccess},\n"
@@ -567,7 +567,7 @@ internal static class CodeEmitter
         if (col.IsListLeaf)
         {
             // Entries run ahead of rowCount for multi-element lists: size from the column
-            // metadata and re-rent on growth (docs/15 §2.3 — values buffer must cover
+            // metadata and re-rent on growth (docs/internals/nested-types.md §2.3 — values buffer must cover
             // NumValues, the packed lane follows inside it).
             string packedL = col.PackedType;
             builder.AppendLine(

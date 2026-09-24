@@ -26,7 +26,7 @@ namespace Parquet.SourceGenerator.Tests;
 /// size-per-capability ratio is arithmetically consistent with the counts it is derived from, and
 /// that the file is in the ordinal order the artefact's determinism contract requires.
 ///
-/// See docs/22-GENERATED-CODE-METRICS.md.
+/// See docs/quality/generated-code-metrics.md.
 /// </summary>
 public sealed class GeneratedCodeMetricsBaselineTests
 {

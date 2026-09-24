@@ -84,11 +84,13 @@ If you publish numbers anywhere, include the machine and runtime they came from.
 - Modern C# with file-scoped namespaces, nullable reference types and pattern matching; format with
   `dotnet tool run csharpier`.
 - Never hold raw `ISymbol` or `SyntaxNode` references in incremental-pipeline state — pass
-  value-equatable models ([03 - Incremental Generator Pipeline](docs/03-INCREMENTAL-GENERATOR-PIPELINE.md)).
+  value-equatable models ([Incremental Generator Pipeline](./docs/internals/incremental-pipeline.md)).
 - Any change to a governed API surface needs a catalogue line and a `docs/api/LEDGER.md` entry
-  ([18 - API Change Contract](docs/18-API-CHANGE-CONTRACT.md)).
-- Scoping and deferral decisions go in [`docs/DECISIONS.md`](docs/DECISIONS.md), not a new numbered
-  document.
+  ([API Change Contract](./docs/quality/api-change-contract.md)).
+- Docs are organised by section folder (`docs/guide`, `reference`, `design`, `internals`, `quality`),
+  declared in `docs/index.md`. A new page gets a descriptive slug — no number prefix — plus
+  `description` and `order` frontmatter. Scoping and deferral decisions go in
+  [`docs/design/decisions.md`](docs/design/decisions.md), not a new page.
 
 ---
 
@@ -152,4 +154,4 @@ gh workflow run release.yml -f dry_run=true   # rehearsal
 ---
 
 ## 📄 License
-By contributing to **Parquet.SourceGenerator**, you agree that your contributions will be licensed under the [MIT License](LICENSE).
+By contributing to **Parquet.SourceGenerator**, you agree that your contributions will be licensed under the [MIT License](./LICENSE).

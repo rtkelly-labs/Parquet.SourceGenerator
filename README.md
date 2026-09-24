@@ -33,7 +33,7 @@ Zero-reflection C# source generation vs **`ParquetSerializer` v6** reflection ba
 | **Streaming Read (IAsyncEnumerable)** | 100,000 items | 12.41 ms (12.30 MB) | **5.18 ms** (**8.22 MB**) | ⚡ **2.4x faster** | 📉 **33% less memory** |
 | **Guid Serialization** | 100,000 items | 15.82 ms (17.71 MB) | **10.39 ms** (**10.70 MB**) | ⚡ **1.5x faster** | 📉 **40% less memory** |
 
-> 📌 **Note**: BenchmarkDotNet results captured on GitHub Actions. Detailed multi-scale reports (1K, 10K, 100K, 1M rows) are in [docs/BENCHMARKS.md](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/BENCHMARKS.md).
+> 📌 **Note**: BenchmarkDotNet results captured on GitHub Actions. Detailed multi-scale reports (1K, 10K, 100K, 1M rows) are in [docs/guide/benchmarks.md](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/guide/benchmarks.md).
 
 
 ## 🌐 Real-World Provenanced Dataset Benchmarks
@@ -67,7 +67,7 @@ Fixed public datasets tracked under Git LFS with full cryptographic SHA-256 data
 
 ---
 
-## 📦 Quick Start (30 Seconds)
+## 📦 Quick Start
 
 ### 1. Installation
 
@@ -106,140 +106,16 @@ public partial record UserEvent
 }
 ```
 
-### 3. Writing Parquet Files
+### 3. Write and read
 
 ```csharp
-List<UserEvent> events = GetEvents();
-using var stream = File.Create("events.parquet");
-
-// Simple write
-await events.WriteParquetAsync(stream);
-
-// Chunked streaming write in fixed 10,000 row-group chunks
-await events.WriteParquetBatchedAsync(
-    stream,
-    new ParquetSerializerOptions { RowGroupSize = 10_000 });
-
-// Stream directly from IAsyncEnumerable<T>
-IAsyncEnumerable<UserEvent> eventStream = GetAsyncEventStream();
-await eventStream.WriteParquetAsync(
-    stream,
-    new ParquetSerializerOptions { RowGroupSize = 10_000 });
+await events.WriteParquetAsync(stream);                                  // write
+List<UserEvent> read = await UserEventParquet.From(stream).ToListAsync(); // read
 ```
 
-#### Writing from data that is already columnar
-
-If the caller already holds contiguous column buffers — Arrow arrays, a query engine's column
-vectors, pre-split `ReadOnlyMemory<T>` — there is no reason to materialise POCOs first. Flat models
-also get a generated batch struct whose buffers go straight to Parquet.Net with no pooled rental and
-no copy:
-
-```csharp
-var batch = new UserEventColumnarBatch
-{
-    RowCount = rowCount,
-    Id = idBuffer,                                  // ReadOnlyMemory<int>
-    Name = nameBuffer,                              // ReadOnlyMemory<ReadOnlyMemory<char>?>
-    Score = packedScores,                           // packed non-nulls only
-    ScoreDefinitionLevels = scoreDefinitionLevels,  // 1 = present, 0 = null, one per row
-};
-
-await batch.WriteParquetAsync(stream);
-```
-
-Nullable value columns take packed values plus explicit definition levels, because that is the only
-shape Parquet.Net's `WriteAllPartsAsync` accepts without an intermediate buffer. On a 16-column
-schema this removes around 7% of end-to-end write time (the transpose it deletes); allocation is
-unchanged, since the row-oriented path's rentals come from a warm `ArrayPool`. Measured numbers, both
-GC modes, and the reasons the API is shaped this way are in
-[docs/12](docs/12-BUFFER-REUSE-AND-EXTRACTION-STRATEGIES.md#-6-direct-columnar-handoff--measured-issue-137).
-Models with struct, list or map members keep the row-oriented API only.
-
-### 4. Reading Parquet Files (Sequential & Multi-Core Parallel)
-
-```csharp
-using var stream = File.OpenRead("events.parquet");
-
-// Sequential read
-List<UserEvent> events = await UserEventParquet.From(stream).ToListAsync();
-
-// Multi-core parallel read over an in-memory byte buffer
-ReadOnlyMemory<byte> buffer = File.ReadAllBytes("events.parquet");
-List<UserEvent> fast = await UserEventParquet
-    .From(buffer)
-    .WithOptions(new ParquetSerializerOptions { MaxDegreeOfParallelism = 8 })
-    .Parallel()
-    .ToListAsync();
-
-// Low-memory streaming reader
-await foreach (var e in UserEventParquet.From(buffer).AsAsyncEnumerable())
-{
-    // Process item by item with O(1) memory
-}
-
-// Columnar (struct-of-arrays) batches — one per row group, no UserEvent ever constructed
-await foreach (var batch in UserEventParquet.From(buffer).Batches())
-{
-    ReadOnlySpan<long> ids = batch.UserIdSpan;
-    ReadOnlySpan<double> amounts = batch.AmountSpan;
-    // SIMD-friendly: the spans alias pooled buffers, valid until the next iteration
-}
-```
-
-`<Model>Parquet.From(...)` is the only generated read entry point: the source (`Stream` or
-`ReadOnlyMemory<byte>`), the execution (`.Parallel()`, buffer only), pushdown (`.Where(...)`) and
-options (`.WithOptions(...)`) are members of the builder, and the terminal (`ToListAsync`,
-`ToArrayAsync`, `AsAsyncEnumerable`, `Batches`) picks the shape. The flat `ReadParquet*Async` methods
-were removed before `0.1.0`; the mapping is in [CHANGELOG.md](CHANGELOG.md) and the decision in
-[docs/48](docs/48-FLAT-READ-REMOVAL-480.md). The `Parquet.SourceGenerator.Legacy` package has no
-builder and keeps its flat `ReadParquetAsync` / `ReadParquetArrayAsync`.
-
-`Batches()` is emitted for flat models only (no nested structs, lists or maps) and
-allocates no domain objects; the pooled column buffers are returned when the enumerator advances
-or is disposed, so nothing in a batch may outlive the loop body.
-
-### 5. Row-Group Pruning with Min/Max Statistics
-
-`.Where(...)` on the read builder takes a predicate over the statistics Parquet records in the file
-footer, from either source and for every materializing or streaming shape. A row group the zone map rules out is never opened: no page read, no decompression,
-no buffer rental.
-
-```csharp
-// Only the row groups whose [min, max] range can still hold a key >= 1000 are read.
-List<OrderEvent> recent = await OrderEventParquet
-    .From(stream)
-    .Where(meta => meta.OrderKey.MayContainAtLeast(1_000))
-    .ToListAsync();
-
-// Conjunctive filters compose; any column that cannot match prunes the whole group.
-List<OrderEvent> narrow = await OrderEventParquet
-    .From(stream)
-    .Where(meta => meta.OrderKey.MayContainBetween(1_000, 2_000)
-                && meta.Region.MayContain("emea"))
-    .ToListAsync();
-```
-
-The generated `<Model>RowGroupMetadata` struct exposes `RowGroupIndex`, `RowCount` and one
-`ParquetColumnStatistics<T>` per integral, floating-point or string column, carrying `Min`, `Max`,
-`NullCount`, `DistinctCount` and the `May*` range helpers. Only the generated reader constructs it
-(its constructor is `internal`); a predicate just reads it. Pruning is conservative: a row group
-whose statistics are incomplete is always read.
-
-### 6. Custom Configuration (`ParquetSerializerOptions`)
-
-```csharp
-var options = new ParquetSerializerOptions
-{
-    RowGroupSize = 25_000,
-    MaxDegreeOfParallelism = 8,
-    CompressionMethod = ParquetCompressionMethod.Zstd,
-    CompressionLevel = ParquetCompressionLevel.Fastest
-};
-
-await events.WriteParquetBatchedAsync(stream, options: options);
-```
-
-Supported codecs: `None`, `Snappy` (default), `Gzip`, `Lz4`, `Brotli`, and `Zstd`.
+Batched and `IAsyncEnumerable<T>` writes, columnar batches, parallel and streaming reads, row-group
+pruning and options are covered in
+**[Reading & Writing](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/guide/reading-and-writing.md)**.
 
 ---
 
@@ -266,7 +142,7 @@ The Roslyn analyzer enforces correct usage at compile time, catching errors befo
 public record Metric(int Id); 
 ```
 
-Full details on every diagnostic rule, examples, and fixes are documented in **[`docs/13-COMPILER-DIAGNOSTICS.md`](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/13-COMPILER-DIAGNOSTICS.md)**:
+Full details on every diagnostic rule, examples, and fixes are documented in **[`docs/reference/diagnostics.md`](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/reference/diagnostics.md)**:
 - `PARQ001`: Type must be declared `partial`
 - `PARQ002`: Duplicate `[ParquetColumn]` column names detected
 - `PARQ005`: Invalid `[ParquetDecimal]` precision or scale
@@ -308,7 +184,7 @@ To enable Native AOT in your application:
 </PropertyGroup>
 ```
 
-> 📖 For a deep dive into CoreCLR type system mechanics, `Nullable<T>` value type sharing, and runtime directives, see **[`docs/10-NATIVE-AOT-GUIDE.md`](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/10-NATIVE-AOT-GUIDE.md)**.
+> 📖 For a deep dive into CoreCLR type system mechanics, `Nullable<T>` value type sharing, and runtime directives, see **[`docs/guide/native-aot.md`](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/guide/native-aot.md)**.
 
 ---
 
@@ -338,7 +214,7 @@ OrderEventParquetExtensions.WriteParquetRowGroupAsync(writer, recordBatch);
   `ArrayPool` rental. Nullable columns derive their definition levels from the Arrow validity
   bitmap and produce byte-identical files to the POCO path.
 - **Supported floor:** Apache.Arrow `23.0.0`. Full mapping table and rejection rules in
-  **[`docs/14-COMPATIBILITY-MATRIX.md`](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/14-COMPATIBILITY-MATRIX.md#apache-arrow-recordbatch-ingestion-experimental-177)**.
+  **[`docs/reference/compatibility.md`](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/reference/compatibility.md#apache-arrow-recordbatch-ingestion-experimental-177)**.
 
 ---
 
@@ -347,7 +223,7 @@ OrderEventParquetExtensions.WriteParquetRowGroupAsync(writer, recordBatch);
 | Capability | Status | Notes |
 |:--- |:---:|:--- |
 | **Supported Types** | `Guid`, `DateTime`, `TimeSpan`, `Enum`, `decimal`, `byte[]`, `string`, numeric primitives, `Nullable<T>` | Standard flat analytical schemas. |
-| **Nested types & lists** | 🧪 Modern (v6) only | Struct and list shapes covered by the golden corpus; classic (V5) is flat-only; maps are unsupported. See [DECISIONS #176](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/DECISIONS.md#176--nested-types-by-backend). |
+| **Nested types & lists** | 🧪 Modern (v6) only | Struct and list shapes covered by the golden corpus; classic (V5) is flat-only; maps are unsupported. See [DECISIONS #176](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/design/decisions.md#176--nested-types-by-backend). |
 | **`DateTimeOffset`** | ❌ Unsupported | Parquet has no direct representation; use `DateTime` + offset column. |
 | **Positional Records** | ❌ Unsupported | Constructor with parameters reported as `PARQ008`. Use nominal records with `{ get; init; }`. |
 | **.NET Framework (net472)** | ✅ Supported via V5 | Use `Parquet.SourceGenerator.V5` for Parquet.Net 4.x/5.x support. |
@@ -355,7 +231,7 @@ OrderEventParquetExtensions.WriteParquetRowGroupAsync(writer, recordBatch);
 | **Generator feature level** | ✅ Configurable | Defaults to `Level2CompoundPreview`; pin `Level1Flat` or opt into `Level3ModernCSharp` with `ParquetGeneratorFeatureLevel`. |
 | **V5 generated API** | ✅ Declared core subset | V5 intentionally exposes flat read/write, batched write, row-group write, and schema; modern builder, filtering, parallel, streaming, column-batch, and Arrow members are v6-only. |
 
-> Current limitations and the closed audit are in **[`docs/07-KNOWN-LIMITATIONS.md`](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/07-KNOWN-LIMITATIONS.md)**.
+> Current limitations and the closed audit are in **[`docs/guide/limitations.md`](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/guide/limitations.md)**.
 
 ---
 
@@ -363,13 +239,13 @@ OrderEventParquetExtensions.WriteParquetRowGroupAsync(writer, recordBatch);
 
 > 🌐 **Interactive Documentation & API Catalog**: Visit [docs.ryankelly.dev/parquet-sourcegenerator](https://docs.ryankelly.dev/parquet-sourcegenerator) for interactive guides, live search, architecture diagrams, and full generated API symbol catalogs.
 
-Start at the **[documentation index](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/INDEX.md)**. The most-used pages:
+Start at the **[documentation index](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/index.md)**. The most-used pages:
 
-- **[02 - API Design & Attributes](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/02-API-DESIGN-AND-ATTRIBUTES.md)** — attributes and feature levels
-- **[13 - Compiler Diagnostics](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/13-COMPILER-DIAGNOSTICS.md)** — every `PARQ` rule, cause and fix
-- **[14 - Compatibility Matrix](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/14-COMPATIBILITY-MATRIX.md)** — supported types, encodings and interop
-- **[07 - Known Limitations](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/07-KNOWN-LIMITATIONS.md)** — what does not work today
-- **[Benchmarks](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/BENCHMARKS.md)** — full performance report
+- **[Attributes & Configuration](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/guide/attributes.md)** — attributes and feature levels
+- **[Compiler Diagnostics](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/reference/diagnostics.md)** — every `PARQ` rule, cause and fix
+- **[Compatibility Matrix](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/reference/compatibility.md)** — supported types, encodings and interop
+- **[Known Limitations](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/guide/limitations.md)** — what does not work today
+- **[Benchmarks](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/guide/benchmarks.md)** — full performance report
 
 ---
 

@@ -102,7 +102,7 @@ dotnet_diagnostic.category-Meziantou.severity = none
 
 
 # --------------------------------------------------------------------------------------------
-# Code metrics gates (#251, docs/21-CODE-METRICS.md).
+# Code metrics gates (#251, docs/quality/code-metrics.md).
 #
 # Scoped to src/ deliberately. Test, benchmark, sample and tooling code is measured by nothing
 # here: a table-driven test method with forty cases is not a maintainability problem, and gating

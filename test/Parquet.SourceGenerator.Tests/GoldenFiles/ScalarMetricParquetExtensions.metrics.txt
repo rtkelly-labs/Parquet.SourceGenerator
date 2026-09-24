@@ -8,7 +8,7 @@
 # compile errors in the emitted code, METHODS emitted methods, MAXCC worst method CC,
 # ELOC_PER_MEMBER emitted executable lines per emitted public member.
 # Ordinal-sorted. CC, CL, SLOC, ELOC, DIT, ERRORS and MEMBERS are gated exactly; MI is
-# REPORTED BUT NOT GATED for generated code. See docs/22-GENERATED-CODE-METRICS.md.
+# REPORTED BUT NOT GATED for generated code. See docs/quality/generated-code-metrics.md.
 S:ScalarMetricParquetExtensions | EMITTER=v6 MEMBERS=64 CC=674 CL=83 SLOC=3471 ELOC=1439 ERRORS=0 METHODS=104 MAXCC=79 ELOC_PER_MEMBER=22.5
 M:SampleDomain.Models.ScalarMetricParquet.From(System.IO.Stream) | MI=90 CC=2 CL=5 DIT=- SLOC=3 ELOC=1
 M:SampleDomain.Models.ScalarMetricParquet.From(System.ReadOnlyMemory<byte>) | MI=94 CC=1 CL=3 DIT=- SLOC=3 ELOC=1

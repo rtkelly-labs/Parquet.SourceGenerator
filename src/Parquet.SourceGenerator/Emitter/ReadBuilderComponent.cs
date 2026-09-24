@@ -9,7 +9,7 @@ namespace Parquet.SourceGenerator.Emitter;
 /// Reads used to encode source, shape and execution into method names, with pushdown appended as a
 /// parameter to some cells and not others — twelve members for a four-axis grid, heading for
 /// forty-five as #146, #148 and #178 land. Naming a cross-product does not scale; expressing each
-/// axis as a member does. See <c>docs/19-PUBLIC-API-SURFACE.md</c>.
+/// axis as a member does. See <c>docs/reference/api-surface.md</c>.
 /// </para>
 /// <para>
 /// The builders are <b>type-state</b> rather than one struct with runtime validation. A cell that
@@ -251,7 +251,7 @@ internal static class ReadBuilderComponent
     /// The filtered source. Pushdown reaches every shape here, including the buffer + <c>List</c>
     /// and buffer + array cells the removed flat methods never grew a predicate for: those route
     /// through the streaming core that does accept one and collect, which is the same rows by the same
-    /// pruning, rather than leaving the grid unevenly populated (defect 3 in docs/17).
+    /// pruning, rather than leaving the grid unevenly populated (defect 3 in docs/quality/api-baselines.md).
     /// </summary>
     private static void EmitFilteredSource(StringBuilder builder, TargetClassModel model)
     {

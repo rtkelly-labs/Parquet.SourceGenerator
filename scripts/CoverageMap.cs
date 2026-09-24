@@ -22,10 +22,10 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 //
 // Usage:
 //   dotnet run scripts/CoverageMap.cs             # compare the checked-in map
-//   dotnet run scripts/CoverageMap.cs -- --update # refresh docs/28-COVERAGE-MAP.md
+//   dotnet run scripts/CoverageMap.cs -- --update # refresh docs/reference/coverage-map.md
 // -----------------------------------------------------------------------------
 
-const string OutputPath = "docs/28-COVERAGE-MAP.md";
+const string OutputPath = "docs/reference/coverage-map.md";
 
 string repoRoot = FindRepositoryRoot();
 Directory.SetCurrentDirectory(repoRoot);
@@ -377,7 +377,7 @@ static int RiskRank(string risk) =>
     : 3;
 
 static string FormatEvidence(IReadOnlyList<string> paths) =>
-    string.Join("<br>", paths.Select(path => $"[`{path}`](../{path})"));
+    string.Join("<br>", paths.Select(path => $"[`{path}`](../../{path})"));
 
 static string FormatDial(IReadOnlySet<string> kinds) =>
     kinds.Count == 0

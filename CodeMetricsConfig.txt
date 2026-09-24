@@ -1,4 +1,4 @@
-# Code metrics thresholds for the hand-written code under src/ (docs/21-CODE-METRICS.md, #251).
+# Code metrics thresholds for the hand-written code under src/ (docs/quality/code-metrics.md, #251).
 #
 # Read by the CA1502 / CA1505 / CA1506 analyzers (enabled at `warning` for [src/**.cs] in
 # .editorconfig; CI's `-warnaserror` promotes them), and validated by scripts/CodeMetrics.cs on every CI

@@ -18,7 +18,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 // Layer 3 of #251. Measures token-level duplication across the hand-written sources under
 // src/, checks it in as a deterministic ordinal artifact (metrics/duplication.txt), and gates
 // CI on drift — the `*.api.txt` / `metrics/*.metrics.txt` pattern layers 1 and 2 established.
-// See docs/23-DUPLICATION.md for the design and its known limits.
+// See docs/quality/duplication.md for the design and its known limits.
 //
 // What it computes: for every method body, a stream of normalized token units (identifiers
 // collapse to a placeholder, keywords and operators keep their syntax kind, literals keep
@@ -33,7 +33,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 // Gating on emitted duplication would produce a permanent false positive, and "reported but
 // never gated" was rejected too: there is no decision the number could inform.
 //
-// Calibration (docs/23-DUPLICATION.md): the settings below were chosen against the repo's
+// Calibration (docs/quality/duplication.md): the settings below were chosen against the repo's
 // demonstrated failure — the hand-rolled copies of ResolveSchemaField that all broke when
 // #196 added a parameter. Run `--root <checkout-of-8d4a097>/src --report -` and the detector
 // names the cross-file pair. A configuration that cannot find the copies that already broke
@@ -255,7 +255,7 @@ foreach (string line in added)
 foreach (string line in removed)
     message.AppendLine($"  - gone/shrunk cluster:  {line}");
 message.AppendLine(
-    "Either the duplication is real (fold it, or record the reason in docs/23-DUPLICATION.md)\n"
+    "Either the duplication is real (fold it, or record the reason in docs/quality/duplication.md)\n"
         + "or the baseline is stale: UPDATE_GOLDEN_FILES=true dotnet run scripts/Duplication.cs"
 );
 Console.Error.Write(message);
@@ -398,7 +398,7 @@ static string RenderArtifact(List<Cluster> clusters, int totalTokens)
     sb.AppendLine($"# K: cluster — duplicated token span x copies — ordinal-sorted method ids.");
     sb.AppendLine($"# Method ids are RELATIVE-PATH:Type.Method. No line numbers: a refactor that");
     sb.AppendLine("# moves code without changing overlap must not trip this gate.");
-    sb.AppendLine("# Emitted/generated code is out of scope by design (docs/23-DUPLICATION.md).");
+    sb.AppendLine("# Emitted/generated code is out of scope by design (docs/quality/duplication.md).");
     sb.AppendLine($"# totals: clusters={clusters.Count} duplicated-tokens={totalTokens}");
     foreach (Cluster c in clusters)
         sb.AppendLine($"K | span={c.Span} copies={c.Copies} | {c.Key}");

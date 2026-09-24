@@ -8,7 +8,7 @@ namespace Parquet.SourceGenerator.Tests;
 /// <summary>
 /// Unit tests for the two pieces of the API change contract that are pure logic: reading a
 /// catalogue file, and deciding whether an <c>**Unapproved-by-design:**</c> ledger entry covers a
-/// signature (<c>docs/18-API-CHANGE-CONTRACT.md</c>).
+/// signature (<c>docs/quality/api-change-contract.md</c>).
 /// </summary>
 /// <remarks>
 /// The gates themselves are proven by the build: <c>PARQAPI001</c> runs over
