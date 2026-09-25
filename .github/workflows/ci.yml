@@ -552,12 +552,12 @@ jobs:
           BASE_LABEL: ${{ steps.base.outputs.label || github.base_ref }}
           BASE_SOURCE: ${{ steps.base.outputs.source }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        # Two passes: the patch and the full HTML diff first, then — once the HTML is uploaded and
+        # has a download URL — the comment, which links to it.
         run: |
           args=(
             --base "$RUNNER_TEMP/derived/base"
             --head "$RUNNER_TEMP/derived/head"
-            --comment "$RUNNER_TEMP/derived/review-diff.md"
-            --patch "$RUNNER_TEMP/derived/review.patch"
             --base-label "$BASE_LABEL"
             --artifact-url "$RUN_URL#artifacts"
             --head-status "${HEAD_STATUS:-skipped}"
@@ -566,7 +566,33 @@ jobs:
           if [ -n "$BASE_SOURCE" ]; then
             args+=(--base-source "$BASE_SOURCE")
           fi
-          dotnet run scripts/RenderDerivedDiff.cs -- "${args[@]}"
+          printf '%s\n' "${args[@]}" > "$RUNNER_TEMP/render-args"
+          dotnet run scripts/RenderDerivedDiff.cs -- "${args[@]}" \
+            --patch "$RUNNER_TEMP/derived/review.patch" \
+            --html "$RUNNER_TEMP/derived-full-diff.html"
+
+      # Its own artifact, uploaded unzipped (archive: false, which names it after the file), so the
+      # comment's link downloads the page itself rather than a zip. Written only when there is a diff.
+      - name: Upload Full Diff (HTML)
+        id: html
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          path: ${{ runner.temp }}/derived-full-diff.html
+          archive: false
+          if-no-files-found: ignore
+
+      - name: Render Review Comment
+        if: always() && github.event_name == 'pull_request'
+        env:
+          HTML_URL: ${{ steps.html.outputs.artifact-url }}
+        run: |
+          mapfile -t args < "$RUNNER_TEMP/render-args"
+          if [ -n "$HTML_URL" ]; then
+            args+=(--html-url "$HTML_URL")
+          fi
+          dotnet run scripts/RenderDerivedDiff.cs -- "${args[@]}" \
+            --comment "$RUNNER_TEMP/derived/review-diff.md"
           cat "$RUNNER_TEMP/derived/review-diff.md" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload Derived Outputs

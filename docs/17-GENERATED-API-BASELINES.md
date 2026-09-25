@@ -204,10 +204,15 @@ passes only when both succeed, so the gates below block a merge:
    Generated-code metrics → Duplication → Hand-written code metrics (src/) → Call graph → Other
    (collapsed). The root change reads first; the numbers that follow from it come after. GitHub caps
    a comment at 65,536 characters, so per-file and total budgets apply, and anything past them is
-   named with its line counts and left to the artifact. The body depends only on the two trees,
-   plus the run link and baseline source in its footer.
-4. Both trees, the full `review.patch` and the rendered `review-diff.md` are uploaded as the
-   `derived-outputs` artifact, and the diff is appended to the job's step summary.
+   named with its line counts — "too large for a comment" when its own diff is over the per-file
+   budget, "comment limit reached" when earlier sections used up the comment — and linked to the
+   full HTML diff. The body depends only on the two trees, plus the links and baseline source.
+4. The same script writes the **full diff as one self-contained HTML page**: every changed file
+   in the same section order, with no budget, line numbers, a contents list and expand/collapse
+   all; nothing is fetched when it opens. It is uploaded unzipped as its own artifact,
+   `derived-full-diff.html` (`archive: false`), so the link at the top of the comment downloads the
+   page itself. Both trees, the full `review.patch` and the rendered `review-diff.md` are uploaded
+   as the `derived-outputs` artifact, and the diff is appended to the job's step summary.
 5. The job creates, or edits in place, **one** sticky comment on the pull request, marked
    `<!-- derived-review-diff -->`. It is updated on every run, including failed ones: a head that
    failed its gates, or a base that could not be produced, replaces the previous diff with a
