@@ -5,20 +5,28 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Text;
+using System.Text.RegularExpressions;
 
 // -----------------------------------------------------------------------------
 // RenderDerivedDiff.cs
 //
 // Diffs two trees written by scripts/DerivedOutputs.cs — the pull request's merge base and its
-// head — and renders the result as the Markdown body of the sticky PR comment, plus the full
-// unified patch for the `derived-outputs` artifact.
+// head — and renders the result three ways: the Markdown body of the sticky PR comment, the full
+// unified patch for the `derived-outputs` artifact, and a self-contained HTML page of the full diff
+// (no scripts or styles loaded from anywhere) that CI uploads unzipped, so the comment can link to
+// one downloadable file.
 //
 // The comment is ordered so the root change reads first: the emitted public API (a signature
 // added, removed or changed), then the emitted code, then the numbers that follow from it
 // (generated-code metrics, src/ metrics, duplication, call graph). The API section is expanded;
 // everything else is collapsed. GitHub caps a comment at 65,536 characters, so per-file and total
-// budgets apply; anything past them is named with its line counts and left to the artifact.
+// budgets apply; anything past them is named with its line counts and linked to the HTML page,
+// which has no budget: every changed file, in the same section order.
+//
+// Two passes, because the page's download URL exists only once it is uploaded: first --patch and
+// --html, then --comment with --html-url. Each pass writes only the outputs it is given.
 //
 // The comment always describes the latest run, so it is also rendered when there is nothing to
 // diff: --head-status other than `success` (the head failed its gates) and --base-status other
@@ -26,9 +34,12 @@ using System.Text;
 // body that says so, rather than leaving an earlier run's diff standing as if it were current.
 //
 // Usage:
-//   dotnet run scripts/RenderDerivedDiff.cs -- --base <dir> --head <dir> --comment <file>
-//       [--patch <file>] [--base-label <text>] [--base-source <text>] [--artifact-url <url>]
+//   dotnet run scripts/RenderDerivedDiff.cs -- --base <dir> --head <dir>
+//       [--comment <file>] [--patch <file>] [--html <file>] [--html-url <url>]
+//       [--base-label <text>] [--base-source <text>] [--artifact-url <url>]
 //       [--head-status <outcome>] [--base-status <outcome>]
+// At least one of --comment, --patch and --html. With a head or base that did not succeed there is
+// no diff: --comment still gets a body saying so, --patch and --html are not written.
 // Exit codes: 0 rendered (whether or not anything changed), 2 usage.
 // -----------------------------------------------------------------------------
 
@@ -37,10 +48,58 @@ const int CommentBudget = 60_000;
 const int FileBudget = 12_000;
 const string OtherSection = "Other";
 
+// Inline so the page opens offline, from a download, with nothing else beside it.
+const string HtmlStyle = """
+    :root { color-scheme: light dark; --bg: #ffffff; --fg: #1f2328; --muted: #59636e;
+      --line: #d1d9e0; --add: #dafbe1; --add-fg: #116329; --del: #ffebe9; --del-fg: #a40e26;
+      --hunk: #ddf4ff; --head: #f6f8fa; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #0d1117; --fg: #e6edf3; --muted: #9198a1;
+      --line: #3d444d; --add: #12261e; --add-fg: #3fb950; --del: #25171c; --del-fg: #f85149;
+      --hunk: #121d2f; --head: #151b23; } }
+    * { box-sizing: border-box; }
+    body { margin: 0 auto; max-width: 1200px; padding: 16px; background: var(--bg); color: var(--fg);
+      font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    code, table.diff { font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    h1 { font-size: 20px; } h2 { font-size: 16px; margin-top: 32px; }
+    .meta { color: var(--muted); }
+    .a { color: var(--add-fg); } .d { color: var(--del-fg); } .st { color: var(--muted); }
+    table.summary { border-collapse: collapse; margin-bottom: 12px; }
+    table.summary th, table.summary td { border: 1px solid var(--line); padding: 4px 10px; }
+    table.summary td:not(:first-child) { text-align: right; }
+    ul.toc { columns: 2 360px; padding-left: 18px; }
+    details { border: 1px solid var(--line); border-radius: 6px; margin: 8px 0; overflow: hidden; }
+    summary { background: var(--head); padding: 6px 10px; cursor: pointer; }
+    table.diff { border-collapse: collapse; display: block; overflow-x: auto; }
+    table.diff td { padding: 0 8px; white-space: pre; vertical-align: top; }
+    table.diff td:nth-child(-n+2) { color: var(--muted); text-align: right; user-select: none;
+      min-width: 48px; border-right: 1px solid var(--line); }
+    table.diff td:last-child { width: 100%; }
+    tr.a td:last-child { background: var(--add); } tr.d td:last-child { background: var(--del); }
+    tr.h td { background: var(--hunk); color: var(--muted); } tr.m td { color: var(--muted); }
+    button { font: inherit; padding: 2px 10px; }
+
+    """;
+const string HtmlScript = """
+    for (const b of document.querySelectorAll("button[data-open]")) {
+      b.addEventListener("click", () => {
+        for (const d of document.querySelectorAll("details")) d.open = b.dataset.open === "1";
+      });
+    }
+    const reveal = () => {
+      const t = location.hash && document.getElementById(location.hash.slice(1));
+      if (t && t.tagName === "DETAILS") t.open = true;
+    };
+    addEventListener("hashchange", reveal);
+    reveal();
+
+    """;
+
 string? baseDir = null;
 string? headDir = null;
 string? commentPath = null;
 string? patchPath = null;
+string? htmlPath = null;
+string? htmlUrl = null;
 string baseLabel = "base";
 string? baseSource = null;
 string? artifactUrl = null;
@@ -66,6 +125,12 @@ for (int i = 1; i < argv.Length; i++)
         case "--patch":
             patchPath = Next();
             break;
+        case "--html":
+            htmlPath = Next();
+            break;
+        case "--html-url":
+            htmlUrl = Next();
+            break;
         case "--base-label":
             baseLabel = Next();
             break;
@@ -87,10 +152,14 @@ for (int i = 1; i < argv.Length; i++)
     }
 }
 
-if (baseDir is null || headDir is null || commentPath is null)
+if (
+    baseDir is null
+    || headDir is null
+    || (commentPath is null && patchPath is null && htmlPath is null)
+)
 {
     Console.Error.WriteLine(
-        "Usage: RenderDerivedDiff.cs --base <dir> --head <dir> --comment <file> [--patch <file>] [--base-label <text>] [--base-source <text>] [--artifact-url <url>] [--head-status <outcome>] [--base-status <outcome>]"
+        "Usage: RenderDerivedDiff.cs --base <dir> --head <dir> [--comment <file>] [--patch <file>] [--html <file>] [--html-url <url>] [--base-label <text>] [--base-source <text>] [--artifact-url <url>] [--head-status <outcome>] [--base-status <outcome>]"
     );
     return 2;
 }
@@ -101,6 +170,12 @@ string artifactLine = artifactUrl is null
 
 if (headStatus != "success")
 {
+    if (commentPath is null)
+    {
+        Console.WriteLine($"Head status {headStatus}; no diff to write.");
+        return 0;
+    }
+
     WriteComment(
         "## Derived output: not produced\n\n"
             + $"Producing the derived outputs for this PR ended with `{headStatus}`, so there is no "
@@ -114,6 +189,12 @@ if (headStatus != "success")
 
 if (baseStatus != "success")
 {
+    if (commentPath is null)
+    {
+        Console.WriteLine($"Base status {baseStatus}; no diff to write.");
+        return 0;
+    }
+
     WriteComment(
         $"## Derived output: no baseline for `{baseLabel}`\n\n"
             + "This PR's derived outputs were produced and passed their gates, but the merge base's "
@@ -237,12 +318,32 @@ if (patchPath is not null)
     );
 }
 
+if (htmlPath is not null)
+{
+    File.WriteAllText(htmlPath, RenderHtml(), new UTF8Encoding(false));
+}
+
+if (commentPath is null)
+{
+    Console.WriteLine($"{changes.Count} derived file(s) differ from {baseLabel}.");
+    return 0;
+}
+
+string fullDiffLink = htmlUrl is null ? "the artifact" : $"the [full diff]({htmlUrl})";
+
 var body = new StringBuilder();
 body.Append("## Derived output: this PR vs `").Append(baseLabel).Append("`\n\n");
 body.Append(
     "Emitted code, its public API, code metrics and the call graph are generated from the code on "
         + "every run and are not checked in. This is how they differ from the merge base.\n\n"
 );
+if (htmlUrl is not null && changes.Count > 0)
+{
+    body.Append(
+        $"**[Full diff (HTML)]({htmlUrl})**: every changed file, nothing left out. It downloads as "
+            + "one file; open it in a browser.\n\n"
+    );
+}
 
 if (changes.Count == 0)
 {
@@ -282,12 +383,22 @@ else
             string block =
                 (section.Expanded ? "<details open>" : "<details>")
                 + $"<summary>{label}</summary>\n\n````diff\n{diffBody.TrimEnd('\n')}\n````\n\n</details>\n\n";
-            if (diffBody.Length > FileBudget || body.Length + block.Length > CommentBudget)
+            // Two different reasons, named separately: a file whose own diff is over its budget,
+            // and a small one left out only because earlier sections used up the comment.
+            string? reason =
+                diffBody.Length > FileBudget ? "too large for a comment"
+                : body.Length + block.Length > CommentBudget ? "comment limit reached"
+                : null;
+            if (reason is not null)
             {
                 omitted.Add(change);
                 body.Append("- ")
                     .Append(label)
-                    .Append(" — too large for a comment; see the artifact\n\n");
+                    .Append(" — ")
+                    .Append(reason)
+                    .Append("; in ")
+                    .Append(fullDiffLink)
+                    .Append("\n\n");
                 continue;
             }
 
@@ -298,7 +409,8 @@ else
     if (omitted.Count > 0)
     {
         body.Append(
-            $"> {omitted.Count} file diff(s) were left out to fit GitHub's comment limit.\n\n"
+            $"> {omitted.Count} file diff(s) were left out to fit GitHub's comment limit; "
+                + $"{fullDiffLink} has all of them.\n\n"
         );
     }
 }
@@ -308,6 +420,150 @@ Console.WriteLine($"{changes.Count} derived file(s) differ from {baseLabel}; wro
 return 0;
 
 string SectionOf(string relative) => sections.First(s => s.Owns(relative)).Title;
+
+// The full diff as one self-contained page: a summary table and contents linking to every file,
+// then each section with every file's diff in full — line numbers, additions and removals marked.
+// Nothing is fetched when it opens, and it carries no timestamp, so the same two trees always
+// produce the same bytes. The API section starts expanded, like the comment.
+string RenderHtml()
+{
+    var h = new StringBuilder();
+    h.Append("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n")
+        .Append("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n")
+        .Append("<title>Derived output diff vs ")
+        .Append(Html(baseLabel))
+        .Append("</title>\n<style>\n")
+        .Append(HtmlStyle)
+        .Append("</style>\n</head>\n<body>\n<header>\n<h1>Derived output: this PR vs <code>")
+        .Append(Html(baseLabel))
+        .Append("</code></h1>\n");
+    if (baseSource is not null)
+    {
+        // The source is written as Markdown for the comment; its `code` spans become <code> here.
+        h.Append("<p class=\"meta\">Merge-base outputs: ")
+            .Append(Regex.Replace(Html(baseSource), "`([^`]*)`", "<code>$1</code>"))
+            .Append(".</p>\n");
+    }
+
+    if (changes.Count == 0)
+    {
+        h.Append(
+            "<p><strong>No derived output changed.</strong></p>\n</header>\n</body>\n</html>\n"
+        );
+        return h.ToString();
+    }
+
+    h.Append("<p class=\"controls\"><button type=\"button\" data-open=\"1\">Expand all</button> ")
+        .Append("<button type=\"button\" data-open=\"0\">Collapse all</button></p>\n</header>\n")
+        .Append("<nav>\n<table class=\"summary\">\n<thead><tr><th></th><th>Files</th><th>+</th>")
+        .Append("<th>−</th></tr></thead>\n<tbody>\n");
+    var owned = sections
+        .Select(s => (Section: s, Files: changes.Where(c => SectionOf(c.Path) == s.Title).ToList()))
+        .Where(s => s.Files.Count > 0)
+        .ToList();
+    foreach (var (section, files) in owned)
+    {
+        h.Append("<tr><td><a href=\"#")
+            .Append(Slug("s-" + section.Title))
+            .Append("\">")
+            .Append(Html(section.Title))
+            .Append("</a></td><td>")
+            .Append(files.Count)
+            .Append("</td><td class=\"a\">+")
+            .Append(files.Sum(c => c.Added))
+            .Append("</td><td class=\"d\">−")
+            .Append(files.Sum(c => c.Removed))
+            .Append("</td></tr>\n");
+    }
+
+    h.Append("</tbody>\n</table>\n<ul class=\"toc\">\n");
+    foreach (FileChange change in owned.SelectMany(s => s.Files))
+    {
+        h.Append("<li><a href=\"#")
+            .Append(Slug("f-" + change.Path))
+            .Append("\"><code>")
+            .Append(Html(change.Path))
+            .Append("</code></a> <span class=\"a\">+")
+            .Append(change.Added)
+            .Append("</span> <span class=\"d\">−")
+            .Append(change.Removed)
+            .Append("</span></li>\n");
+    }
+
+    h.Append("</ul>\n</nav>\n<main>\n");
+    foreach (var (section, files) in owned)
+    {
+        h.Append("<h2 id=\"")
+            .Append(Slug("s-" + section.Title))
+            .Append("\">")
+            .Append(Html(section.Title))
+            .Append("</h2>\n");
+        foreach (FileChange change in files)
+        {
+            h.Append(section.Expanded ? "<details open id=\"" : "<details id=\"")
+                .Append(Slug("f-" + change.Path))
+                .Append("\"><summary><code>")
+                .Append(Html(change.Path))
+                .Append("</code> <span class=\"st\">")
+                .Append(change.Status)
+                .Append("</span> <span class=\"a\">+")
+                .Append(change.Added)
+                .Append("</span> <span class=\"d\">−")
+                .Append(change.Removed)
+                .Append("</span></summary>\n<table class=\"diff\">\n");
+            AppendDiffRows(h, StripHeader(change.Patch));
+            h.Append("</table>\n</details>\n");
+        }
+    }
+
+    h.Append("</main>\n<script>\n").Append(HtmlScript).Append("</script>\n</body>\n</html>\n");
+    return h.ToString();
+}
+
+static void AppendDiffRows(StringBuilder h, string hunks)
+{
+    int oldLine = 0;
+    int newLine = 0;
+    foreach (string line in hunks.Split('\n'))
+    {
+        Match header = Regex.Match(line, @"^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@");
+        if (header.Success)
+        {
+            oldLine = int.Parse(header.Groups[1].Value);
+            newLine = int.Parse(header.Groups[2].Value);
+            h.Append("<tr class=\"h\"><td></td><td></td><td>")
+                .Append(Html(line))
+                .Append("</td></tr>\n");
+            continue;
+        }
+
+        if (line.Length == 0)
+        {
+            continue;
+        }
+
+        (string css, string left, string right) = line[0] switch
+        {
+            '+' => ("a", "", (newLine++).ToString()),
+            '-' => ("d", (oldLine++).ToString(), ""),
+            '\\' => ("m", "", ""),
+            _ => ("c", (oldLine++).ToString(), (newLine++).ToString()),
+        };
+        h.Append("<tr class=\"")
+            .Append(css)
+            .Append("\"><td>")
+            .Append(left)
+            .Append("</td><td>")
+            .Append(right)
+            .Append("</td><td>")
+            .Append(Html(line))
+            .Append("</td></tr>\n");
+    }
+}
+
+static string Html(string text) => WebUtility.HtmlEncode(text);
+
+static string Slug(string text) => Regex.Replace(text.ToLowerInvariant(), "[^a-z0-9]+", "-");
 
 // Every body starts with the marker the sticky-comment step finds it by, and ends by naming where
 // the full trees are and where the baseline came from, so the body depends only on the two trees
