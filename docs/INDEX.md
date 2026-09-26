@@ -72,6 +72,8 @@ The documentation is organized into three distinct tiers based on audience and i
 
 ### 🔬 Internals & Engineering Spikes
 
+The [artifact-backed baseline approval proposal](./ARTIFACT-BACKED-BASELINES.md) builds on the current derived-output review workflow. Its [prior-art comparison](./BASELINE-APPROVAL-PRIOR-ART.md) distinguishes committed, hosted, and CI-artifact references. The approval gate is not implemented.
+
 1. **[01 - Vision & Architecture](./01-VISION-AND-ARCHITECTURE.md)**
    - High-throughput zero-reflection design and project philosophy.
 
