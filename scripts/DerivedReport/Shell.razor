@@ -1,0 +1,33 @@
+@*
+    The page frame both views share: one self-contained document. report.css and report.js from
+    beside the entry script are inlined; nothing is fetched when the page opens.
+*@
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>@Title</title>
+        <style>@((MarkupString)PageAssets.Css)</style>
+    </head>
+    <body>
+        <div class="layout">
+            @ChildContent
+        </div>
+        @if (Interactive)
+        {
+            <script>@((MarkupString)PageAssets.Js)</script>
+        }
+    </body>
+</html>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = "";
+
+    /// <summary>False for a page with nothing to navigate, which then carries no script.</summary>
+    [Parameter]
+    public bool Interactive { get; set; } = true;
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+}

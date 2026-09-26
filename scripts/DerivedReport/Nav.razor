@@ -1,0 +1,28 @@
+@*
+    The sidebar: filter, expand/collapse, wrap and key help above the per-section file lists.
+    report.js finds a file's link by matching its #id to the file's <details> id.
+*@
+<nav aria-label="Files">
+    <div class="tools">
+        <input id="filter"
+               type="search"
+               placeholder="Filter paths"
+               aria-label="Filter files by path"
+               autocomplete="off"
+               spellcheck="false" />
+        <button type="button" data-open="1">Expand all</button>
+        <button type="button" data-open="0">Collapse all</button>
+        <button type="button" id="wrap" aria-pressed="false">Wrap lines</button>
+    </div>
+    <p class="keys">
+        <kbd>j</kbd>@(" ")<kbd>k</kbd> next and previous file,
+        <kbd>Enter</kbd> open or close,
+        <kbd>/</kbd> filter
+    </p>
+    @ChildContent
+</nav>
+
+@code {
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+}

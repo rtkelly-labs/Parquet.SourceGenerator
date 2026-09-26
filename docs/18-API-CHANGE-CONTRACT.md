@@ -292,7 +292,7 @@ the built `.nupkg` files from a local feed and compile against them on four targ
 | Thing | Where |
 |:---|:---|
 | Grammar for every catalogue line | [17 - Generated Public API Baselines](./17-GENERATED-API-BASELINES.md) |
-| Emitted API review diff | `derived` job in `.github/workflows/ci.yml`; `scripts/DerivedOutputs.cs`, `scripts/RenderDerivedDiff.cs` |
+| Emitted API review diff | `derived` job in `.github/workflows/ci.yml`; `scripts/DerivedOutputs.cs`, `scripts/DerivedReport/` |
 | The ledger | [`docs/api/LEDGER.md`](./api/LEDGER.md) |
 | Seam catalogue | [`src/api/seams.txt`](../src/api/seams.txt) |
 | Analyzer (`PARQAPI002`) | `tools/Parquet.SourceGenerator.ApiGates/` |

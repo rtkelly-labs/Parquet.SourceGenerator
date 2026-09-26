@@ -1,0 +1,84 @@
+@*
+    The state view: one tree's derived outputs as they are. The current numbers, then every file in
+    full, grouped by section.
+*@
+<Shell Title="@($"Derived outputs at {Report.Label}")">
+    <header>
+        <h1>Derived outputs at <code>@Report.Label</code></h1>
+        <p class="meta">
+            @Html.N(Report.Sections.Sum(s => s.Files.Count)) files,
+            @Html.N(Report.Sections.Sum(s => s.Files.Sum(f => f.Lines.Count))) lines
+        </p>
+    </header>
+
+    <Nav>
+        @foreach (var section in Report.Sections)
+        {
+            <div class="@SectionClass("toc", section)">
+                <h2>
+                    <a href="#@SectionId(section)">@section.Title</a>
+                    @(" ")
+                    <span class="n">@Html.N(section.Files.Count)</span>
+                </h2>
+                <ul>
+                    @foreach (var file in section.Files)
+                    {
+                        <li>
+                            <a href="#@FileId(file.Path)">
+                                <PathLabel Path="@file.Path" />
+                                <span class="n">@Html.N(file.Lines.Count)</span>
+                            </a>
+                        </li>
+                    }
+                </ul>
+            </div>
+        }
+    </Nav>
+
+    <main>
+        <Overview Heading="Current state" Tables="Report.Overview" />
+
+        @foreach (var section in Report.Sections)
+        {
+            <section class="@SectionClass("sec", section)" id="@SectionId(section)">
+                <h2>
+                    @section.Title
+                    @(" ")
+                    <span class="n">@Html.N(section.Files.Count) files</span>
+                </h2>
+                @foreach (var file in section.Files)
+                {
+                    <details open="@section.Expanded" id="@FileId(file.Path)">
+                        <summary>
+                            <PathLabel Path="@file.Path" />
+                            <span class="size n">@Html.N(file.Lines.Count) lines</span>
+                        </summary>
+                        <table class="content">
+                            @for (int i = 0; i < file.Lines.Count; i++)
+                            {
+                                <tr>
+                                    <td>@(i + 1)</td>
+                                    <td>@file.Lines[i]</td>
+                                </tr>
+                            }
+                        </table>
+                    </details>
+                }
+            </section>
+        }
+
+        <p class="empty" id="none" hidden>No file path contains that text.</p>
+    </main>
+</Shell>
+
+@code {
+    [Parameter, EditorRequired]
+    public StateReport Report { get; set; } = null!;
+
+    private static string SectionClass(string kind, StateSection section) =>
+        section.Expanded ? $"{kind} api" : kind;
+
+    private static string SectionId(StateSection section) => Html.Slug("s-" + section.Title);
+
+    private static string FileId(string path) => Html.Slug("f-" + path);
+}

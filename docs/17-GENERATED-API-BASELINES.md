@@ -192,37 +192,48 @@ passes only when both succeed, so the gates below block a merge:
    concurrency group per commit and are never cancelled.
 2. On a pull request the merge base's tree is downloaded from its `derived-baseline-<sha>`
    artifact, accepted only when it was uploaded from this repository by a push run of `ci.yml` on
-   `main` at exactly that commit (the name alone proves nothing: any run can upload one). Only when there is none — the base is another branch of a stack, its main run has not
-   finished, or the artifact expired — is it regenerated here in a `git worktree`. Outputs are
+   `main` at exactly that commit (the name alone proves nothing: any run can upload one).
+   Only when there is none — the base is another branch of a stack, its main run has not finished, or the artifact expired — is it regenerated here in a `git worktree`. Outputs are
    byte-identical across runs and between Linux and macOS, so the two are interchangeable; the
    comment's footer says which was used. A base commit that predates this change has no
    `GoldenCorpus`; for it the checked-in files *were* its derived output, so they are copied into
    the same layout rather than regenerated. Nothing about the base can fail the job: if it cannot
    be produced, the comment says so and the head's gates alone decide the check.
-3. `scripts/RenderDerivedDiff.cs` diffs the two trees and renders one Markdown comment: a summary
-   table, then sections in the order **Emitted public API** (expanded) → Emitted code →
-   Generated-code metrics → Duplication → Hand-written code metrics (src/) → Call graph → Other
-   (collapsed). The root change reads first; the numbers that follow from it come after. GitHub caps
-   a comment at 65,536 characters, so per-file and total budgets apply, and anything past them is
-   named with its line counts — "too large for a comment" when its own diff is over the per-file
-   budget, "comment limit reached" when earlier sections used up the comment — and linked to the
-   full HTML diff. The body depends only on the two trees, plus the links and baseline source.
-4. The same script writes the **full diff as one self-contained HTML page**: every changed file
-   in the same section order, with no budget, line numbers, a contents list and expand/collapse
-   all; nothing is fetched when it opens. It is uploaded unzipped as its own artifact,
-   `derived-full-diff.html` (`archive: false`), so the link at the top of the comment downloads the
-   page itself. Both trees, the full `review.patch` and the rendered `review-diff.md` are uploaded
-   as the `derived-outputs` artifact, and the diff is appended to the job's step summary.
+3. `scripts/DerivedReport/` renders the review. It is a file-based app spread over one folder:
+   `dotnet run scripts/DerivedReport/DerivedReport.cs` compiles the C# and the Razor components
+   beside it, and renders the HTML pages with the official `HtmlRenderer`
+   (`Microsoft.AspNetCore.Components.Web`) — no web host, no ASP.NET shared framework, no project
+   file. It has two views:
+   - **`diff`** — the sticky comment, a deterministic **summary of the whole PR**: files and lines
+     by area, the API catalogues and changelog, test methods added and removed, CI and tooling
+     touched (`.github/protected-paths.txt`), all read from git between the merge base and the head
+     commit; then what drifted in the derived outputs, read from the two trees' own reports —
+     public members and signatures per golden model and the public types added or removed,
+     generated-code and `src/` metrics that moved, duplication totals, call-graph nodes and edges.
+     No diff text. Everything above the footer is a function of the two commits, so the same pair
+     always renders the same bytes; only the footer's links name the run. It also writes the full
+     `review.patch` and the **full diff as HTML**: every changed file in the section order
+     **Emitted public API** (expanded) → Emitted code → Generated-code metrics → Duplication →
+     Hand-written code metrics (src/) → Call graph → Other, with the summary tables on top.
+   - **`state`** — one tree as it is: the current numbers and every file in full. A PR gets it for
+     its head; main's weekly and release snapshots use it too.
+4. Both pages are self-contained (styles and script inlined from `report.css` and `report.js`,
+   nothing fetched when they open) and each is uploaded unzipped as its own artifact
+   (`derived-diff.html`, `derived-state.html`, `archive: false`), so the comment's footer links
+   download the pages themselves. Both trees, the full `review.patch` and the rendered
+   `review-diff.md` are uploaded as the `derived-outputs` artifact. PR artifacts expire with the
+   repository's retention.
 5. The job creates, or edits in place, **one** sticky comment on the pull request, marked
    `<!-- derived-review-diff -->`. It is updated on every run, including failed ones: a head that
    failed its gates, or a base that could not be produced, replaces the previous diff with a
    statement saying so, so a stale diff never stands as current. Only a run for the PR's current
-   head posts: an older run re-run after a newer push leaves the comment alone. A fork's token cannot write
-   comments; that step is `continue-on-error`, and the result is still in the step summary and the
-   artifact.
+   head posts: an older run re-run after a newer push leaves the comment alone. A fork's token
+   cannot write comments; that step is `continue-on-error`, and the result is still in the step
+   summary and the artifact.
 
-The "Emitted public API" section is the review surface for the emitted consumer API. A diff there
-reads exactly as the old baseline diff did:
+The "Emitted public API" table in the comment says which models' surfaces moved and which public
+types came and went; the same section of the full diff page is the line-level review surface for
+the emitted consumer API, and reads exactly as the old baseline diff did:
 
 ```diff
 -SampleDomain.Models.OrderEventColumnarBatch.RowCount -> long

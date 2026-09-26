@@ -1,0 +1,36 @@
+@*
+    "+added −removed" and a bar: its length is the file's changed lines on a log scale against the
+    largest file (so a 2-line change still shows), split green/red by the share of additions.
+*@
+<span class="n">
+    <span class="a">+@Html.N(Added)</span>
+    @(" ")
+    <span class="d">−@Html.N(Removed)</span>
+    @if (Largest > 0)
+    {
+        @(" ")
+        <span class="bar" aria-hidden="true">
+            <i class="ba" style="width:@(AddWidth)%"></i>
+            <i class="bd" style="width:@(Fill - AddWidth)%"></i>
+        </span>
+    }
+</span>
+
+@code {
+    [Parameter]
+    public int Added { get; set; }
+
+    [Parameter]
+    public int Removed { get; set; }
+
+    /// <summary>The largest file's changed lines; zero leaves the bar out.</summary>
+    [Parameter]
+    public int Largest { get; set; }
+
+    private int Total => Added + Removed;
+
+    private int Fill =>
+        Total == 0 ? 0 : (int)Math.Round(100 * Math.Log(1 + Total) / Math.Log(1 + Largest));
+
+    private int AddWidth => Total == 0 ? 0 : Fill * Added / Total;
+}

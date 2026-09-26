@@ -1,0 +1,15 @@
+@* A path with its directory muted, so the file name reads first. *@
+<code>
+    @if (Slash >= 0)
+    {
+        <span class="dir">@Path[..(Slash + 1)]</span>
+    }
+    @Path[(Slash + 1)..]
+</code>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Path { get; set; } = "";
+
+    private int Slash => Path.LastIndexOf('/');
+}

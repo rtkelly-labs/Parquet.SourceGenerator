@@ -91,11 +91,13 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   `scripts/DerivedOutputs.cs` for the pull request and compares it with its merge base's outputs,
   which each push to main publishes as a `derived-baseline-<sha>` artifact (regenerated in the job
   when missing). It uploads both trees as the `derived-outputs` artifact and posts the difference
-  as one sticky PR comment with the emitted public API first (`scripts/RenderDerivedDiff.cs`). The
-  comment is updated on every run, and says so when the head failed or the base was unavailable
-  instead of leaving a stale diff; a base that cannot be produced never fails the check. The
-  required `build` check is now an aggregate of the `test` job (the former `build`) and `derived`,
-  so both block a merge. Each full release attaches its derived outputs as
+  as one sticky PR comment (`scripts/DerivedReport/`): a deterministic summary of the whole PR —
+  files by area, API catalogues, tests, CI and tooling touched, then what drifted in the derived
+  outputs — linking to the full diff and the head's state as self-contained HTML pages rendered
+  with Razor components and the official `HtmlRenderer`. The comment is updated on every run, and
+  says so when the head failed or the base was unavailable instead of leaving a stale diff; a base
+  that cannot be produced never fails the check. The required `build` check is now an aggregate of
+  the `test` job (the former `build`) and `derived`, so both block a merge. Each full release attaches its derived outputs as
   `derived-outputs.tar.gz` and dispatches the docs site with the tag, so the API grid renders what
   that version shipped. The golden models now live in
   `GoldenCorpus`; `GoldenCodeGenRegressionTests` checks their invariants and publishes them to

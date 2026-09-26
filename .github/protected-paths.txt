@@ -1,0 +1,17 @@
+# Paths a pull request from a fork may not change: CI, build and tooling that run with the
+# repository's trust. One entry per line; an entry ending in "/" covers everything under it.
+#
+# Read from the BASE branch by .github/workflows/protected-paths.yml (so a fork cannot edit its way
+# past it) and by tools/DerivedReport, which flags these paths as "CI and tooling touched" in the
+# PR summary. Changing this list is itself a protected change.
+.github/
+.config/
+scripts/
+tools/
+Directory.Build.props
+Directory.Build.targets
+Directory.Packages.props
+global.json
+nuget.config
+NuGet.config
+Parquet.SourceGenerator.slnx
