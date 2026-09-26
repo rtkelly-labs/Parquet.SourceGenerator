@@ -33,7 +33,11 @@ Applied with `enforcement: active`, targeting `refs/heads/main`.
     - `build` (`ci.yml`) — an aggregate job that succeeds only when both `test` (restore, build,
       tests, pack, interop) and `derived` (derived outputs and their gates) succeed
     - `pr-title` (`pr-title.yml`)
-  - These two strings are an API between the workflows here and
+    - `protected-paths` (`protected-paths.yml`) — fails a pull request from a fork that changes a
+      path listed in `.github/protected-paths.txt` (CI, build and tooling). It runs on
+      `pull_request_target`, so it is the base branch's copy of the check that runs; it never
+      checks out the pull request. Pull requests from branches of this repository pass.
+  - These strings are an API between the workflows here and
     `REPO_REQUIRED_CHECKS_MAP` in shared-utilities. Renaming a job silently breaks the ruleset, so
     rename the job and update that map in the same change. An earlier pair of long descriptive
     names containing `&` and parentheses caused exactly the failure above.

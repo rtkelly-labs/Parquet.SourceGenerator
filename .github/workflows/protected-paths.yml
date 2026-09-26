@@ -1,0 +1,80 @@
+name: Protected Paths
+
+# A pull request from a fork may not change CI, build or tooling: the paths listed in
+# .github/protected-paths.txt. Those run with the repository's trust (workflows, the scripts they
+# run, build props), so a fork that needs such a change asks for it, and a maintainer makes it.
+#
+# Why pull_request_target: it runs the workflow as it is on the BASE branch, with the base branch's
+# list, so a fork cannot edit its way past the check by changing this file or the list. It is safe
+# here because nothing from the pull request is checked out or executed: the list comes from the
+# base branch and the changed files from the API. Keep it that way — never add a checkout of the
+# pull request's head to this workflow.
+#
+# The job name is the required status check (`protected-paths`); treat it as an identifier.
+# Pull requests from branches of this repository pass: they are already reviewed and gated.
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  protected-paths:
+    name: protected-paths
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the protected-path list (base branch)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          sparse-checkout: .github/protected-paths.txt
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Check changed paths
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          if [ "$HEAD_REPO" = "$REPO" ]; then
+            echo "Pull request from a branch of $REPO: protected paths may change under review."
+            exit 0
+          fi
+
+          mapfile -t entries < <(grep -vE '^\s*(#|$)' .github/protected-paths.txt | sed 's/[[:space:]]*$//')
+          # A rename counts on both sides: moving a protected file out is a change to it.
+          mapfile -t files < <(gh api --paginate "repos/$REPO/pulls/$PR_NUMBER/files" \
+            --jq '.[] | .filename, (.previous_filename // empty)' | sort -u)
+
+          hits=()
+          for file in "${files[@]}"; do
+            for entry in "${entries[@]}"; do
+              if [[ "$entry" == */ && "$file" == "$entry"* ]] || [ "$file" = "$entry" ]; then
+                hits+=("$file")
+                break
+              fi
+            done
+          done
+
+          if [ ${#hits[@]} -eq 0 ]; then
+            echo "No protected paths changed (${#files[@]} files checked)."
+            exit 0
+          fi
+
+          {
+            echo "### Protected paths changed"
+            echo
+            echo "A pull request from a fork ($HEAD_REPO) may not change these paths, listed in"
+            echo "\`.github/protected-paths.txt\`. Ask for the change instead; a maintainer will make it."
+            echo
+            printf -- '- `%s`\n' "${hits[@]}"
+          } >> "$GITHUB_STEP_SUMMARY"
+          for hit in "${hits[@]}"; do
+            echo "::error file=$hit::A fork may not change $hit (listed in .github/protected-paths.txt)."
+          done
+          exit 1
