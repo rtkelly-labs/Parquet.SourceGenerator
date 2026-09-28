@@ -45,10 +45,13 @@
         <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="All" />
     </ItemGroup>
 
-    <ItemGroup Condition="'$(IsTestProject)' != 'true'">
+    <ItemGroup Condition="'$(IsTestProject)' != 'true' And !$(MSBuildProjectDirectory.Contains('/test/')) And !$(MSBuildProjectDirectory.EndsWith('test')) And !$(MSBuildProjectDirectory.Contains('/benchmarks/')) And !$(MSBuildProjectDirectory.Contains('/samples/'))">
         <PackageReference Include="Meziantou.Analyzer" PrivateAssets="All">
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
+    </ItemGroup>
+    <ItemGroup Condition="'$(IsTestProject)' != 'true' And !$(MSBuildProjectDirectory.Contains('/test/')) And !$(MSBuildProjectDirectory.EndsWith('test')) And !$(MSBuildProjectDirectory.Contains('/benchmarks/')) And !$(MSBuildProjectDirectory.Contains('/samples/'))">
+        <PackageReference Include="SonarAnalyzer.CSharp" PrivateAssets="All" />
     </ItemGroup>
 
     <!-- Test, Benchmark, Tools, Samples, and CLI Project Suppressions -->

@@ -67,15 +67,15 @@ internal static class BufferPoolComponent
 
     public static bool IsReferenceTypeBuffer(PropertyModel prop, bool isWrite = false)
     {
-        if (isWrite)
-        {
-            if (
+        if (
+            isWrite
+            && (
                 prop.Kind == PropertyKind.ByteArray
                 || (prop.Kind == PropertyKind.Primitive && prop.TypeName.Contains("string"))
             )
-            {
-                return true;
-            }
+        )
+        {
+            return true;
         }
 
         return prop.Kind switch

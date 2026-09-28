@@ -907,16 +907,4 @@ internal static class LegacyCodeEmitter
     private static bool IsStringColumn(PropertyModel prop) =>
         prop.Kind == PropertyKind.Primitive
         && prop.TypeName.IndexOf("string", StringComparison.Ordinal) >= 0;
-
-    private static string GetWriteExpression(PropertyModel prop, string valueExpression) =>
-        PropertyMappingComponent.GetWriteExpression(
-            prop,
-            valueExpression,
-            useMemoryForTextAndBinary: false
-        );
-
-    private static string GetReadExpression(PropertyModel prop, string valueExpression) =>
-        PropertyMappingComponent.GetReadExpression(prop, valueExpression);
-
-    private static string BoolLiteral(bool val) => SchemaComponent.BoolLiteral(val);
 }

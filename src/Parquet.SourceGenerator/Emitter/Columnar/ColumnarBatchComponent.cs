@@ -281,7 +281,7 @@ internal static class ColumnarBatchComponent
         builder.AppendLine();
         EmitPositionalWriter(builder, model, batchType, rowCountMember);
         builder.AppendLine();
-        EmitBatchStreamWriter(builder, model, batchType);
+        EmitBatchStreamWriter(builder, batchType);
     }
 
     /// <summary>
@@ -489,11 +489,7 @@ internal static class ColumnarBatchComponent
         builder.AppendLine("    }");
     }
 
-    private static void EmitBatchStreamWriter(
-        StringBuilder builder,
-        TargetClassModel model,
-        string batchType
-    )
+    private static void EmitBatchStreamWriter(StringBuilder builder, string batchType)
     {
         builder.AppendLine("    /// <summary>");
         builder.AppendLine(
