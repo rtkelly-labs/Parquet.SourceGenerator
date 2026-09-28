@@ -351,10 +351,10 @@ internal static class ArrowBridgeEmitter
                 EmitDirectRequired(builder, map, arr, prop.Name);
                 break;
             case ArrowExtractionMode.Utf8:
-                EmitUtf8(builder, prop, map, arr, slot);
+                EmitUtf8(builder, prop, arr, slot);
                 break;
             case ArrowExtractionMode.Binary:
-                EmitBinary(builder, prop, map, arr, slot);
+                EmitBinary(builder, prop, arr, slot);
                 break;
             case ArrowExtractionMode.Convert when !prop.IsNullable:
                 EmitConvertRequired(builder, map, arr, prop.Name, slot);
@@ -523,7 +523,6 @@ internal static class ArrowBridgeEmitter
     private static void EmitUtf8(
         StringBuilder builder,
         PropertyModel prop,
-        ArrowLeafMapping map,
         string arr,
         int slot
     )
@@ -587,7 +586,6 @@ internal static class ArrowBridgeEmitter
     private static void EmitBinary(
         StringBuilder builder,
         PropertyModel prop,
-        ArrowLeafMapping map,
         string arr,
         int slot
     )

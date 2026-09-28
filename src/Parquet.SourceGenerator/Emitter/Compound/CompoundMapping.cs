@@ -320,7 +320,7 @@ internal static class CompoundMapping
     )
     {
         int n = col.Slot;
-        string listType = ListTypeOf(col, col.Leaf);
+        string listType = ListTypeOf(col.Leaf);
         builder.AppendLine($"{indent}var lane_{n} = new {listType}?[{rowCountVar}];");
         builder.AppendLine(
             $"{indent}{listType}? bk_{n} = null; int rc_{n} = 0; int vc_{n} = 0; bool st_{n} = false;"
@@ -421,7 +421,7 @@ internal static class CompoundMapping
         builder.AppendLine($"{indent}_ = rc_{a};");
     }
 
-    private static string ListTypeOf(LeafColumn col, PropertyModel element)
+    private static string ListTypeOf(PropertyModel element)
     {
         // The parser renders element types without nullability suffixes; the lane must
         // carry the element's annotation or assigning a List<string> into a

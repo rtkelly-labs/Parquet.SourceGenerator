@@ -510,10 +510,6 @@ internal static class CodeEmitter
         }
         else if (prop.Kind == PropertyKind.TimeSpan)
         {
-            return $"{indent}await groupWriter.WriteAsync<int>(\n{indent}    {fieldAccess},\n{indent}    new global::System.ReadOnlyMemory<int>({bufName}, 0, count),\n{indent}    cancellationToken: cancellationToken);";
-        }
-        else if (prop.Kind == PropertyKind.TimeSpan)
-        {
             string memType = prop.IsNullable ? "int?" : "int";
             return $"{indent}await groupWriter.WriteAsync<int>(\n{indent}    {fieldAccess},\n{indent}    new global::System.ReadOnlyMemory<{memType}>({bufName}, 0, count),\n{indent}    cancellationToken: cancellationToken);";
         }
@@ -2713,17 +2709,6 @@ internal static class CodeEmitter
             _ => $"{valVar}.GetValueOrDefault()",
         };
 
-    private static string GetBufferElementType(PropertyModel prop) =>
-        BufferPoolComponent.GetBufferElementType(prop);
-
-    private static bool IsReferenceTypeBuffer(PropertyModel prop) =>
-        BufferPoolComponent.IsReferenceTypeBuffer(prop);
-
     private static string GetWriteExpression(PropertyModel prop, string valueExpr) =>
         PropertyMappingComponent.GetWriteExpression(prop, valueExpr);
-
-    private static string GetReadExpression(PropertyModel prop, string valueExpr) =>
-        PropertyMappingComponent.GetReadExpression(prop, valueExpr);
-
-    private static string BoolLiteral(bool value) => SchemaComponent.BoolLiteral(value);
 }
