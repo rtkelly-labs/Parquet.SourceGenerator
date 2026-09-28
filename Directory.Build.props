@@ -9,7 +9,8 @@
         <LangVersion>latest</LangVersion>
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
-        <AnalysisLevel>latest-recommended</AnalysisLevel>
+        <AnalysisLevel>latest-all</AnalysisLevel>
+        <AnalysisMode>AllEnabledByDefault</AnalysisMode>
         <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
         <!--
       Warnings are NOT errors in local builds. CI passes `-warnaserror` explicitly instead.
@@ -52,4 +53,24 @@
     <ItemGroup Condition="'$(IsTestProject)' != 'true' And !$(MSBuildProjectDirectory.Contains('/test/')) And !$(MSBuildProjectDirectory.EndsWith('test')) And !$(MSBuildProjectDirectory.Contains('/benchmarks/')) And !$(MSBuildProjectDirectory.Contains('/samples/'))">
         <PackageReference Include="SonarAnalyzer.CSharp" PrivateAssets="All" />
     </ItemGroup>
+
+    <!-- Test, Benchmark, Tools, Samples, and CLI Project Suppressions -->
+    <PropertyGroup Condition="'$(IsTestProject)' == 'true' Or $(MSBuildProjectDirectory.Contains('/test/')) Or $(MSBuildProjectDirectory.EndsWith('test')) Or $(MSBuildProjectDirectory.Contains('/benchmarks/')) Or $(MSBuildProjectDirectory.Contains('/samples/')) Or $(MSBuildProjectName.Contains('Test')) Or $(MSBuildProjectName.Contains('Benchmark')) Or $(MSBuildProjectName.Contains('Sample')) Or $(MSBuildProjectName.Contains('CLI')) Or $(MSBuildProjectName.Contains('Gates'))">
+        <AnalysisMode>Default</AnalysisMode>
+        <AnalysisLevel>latest-recommended</AnalysisLevel>
+        <!--
+          Disable rules that are not applicable or desirable in test, benchmark, or tooling projects:
+          - CA2007: Do not directly await a Task without ConfigureAwait (unit tests run in test runner context and do not require ConfigureAwait(false))
+          - MA0004: ConfigureAwait(false)
+          - CA1812: Internal class never instantiated (test fixture models, manifests, data classes)
+          - CA1062: Validate arguments of public methods (test helpers don't need redundant defensive null checks)
+          - CA1031: Do not catch general exception types (fuzzing/negative testing deliberately catches generic Exception)
+          - CA1822: Mark members as static (test fixture methods)
+          - CA1823: Unused field (test constants and fixtures)
+          - CA1515: Consider making type internal (test and ABI matrix types)
+          - CA1815: Override Equals and operator == on value types (test structs)
+          - CA1819: Properties should not return arrays (test model property shapes)
+        -->
+        <NoWarn>$(NoWarn);CA2007;MA0004;CA1812;CA1062;CA1031;CA1822;CA1823;CA1515;CA1815;CA1819</NoWarn>
+    </PropertyGroup>
 </Project>

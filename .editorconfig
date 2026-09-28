@@ -105,13 +105,30 @@ dotnet_diagnostic.xUnit2017.severity = warning
 # Banned symbols analyzer (RS0030) - migrating xUnit.Assert to Shouldly (#295)
 dotnet_diagnostic.RS0030.severity = warning
 
+# Suppress test-irrelevant rules (ConfigureAwait, defensive null validation, uninstantiated test fixtures)
+dotnet_diagnostic.CA2007.severity = none # ConfigureAwait is not needed in test runner execution context
+dotnet_diagnostic.MA0004.severity = none # ConfigureAwait(false)
+dotnet_diagnostic.CA1812.severity = none # Internal class never instantiated (test models and manifests)
+dotnet_diagnostic.CA1062.severity = none # Validate parameter is non-null
+dotnet_diagnostic.CA1031.severity = none # Do not catch generic Exception (negative testing)
+dotnet_diagnostic.CA1822.severity = none # Mark members as static (test methods)
+dotnet_diagnostic.CA1823.severity = none # Unused fields (test constants)
+
+[benchmarks/**.cs]
+dotnet_diagnostic.CA2007.severity = none
+dotnet_diagnostic.MA0004.severity = none
+dotnet_diagnostic.CA1812.severity = none
+dotnet_diagnostic.CA1062.severity = none
+dotnet_diagnostic.CA1031.severity = none
+dotnet_diagnostic.CA1822.severity = none
+dotnet_diagnostic.CA1823.severity = none
+
 [samples/**.cs]
 dotnet_diagnostic.category-Meziantou.severity = none
-
-
+dotnet_diagnostic.CA2007.severity = none
 
 # --------------------------------------------------------------------------------------------
-# Code metrics gates (#251, docs/21-CODE-METRICS.md).
+# Code metrics and strict reliability gates (#251, docs/21-CODE-METRICS.md).
 #
 # Scoped to src/ deliberately. Test, benchmark, sample and tooling code is measured by nothing
 # here: a table-driven test method with forty cases is not a maintainability problem, and gating
@@ -131,3 +148,11 @@ dotnet_diagnostic.CA1502.severity = warning
 dotnet_diagnostic.CA1505.severity = warning
 # Class coupling.
 dotnet_diagnostic.CA1506.severity = warning
+
+# Strict ConfigureAwait enforcement for library / generator code
+dotnet_diagnostic.CA2007.severity = warning
+dotnet_diagnostic.MA0004.severity = warning
+
+# Attribute design rule tuning
+dotnet_diagnostic.CA1019.severity = none # Allow property setters for named attribute arguments
+dotnet_diagnostic.CA1008.severity = suggestion
