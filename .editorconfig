@@ -75,6 +75,7 @@ dotnet_naming_style.prefix_field_with_underscore.capitalization = camel_case
 # Meziantou.Analyzer configuration
 # Silence overly pedantic style and metric rules, while preserving performance and correctness rules
 dotnet_diagnostic.MA0004.severity = none # ConfigureAwait(false)
+# Active audit: evaluate all other Meziantou performance and allocation rules
 dotnet_diagnostic.MA0006.severity = none # Use string.Equals instead of == operator
 dotnet_diagnostic.MA0016.severity = none # Prefer return collection abstraction
 dotnet_diagnostic.MA0026.severity = none # To-do comments
