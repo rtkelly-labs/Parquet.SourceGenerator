@@ -49,4 +49,7 @@
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
     </ItemGroup>
+    <ItemGroup Condition="'$(IsTestProject)' != 'true'">
+        <PackageReference Include="Roslynator.Analyzers" PrivateAssets="All" />
+    </ItemGroup>
 </Project>
