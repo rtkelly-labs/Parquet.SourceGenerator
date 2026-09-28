@@ -489,10 +489,7 @@ internal static class ColumnarBatchComponent
         builder.AppendLine("    }");
     }
 
-    private static void EmitBatchStreamWriter(
-        StringBuilder builder,
-        string batchType
-    )
+    private static void EmitBatchStreamWriter(StringBuilder builder, string batchType)
     {
         builder.AppendLine("    /// <summary>");
         builder.AppendLine(

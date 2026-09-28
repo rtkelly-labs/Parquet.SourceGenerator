@@ -520,12 +520,7 @@ internal static class ArrowBridgeEmitter
         );
     }
 
-    private static void EmitUtf8(
-        StringBuilder builder,
-        PropertyModel prop,
-        string arr,
-        int slot
-    )
+    private static void EmitUtf8(StringBuilder builder, PropertyModel prop, string arr, int slot)
     {
         string element = prop.IsNullable
             ? "global::System.ReadOnlyMemory<char>?"
@@ -583,12 +578,7 @@ internal static class ArrowBridgeEmitter
         );
     }
 
-    private static void EmitBinary(
-        StringBuilder builder,
-        PropertyModel prop,
-        string arr,
-        int slot
-    )
+    private static void EmitBinary(StringBuilder builder, PropertyModel prop, string arr, int slot)
     {
         string element = prop.IsNullable
             ? "global::System.ReadOnlyMemory<byte>?"
