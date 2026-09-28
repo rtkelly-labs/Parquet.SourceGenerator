@@ -1,0 +1,31 @@
+name: DevSkim Security Scan
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  security-scan:
+    name: devskim
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run DevSkim Scanner
+        uses: microsoft/DevSkim-Action@v1
+        with:
+          directory-to-scan: 'src'
+          output-filename: 'devskim-results.sarif'
+          should-scan-archives: false
+
+      - name: Upload DevSkim SARIF Report
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: devskim-results.sarif
