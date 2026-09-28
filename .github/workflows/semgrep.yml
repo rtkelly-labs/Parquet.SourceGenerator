@@ -1,0 +1,31 @@
+name: Semgrep OSS Security Scan
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  semgrep:
+    name: semgrep-oss
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Semgrep OSS
+        run: |
+          docker run --rm -v "${{ github.workspace }}:/src" returntocorp/semgrep semgrep scan \
+            --config "p/csharp" \
+            --config "p/owasp-top-ten" \
+            --sarif --output semgrep.sarif src/
+
+      - name: Upload Semgrep SARIF Report
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: semgrep.sarif
