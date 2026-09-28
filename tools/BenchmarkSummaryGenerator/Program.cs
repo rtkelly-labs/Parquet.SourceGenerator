@@ -671,17 +671,17 @@ public static class Program
             )
                 return val >= 1000 ? $"{val / 1000:F2} ms" : $"{val:F1} μs";
         }
-        else if (clean.EndsWith("ms", StringComparison.Ordinal))
-        {
-            if (
-                double.TryParse(
-                    clean.Replace("ms", "").Trim(),
-                    NumberStyles.Any,
-                    CultureInfo.InvariantCulture,
-                    out double val
-                )
+        else if (
+            clean.EndsWith("ms", StringComparison.Ordinal)
+            && double.TryParse(
+                clean.Replace("ms", "").Trim(),
+                NumberStyles.Any,
+                CultureInfo.InvariantCulture,
+                out double val
             )
-                return $"{val:F2} ms";
+        )
+        {
+            return $"{val:F2} ms";
         }
         return meanStr;
     }
@@ -708,17 +708,17 @@ public static class Program
             )
                 return val >= 1024 ? $"{val / 1024:F2} MB" : $"{val:F1} KB";
         }
-        else if (clean.EndsWith("MB", StringComparison.OrdinalIgnoreCase))
-        {
-            if (
-                double.TryParse(
-                    clean.Replace("MB", "", StringComparison.OrdinalIgnoreCase).Trim(),
-                    NumberStyles.Any,
-                    CultureInfo.InvariantCulture,
-                    out double val
-                )
+        else if (
+            clean.EndsWith("MB", StringComparison.OrdinalIgnoreCase)
+            && double.TryParse(
+                clean.Replace("MB", "", StringComparison.OrdinalIgnoreCase).Trim(),
+                NumberStyles.Any,
+                CultureInfo.InvariantCulture,
+                out double val
             )
-                return $"{val:F2} MB";
+        )
+        {
+            return $"{val:F2} MB";
         }
         return allocStr;
     }

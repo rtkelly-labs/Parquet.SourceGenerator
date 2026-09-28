@@ -82,6 +82,15 @@ dotnet_diagnostic.MA0026.severity = none # To-do comments
 dotnet_diagnostic.MA0048.severity = none # File name must match type name
 dotnet_diagnostic.MA0051.severity = none # Method is too long
 
+# SonarAnalyzer.CSharp configuration
+# Silence rules that contradict zero-allocation source generator patterns
+dotnet_diagnostic.S3267.severity = none # Prefer LINQ methods over foreach loops (allocates delegates/enumerators)
+dotnet_diagnostic.S1643.severity = suggestion # Use StringBuilder instead of concatenation in loops
+dotnet_diagnostic.S4136.severity = none # Group overloads together
+dotnet_diagnostic.S2094.severity = none # Classes should not be empty (marker types)
+dotnet_diagnostic.S6608.severity = suggestion # Indexing preference
+dotnet_diagnostic.S125.severity = none # Commented out code (explanatory code comments)
+
 # Test projects analyzer configuration
 [test/**.cs]
 # xUnit quality analyzers
