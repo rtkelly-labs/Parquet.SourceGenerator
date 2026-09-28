@@ -478,51 +478,55 @@ internal static class CodeEmitter
                 + $"{indent}    null,\n"
                 + $"{indent}    cancellationToken: cancellationToken);";
         }
-        else if (isString)
+        if (isString)
         {
             string memType = prop.IsNullable
                 ? "global::System.ReadOnlyMemory<char>?"
                 : "global::System.ReadOnlyMemory<char>";
             return $"{indent}await groupWriter.WriteAsync<global::System.ReadOnlyMemory<char>>(\n{indent}    {fieldAccess},\n{indent}    new global::System.ReadOnlyMemory<{memType}>({bufName}, 0, count),\n{indent}    cancellationToken: cancellationToken);";
         }
-        else if (isByteArray)
+
+        if (isByteArray)
         {
             string memType = prop.IsNullable
                 ? "global::System.ReadOnlyMemory<byte>?"
                 : "global::System.ReadOnlyMemory<byte>";
             return $"{indent}await groupWriter.WriteAsync<global::System.ReadOnlyMemory<byte>>(\n{indent}    {fieldAccess},\n{indent}    new global::System.ReadOnlyMemory<{memType}>({bufName}, 0, count),\n{indent}    cancellationToken: cancellationToken);";
         }
-        else if (prop.Kind == PropertyKind.Guid)
+
+        if (prop.Kind == PropertyKind.Guid)
         {
             return $"{indent}await groupWriter.WriteAsync<global::System.Guid>(\n{indent}    {fieldAccess},\n{indent}    new global::System.ReadOnlyMemory<global::System.Guid>({bufName}, 0, count),\n{indent}    cancellationToken: cancellationToken);";
         }
-        else if (prop.Kind == PropertyKind.DateOnly)
+
+        if (prop.Kind == PropertyKind.DateOnly)
         {
             string memType = prop.IsNullable
                 ? "global::System.DateTime?"
                 : "global::System.DateTime";
             return $"{indent}await groupWriter.WriteAsync<global::System.DateTime>(\n{indent}    {fieldAccess},\n{indent}    new global::System.ReadOnlyMemory<{memType}>({bufName}, 0, count),\n{indent}    cancellationToken: cancellationToken);";
         }
-        else if (prop.Kind == PropertyKind.Enum)
+
+        if (prop.Kind == PropertyKind.Enum)
         {
             string underlying = prop.EnumUnderlyingTypeName ?? "int";
             return $"{indent}await groupWriter.WriteAsync<{underlying}>(\n{indent}    {fieldAccess},\n{indent}    new global::System.ReadOnlyMemory<{underlying}>({bufName}, 0, count),\n{indent}    cancellationToken: cancellationToken);";
         }
-        else if (prop.Kind == PropertyKind.TimeSpan)
+
+        if (prop.Kind == PropertyKind.TimeSpan)
         {
             string memType = prop.IsNullable ? "int?" : "int";
             return $"{indent}await groupWriter.WriteAsync<int>(\n{indent}    {fieldAccess},\n{indent}    new global::System.ReadOnlyMemory<{memType}>({bufName}, 0, count),\n{indent}    cancellationToken: cancellationToken);";
         }
-        else if (prop.Kind == PropertyKind.TimeOnly)
+
+        if (prop.Kind == PropertyKind.TimeOnly)
         {
             string memType = prop.IsNullable ? "long?" : "long";
             return $"{indent}await groupWriter.WriteAsync<long>(\n{indent}    {fieldAccess},\n{indent}    new global::System.ReadOnlyMemory<{memType}>({bufName}, 0, count),\n{indent}    cancellationToken: cancellationToken);";
         }
-        else
-        {
-            string structType = prop.TypeName.TrimEnd('?');
-            return $"{indent}await groupWriter.WriteAsync<{structType}>(\n{indent}    {fieldAccess},\n{indent}    new global::System.ReadOnlyMemory<{structType}>({bufName}, 0, count),\n{indent}    cancellationToken: cancellationToken);";
-        }
+
+        string structType = prop.TypeName.TrimEnd('?');
+        return $"{indent}await groupWriter.WriteAsync<{structType}>(\n{indent}    {fieldAccess},\n{indent}    new global::System.ReadOnlyMemory<{structType}>({bufName}, 0, count),\n{indent}    cancellationToken: cancellationToken);";
     }
 
     /// <summary>
