@@ -180,16 +180,6 @@ internal static class ColumnarBatchComponent
     private static string ColumnMemoryType(PropertyModel prop) =>
         $"global::System.ReadOnlyMemory<{ColumnElementType(prop)}>";
 
-    private static string CamelCase(string name)
-    {
-        if (name.Length == 0)
-            return name;
-        string camel =
-            char.ToLowerInvariant(name[0]).ToString(CultureInfo.InvariantCulture)
-            + name.Substring(1);
-        return CSharpKeywords.Contains(camel) ? "@" + camel : camel;
-    }
-
     private static string Unescape(string name) =>
         name.Length > 0 && name[0] == '@' ? name.Substring(1) : name;
 
@@ -226,6 +216,16 @@ internal static class ColumnarBatchComponent
                     Levels[i] = Unique(used, prop.Name + "DefinitionLevels");
                 }
             }
+        }
+
+        private static string CamelCase(string name)
+        {
+            if (name.Length == 0)
+                return name;
+            string camel =
+                char.ToLowerInvariant(name[0]).ToString(CultureInfo.InvariantCulture)
+                + name.Substring(1);
+            return CSharpKeywords.Contains(camel) ? "@" + camel : camel;
         }
 
         private static string Unique(HashSet<string> used, string propertyName)

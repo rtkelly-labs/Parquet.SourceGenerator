@@ -513,11 +513,7 @@ public sealed class ColumnarHandoffTests
     [Fact]
     public async Task DenseModelWithoutNullableColumnsExposesNoDefinitionLevelParameters()
     {
-        var batch = new ColumnarDenseModelColumnarBatch(
-            rowCount: 3,
-            a: DenseA,
-            b: DenseB
-        );
+        var batch = new ColumnarDenseModelColumnarBatch(rowCount: 3, a: DenseA, b: DenseB);
 
         using var stream = new MemoryStream();
         await batch.WriteParquetAsync(stream);
