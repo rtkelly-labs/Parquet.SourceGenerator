@@ -319,7 +319,9 @@ internal static class ArrowBridgeEmitter
                 $"                    columnarBatch.{prop.Name}DefinitionLevels.Slice(0, count),"
             );
             builder.AppendLine("                    null,");
-            builder.AppendLine("                    cancellationToken: cancellationToken);");
+            builder.AppendLine(
+                "                    cancellationToken: cancellationToken).ConfigureAwait(false);"
+            );
             return;
         }
 
@@ -327,7 +329,9 @@ internal static class ArrowBridgeEmitter
         builder.AppendLine($"                await groupWriter.WriteAsync<{columnElementType}>(");
         builder.AppendLine($"                    {fieldAccess},");
         builder.AppendLine($"                    columnarBatch.{prop.Name}.Slice(0, count),");
-        builder.AppendLine("                    cancellationToken: cancellationToken);");
+        builder.AppendLine(
+            "                    cancellationToken: cancellationToken).ConfigureAwait(false);"
+        );
     }
 
     private static void EmitColumn(StringBuilder builder, PropertyModel prop, int slot)

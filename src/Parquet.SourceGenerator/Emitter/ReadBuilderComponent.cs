@@ -312,11 +312,11 @@ internal static class ReadBuilderComponent
         builder.AppendLine(
             $"        var results = new global::System.Collections.Generic.List<{model.ClassName}>();"
         );
-        // No ConfigureAwait: the IAsyncEnumerable overload is an extension in
-        // System.Threading.Tasks, and the emitted file carries no usings. The existing read
-        // emitters omit it on `await foreach` for the same reason.
+        // The IAsyncEnumerable ConfigureAwait overload is an extension in System.Threading.Tasks and
+        // the emitted file carries no usings, so it is called as a static method. Skipping it would
+        // leave the enumeration capturing the caller's SynchronizationContext.
         builder.AppendLine(
-            $"        await foreach (var item in {ext}.ReadEnumerableCoreAsync(_bytes, _options, cancellationToken, _predicate))"
+            $"        await foreach (var item in global::System.Threading.Tasks.TaskAsyncEnumerableExtensions.ConfigureAwait({ext}.ReadEnumerableCoreAsync(_bytes, _options, cancellationToken, _predicate), false))"
         );
         builder.AppendLine("            results.Add(item);");
         builder.AppendLine("        return results;");

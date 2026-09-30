@@ -175,6 +175,9 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   only for code that referenced the Attributes helpers directly.
 
 ### Fixed
+- **Emitted code now calls `ConfigureAwait(false)` on every await** and passes its cancellation token to the
+  source of a streaming write (`IAsyncEnumerable` `WriteParquetAsync`), clearing CA2007 and MA0004 in the
+  generated output (#418, #423, #425).
 - **Coexistence of the two row-group pruning mechanisms is now pinned by a behavioural
   test** (`PredicatePushdownAndSortedLookupCoexistOnOneModel`, completes #264's coverage).
   `SortedEvent` carries both the predicate zone-map path and three sort-key binary-search
