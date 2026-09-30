@@ -114,7 +114,7 @@ public sealed class ColumnBatchReadTests
 
         source.ShouldContain("public readonly struct ColumnBatch");
         source.ShouldContain(
-            "internal static async global::System.Collections.Generic.IAsyncEnumerable<ColumnBatch> ReadBatchesCoreAsync("
+            "internal static global::System.Collections.Generic.IAsyncEnumerable<ColumnBatch> ReadBatchesCoreAsync("
         );
         source.ShouldContain("public global::System.ReadOnlySpan<int> IdSpan =>");
         source.ShouldContain("public global::System.ReadOnlySpan<string> NameSpan =>");

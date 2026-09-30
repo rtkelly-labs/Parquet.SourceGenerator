@@ -1648,8 +1648,10 @@ internal static class CodeEmitter
             "    /// Memory usage is bounded by a single row group rather than the whole file."
         );
         builder.AppendLine("    /// </summary>");
+        // Not an iterator: arguments are validated when this is called, not on the first
+        // MoveNextAsync (S4456). The iterator below owns [EnumeratorCancellation].
         builder.AppendLine(
-            $"    internal static async global::System.Collections.Generic.IAsyncEnumerable<{model.ClassName}> ReadEnumerableCoreAsync("
+            $"    internal static global::System.Collections.Generic.IAsyncEnumerable<{model.ClassName}> ReadEnumerableCoreAsync("
         );
         builder.AppendLine($"        global::System.IO.Stream stream,");
         builder.AppendLine(
@@ -1657,11 +1659,28 @@ internal static class CodeEmitter
         );
         builder.Append(RowGroupPruningComponent.PredicateParameterLine(model));
         builder.AppendLine(
-            "        [global::System.Runtime.CompilerServices.EnumeratorCancellation] global::System.Threading.CancellationToken cancellationToken = default)"
+            "        global::System.Threading.CancellationToken cancellationToken = default)"
         );
         builder.AppendLine("    {");
         builder.AppendLine("        global::System.ArgumentNullException.ThrowIfNull(stream);");
         builder.AppendLine();
+        builder.AppendLine(
+            $"        return ReadEnumerableIteratorAsync(stream, options, {RowGroupPruningComponent.ForwardPredicate(model)}cancellationToken);"
+        );
+        builder.AppendLine("    }");
+        builder.AppendLine();
+        builder.AppendLine(
+            $"    private static async global::System.Collections.Generic.IAsyncEnumerable<{model.ClassName}> ReadEnumerableIteratorAsync("
+        );
+        builder.AppendLine("        global::System.IO.Stream stream,");
+        builder.AppendLine(
+            "        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,"
+        );
+        builder.Append(RowGroupPruningComponent.PredicateParameterLine(model));
+        builder.AppendLine(
+            "        [global::System.Runtime.CompilerServices.EnumeratorCancellation] global::System.Threading.CancellationToken cancellationToken = default)"
+        );
+        builder.AppendLine("    {");
         builder.AppendLine(
             "        options ??= global::Parquet.SourceGenerator.ParquetSerializerOptions.Default;"
         );
@@ -2336,7 +2355,7 @@ internal static class CodeEmitter
         builder.AppendLine("            }");
         builder.AppendLine("            catch");
         builder.AppendLine("            {");
-        builder.AppendLine("                linkedCts.Cancel();");
+        builder.AppendLine("                await linkedCts.CancelAsync().ConfigureAwait(false);");
         builder.AppendLine("                throw;");
         builder.AppendLine("            }");
         builder.AppendLine("        }");
@@ -2514,7 +2533,7 @@ internal static class CodeEmitter
         builder.AppendLine("        }");
         builder.AppendLine("        catch");
         builder.AppendLine("        {");
-        builder.AppendLine("            linkedCts.Cancel();");
+        builder.AppendLine("            await linkedCts.CancelAsync().ConfigureAwait(false);");
         builder.AppendLine("            throw;");
         builder.AppendLine("        }");
         builder.AppendLine("    }");
