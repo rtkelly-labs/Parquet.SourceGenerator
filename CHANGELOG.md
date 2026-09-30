@@ -187,6 +187,7 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   #554). `Flush()` is a no-op instead of throwing, `Dispose(bool)` calls the base and documents that
   the caller owns the inner stream, and `Read(Span<byte>)` / `ReadAsync(Memory<byte>)` pass through
   like the array overloads (gated for net472). Clears CA2215, CA1844, CA1835 and S1186 in emitted code.
+- **Emitted async iterators validate arguments at call time, and the parallel readers cancel with `CancelAsync`** (#548). `ReadEnumerableCoreAsync` and `ReadBatchesCoreAsync` (stream overloads) are now non-iterator wrappers that throw `ArgumentNullException` on the call, not on the first `MoveNextAsync`, then return a private iterator; the parallel readers `await linkedCts.CancelAsync().ConfigureAwait(false)` instead of a synchronous `Cancel()`. Clears S4456 (9) and S6966 (12) from the generated-code analysis. No public API change.
 - **Coexistence of the two row-group pruning mechanisms is now pinned by a behavioural
   test** (`PredicatePushdownAndSortedLookupCoexistOnOneModel`, completes #264's coverage).
   `SortedEvent` carries both the predicate zone-map path and three sort-key binary-search

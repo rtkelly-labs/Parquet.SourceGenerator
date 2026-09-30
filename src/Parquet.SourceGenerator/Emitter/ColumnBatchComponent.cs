@@ -184,8 +184,28 @@ internal static class ColumnBatchComponent
             "    /// enumerator advances or is disposed, so the spans must not escape the loop body."
         );
         builder.AppendLine("    /// </remarks>");
+        // Not an iterator: arguments are validated when this is called, not on the first
+        // MoveNextAsync (S4456). The iterator below owns [EnumeratorCancellation].
         builder.AppendLine(
-            $"    internal static async global::System.Collections.Generic.IAsyncEnumerable<{BatchTypeName}> ReadBatchesCoreAsync("
+            $"    internal static global::System.Collections.Generic.IAsyncEnumerable<{BatchTypeName}> ReadBatchesCoreAsync("
+        );
+        builder.AppendLine("        global::System.IO.Stream stream,");
+        builder.AppendLine(
+            "        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,"
+        );
+        builder.AppendLine(
+            "        global::System.Threading.CancellationToken cancellationToken = default)"
+        );
+        builder.AppendLine("    {");
+        builder.AppendLine("        global::System.ArgumentNullException.ThrowIfNull(stream);");
+        builder.AppendLine();
+        builder.AppendLine(
+            "        return ReadBatchesIteratorAsync(stream, options, cancellationToken);"
+        );
+        builder.AppendLine("    }");
+        builder.AppendLine();
+        builder.AppendLine(
+            $"    private static async global::System.Collections.Generic.IAsyncEnumerable<{BatchTypeName}> ReadBatchesIteratorAsync("
         );
         builder.AppendLine("        global::System.IO.Stream stream,");
         builder.AppendLine(
@@ -195,8 +215,6 @@ internal static class ColumnBatchComponent
             "        [global::System.Runtime.CompilerServices.EnumeratorCancellation] global::System.Threading.CancellationToken cancellationToken = default)"
         );
         builder.AppendLine("    {");
-        builder.AppendLine("        global::System.ArgumentNullException.ThrowIfNull(stream);");
-        builder.AppendLine();
         builder.AppendLine(
             "        options ??= global::Parquet.SourceGenerator.ParquetSerializerOptions.Default;"
         );
