@@ -115,6 +115,7 @@ internal static class SchemaComponent
     /// </summary>
     /// <param name="builder">The string builder.</param>
     /// <param name="usePath">When true, resolves via field.Path.ToString() (for v4/v5); when false, resolves via field.Name (for v6).</param>
+    /// <param name="invariantPath">When true, renders field paths with an invariant <c>IFormatProvider</c> (Parquet.Net 6 only).</param>
     public static void EmitResolveSchemaField(
         StringBuilder builder,
         bool usePath = false,
