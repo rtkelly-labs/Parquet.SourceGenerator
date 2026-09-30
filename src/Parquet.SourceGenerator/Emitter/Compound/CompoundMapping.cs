@@ -406,7 +406,7 @@ internal static class CompoundMapping
         foreach (LeafColumn g in group)
         {
             string read = GetCompoundLeafReadExpression(g.Leaf, $"buffer_{g.Slot}[vc_{g.Slot}++]");
-            string absent = g.Leaf.IsNullable ? "null!" : "default";
+            string absent = g.Leaf.IsNullable ? "null!" : NonNullAbsentLiteral(g.Leaf);
             builder.AppendLine(
                 $"{indent}                {g.Leaf.Name} = defLevels_{g.Slot}[p_{a}] >= {g.MaxDef} ? {read} : {absent},"
             );
@@ -420,6 +420,13 @@ internal static class CompoundMapping
         );
         builder.AppendLine($"{indent}_ = rc_{a};");
     }
+
+    /// <summary>
+    /// The value a non-nullable leaf takes when its definition level says the value is absent.
+    /// A Guid spells it <c>Guid.Empty</c> (S4581); every other type keeps <c>default</c>.
+    /// </summary>
+    private static string NonNullAbsentLiteral(PropertyModel leaf) =>
+        leaf.Kind == PropertyKind.Guid ? "global::System.Guid.Empty" : "default";
 
     private static string ListTypeOf(PropertyModel element)
     {
@@ -509,7 +516,7 @@ internal static class CompoundMapping
                         && leafCol.Leaf.TypeName.Contains("string")
                     )
                     || leafCol.Leaf.Kind == PropertyKind.ByteArray;
-                string absent = nullableish ? "null!" : "default";
+                string absent = nullableish ? "null!" : NonNullAbsentLiteral(leafCol.Leaf);
                 builder.AppendLine(
                     $"{p}    {leafCol.Leaf.Name} = defLevels_{leafCol.Slot}[ri_{node.Id}] >= {leafCol.MaxDef} ? {expr} : {absent},"
                 );
