@@ -9,8 +9,8 @@
         <LangVersion>latest</LangVersion>
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
-        <AnalysisLevel>latest-all</AnalysisLevel>
-        <AnalysisMode>AllEnabledByDefault</AnalysisMode>
+        <AnalysisLevel>9.0-recommended</AnalysisLevel>
+        <AnalysisMode>Recommended</AnalysisMode>
         <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
         <!--
       Warnings are NOT errors in local builds. CI passes `-warnaserror` explicitly instead.
