@@ -1102,12 +1102,17 @@ internal static class CodeEmitter
         builder.AppendLine(
             "            cancellationToken: cancellationToken).ConfigureAwait(false);"
         );
-        builder.AppendLine(
-            "        await using var writerScope = global::System.Threading.Tasks.TaskAsyncEnumerableExtensions.ConfigureAwait(writer, false);"
-        );
+        // try/finally instead of an `await using` scope: see the CA1506 note on EmitReadAsync.
+        builder.AppendLine("        try");
+        builder.AppendLine("        {");
         builder.AppendLine(
             "        await writer.WriteParquetRowGroupAsync(items, cancellationToken).ConfigureAwait(false);"
         );
+        builder.AppendLine("        }");
+        builder.AppendLine("        finally");
+        builder.AppendLine("        {");
+        builder.AppendLine("            await writer.DisposeAsync().ConfigureAwait(false);");
+        builder.AppendLine("        }");
         builder.AppendLine("    }");
     }
 
@@ -1153,13 +1158,20 @@ internal static class CodeEmitter
         builder.AppendLine(
             "                cancellationToken: cancellationToken).ConfigureAwait(false);"
         );
-        builder.AppendLine(
-            "            await using var singleWriterScope = global::System.Threading.Tasks.TaskAsyncEnumerableExtensions.ConfigureAwait(singleWriter, false);"
-        );
+        // try/finally instead of an `await using` scope: see the CA1506 note on EmitReadAsync.
+        builder.AppendLine("            try");
+        builder.AppendLine("            {");
         builder.AppendLine(
             "            await singleWriter.WriteParquetRowGroupAsync(col, cancellationToken).ConfigureAwait(false);"
         );
         builder.AppendLine("            return;");
+        builder.AppendLine("            }");
+        builder.AppendLine("            finally");
+        builder.AppendLine("            {");
+        builder.AppendLine(
+            "                await singleWriter.DisposeAsync().ConfigureAwait(false);"
+        );
+        builder.AppendLine("            }");
         builder.AppendLine("        }");
         builder.AppendLine();
         builder.AppendLine("        var writer = await global::Parquet.ParquetWriter.CreateAsync(");
@@ -1169,9 +1181,9 @@ internal static class CodeEmitter
         builder.AppendLine(
             "            cancellationToken: cancellationToken).ConfigureAwait(false);"
         );
-        builder.AppendLine(
-            "        await using var writerScope = global::System.Threading.Tasks.TaskAsyncEnumerableExtensions.ConfigureAwait(writer, false);"
-        );
+        // try/finally instead of an `await using` scope: see the CA1506 note on EmitReadAsync.
+        builder.AppendLine("        try");
+        builder.AppendLine("        {");
         builder.AppendLine(
             $"        var buffer = new global::System.Collections.Generic.List<{model.ClassName}>(targetChunkSize);"
         );
@@ -1191,6 +1203,11 @@ internal static class CodeEmitter
         builder.AppendLine(
             "            await writer.WriteParquetRowGroupAsync(buffer, cancellationToken).ConfigureAwait(false);"
         );
+        builder.AppendLine("        }");
+        builder.AppendLine("        finally");
+        builder.AppendLine("        {");
+        builder.AppendLine("            await writer.DisposeAsync().ConfigureAwait(false);");
+        builder.AppendLine("        }");
         builder.AppendLine("    }");
     }
 
@@ -1230,9 +1247,9 @@ internal static class CodeEmitter
         builder.AppendLine(
             "            cancellationToken: cancellationToken).ConfigureAwait(false);"
         );
-        builder.AppendLine(
-            "        await using var writerScope = global::System.Threading.Tasks.TaskAsyncEnumerableExtensions.ConfigureAwait(writer, false);"
-        );
+        // try/finally instead of an `await using` scope: see the CA1506 note on EmitReadAsync.
+        builder.AppendLine("        try");
+        builder.AppendLine("        {");
         builder.AppendLine(
             $"        var buffer = new global::System.Collections.Generic.List<{model.ClassName}>(targetChunkSize);"
         );
@@ -1254,6 +1271,11 @@ internal static class CodeEmitter
         builder.AppendLine(
             "            await writer.WriteParquetRowGroupAsync(buffer, cancellationToken).ConfigureAwait(false);"
         );
+        builder.AppendLine("        }");
+        builder.AppendLine("        finally");
+        builder.AppendLine("        {");
+        builder.AppendLine("            await writer.DisposeAsync().ConfigureAwait(false);");
+        builder.AppendLine("        }");
         builder.AppendLine("    }");
     }
 
@@ -1520,9 +1542,9 @@ internal static class CodeEmitter
         builder.AppendLine(
             "            cancellationToken: cancellationToken).ConfigureAwait(false);"
         );
-        builder.AppendLine(
-            "        await using var readerScope = global::System.Threading.Tasks.TaskAsyncEnumerableExtensions.ConfigureAwait(reader, false);"
-        );
+        // try/finally instead of an `await using` scope: see the CA1506 note on EmitReadAsync.
+        builder.AppendLine("        try");
+        builder.AppendLine("        {");
         builder.AppendLine("        guardedStream.Activate();");
         builder.AppendLine(
             "        await ValidateReaderAsync(reader, stream, options, cancellationToken).ConfigureAwait(false);"
@@ -1588,6 +1610,11 @@ internal static class CodeEmitter
         builder.AppendLine("            }");
         builder.AppendLine("            finally");
         builder.AppendLine("            {");
+        builder.AppendLine("        }");
+        builder.AppendLine("        finally");
+        builder.AppendLine("        {");
+        builder.AppendLine("            await reader.DisposeAsync().ConfigureAwait(false);");
+        builder.AppendLine("        }");
 
         EmitReturnsFor(builder, model, indent: "                ");
 
@@ -1893,9 +1920,9 @@ internal static class CodeEmitter
         builder.AppendLine(
             "            cancellationToken: cancellationToken).ConfigureAwait(false);"
         );
-        builder.AppendLine(
-            "        await using var readerScope = global::System.Threading.Tasks.TaskAsyncEnumerableExtensions.ConfigureAwait(reader, false);"
-        );
+        // try/finally instead of an `await using` scope: see the CA1506 note on EmitReadAsync.
+        builder.AppendLine("        try");
+        builder.AppendLine("        {");
         builder.AppendLine("        guardedStream.Activate();");
         builder.AppendLine(
             "        await ValidateReaderAsync(reader, stream, options, cancellationToken).ConfigureAwait(false);"
@@ -2014,6 +2041,11 @@ internal static class CodeEmitter
         builder.AppendLine("        }");
         builder.AppendLine();
         builder.AppendLine("        return results;");
+        builder.AppendLine("        }");
+        builder.AppendLine("        finally");
+        builder.AppendLine("        {");
+        builder.AppendLine("            await reader.DisposeAsync().ConfigureAwait(false);");
+        builder.AppendLine("        }");
         builder.AppendLine("    }");
     }
 
@@ -2051,9 +2083,9 @@ internal static class CodeEmitter
         builder.AppendLine(
             "            cancellationToken: cancellationToken).ConfigureAwait(false);"
         );
-        builder.AppendLine(
-            "        await using var readerScope = global::System.Threading.Tasks.TaskAsyncEnumerableExtensions.ConfigureAwait(reader, false);"
-        );
+        // try/finally instead of an `await using` scope: see the CA1506 note on EmitReadAsync.
+        builder.AppendLine("        try");
+        builder.AppendLine("        {");
         builder.AppendLine("        guardedStream.Activate();");
         builder.AppendLine(
             "        await ValidateReaderAsync(reader, stream, options, cancellationToken).ConfigureAwait(false);"
@@ -2133,6 +2165,11 @@ internal static class CodeEmitter
         builder.AppendLine("        }");
         builder.AppendLine();
         builder.AppendLine("        return results;");
+        builder.AppendLine("        }");
+        builder.AppendLine("        finally");
+        builder.AppendLine("        {");
+        builder.AppendLine("            await reader.DisposeAsync().ConfigureAwait(false);");
+        builder.AppendLine("        }");
         builder.AppendLine("    }");
     }
 
@@ -2192,9 +2229,9 @@ internal static class CodeEmitter
         builder.AppendLine(
             "                cancellationToken: cancellationToken).ConfigureAwait(false);"
         );
-        builder.AppendLine(
-            "            await using var probeScope = global::System.Threading.Tasks.TaskAsyncEnumerableExtensions.ConfigureAwait(probe, false);"
-        );
+        // try/finally instead of an `await using` scope: see the CA1506 note on EmitReadAsync.
+        builder.AppendLine("            try");
+        builder.AppendLine("            {");
         builder.AppendLine("            guardedProbeStream.Activate();");
         builder.AppendLine(
             "            await ValidateReaderAsync(probe, probeStream, options, cancellationToken).ConfigureAwait(false);"
@@ -2210,6 +2247,11 @@ internal static class CodeEmitter
             indent: "            ",
             optionsVar: "options"
         );
+        builder.AppendLine("            }");
+        builder.AppendLine("            finally");
+        builder.AppendLine("            {");
+        builder.AppendLine("                await probe.DisposeAsync().ConfigureAwait(false);");
+        builder.AppendLine("            }");
         builder.AppendLine("        }");
         builder.AppendLine();
         builder.AppendLine(
@@ -2370,9 +2412,9 @@ internal static class CodeEmitter
         builder.AppendLine(
             "                cancellationToken: cancellationToken).ConfigureAwait(false);"
         );
-        builder.AppendLine(
-            "            await using var readerScope = global::System.Threading.Tasks.TaskAsyncEnumerableExtensions.ConfigureAwait(reader, false);"
-        );
+        // try/finally instead of an `await using` scope: see the CA1506 note on EmitReadAsync.
+        builder.AppendLine("            try");
+        builder.AppendLine("            {");
         builder.AppendLine("            guardedStream.Activate();");
         builder.AppendLine(
             "            await ValidateReaderAsync(reader, stream, options, cancellationToken).ConfigureAwait(false);"
@@ -2451,6 +2493,11 @@ internal static class CodeEmitter
         builder.AppendLine("            finally");
         builder.AppendLine("            {");
         EmitReturnsFor(builder, model, indent: "                ");
+        builder.AppendLine("            }");
+        builder.AppendLine("            }");
+        builder.AppendLine("            finally");
+        builder.AppendLine("            {");
+        builder.AppendLine("                await reader.DisposeAsync().ConfigureAwait(false);");
         builder.AppendLine("            }");
         builder.AppendLine("        }");
         builder.AppendLine("        catch");

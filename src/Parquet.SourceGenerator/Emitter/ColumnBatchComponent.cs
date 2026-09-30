@@ -209,9 +209,9 @@ internal static class ColumnBatchComponent
         builder.AppendLine(
             "            cancellationToken: cancellationToken).ConfigureAwait(false);"
         );
-        builder.AppendLine(
-            "        await using var readerScope = global::System.Threading.Tasks.TaskAsyncEnumerableExtensions.ConfigureAwait(reader, false);"
-        );
+        // try/finally instead of an `await using` scope: see the CA1506 note on EmitReadAsync.
+        builder.AppendLine("        try");
+        builder.AppendLine("        {");
         builder.AppendLine(
             "        await ValidateReaderAsync(reader, stream, options, cancellationToken).ConfigureAwait(false);"
         );
@@ -270,6 +270,11 @@ internal static class ColumnBatchComponent
         BufferPoolComponent.EmitReturns(builder, model, indent: "                ");
 
         builder.AppendLine("            }");
+        builder.AppendLine("        }");
+        builder.AppendLine("        }");
+        builder.AppendLine("        finally");
+        builder.AppendLine("        {");
+        builder.AppendLine("            await reader.DisposeAsync().ConfigureAwait(false);");
         builder.AppendLine("        }");
         builder.AppendLine("    }");
         builder.AppendLine();

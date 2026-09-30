@@ -528,12 +528,17 @@ internal static class ColumnarBatchComponent
         builder.AppendLine(
             "            cancellationToken: cancellationToken).ConfigureAwait(false);"
         );
-        builder.AppendLine(
-            "        await using var writerScope = global::System.Threading.Tasks.TaskAsyncEnumerableExtensions.ConfigureAwait(writer, false);"
-        );
+        // try/finally instead of an `await using` scope: see the CA1506 note on EmitReadAsync.
+        builder.AppendLine("        try");
+        builder.AppendLine("        {");
         builder.AppendLine(
             "        await writer.WriteParquetRowGroupAsync(batch, cancellationToken).ConfigureAwait(false);"
         );
+        builder.AppendLine("        }");
+        builder.AppendLine("        finally");
+        builder.AppendLine("        {");
+        builder.AppendLine("            await writer.DisposeAsync().ConfigureAwait(false);");
+        builder.AppendLine("        }");
         builder.AppendLine("    }");
     }
 }
