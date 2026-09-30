@@ -27,16 +27,12 @@ internal static class DictionaryPageComponent
         builder.AppendLine("        long savedPosition = stream.Position;");
         builder.AppendLine("        try");
         builder.AppendLine("        {");
-        builder.AppendLine(
-            "            stream.Seek(offset.Value, global::System.IO.SeekOrigin.Begin);"
-        );
+        builder.AppendLine("            stream.Position = offset.Value;");
         builder.AppendLine("            return ReadDictionaryPageHeader(stream);");
         builder.AppendLine("        }");
         builder.AppendLine("        finally");
         builder.AppendLine("        {");
-        builder.AppendLine(
-            "            stream.Seek(savedPosition, global::System.IO.SeekOrigin.Begin);"
-        );
+        builder.AppendLine("            stream.Position = savedPosition;");
         builder.AppendLine("        }");
         builder.AppendLine("    }");
         builder.AppendLine();

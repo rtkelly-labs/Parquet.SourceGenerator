@@ -214,6 +214,14 @@ internal static class CodeEmitter
         EmitValidateReader(builder, model);
     }
 
+    /// <summary>
+    /// Emits <c>BuildFormatOptions</c> as a one-line forwarder to a nested mapper class.
+    /// </summary>
+    /// <remarks>
+    /// The option-to-Parquet.Net enum mappings name six types that nothing else in the
+    /// extensions class uses. Keeping them in a nested class keeps them out of the outer
+    /// class's coupling count (CA1506), which every emitted feature competes for.
+    /// </remarks>
     private static void EmitBuildFormatOptions(StringBuilder builder, TargetClassModel model)
     {
         builder.AppendLine("    /// <summary>");
@@ -222,7 +230,30 @@ internal static class CodeEmitter
         );
         builder.AppendLine("    /// </summary>");
         builder.AppendLine(
-            "    private static global::Parquet.ParquetOptions BuildFormatOptions(global::Parquet.SourceGenerator.ParquetSerializerOptions options)"
+            "    private static global::Parquet.ParquetOptions BuildFormatOptions(global::Parquet.SourceGenerator.ParquetSerializerOptions options) =>"
+        );
+        builder.AppendLine("        FormatOptionsMapper.Build(options);");
+        builder.AppendLine();
+        builder.AppendLine("    private static class FormatOptionsMapper");
+        builder.AppendLine("    {");
+
+        var method = new StringBuilder();
+        EmitFormatOptionsMapperMethod(method, model);
+        foreach (string line in method.ToString().TrimEnd().Split('\n'))
+        {
+            string trimmed = line.TrimEnd('\r');
+            builder.AppendLine(trimmed.Length == 0 ? trimmed : "    " + trimmed);
+        }
+
+        builder.AppendLine("    }");
+        builder.AppendLine();
+        DecompressionGuardComponent.Emit(builder);
+    }
+
+    private static void EmitFormatOptionsMapperMethod(StringBuilder builder, TargetClassModel model)
+    {
+        builder.AppendLine(
+            "    internal static global::Parquet.ParquetOptions Build(global::Parquet.SourceGenerator.ParquetSerializerOptions options)"
         );
         builder.AppendLine("    {");
         builder.AppendLine("        var formatOptions = new global::Parquet.ParquetOptions");
@@ -342,8 +373,6 @@ internal static class CodeEmitter
         builder.AppendLine();
         builder.AppendLine("        return formatOptions;");
         builder.AppendLine("    }");
-        builder.AppendLine();
-        DecompressionGuardComponent.Emit(builder);
     }
 
     private static void EmitValidateReader(StringBuilder builder, TargetClassModel model)
@@ -423,8 +452,10 @@ internal static class CodeEmitter
         builder.AppendLine("        }");
         builder.AppendLine("        if (field is global::Parquet.Schema.MapField mf)");
         builder.AppendLine("        {");
+        builder.AppendLine("            int keyDepth = GetFieldDepth(mf.Key);");
+        builder.AppendLine("            int valueDepth = GetFieldDepth(mf.Value);");
         builder.AppendLine(
-            "            return 1 + global::System.Math.Max(GetFieldDepth(mf.Key), GetFieldDepth(mf.Value));"
+            "            return 1 + (keyDepth > valueDepth ? keyDepth : valueDepth);"
         );
         builder.AppendLine("        }");
         builder.AppendLine("        return 1;");
@@ -2259,8 +2290,9 @@ internal static class CodeEmitter
             "        int requested = options.MaxDegreeOfParallelism > 0 ? options.MaxDegreeOfParallelism : global::System.Environment.ProcessorCount;"
         );
         builder.AppendLine(
-            "        int workerCount = global::System.Math.Max(1, global::System.Math.Min(requested, rowGroupCount));"
+            "        int workerCount = requested < rowGroupCount ? requested : rowGroupCount;"
         );
+        builder.AppendLine("        if (workerCount < 1) workerCount = 1;");
         builder.AppendLine();
         builder.AppendLine("        if (workerCount == 1)");
         builder.AppendLine("        {");
