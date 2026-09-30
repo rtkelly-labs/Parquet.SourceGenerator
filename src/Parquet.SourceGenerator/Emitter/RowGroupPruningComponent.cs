@@ -317,7 +317,7 @@ internal static class RowGroupPruningComponent
             builder.AppendLine(",");
             builder.Append(
                 $"            global::Parquet.SourceGenerator.ParquetColumnStatistics.FromRaw<{type}>("
-                    + $"stats_{col.Slot}!.MinValue, stats_{col.Slot}!.MaxValue, stats_{col.Slot}!.NullCount, stats_{col.Slot}!.DistinctCount)"
+                    + $"stats_{col.Slot}!.MinValue, stats_{col.Slot}.MaxValue, stats_{col.Slot}.NullCount, stats_{col.Slot}.DistinctCount)"
             );
         }
 
