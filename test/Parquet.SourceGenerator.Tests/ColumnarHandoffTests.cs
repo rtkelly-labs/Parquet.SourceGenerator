@@ -414,7 +414,7 @@ public sealed class ColumnarHandoffTests
     }
 
     [Fact]
-    public async Task DefaultBatchIsAnEmptyBatchThatWritesNoRowGroup()
+    public async Task DefaultBatchIsAnEmptyBatchThatWritesNoRowGroupAsync()
     {
         // default(T) never goes through the constructor. It has RowCount 0 and empty lanes, which is
         // a consistent (empty) batch, so the write is a no-op rather than an error.
@@ -481,7 +481,7 @@ public sealed class ColumnarHandoffTests
         );
 
     [Fact]
-    public async Task ColumnNamesThatCollideWithFixedParametersStillBuildAndWrite()
+    public async Task ColumnNamesThatCollideWithFixedParametersStillBuildAndWriteAsync()
     {
         int[] rowCounts = [1, 2, 3];
         long[] writers = [4, 5, 6];

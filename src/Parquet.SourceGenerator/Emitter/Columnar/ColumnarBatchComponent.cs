@@ -193,9 +193,13 @@ internal static class ColumnarBatchComponent
     {
         public string RowCount { get; } = "rowCount";
 
-        public string[] Values { get; }
+        private readonly string[] _values;
 
-        public string?[] Levels { get; }
+        private readonly string?[] _levels;
+
+        public string Value(int index) => _values[index];
+
+        public string? Level(int index) => _levels[index];
 
         public ParameterNames(TargetClassModel model)
         {
@@ -205,15 +209,15 @@ internal static class ColumnarBatchComponent
                 RowCount,
                 "cancellationToken",
             };
-            Values = new string[model.Properties.Length];
-            Levels = new string?[model.Properties.Length];
+            _values = new string[model.Properties.Length];
+            _levels = new string?[model.Properties.Length];
             for (int i = 0; i < model.Properties.Length; i++)
             {
                 PropertyModel prop = model.Properties[i];
-                Values[i] = Unique(used, prop.Name);
+                _values[i] = Unique(used, prop.Name);
                 if (BufferPoolComponent.UsesWriteAllParts(prop))
                 {
-                    Levels[i] = Unique(used, prop.Name + "DefinitionLevels");
+                    _levels[i] = Unique(used, prop.Name + "DefinitionLevels");
                 }
             }
         }
@@ -350,9 +354,9 @@ internal static class ColumnarBatchComponent
         {
             PropertyModel prop = model.Properties[i];
             builder.AppendLine(
-                $"    /// <param name=\"{Unescape(names.Values[i])}\">Column <c>{prop.Name}</c>: at least <paramref name=\"{names.RowCount}\"/> entries{(BufferPoolComponent.UsesWriteAllParts(prop) ? " of packed non-null values, sized by the definition levels" : string.Empty)}.</param>"
+                $"    /// <param name=\"{Unescape(names.Value(i))}\">Column <c>{prop.Name}</c>: at least <paramref name=\"{names.RowCount}\"/> entries{(BufferPoolComponent.UsesWriteAllParts(prop) ? " of packed non-null values, sized by the definition levels" : string.Empty)}.</param>"
             );
-            if (names.Levels[i] is string levels)
+            if (names.Level(i) is string levels)
             {
                 builder.AppendLine(
                     $"    /// <param name=\"{Unescape(levels)}\">Definition levels for <c>{prop.Name}</c>: at least <paramref name=\"{names.RowCount}\"/> entries.</param>"
@@ -371,8 +375,8 @@ internal static class ColumnarBatchComponent
         for (int i = 0; i < model.Properties.Length; i++)
         {
             PropertyModel prop = model.Properties[i];
-            parameters.Add($"        {ColumnMemoryType(prop)} {names.Values[i]}");
-            if (names.Levels[i] is string levels)
+            parameters.Add($"        {ColumnMemoryType(prop)} {names.Value(i)}");
+            if (names.Level(i) is string levels)
             {
                 parameters.Add($"        global::System.ReadOnlyMemory<int> {levels}");
             }
@@ -390,7 +394,7 @@ internal static class ColumnarBatchComponent
         for (int i = 0; i < model.Properties.Length; i++)
         {
             PropertyModel prop = model.Properties[i];
-            if (names.Levels[i] is string levels)
+            if (names.Level(i) is string levels)
             {
                 builder.AppendLine(
                     $"        if ({levels}.Length < {names.RowCount}) throw new global::System.ArgumentException(\"Column '{prop.Name}' supplied \" + {levels}.Length + \" definition levels for \" + {names.RowCount} + \" rows.\", nameof({levels}));"
@@ -398,7 +402,7 @@ internal static class ColumnarBatchComponent
             }
             else
             {
-                string value = names.Values[i];
+                string value = names.Value(i);
                 builder.AppendLine(
                     $"        if ({value}.Length < {names.RowCount}) throw new global::System.ArgumentException(\"Column '{prop.Name}' supplied \" + {value}.Length + \" values for \" + {names.RowCount} + \" rows.\", nameof({value}));"
                 );
@@ -410,8 +414,8 @@ internal static class ColumnarBatchComponent
         for (int i = 0; i < model.Properties.Length; i++)
         {
             PropertyModel prop = model.Properties[i];
-            builder.AppendLine($"        {prop.Name} = {names.Values[i]};");
-            if (names.Levels[i] is string levels)
+            builder.AppendLine($"        {prop.Name} = {names.Value(i)};");
+            if (names.Level(i) is string levels)
             {
                 builder.AppendLine($"        {prop.Name}DefinitionLevels = {levels};");
             }
@@ -592,8 +596,8 @@ internal static class ColumnarBatchComponent
         for (int i = 0; i < model.Properties.Length; i++)
         {
             PropertyModel prop = model.Properties[i];
-            builder.AppendLine($"        {ColumnMemoryType(prop)} {names.Values[i]},");
-            if (names.Levels[i] is string levels)
+            builder.AppendLine($"        {ColumnMemoryType(prop)} {names.Value(i)},");
+            if (names.Level(i) is string levels)
             {
                 builder.AppendLine($"        global::System.ReadOnlyMemory<int> {levels},");
             }
@@ -607,8 +611,8 @@ internal static class ColumnarBatchComponent
         var args = new List<string> { $"            {names.RowCount}" };
         for (int i = 0; i < model.Properties.Length; i++)
         {
-            args.Add($"            {names.Values[i]}");
-            if (names.Levels[i] is string levels)
+            args.Add($"            {names.Value(i)}");
+            if (names.Level(i) is string levels)
             {
                 args.Add($"            {levels}");
             }
