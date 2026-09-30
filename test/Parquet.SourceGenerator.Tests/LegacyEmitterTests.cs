@@ -165,7 +165,7 @@ public class LegacyEmitterTests
         );
 
         code.ShouldContain("global::Parquet.ParquetReader.CreateAsync(");
-        code.ShouldContain("BuildFormatOptions(options)");
+        code.ShouldContain("BuildFormatOptions()");
     }
 
     [Fact]
