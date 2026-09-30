@@ -256,12 +256,8 @@ internal static class ArrowBridgeEmitter
             "        global::System.Threading.CancellationToken cancellationToken = default)"
         );
         builder.AppendLine("    {");
-        builder.AppendLine(
-            "        if (writer == null) throw new global::System.ArgumentNullException(nameof(writer));"
-        );
-        builder.AppendLine(
-            "        if (batch == null) throw new global::System.ArgumentNullException(nameof(batch));"
-        );
+        builder.AppendLine("        global::System.ArgumentNullException.ThrowIfNull(writer);");
+        builder.AppendLine("        global::System.ArgumentNullException.ThrowIfNull(batch);");
         builder.AppendLine();
         builder.AppendLine(
             "        // Row-group granularity is the unit of this overload; compression and the other"

@@ -867,12 +867,8 @@ internal static class CodeEmitter
             $"        global::System.Threading.CancellationToken cancellationToken = default)"
         );
         builder.AppendLine("    {");
-        builder.AppendLine(
-            "        if (writer == null) throw new global::System.ArgumentNullException(nameof(writer));"
-        );
-        builder.AppendLine(
-            "        if (chunk == null) throw new global::System.ArgumentNullException(nameof(chunk));"
-        );
+        builder.AppendLine("        global::System.ArgumentNullException.ThrowIfNull(writer);");
+        builder.AppendLine("        global::System.ArgumentNullException.ThrowIfNull(chunk);");
         builder.AppendLine();
         builder.AppendLine("        int count = chunk.Count;");
         builder.AppendLine("        if (count == 0) return;");
@@ -1083,12 +1079,8 @@ internal static class CodeEmitter
             $"        global::System.Threading.CancellationToken cancellationToken = default)"
         );
         builder.AppendLine("    {");
-        builder.AppendLine(
-            "        if (items == null) throw new global::System.ArgumentNullException(nameof(items));"
-        );
-        builder.AppendLine(
-            "        if (stream == null) throw new global::System.ArgumentNullException(nameof(stream));"
-        );
+        builder.AppendLine("        global::System.ArgumentNullException.ThrowIfNull(items);");
+        builder.AppendLine("        global::System.ArgumentNullException.ThrowIfNull(stream);");
         builder.AppendLine("        cancellationToken.ThrowIfCancellationRequested();");
         builder.AppendLine();
         builder.AppendLine(
@@ -1137,12 +1129,8 @@ internal static class CodeEmitter
             $"        global::System.Threading.CancellationToken cancellationToken = default)"
         );
         builder.AppendLine("    {");
-        builder.AppendLine(
-            "        if (items == null) throw new global::System.ArgumentNullException(nameof(items));"
-        );
-        builder.AppendLine(
-            "        if (stream == null) throw new global::System.ArgumentNullException(nameof(stream));"
-        );
+        builder.AppendLine("        global::System.ArgumentNullException.ThrowIfNull(items);");
+        builder.AppendLine("        global::System.ArgumentNullException.ThrowIfNull(stream);");
         EmitRowGroupSizeResolution(builder);
         builder.AppendLine();
         builder.AppendLine(
@@ -1232,12 +1220,8 @@ internal static class CodeEmitter
             $"        global::System.Threading.CancellationToken cancellationToken = default)"
         );
         builder.AppendLine("    {");
-        builder.AppendLine(
-            "        if (items == null) throw new global::System.ArgumentNullException(nameof(items));"
-        );
-        builder.AppendLine(
-            "        if (stream == null) throw new global::System.ArgumentNullException(nameof(stream));"
-        );
+        builder.AppendLine("        global::System.ArgumentNullException.ThrowIfNull(items);");
+        builder.AppendLine("        global::System.ArgumentNullException.ThrowIfNull(stream);");
         EmitRowGroupSizeResolution(builder);
         builder.AppendLine();
         builder.AppendLine("        var writer = await global::Parquet.ParquetWriter.CreateAsync(");
@@ -1309,9 +1293,7 @@ internal static class CodeEmitter
             $"        global::System.Threading.CancellationToken cancellationToken = default{RowGroupPruningComponent.SignatureSuffix(model)}"
         );
         builder.AppendLine("    {");
-        builder.AppendLine(
-            "        if (stream == null) throw new global::System.ArgumentNullException(nameof(stream));"
-        );
+        builder.AppendLine("        global::System.ArgumentNullException.ThrowIfNull(stream);");
         builder.AppendLine();
         builder.AppendLine(
             "        options ??= global::Parquet.SourceGenerator.ParquetSerializerOptions.Default;"
@@ -1525,9 +1507,7 @@ internal static class CodeEmitter
             $"        global::System.Threading.CancellationToken cancellationToken = default{RowGroupPruningComponent.SignatureSuffix(model)}"
         );
         builder.AppendLine("    {");
-        builder.AppendLine(
-            "        if (stream == null) throw new global::System.ArgumentNullException(nameof(stream));"
-        );
+        builder.AppendLine("        global::System.ArgumentNullException.ThrowIfNull(stream);");
         builder.AppendLine();
         builder.AppendLine(
             "        options ??= global::Parquet.SourceGenerator.ParquetSerializerOptions.Default;"
@@ -1646,9 +1626,7 @@ internal static class CodeEmitter
             $"        [global::System.Runtime.CompilerServices.EnumeratorCancellation] global::System.Threading.CancellationToken cancellationToken = default{RowGroupPruningComponent.SignatureSuffix(model)}"
         );
         builder.AppendLine("    {");
-        builder.AppendLine(
-            "        if (stream == null) throw new global::System.ArgumentNullException(nameof(stream));"
-        );
+        builder.AppendLine("        global::System.ArgumentNullException.ThrowIfNull(stream);");
         builder.AppendLine();
         builder.AppendLine(
             "        options ??= global::Parquet.SourceGenerator.ParquetSerializerOptions.Default;"
@@ -1892,9 +1870,7 @@ internal static class CodeEmitter
         );
         builder.AppendLine("        global::System.Threading.CancellationToken cancellationToken)");
         builder.AppendLine("    {");
-        builder.AppendLine(
-            "        if (stream == null) throw new global::System.ArgumentNullException(nameof(stream));"
-        );
+        builder.AppendLine("        global::System.ArgumentNullException.ThrowIfNull(stream);");
         builder.AppendLine();
         builder.AppendLine("        pruneStatistics?.Reset();");
         builder.AppendLine(

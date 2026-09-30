@@ -368,9 +368,7 @@ internal static class ColumnarBatchComponent
             "        global::System.Threading.CancellationToken cancellationToken = default)"
         );
         builder.AppendLine("    {");
-        builder.AppendLine(
-            "        if (writer == null) throw new global::System.ArgumentNullException(nameof(writer));"
-        );
+        builder.AppendLine("        global::System.ArgumentNullException.ThrowIfNull(writer);");
         builder.AppendLine();
         builder.AppendLine($"        int count = batch.{rowCountMember};");
         builder.AppendLine(
@@ -512,9 +510,7 @@ internal static class ColumnarBatchComponent
             "        global::System.Threading.CancellationToken cancellationToken = default)"
         );
         builder.AppendLine("    {");
-        builder.AppendLine(
-            "        if (stream == null) throw new global::System.ArgumentNullException(nameof(stream));"
-        );
+        builder.AppendLine("        global::System.ArgumentNullException.ThrowIfNull(stream);");
         builder.AppendLine("        cancellationToken.ThrowIfCancellationRequested();");
         builder.AppendLine();
         builder.AppendLine(
