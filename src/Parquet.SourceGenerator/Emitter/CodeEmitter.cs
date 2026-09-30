@@ -1304,9 +1304,11 @@ internal static class CodeEmitter
         builder.AppendLine(
             "            cancellationToken: cancellationToken).ConfigureAwait(false);"
         );
-        builder.AppendLine(
-            "        await using var readerScope = global::System.Threading.Tasks.TaskAsyncEnumerableExtensions.ConfigureAwait(reader, false);"
-        );
+        // try/finally rather than an `await using` scope: ConfigureAwait on an IAsyncDisposable
+        // needs ConfiguredAsyncDisposable plus the extension class, and this method is already at
+        // the CA1506 class-coupling ceiling.
+        builder.AppendLine("        try");
+        builder.AppendLine("        {");
         builder.AppendLine("        guardedStream.Activate();");
         builder.AppendLine(
             "        await ValidateReaderAsync(reader, stream, options, cancellationToken).ConfigureAwait(false);"
@@ -1472,6 +1474,11 @@ internal static class CodeEmitter
         builder.AppendLine("        }");
         builder.AppendLine();
         builder.AppendLine("        return results;");
+        builder.AppendLine("        }");
+        builder.AppendLine("        finally");
+        builder.AppendLine("        {");
+        builder.AppendLine("            await reader.DisposeAsync().ConfigureAwait(false);");
+        builder.AppendLine("        }");
         builder.AppendLine("    }");
     }
 
@@ -1629,9 +1636,11 @@ internal static class CodeEmitter
         builder.AppendLine(
             "            cancellationToken: cancellationToken).ConfigureAwait(false);"
         );
-        builder.AppendLine(
-            "        await using var readerScope = global::System.Threading.Tasks.TaskAsyncEnumerableExtensions.ConfigureAwait(reader, false);"
-        );
+        // try/finally rather than an `await using` scope: ConfigureAwait on an IAsyncDisposable
+        // needs ConfiguredAsyncDisposable plus the extension class, and this method is already at
+        // the CA1506 class-coupling ceiling.
+        builder.AppendLine("        try");
+        builder.AppendLine("        {");
         builder.AppendLine("        guardedStream.Activate();");
         builder.AppendLine(
             "        await ValidateReaderAsync(reader, stream, options, cancellationToken).ConfigureAwait(false);"
@@ -1704,6 +1713,11 @@ internal static class CodeEmitter
         EmitReturnsFor(builder, model, indent: "                ");
 
         builder.AppendLine("            }");
+        builder.AppendLine("        }");
+        builder.AppendLine("        }");
+        builder.AppendLine("        finally");
+        builder.AppendLine("        {");
+        builder.AppendLine("            await reader.DisposeAsync().ConfigureAwait(false);");
         builder.AppendLine("        }");
         builder.AppendLine("    }");
     }
