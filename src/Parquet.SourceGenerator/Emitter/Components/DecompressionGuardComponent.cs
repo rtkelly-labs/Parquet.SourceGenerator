@@ -113,7 +113,9 @@ internal static class DecompressionGuardComponent
         builder.AppendLine("            }");
         builder.AppendLine("            catch (global::System.IO.IOException)");
         builder.AppendLine("            {");
-        builder.AppendLine("                return;");
+        builder.AppendLine(
+            "                // A page header that cannot be read is left for the caller's read to report."
+        );
         builder.AppendLine("            }");
         builder.AppendLine("            finally");
         builder.AppendLine("            {");

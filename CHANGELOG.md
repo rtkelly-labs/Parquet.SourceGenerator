@@ -178,6 +178,11 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
 - **Emitted code now calls `ConfigureAwait(false)` on every await** and passes its cancellation token to the
   source of a streaming write (`IAsyncEnumerable` `WriteParquetAsync`), clearing CA2007 and MA0004 in the
   generated output (#418, #423, #425).
+- **Emitted code clears seven mechanical analyzer findings** (CA1510, S8969, CA1068, MA0011, S4581,
+  S1172, S3626; #549, part of #554). Null guards use `ArgumentNullException.ThrowIfNull` (legacy
+  output keeps the manual throw behind `#if` for net472), the internal `Read*CoreAsync` helpers take
+  `CancellationToken` last, and unused parameters and redundant jumps are gone. No public API
+  change.
 - **Coexistence of the two row-group pruning mechanisms is now pinned by a behavioural
   test** (`PredicatePushdownAndSortedLookupCoexistOnOneModel`, completes #264's coverage).
   `SortedEvent` carries both the predicate zone-map path and three sort-key binary-search

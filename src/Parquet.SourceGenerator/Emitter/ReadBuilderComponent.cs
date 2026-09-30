@@ -137,19 +137,19 @@ internal static class ReadBuilderComponent
             builder,
             $"global::System.Threading.Tasks.Task<global::System.Collections.Generic.List<{model.ClassName}>>",
             "ToListAsync",
-            $"{ext}.ReadListCoreAsync(_stream, _options, cancellationToken)"
+            $"{ext}.ReadListCoreAsync(_stream, _options, cancellationToken: cancellationToken)"
         );
         EmitTerminal(
             builder,
             $"global::System.Threading.Tasks.Task<{model.ClassName}[]>",
             "ToArrayAsync",
-            $"{ext}.ReadArrayCoreAsync(_stream, _options, cancellationToken)"
+            $"{ext}.ReadArrayCoreAsync(_stream, _options, cancellationToken: cancellationToken)"
         );
         EmitTerminal(
             builder,
             $"global::System.Collections.Generic.IAsyncEnumerable<{model.ClassName}>",
             "AsAsyncEnumerable",
-            $"{ext}.ReadEnumerableCoreAsync(_stream, _options, cancellationToken)"
+            $"{ext}.ReadEnumerableCoreAsync(_stream, _options, cancellationToken: cancellationToken)"
         );
         if (batches)
         {
@@ -233,7 +233,7 @@ internal static class ReadBuilderComponent
             builder,
             $"global::System.Collections.Generic.IAsyncEnumerable<{model.ClassName}>",
             "AsAsyncEnumerable",
-            $"{ext}.ReadEnumerableCoreAsync(_bytes, _options, cancellationToken)"
+            $"{ext}.ReadEnumerableCoreAsync(_bytes, _options, cancellationToken: cancellationToken)"
         );
         if (batches)
         {
@@ -306,7 +306,7 @@ internal static class ReadBuilderComponent
         builder.AppendLine("    {");
         builder.AppendLine($"        if (_stream is not null)");
         builder.AppendLine(
-            $"            return await {ext}.ReadListCoreAsync(_stream, _options, cancellationToken, _predicate).ConfigureAwait(false);"
+            $"            return await {ext}.ReadListCoreAsync(_stream, _options, _predicate, cancellationToken).ConfigureAwait(false);"
         );
         builder.AppendLine();
         builder.AppendLine(
@@ -316,7 +316,7 @@ internal static class ReadBuilderComponent
         // the emitted file carries no usings, so it is called as a static method. Skipping it would
         // leave the enumeration capturing the caller's SynchronizationContext.
         builder.AppendLine(
-            $"        await foreach (var item in global::System.Threading.Tasks.TaskAsyncEnumerableExtensions.ConfigureAwait({ext}.ReadEnumerableCoreAsync(_bytes, _options, cancellationToken, _predicate), false))"
+            $"        await foreach (var item in global::System.Threading.Tasks.TaskAsyncEnumerableExtensions.ConfigureAwait({ext}.ReadEnumerableCoreAsync(_bytes, _options, _predicate, cancellationToken), false))"
         );
         builder.AppendLine("            results.Add(item);");
         builder.AppendLine("        return results;");
@@ -332,7 +332,7 @@ internal static class ReadBuilderComponent
         builder.AppendLine("    {");
         builder.AppendLine($"        if (_stream is not null)");
         builder.AppendLine(
-            $"            return await {ext}.ReadArrayCoreAsync(_stream, _options, cancellationToken, _predicate).ConfigureAwait(false);"
+            $"            return await {ext}.ReadArrayCoreAsync(_stream, _options, _predicate, cancellationToken).ConfigureAwait(false);"
         );
         builder.AppendLine();
         builder.AppendLine(
@@ -349,10 +349,10 @@ internal static class ReadBuilderComponent
         );
         builder.AppendLine($"        => _stream is not null");
         builder.AppendLine(
-            $"            ? {ext}.ReadEnumerableCoreAsync(_stream, _options, cancellationToken, _predicate)"
+            $"            ? {ext}.ReadEnumerableCoreAsync(_stream, _options, _predicate, cancellationToken)"
         );
         builder.AppendLine(
-            $"            : {ext}.ReadEnumerableCoreAsync(_bytes, _options, cancellationToken, _predicate);"
+            $"            : {ext}.ReadEnumerableCoreAsync(_bytes, _options, _predicate, cancellationToken);"
         );
         builder.AppendLine("}");
     }

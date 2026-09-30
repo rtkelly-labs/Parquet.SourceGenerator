@@ -102,6 +102,20 @@ internal static class LegacyCodeEmitter
     //  SCHEMA & STATIC CACHING
     // ──────────────────────────────────────────────────────────
 
+    private static void AppendNullGuard(StringBuilder builder, string parameterName)
+    {
+        // ArgumentNullException.ThrowIfNull is unavailable on net472 and netstandard2.0 consumers.
+        builder.AppendLine("#if NET6_0_OR_GREATER");
+        builder.AppendLine(
+            $"        global::System.ArgumentNullException.ThrowIfNull({parameterName});"
+        );
+        builder.AppendLine("#else");
+        builder.AppendLine(
+            $"        if ({parameterName} == null) throw new global::System.ArgumentNullException(nameof({parameterName}));"
+        );
+        builder.AppendLine("#endif");
+    }
+
     private static void EmitSchema(StringBuilder builder, TargetClassModel model)
     {
         SchemaComponent.EmitSchema(builder, model);
@@ -163,7 +177,7 @@ internal static class LegacyCodeEmitter
         for (int i = 0; i < model.Properties.Length; i++)
         {
             builder.AppendLine(
-                $"        ValidatePhysicalType(reader, fileFieldsForTypeValidation, _field_{i}, footerStart);"
+                $"        ValidatePhysicalType(reader, fileFieldsForTypeValidation, _field_{i});"
             );
         }
         builder.AppendLine("    }");
@@ -251,7 +265,7 @@ internal static class LegacyCodeEmitter
         );
         builder.AppendLine("    /// </remarks>");
         builder.AppendLine(
-            "    private static global::Parquet.ParquetOptions BuildFormatOptions(global::Parquet.SourceGenerator.ParquetSerializerOptions options)"
+            "    private static global::Parquet.ParquetOptions BuildFormatOptions()"
         );
         builder.AppendLine("    {");
         builder.AppendLine("        return new global::Parquet.ParquetOptions();");
@@ -373,12 +387,8 @@ internal static class LegacyCodeEmitter
             "        global::System.Threading.CancellationToken cancellationToken = default)"
         );
         builder.AppendLine("    {");
-        builder.AppendLine(
-            "        if (writer == null) throw new global::System.ArgumentNullException(nameof(writer));"
-        );
-        builder.AppendLine(
-            "        if (items == null) throw new global::System.ArgumentNullException(nameof(items));"
-        );
+        AppendNullGuard(builder, "writer");
+        AppendNullGuard(builder, "items");
         builder.AppendLine();
 
         if (model.Properties.Length == 0)
@@ -539,12 +549,8 @@ internal static class LegacyCodeEmitter
             "        global::System.Threading.CancellationToken cancellationToken = default)"
         );
         builder.AppendLine("    {");
-        builder.AppendLine(
-            "        if (items == null) throw new global::System.ArgumentNullException(nameof(items));"
-        );
-        builder.AppendLine(
-            "        if (stream == null) throw new global::System.ArgumentNullException(nameof(stream));"
-        );
+        AppendNullGuard(builder, "items");
+        AppendNullGuard(builder, "stream");
         builder.AppendLine();
         builder.AppendLine(
             "        options ??= global::Parquet.SourceGenerator.ParquetSerializerOptions.Default;"
@@ -554,7 +560,7 @@ internal static class LegacyCodeEmitter
         );
         builder.AppendLine("            Schema,");
         builder.AppendLine("            stream,");
-        builder.AppendLine("            BuildFormatOptions(options),");
+        builder.AppendLine("            BuildFormatOptions(),");
         builder.AppendLine(
             "            cancellationToken: cancellationToken).ConfigureAwait(false))"
         );
@@ -588,12 +594,8 @@ internal static class LegacyCodeEmitter
             "        global::System.Threading.CancellationToken cancellationToken = default)"
         );
         builder.AppendLine("    {");
-        builder.AppendLine(
-            "        if (items == null) throw new global::System.ArgumentNullException(nameof(items));"
-        );
-        builder.AppendLine(
-            "        if (stream == null) throw new global::System.ArgumentNullException(nameof(stream));"
-        );
+        AppendNullGuard(builder, "items");
+        AppendNullGuard(builder, "stream");
         BatchValidationComponent.EmitRowGroupSizeResolution(builder, "batchSize");
         builder.AppendLine();
         builder.AppendLine(
@@ -605,7 +607,7 @@ internal static class LegacyCodeEmitter
         );
         builder.AppendLine("                Schema,");
         builder.AppendLine("                stream,");
-        builder.AppendLine("                BuildFormatOptions(options),");
+        builder.AppendLine("                BuildFormatOptions(),");
         builder.AppendLine(
             "                cancellationToken: cancellationToken).ConfigureAwait(false))"
         );
@@ -623,7 +625,7 @@ internal static class LegacyCodeEmitter
         );
         builder.AppendLine("            Schema,");
         builder.AppendLine("            stream,");
-        builder.AppendLine("            BuildFormatOptions(options),");
+        builder.AppendLine("            BuildFormatOptions(),");
         builder.AppendLine(
             "            cancellationToken: cancellationToken).ConfigureAwait(false))"
         );
@@ -706,9 +708,7 @@ internal static class LegacyCodeEmitter
             "        global::System.Threading.CancellationToken cancellationToken = default)"
         );
         builder.AppendLine("    {");
-        builder.AppendLine(
-            "        if (stream == null) throw new global::System.ArgumentNullException(nameof(stream));"
-        );
+        AppendNullGuard(builder, "stream");
         builder.AppendLine();
         builder.AppendLine(
             "        options ??= global::Parquet.SourceGenerator.ParquetSerializerOptions.Default;"
@@ -720,7 +720,7 @@ internal static class LegacyCodeEmitter
             "        using (var reader = await global::Parquet.ParquetReader.CreateAsync("
         );
         builder.AppendLine("            guardedStream,");
-        builder.AppendLine("            BuildFormatOptions(options),");
+        builder.AppendLine("            BuildFormatOptions(),");
         builder.AppendLine(
             "            cancellationToken: cancellationToken).ConfigureAwait(false))"
         );
