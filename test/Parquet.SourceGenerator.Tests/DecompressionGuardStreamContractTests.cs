@@ -56,7 +56,7 @@ public sealed class DecompressionGuardStreamContractTests
     }
 
     [Fact]
-    public async Task ReadAsyncMemoryMatchesTheArrayOverload()
+    public async Task ReadAsyncMemoryMatchesTheArrayOverloadAsync()
     {
         byte[] data = Sample();
         using Stream guardA = CreateGuard(new MemoryStream(data));
