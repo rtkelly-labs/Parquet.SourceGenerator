@@ -64,6 +64,11 @@ internal static class ColumnHelpersComponent
     /// <summary>Emits every helper the model's columns call. Nothing is emitted for unused ones.</summary>
     public static void EmitHelpers(StringBuilder builder, TargetClassModel model)
     {
+        // The compound lane, node and extraction helpers ride along with the shared ones: one
+        // call site in the emitter hub keeps its fan-out under the ratchet.
+        CompoundMapping.EmitReadHelpers(builder, model);
+        CompoundMapping.EmitWriteHelpers(builder, model);
+
         LeafColumn[] columns = EmissionPlan.For(model).Columns;
         if (columns.Length == 0)
             return;

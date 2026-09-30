@@ -75,8 +75,6 @@ internal static class CodeEmitter
         // Shared per-column guards and pooled-buffer returns (#552): one helper each, one call
         // per column, so emitted method complexity does not grow with the column count.
         ColumnHelpersComponent.EmitHelpers(builder, model);
-        CompoundMapping.EmitReadHelpers(builder, model);
-        CompoundMapping.EmitWriteHelpers(builder, model);
         builder.AppendLine();
 
         // Streaming row group writer — low level primitives, 100M+ scale, Native AOT compatible
