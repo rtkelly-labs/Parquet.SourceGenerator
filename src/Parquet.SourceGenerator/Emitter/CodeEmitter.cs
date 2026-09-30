@@ -1610,11 +1610,6 @@ internal static class CodeEmitter
         builder.AppendLine("            }");
         builder.AppendLine("            finally");
         builder.AppendLine("            {");
-        builder.AppendLine("        }");
-        builder.AppendLine("        finally");
-        builder.AppendLine("        {");
-        builder.AppendLine("            await reader.DisposeAsync().ConfigureAwait(false);");
-        builder.AppendLine("        }");
 
         EmitReturnsFor(builder, model, indent: "                ");
 
@@ -1622,6 +1617,11 @@ internal static class CodeEmitter
         builder.AppendLine("        }");
         builder.AppendLine();
         builder.AppendLine("        return results;");
+        builder.AppendLine("        }");
+        builder.AppendLine("        finally");
+        builder.AppendLine("        {");
+        builder.AppendLine("            await reader.DisposeAsync().ConfigureAwait(false);");
+        builder.AppendLine("        }");
         builder.AppendLine("    }");
     }
 
