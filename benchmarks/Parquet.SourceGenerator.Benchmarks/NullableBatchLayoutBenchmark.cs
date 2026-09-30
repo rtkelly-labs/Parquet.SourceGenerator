@@ -136,14 +136,7 @@ internal static class NullableLayoutKernels
         int valueIndex = 0;
         for (int i = 0; i < definitionLevels.Length; i++)
         {
-            if (definitionLevels[i] != 0)
-            {
-                destination[i] = packed[valueIndex++];
-            }
-            else
-            {
-                destination[i] = null;
-            }
+            destination[i] = definitionLevels[i] != 0 ? (T?)packed[valueIndex++] : null;
         }
     }
 
@@ -190,11 +183,11 @@ internal sealed class ColumnData<T>
         PackedCount = NullableLayoutKernels.ExtractBranchless<T>(Nullable, Levels, Packed);
     }
 
-    public T?[] Nullable { get; }
+    public readonly T?[] Nullable;
 
-    public T[] Packed { get; }
+    public readonly T[] Packed;
 
-    public int[] Levels { get; }
+    public readonly int[] Levels;
 
     public int PackedCount { get; }
 
@@ -258,8 +251,16 @@ internal sealed class LayoutCBatch<T>
 }
 
 /// <summary>Per-column micro benchmarks; one concrete subclass per element type below.</summary>
-[SuppressMessage("Naming", "CA1707:Identifiers should not contain underscores")]
-[SuppressMessage("Design", "CA1000:Do not declare static members on generic types")]
+[SuppressMessage(
+    "Naming",
+    "CA1707:Identifiers should not contain underscores",
+    Justification = "Benchmark descriptions and naming follow the existing benchmark files."
+)]
+[SuppressMessage(
+    "Design",
+    "CA1000:Do not declare static members on generic types",
+    Justification = "BenchmarkDotNet discovers the Counts parameter source by name on the concrete subclass."
+)]
 public abstract class NullableBatchLayoutBenchmarkBase<T, TElement>
     where T : struct
     where TElement : struct, ILayoutElement<T>
@@ -562,7 +563,11 @@ public class NullableLayoutTextBenchmark
 [IterationCount(15)]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory, BenchmarkLogicalGroupRule.ByParams)]
 [CategoriesColumn]
-[SuppressMessage("Naming", "CA1707:Identifiers should not contain underscores")]
+[SuppressMessage(
+    "Naming",
+    "CA1707:Identifiers should not contain underscores",
+    Justification = "Benchmark descriptions and naming follow the existing benchmark files."
+)]
 public class NullableLayoutTpchBenchmark
 {
     private ColumnData<long> _orderKey = null!;
