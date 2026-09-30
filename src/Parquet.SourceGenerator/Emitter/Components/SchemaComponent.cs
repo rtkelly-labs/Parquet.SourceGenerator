@@ -404,7 +404,7 @@ internal static class SchemaComponent
         builder.AppendLine("            {");
         builder.AppendLine("#if NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER");
         builder.AppendLine(
-            "                int count = await stream.ReadAsync(footerLengthBytes.AsMemory(read, footerLengthBytes.Length - read), cancellationToken).ConfigureAwait(false);"
+            "                int count = await stream.ReadAsync(global::System.MemoryExtensions.AsMemory(footerLengthBytes, read, footerLengthBytes.Length - read), cancellationToken).ConfigureAwait(false);"
         );
         builder.AppendLine("#else");
         builder.AppendLine(
