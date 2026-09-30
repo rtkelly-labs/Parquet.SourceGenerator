@@ -141,7 +141,7 @@ public class LegacyEmitterTests
         );
 
         int guardStart = code.IndexOf("#if NET6_0_OR_GREATER", StringComparison.Ordinal);
-        int guardEnd = code.IndexOf("#endif", StringComparison.Ordinal);
+        int guardEnd = code.IndexOf("#endif", guardStart, StringComparison.Ordinal);
         int smallestSize = code.IndexOf(
             "global::System.IO.Compression.CompressionLevel.SmallestSize",
             StringComparison.Ordinal
