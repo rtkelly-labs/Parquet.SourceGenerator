@@ -402,9 +402,15 @@ internal static class SchemaComponent
         builder.AppendLine("            int read = 0;");
         builder.AppendLine("            while (read < footerLengthBytes.Length)");
         builder.AppendLine("            {");
+        builder.AppendLine("#if NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER");
+        builder.AppendLine(
+            "                int count = await stream.ReadAsync(global::System.MemoryExtensions.AsMemory(footerLengthBytes, read, footerLengthBytes.Length - read), cancellationToken).ConfigureAwait(false);"
+        );
+        builder.AppendLine("#else");
         builder.AppendLine(
             "                int count = await stream.ReadAsync(footerLengthBytes, read, footerLengthBytes.Length - read, cancellationToken).ConfigureAwait(false);"
         );
+        builder.AppendLine("#endif");
         builder.AppendLine("                if (count == 0)");
         builder.AppendLine("                {");
         builder.AppendLine(
