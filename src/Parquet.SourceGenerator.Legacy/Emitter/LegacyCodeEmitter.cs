@@ -677,7 +677,7 @@ internal static class LegacyCodeEmitter
         );
         builder.AppendLine("    {");
         builder.AppendLine(
-            $"        var array = await ReadParquetArrayAsync(stream, options, cancellationToken);"
+            $"        var array = await ReadParquetArrayAsync(stream, options, cancellationToken).ConfigureAwait(false);"
         );
         builder.AppendLine(
             $"        return new global::System.Collections.Generic.List<{model.ClassName}>(array);"

@@ -447,7 +447,7 @@ internal static class CodeEmitter
                 + $"{indent}    new global::System.ReadOnlyMemory<{packedL}>({bufName}, 0, nonNullCount_{col.Slot}),\n"
                 + $"{indent}    new global::System.ReadOnlyMemory<int>(defLevels_{col.Slot}, 0, posCount_{col.Slot}),\n"
                 + $"{indent}    new global::System.ReadOnlyMemory<int>(repLevels_{col.Slot}, 0, posCount_{col.Slot}),\n"
-                + $"{indent}    cancellationToken: cancellationToken);";
+                + $"{indent}    cancellationToken: cancellationToken).ConfigureAwait(false);";
         }
 
         if (col.IsCompound)
@@ -460,7 +460,7 @@ internal static class CodeEmitter
                 + $"{indent}    new global::System.ReadOnlyMemory<{packed}>({bufName}, 0, nonNullCount_{col.Slot}),\n"
                 + $"{indent}    new global::System.ReadOnlyMemory<int>(defLevels_{col.Slot}, 0, count),\n"
                 + $"{indent}    null,\n"
-                + $"{indent}    cancellationToken: cancellationToken);";
+                + $"{indent}    cancellationToken: cancellationToken).ConfigureAwait(false);";
         }
 
         PropertyModel prop = col.Leaf;
@@ -476,14 +476,14 @@ internal static class CodeEmitter
                 + $"{indent}    new global::System.ReadOnlyMemory<{nonNullType}>({bufName}, 0, nonNullCount_{propIndex}),\n"
                 + $"{indent}    new global::System.ReadOnlyMemory<int>(defLevels_{propIndex}, 0, count),\n"
                 + $"{indent}    null,\n"
-                + $"{indent}    cancellationToken: cancellationToken);";
+                + $"{indent}    cancellationToken: cancellationToken).ConfigureAwait(false);";
         }
         if (isString)
         {
             string memType = prop.IsNullable
                 ? "global::System.ReadOnlyMemory<char>?"
                 : "global::System.ReadOnlyMemory<char>";
-            return $"{indent}await groupWriter.WriteAsync<global::System.ReadOnlyMemory<char>>(\n{indent}    {fieldAccess},\n{indent}    new global::System.ReadOnlyMemory<{memType}>({bufName}, 0, count),\n{indent}    cancellationToken: cancellationToken);";
+            return $"{indent}await groupWriter.WriteAsync<global::System.ReadOnlyMemory<char>>(\n{indent}    {fieldAccess},\n{indent}    new global::System.ReadOnlyMemory<{memType}>({bufName}, 0, count),\n{indent}    cancellationToken: cancellationToken).ConfigureAwait(false);";
         }
 
         if (isByteArray)
@@ -491,12 +491,12 @@ internal static class CodeEmitter
             string memType = prop.IsNullable
                 ? "global::System.ReadOnlyMemory<byte>?"
                 : "global::System.ReadOnlyMemory<byte>";
-            return $"{indent}await groupWriter.WriteAsync<global::System.ReadOnlyMemory<byte>>(\n{indent}    {fieldAccess},\n{indent}    new global::System.ReadOnlyMemory<{memType}>({bufName}, 0, count),\n{indent}    cancellationToken: cancellationToken);";
+            return $"{indent}await groupWriter.WriteAsync<global::System.ReadOnlyMemory<byte>>(\n{indent}    {fieldAccess},\n{indent}    new global::System.ReadOnlyMemory<{memType}>({bufName}, 0, count),\n{indent}    cancellationToken: cancellationToken).ConfigureAwait(false);";
         }
 
         if (prop.Kind == PropertyKind.Guid)
         {
-            return $"{indent}await groupWriter.WriteAsync<global::System.Guid>(\n{indent}    {fieldAccess},\n{indent}    new global::System.ReadOnlyMemory<global::System.Guid>({bufName}, 0, count),\n{indent}    cancellationToken: cancellationToken);";
+            return $"{indent}await groupWriter.WriteAsync<global::System.Guid>(\n{indent}    {fieldAccess},\n{indent}    new global::System.ReadOnlyMemory<global::System.Guid>({bufName}, 0, count),\n{indent}    cancellationToken: cancellationToken).ConfigureAwait(false);";
         }
 
         if (prop.Kind == PropertyKind.DateOnly)
@@ -504,29 +504,29 @@ internal static class CodeEmitter
             string memType = prop.IsNullable
                 ? "global::System.DateTime?"
                 : "global::System.DateTime";
-            return $"{indent}await groupWriter.WriteAsync<global::System.DateTime>(\n{indent}    {fieldAccess},\n{indent}    new global::System.ReadOnlyMemory<{memType}>({bufName}, 0, count),\n{indent}    cancellationToken: cancellationToken);";
+            return $"{indent}await groupWriter.WriteAsync<global::System.DateTime>(\n{indent}    {fieldAccess},\n{indent}    new global::System.ReadOnlyMemory<{memType}>({bufName}, 0, count),\n{indent}    cancellationToken: cancellationToken).ConfigureAwait(false);";
         }
 
         if (prop.Kind == PropertyKind.Enum)
         {
             string underlying = prop.EnumUnderlyingTypeName ?? "int";
-            return $"{indent}await groupWriter.WriteAsync<{underlying}>(\n{indent}    {fieldAccess},\n{indent}    new global::System.ReadOnlyMemory<{underlying}>({bufName}, 0, count),\n{indent}    cancellationToken: cancellationToken);";
+            return $"{indent}await groupWriter.WriteAsync<{underlying}>(\n{indent}    {fieldAccess},\n{indent}    new global::System.ReadOnlyMemory<{underlying}>({bufName}, 0, count),\n{indent}    cancellationToken: cancellationToken).ConfigureAwait(false);";
         }
 
         if (prop.Kind == PropertyKind.TimeSpan)
         {
             string memType = prop.IsNullable ? "int?" : "int";
-            return $"{indent}await groupWriter.WriteAsync<int>(\n{indent}    {fieldAccess},\n{indent}    new global::System.ReadOnlyMemory<{memType}>({bufName}, 0, count),\n{indent}    cancellationToken: cancellationToken);";
+            return $"{indent}await groupWriter.WriteAsync<int>(\n{indent}    {fieldAccess},\n{indent}    new global::System.ReadOnlyMemory<{memType}>({bufName}, 0, count),\n{indent}    cancellationToken: cancellationToken).ConfigureAwait(false);";
         }
 
         if (prop.Kind == PropertyKind.TimeOnly)
         {
             string memType = prop.IsNullable ? "long?" : "long";
-            return $"{indent}await groupWriter.WriteAsync<long>(\n{indent}    {fieldAccess},\n{indent}    new global::System.ReadOnlyMemory<{memType}>({bufName}, 0, count),\n{indent}    cancellationToken: cancellationToken);";
+            return $"{indent}await groupWriter.WriteAsync<long>(\n{indent}    {fieldAccess},\n{indent}    new global::System.ReadOnlyMemory<{memType}>({bufName}, 0, count),\n{indent}    cancellationToken: cancellationToken).ConfigureAwait(false);";
         }
 
         string structType = prop.TypeName.TrimEnd('?');
-        return $"{indent}await groupWriter.WriteAsync<{structType}>(\n{indent}    {fieldAccess},\n{indent}    new global::System.ReadOnlyMemory<{structType}>({bufName}, 0, count),\n{indent}    cancellationToken: cancellationToken);";
+        return $"{indent}await groupWriter.WriteAsync<{structType}>(\n{indent}    {fieldAccess},\n{indent}    new global::System.ReadOnlyMemory<{structType}>({bufName}, 0, count),\n{indent}    cancellationToken: cancellationToken).ConfigureAwait(false);";
     }
 
     /// <summary>
@@ -616,7 +616,7 @@ internal static class CodeEmitter
             builder.AppendLine(
                 $"{indent}    new global::System.Memory<int>(repLevels_{col.Slot}, 0, entries_{col.Slot}),"
             );
-            builder.AppendLine($"{indent}    cancellationToken);");
+            builder.AppendLine($"{indent}    cancellationToken).ConfigureAwait(false);");
             EmitPackedStringLengthValidation(
                 builder,
                 col,
@@ -641,7 +641,7 @@ internal static class CodeEmitter
                 $"{indent}    new global::System.Memory<int>(defLevels_{col.Slot}, 0, rowCount),"
             );
             builder.AppendLine($"{indent}    null,");
-            builder.AppendLine($"{indent}    cancellationToken);");
+            builder.AppendLine($"{indent}    cancellationToken).ConfigureAwait(false);");
             EmitPackedStringLengthValidation(
                 builder,
                 col,
@@ -803,45 +803,45 @@ internal static class CodeEmitter
         {
             // Every string uses the raw UTF-16 lane so the byte-length guard runs before any string
             // materialization, while the existing optional deduplication behavior is retained.
-            return $"{indent}await ReadBoundedStringColumnAsync(\n{indent}    groupReader,\n{indent}    {fieldAccess},\n{indent}    {bufName},\n{indent}    rowCount,\n{indent}    deduplicateStrings,\n{indent}    stringDeduplicator,\n{indent}    options.MaxStringLengthBytes,\n{indent}    cancellationToken);";
+            return $"{indent}await ReadBoundedStringColumnAsync(\n{indent}    groupReader,\n{indent}    {fieldAccess},\n{indent}    {bufName},\n{indent}    rowCount,\n{indent}    deduplicateStrings,\n{indent}    stringDeduplicator,\n{indent}    options.MaxStringLengthBytes,\n{indent}    cancellationToken).ConfigureAwait(false);";
         }
         else if (isByteArray)
         {
-            return $"{indent}await groupReader.ReadAsync(\n{indent}    {fieldAccess},\n{indent}    new global::System.Memory<byte[]?>({bufName}, 0, rowCount),\n{indent}    cancellationToken: cancellationToken);";
+            return $"{indent}await groupReader.ReadAsync(\n{indent}    {fieldAccess},\n{indent}    new global::System.Memory<byte[]?>({bufName}, 0, rowCount),\n{indent}    cancellationToken: cancellationToken).ConfigureAwait(false);";
         }
         else if (prop.Kind == PropertyKind.Guid)
         {
             string memType = prop.IsNullable ? "global::System.Guid?" : "global::System.Guid";
-            return $"{indent}await groupReader.ReadAsync<global::System.Guid>(\n{indent}    {fieldAccess},\n{indent}    new global::System.Memory<{memType}>({bufName}, 0, rowCount),\n{indent}    cancellationToken: cancellationToken);";
+            return $"{indent}await groupReader.ReadAsync<global::System.Guid>(\n{indent}    {fieldAccess},\n{indent}    new global::System.Memory<{memType}>({bufName}, 0, rowCount),\n{indent}    cancellationToken: cancellationToken).ConfigureAwait(false);";
         }
         else if (prop.Kind == PropertyKind.DateOnly)
         {
             string memType = prop.IsNullable
                 ? "global::System.DateTime?"
                 : "global::System.DateTime";
-            return $"{indent}await groupReader.ReadAsync<global::System.DateTime>(\n{indent}    {fieldAccess},\n{indent}    new global::System.Memory<{memType}>({bufName}, 0, rowCount),\n{indent}    cancellationToken: cancellationToken);";
+            return $"{indent}await groupReader.ReadAsync<global::System.DateTime>(\n{indent}    {fieldAccess},\n{indent}    new global::System.Memory<{memType}>({bufName}, 0, rowCount),\n{indent}    cancellationToken: cancellationToken).ConfigureAwait(false);";
         }
         else if (prop.Kind == PropertyKind.Enum)
         {
             string underlying = prop.EnumUnderlyingTypeName ?? "int";
             string memType = prop.IsNullable ? $"{underlying}?" : underlying;
-            return $"{indent}await groupReader.ReadAsync<{underlying}>(\n{indent}    {fieldAccess},\n{indent}    new global::System.Memory<{memType}>({bufName}, 0, rowCount),\n{indent}    cancellationToken: cancellationToken);";
+            return $"{indent}await groupReader.ReadAsync<{underlying}>(\n{indent}    {fieldAccess},\n{indent}    new global::System.Memory<{memType}>({bufName}, 0, rowCount),\n{indent}    cancellationToken: cancellationToken).ConfigureAwait(false);";
         }
         else if (prop.Kind == PropertyKind.TimeSpan)
         {
             string memType = prop.IsNullable ? "int?" : "int";
-            return $"{indent}await groupReader.ReadAsync<int>(\n{indent}    {fieldAccess},\n{indent}    new global::System.Memory<{memType}>({bufName}, 0, rowCount),\n{indent}    cancellationToken: cancellationToken);";
+            return $"{indent}await groupReader.ReadAsync<int>(\n{indent}    {fieldAccess},\n{indent}    new global::System.Memory<{memType}>({bufName}, 0, rowCount),\n{indent}    cancellationToken: cancellationToken).ConfigureAwait(false);";
         }
         else if (prop.Kind == PropertyKind.TimeOnly)
         {
             string memType = prop.IsNullable ? "long?" : "long";
-            return $"{indent}await groupReader.ReadAsync<long>(\n{indent}    {fieldAccess},\n{indent}    new global::System.Memory<{memType}>({bufName}, 0, rowCount),\n{indent}    cancellationToken: cancellationToken);";
+            return $"{indent}await groupReader.ReadAsync<long>(\n{indent}    {fieldAccess},\n{indent}    new global::System.Memory<{memType}>({bufName}, 0, rowCount),\n{indent}    cancellationToken: cancellationToken).ConfigureAwait(false);";
         }
         else
         {
             string structType = prop.TypeName.TrimEnd('?');
             string memType = prop.IsNullable ? $"{structType}?" : structType;
-            return $"{indent}await groupReader.ReadAsync<{structType}>(\n{indent}    {fieldAccess},\n{indent}    new global::System.Memory<{memType}>({bufName}, 0, rowCount),\n{indent}    cancellationToken: cancellationToken);";
+            return $"{indent}await groupReader.ReadAsync<{structType}>(\n{indent}    {fieldAccess},\n{indent}    new global::System.Memory<{memType}>({bufName}, 0, rowCount),\n{indent}    cancellationToken: cancellationToken).ConfigureAwait(false);";
         }
     }
 
@@ -1095,15 +1095,16 @@ internal static class CodeEmitter
             "        options ??= global::Parquet.SourceGenerator.ParquetSerializerOptions.Default;"
         );
         builder.AppendLine();
-        builder.AppendLine(
-            "        await using var writer = await global::Parquet.ParquetWriter.CreateAsync("
-        );
+        builder.AppendLine("        var writer = await global::Parquet.ParquetWriter.CreateAsync(");
         builder.AppendLine("            Schema,");
         builder.AppendLine("            stream,");
         builder.AppendLine("            BuildFormatOptions(options),");
-        builder.AppendLine("            cancellationToken: cancellationToken);");
         builder.AppendLine(
-            "        await writer.WriteParquetRowGroupAsync(items, cancellationToken);"
+            "            cancellationToken: cancellationToken).ConfigureAwait(false);"
+        );
+        builder.AppendLine("        await using var writerScope = writer.ConfigureAwait(false);");
+        builder.AppendLine(
+            "        await writer.WriteParquetRowGroupAsync(items, cancellationToken).ConfigureAwait(false);"
         );
         builder.AppendLine("    }");
     }
@@ -1142,25 +1143,31 @@ internal static class CodeEmitter
         );
         builder.AppendLine("        {");
         builder.AppendLine(
-            "            await using var singleWriter = await global::Parquet.ParquetWriter.CreateAsync("
+            "            var singleWriter = await global::Parquet.ParquetWriter.CreateAsync("
         );
         builder.AppendLine("                Schema,");
         builder.AppendLine("                stream,");
         builder.AppendLine("                BuildFormatOptions(options),");
-        builder.AppendLine("                cancellationToken: cancellationToken);");
         builder.AppendLine(
-            "            await singleWriter.WriteParquetRowGroupAsync(col, cancellationToken);"
+            "                cancellationToken: cancellationToken).ConfigureAwait(false);"
+        );
+        builder.AppendLine(
+            "            await using var singleWriterScope = singleWriter.ConfigureAwait(false);"
+        );
+        builder.AppendLine(
+            "            await singleWriter.WriteParquetRowGroupAsync(col, cancellationToken).ConfigureAwait(false);"
         );
         builder.AppendLine("            return;");
         builder.AppendLine("        }");
         builder.AppendLine();
-        builder.AppendLine(
-            "        await using var writer = await global::Parquet.ParquetWriter.CreateAsync("
-        );
+        builder.AppendLine("        var writer = await global::Parquet.ParquetWriter.CreateAsync(");
         builder.AppendLine("            Schema,");
         builder.AppendLine("            stream,");
         builder.AppendLine("            BuildFormatOptions(options),");
-        builder.AppendLine("            cancellationToken: cancellationToken);");
+        builder.AppendLine(
+            "            cancellationToken: cancellationToken).ConfigureAwait(false);"
+        );
+        builder.AppendLine("        await using var writerScope = writer.ConfigureAwait(false);");
         builder.AppendLine(
             $"        var buffer = new global::System.Collections.Generic.List<{model.ClassName}>(targetChunkSize);"
         );
@@ -1171,14 +1178,14 @@ internal static class CodeEmitter
         builder.AppendLine("            if (buffer.Count == targetChunkSize)");
         builder.AppendLine("            {");
         builder.AppendLine(
-            "                await writer.WriteParquetRowGroupAsync(buffer, cancellationToken);"
+            "                await writer.WriteParquetRowGroupAsync(buffer, cancellationToken).ConfigureAwait(false);"
         );
         builder.AppendLine("                buffer.Clear();");
         builder.AppendLine("            }");
         builder.AppendLine("        }");
         builder.AppendLine("        if (buffer.Count > 0)");
         builder.AppendLine(
-            "            await writer.WriteParquetRowGroupAsync(buffer, cancellationToken);"
+            "            await writer.WriteParquetRowGroupAsync(buffer, cancellationToken).ConfigureAwait(false);"
         );
         builder.AppendLine("    }");
     }
@@ -1212,31 +1219,34 @@ internal static class CodeEmitter
         );
         EmitRowGroupSizeResolution(builder);
         builder.AppendLine();
-        builder.AppendLine(
-            "        await using var writer = await global::Parquet.ParquetWriter.CreateAsync("
-        );
+        builder.AppendLine("        var writer = await global::Parquet.ParquetWriter.CreateAsync(");
         builder.AppendLine("            Schema,");
         builder.AppendLine("            stream,");
         builder.AppendLine("            BuildFormatOptions(options),");
-        builder.AppendLine("            cancellationToken: cancellationToken);");
+        builder.AppendLine(
+            "            cancellationToken: cancellationToken).ConfigureAwait(false);"
+        );
+        builder.AppendLine("        await using var writerScope = writer.ConfigureAwait(false);");
         builder.AppendLine(
             $"        var buffer = new global::System.Collections.Generic.List<{model.ClassName}>(targetChunkSize);"
         );
-        builder.AppendLine("        await foreach (var item in items)");
+        builder.AppendLine(
+            "        await foreach (var item in global::System.Threading.Tasks.TaskAsyncEnumerableExtensions.WithCancellation(items, cancellationToken).ConfigureAwait(false))"
+        );
         builder.AppendLine("        {");
         builder.AppendLine("            cancellationToken.ThrowIfCancellationRequested();");
         builder.AppendLine("            buffer.Add(item);");
         builder.AppendLine("            if (buffer.Count == targetChunkSize)");
         builder.AppendLine("            {");
         builder.AppendLine(
-            "                await writer.WriteParquetRowGroupAsync(buffer, cancellationToken);"
+            "                await writer.WriteParquetRowGroupAsync(buffer, cancellationToken).ConfigureAwait(false);"
         );
         builder.AppendLine("                buffer.Clear();");
         builder.AppendLine("            }");
         builder.AppendLine("        }");
         builder.AppendLine("        if (buffer.Count > 0)");
         builder.AppendLine(
-            "            await writer.WriteParquetRowGroupAsync(buffer, cancellationToken);"
+            "            await writer.WriteParquetRowGroupAsync(buffer, cancellationToken).ConfigureAwait(false);"
         );
         builder.AppendLine("    }");
     }
@@ -1282,12 +1292,13 @@ internal static class CodeEmitter
         builder.AppendLine(
             "        using var guardedStream = CreateGuardedReadStream(stream, options);"
         );
-        builder.AppendLine(
-            "        await using var reader = await global::Parquet.ParquetReader.CreateAsync("
-        );
+        builder.AppendLine("        var reader = await global::Parquet.ParquetReader.CreateAsync(");
         builder.AppendLine("            guardedStream,");
         builder.AppendLine("            BuildFormatOptions(options),");
-        builder.AppendLine("            cancellationToken: cancellationToken);");
+        builder.AppendLine(
+            "            cancellationToken: cancellationToken).ConfigureAwait(false);"
+        );
+        builder.AppendLine("        await using var readerScope = reader.ConfigureAwait(false);");
         builder.AppendLine("        guardedStream.Activate();");
         builder.AppendLine(
             "        await ValidateReaderAsync(reader, stream, options, cancellationToken).ConfigureAwait(false);"
@@ -1488,12 +1499,13 @@ internal static class CodeEmitter
         builder.AppendLine(
             "        using var guardedStream = CreateGuardedReadStream(stream, options);"
         );
-        builder.AppendLine(
-            "        await using var reader = await global::Parquet.ParquetReader.CreateAsync("
-        );
+        builder.AppendLine("        var reader = await global::Parquet.ParquetReader.CreateAsync(");
         builder.AppendLine("            guardedStream,");
         builder.AppendLine("            BuildFormatOptions(options),");
-        builder.AppendLine("            cancellationToken: cancellationToken);");
+        builder.AppendLine(
+            "            cancellationToken: cancellationToken).ConfigureAwait(false);"
+        );
+        builder.AppendLine("        await using var readerScope = reader.ConfigureAwait(false);");
         builder.AppendLine("        guardedStream.Activate();");
         builder.AppendLine(
             "        await ValidateReaderAsync(reader, stream, options, cancellationToken).ConfigureAwait(false);"
@@ -1601,12 +1613,13 @@ internal static class CodeEmitter
         builder.AppendLine(
             "        using var guardedStream = CreateGuardedReadStream(stream, options);"
         );
-        builder.AppendLine(
-            "        await using var reader = await global::Parquet.ParquetReader.CreateAsync("
-        );
+        builder.AppendLine("        var reader = await global::Parquet.ParquetReader.CreateAsync(");
         builder.AppendLine("            guardedStream,");
         builder.AppendLine("            BuildFormatOptions(options),");
-        builder.AppendLine("            cancellationToken: cancellationToken);");
+        builder.AppendLine(
+            "            cancellationToken: cancellationToken).ConfigureAwait(false);"
+        );
+        builder.AppendLine("        await using var readerScope = reader.ConfigureAwait(false);");
         builder.AppendLine("        guardedStream.Activate();");
         builder.AppendLine(
             "        await ValidateReaderAsync(reader, stream, options, cancellationToken).ConfigureAwait(false);"
@@ -1702,7 +1715,7 @@ internal static class CodeEmitter
         );
         builder.AppendLine("    {");
         builder.AppendLine(
-            $"        var results = await ReadBufferSequentialArrayAsync(parquetBytes, options, cancellationToken);"
+            $"        var results = await ReadBufferSequentialArrayAsync(parquetBytes, options, cancellationToken).ConfigureAwait(false);"
         );
         builder.AppendLine(
             $"        return new global::System.Collections.Generic.List<{model.ClassName}>(results);"
@@ -1727,7 +1740,7 @@ internal static class CodeEmitter
         );
         builder.AppendLine("    {");
         builder.AppendLine(
-            "        return await ReadBufferSequentialArrayAsync(parquetBytes, options, cancellationToken);"
+            "        return await ReadBufferSequentialArrayAsync(parquetBytes, options, cancellationToken).ConfigureAwait(false);"
         );
         builder.AppendLine("    }");
         builder.AppendLine();
@@ -1756,7 +1769,7 @@ internal static class CodeEmitter
         builder.AppendLine("    {");
         builder.AppendLine("        using var stream = CreateBufferStream(parquetBytes);");
         builder.AppendLine(
-            $"        await foreach (var item in ReadEnumerableCoreAsync(stream, options, cancellationToken{RowGroupPruningComponent.ForwardArgument(model)}))"
+            $"        await foreach (var item in global::System.Threading.Tasks.TaskAsyncEnumerableExtensions.ConfigureAwait(ReadEnumerableCoreAsync(stream, options, cancellationToken{RowGroupPruningComponent.ForwardArgument(model)}), false))"
         );
         builder.AppendLine("        {");
         builder.AppendLine("            yield return item;");
@@ -1848,12 +1861,13 @@ internal static class CodeEmitter
         builder.AppendLine(
             "        using var guardedStream = CreateGuardedReadStream(stream, options);"
         );
-        builder.AppendLine(
-            "        await using var reader = await global::Parquet.ParquetReader.CreateAsync("
-        );
+        builder.AppendLine("        var reader = await global::Parquet.ParquetReader.CreateAsync(");
         builder.AppendLine("            guardedStream,");
         builder.AppendLine("            BuildFormatOptions(options),");
-        builder.AppendLine("            cancellationToken: cancellationToken);");
+        builder.AppendLine(
+            "            cancellationToken: cancellationToken).ConfigureAwait(false);"
+        );
+        builder.AppendLine("        await using var readerScope = reader.ConfigureAwait(false);");
         builder.AppendLine("        guardedStream.Activate();");
         builder.AppendLine(
             "        await ValidateReaderAsync(reader, stream, options, cancellationToken).ConfigureAwait(false);"
@@ -2003,12 +2017,13 @@ internal static class CodeEmitter
         builder.AppendLine(
             "        using var guardedStream = CreateGuardedReadStream(stream, options);"
         );
-        builder.AppendLine(
-            "        await using var reader = await global::Parquet.ParquetReader.CreateAsync("
-        );
+        builder.AppendLine("        var reader = await global::Parquet.ParquetReader.CreateAsync(");
         builder.AppendLine("            guardedStream,");
         builder.AppendLine("            BuildFormatOptions(options),");
-        builder.AppendLine("            cancellationToken: cancellationToken);");
+        builder.AppendLine(
+            "            cancellationToken: cancellationToken).ConfigureAwait(false);"
+        );
+        builder.AppendLine("        await using var readerScope = reader.ConfigureAwait(false);");
         builder.AppendLine("        guardedStream.Activate();");
         builder.AppendLine(
             "        await ValidateReaderAsync(reader, stream, options, cancellationToken).ConfigureAwait(false);"
@@ -2140,11 +2155,14 @@ internal static class CodeEmitter
             "            using var guardedProbeStream = CreateGuardedReadStream(probeStream, options);"
         );
         builder.AppendLine(
-            "            await using var probe = await global::Parquet.ParquetReader.CreateAsync("
+            "            var probe = await global::Parquet.ParquetReader.CreateAsync("
         );
         builder.AppendLine("                guardedProbeStream,");
         builder.AppendLine("                formatOptions,");
-        builder.AppendLine("                cancellationToken: cancellationToken);");
+        builder.AppendLine(
+            "                cancellationToken: cancellationToken).ConfigureAwait(false);"
+        );
+        builder.AppendLine("            await using var probeScope = probe.ConfigureAwait(false);");
         builder.AppendLine("            guardedProbeStream.Activate();");
         builder.AppendLine(
             "            await ValidateReaderAsync(probe, probeStream, options, cancellationToken).ConfigureAwait(false);"
@@ -2172,7 +2190,7 @@ internal static class CodeEmitter
         builder.AppendLine("        if (rowGroupCount <= 1 || totalRows <= 10_000)");
         builder.AppendLine("        {");
         builder.AppendLine(
-            "            return await ReadBufferSequentialArrayAsync(sourceBytes, options, cancellationToken);"
+            "            return await ReadBufferSequentialArrayAsync(sourceBytes, options, cancellationToken).ConfigureAwait(false);"
         );
         builder.AppendLine("        }");
         builder.AppendLine();
@@ -2201,7 +2219,7 @@ internal static class CodeEmitter
         builder.AppendLine("                maxRowGroupSize,");
         builder.AppendLine("                options,");
         builder.AppendLine("                linkedCts,");
-        builder.AppendLine("                workerToken);");
+        builder.AppendLine("                workerToken).ConfigureAwait(false);");
         builder.AppendLine("        }");
         builder.AppendLine("        else");
         builder.AppendLine("        {");
@@ -2227,7 +2245,7 @@ internal static class CodeEmitter
         builder.AppendLine("            try");
         builder.AppendLine("            {");
         builder.AppendLine(
-            "                await global::System.Threading.Tasks.Task.WhenAll(workers);"
+            "                await global::System.Threading.Tasks.Task.WhenAll(workers).ConfigureAwait(false);"
         );
         builder.AppendLine("            }");
         builder.AppendLine("            catch");
@@ -2259,7 +2277,7 @@ internal static class CodeEmitter
         );
         builder.AppendLine("    {");
         builder.AppendLine(
-            $"        var resultArray = await ReadParallelArrayCoreAsync(parquetBytes, options, cancellationToken);"
+            $"        var resultArray = await ReadParallelArrayCoreAsync(parquetBytes, options, cancellationToken).ConfigureAwait(false);"
         );
         builder.AppendLine(
             $"        return new global::System.Collections.Generic.List<{model.ClassName}>(resultArray);"
@@ -2313,11 +2331,16 @@ internal static class CodeEmitter
             "            using var guardedStream = CreateGuardedReadStream(stream, options);"
         );
         builder.AppendLine(
-            "            await using var reader = await global::Parquet.ParquetReader.CreateAsync("
+            "            var reader = await global::Parquet.ParquetReader.CreateAsync("
         );
         builder.AppendLine("                guardedStream,");
         builder.AppendLine("                formatOptions,");
-        builder.AppendLine("                cancellationToken: cancellationToken);");
+        builder.AppendLine(
+            "                cancellationToken: cancellationToken).ConfigureAwait(false);"
+        );
+        builder.AppendLine(
+            "            await using var readerScope = reader.ConfigureAwait(false);"
+        );
         builder.AppendLine("            guardedStream.Activate();");
         builder.AppendLine(
             "            await ValidateReaderAsync(reader, stream, options, cancellationToken).ConfigureAwait(false);"

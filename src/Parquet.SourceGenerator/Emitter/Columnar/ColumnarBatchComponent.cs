@@ -417,7 +417,9 @@ internal static class ColumnarBatchComponent
                     $"                batch.{prop.Name}DefinitionLevels.Slice(0, count),"
                 );
                 builder.AppendLine("                null,");
-                builder.AppendLine("                cancellationToken: cancellationToken);");
+                builder.AppendLine(
+                    "                cancellationToken: cancellationToken).ConfigureAwait(false);"
+                );
             }
             else
             {
@@ -425,7 +427,9 @@ internal static class ColumnarBatchComponent
                 builder.AppendLine($"            await groupWriter.WriteAsync<{generic}>(");
                 builder.AppendLine($"                {fieldAccess},");
                 builder.AppendLine($"                batch.{prop.Name}.Slice(0, count),");
-                builder.AppendLine("                cancellationToken: cancellationToken);");
+                builder.AppendLine(
+                    "                cancellationToken: cancellationToken).ConfigureAwait(false);"
+                );
             }
         }
 
@@ -517,15 +521,16 @@ internal static class ColumnarBatchComponent
             "        options ??= global::Parquet.SourceGenerator.ParquetSerializerOptions.Default;"
         );
         builder.AppendLine();
-        builder.AppendLine(
-            "        await using var writer = await global::Parquet.ParquetWriter.CreateAsync("
-        );
+        builder.AppendLine("        var writer = await global::Parquet.ParquetWriter.CreateAsync(");
         builder.AppendLine("            Schema,");
         builder.AppendLine("            stream,");
         builder.AppendLine("            BuildFormatOptions(options),");
-        builder.AppendLine("            cancellationToken: cancellationToken);");
         builder.AppendLine(
-            "        await writer.WriteParquetRowGroupAsync(batch, cancellationToken);"
+            "            cancellationToken: cancellationToken).ConfigureAwait(false);"
+        );
+        builder.AppendLine("        await using var writerScope = writer.ConfigureAwait(false);");
+        builder.AppendLine(
+            "        await writer.WriteParquetRowGroupAsync(batch, cancellationToken).ConfigureAwait(false);"
         );
         builder.AppendLine("    }");
     }

@@ -203,12 +203,13 @@ internal static class ColumnBatchComponent
             "        options ??= global::Parquet.SourceGenerator.ParquetSerializerOptions.Default;"
         );
         builder.AppendLine();
-        builder.AppendLine(
-            "        await using var reader = await global::Parquet.ParquetReader.CreateAsync("
-        );
+        builder.AppendLine("        var reader = await global::Parquet.ParquetReader.CreateAsync(");
         builder.AppendLine("            stream,");
         builder.AppendLine("            BuildFormatOptions(options),");
-        builder.AppendLine("            cancellationToken: cancellationToken);");
+        builder.AppendLine(
+            "            cancellationToken: cancellationToken).ConfigureAwait(false);"
+        );
+        builder.AppendLine("        await using var readerScope = reader.ConfigureAwait(false);");
         builder.AppendLine(
             "        await ValidateReaderAsync(reader, stream, options, cancellationToken).ConfigureAwait(false);"
         );
@@ -289,7 +290,7 @@ internal static class ColumnBatchComponent
         builder.AppendLine("    {");
         builder.AppendLine("        using var stream = CreateBufferStream(parquetBytes);");
         builder.AppendLine(
-            "        await foreach (var batch in ReadBatchesCoreAsync(stream, options, cancellationToken))"
+            "        await foreach (var batch in global::System.Threading.Tasks.TaskAsyncEnumerableExtensions.ConfigureAwait(ReadBatchesCoreAsync(stream, options, cancellationToken), false))"
         );
         builder.AppendLine("        {");
         builder.AppendLine("            yield return batch;");

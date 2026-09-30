@@ -256,7 +256,7 @@ internal static class StringDeduplicatorComponent
             "                    : new global::System.Memory<int>(definitionLevels, 0, rowCount),"
         );
         builder.AppendLine("                null,");
-        builder.AppendLine("                cancellationToken);");
+        builder.AppendLine("                cancellationToken).ConfigureAwait(false);");
         builder.AppendLine();
         builder.AppendLine(
             "            MaterializeBoundedStrings(raw, definitionLevels, destination, rowCount, maxDefinitionLevel, deduplicateStrings, deduplicator, maxStringLengthBytes, field.Name);"
