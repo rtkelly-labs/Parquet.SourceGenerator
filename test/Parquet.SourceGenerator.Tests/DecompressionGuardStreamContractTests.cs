@@ -16,6 +16,7 @@ namespace Parquet.SourceGenerator.Tests;
 /// reflection. They pin the parts of the <see cref="Stream"/> contract the analyzers flagged:
 /// disposal, Flush, and the Memory/Span overloads.
 /// </summary>
+#pragma warning disable CA1835 // the array overload is the reference behaviour under test
 public sealed class DecompressionGuardStreamContractTests
 {
     private static readonly Type GuardType = typeof(BufferModel)

@@ -89,6 +89,7 @@ internal static class DecompressionGuardComponent
         builder.AppendLine(
             "            // The inner stream is owned by the caller and is deliberately not disposed."
         );
+        builder.AppendLine("            _active = false;");
         builder.AppendLine("            base.Dispose(disposing);");
         builder.AppendLine("        }");
         builder.AppendLine();
