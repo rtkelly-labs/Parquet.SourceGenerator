@@ -187,14 +187,14 @@ internal static class CodeEmitter
 
     private static void EmitResolveSchemaField(StringBuilder builder, bool usePath = false)
     {
-        SchemaComponent.EmitResolveSchemaField(builder, usePath: usePath);
+        SchemaComponent.EmitResolveSchemaField(builder, usePath: usePath, invariantPath: true);
     }
 
     private static void EmitSchemaHelpers(StringBuilder builder, bool usePath)
     {
         EmitResolveSchemaField(builder, usePath);
         builder.AppendLine();
-        SchemaComponent.EmitValidatePhysicalType(builder);
+        SchemaComponent.EmitValidatePhysicalType(builder, invariantPath: true);
         builder.AppendLine();
         SchemaComponent.EmitValidateColumnChunkBounds(builder);
         DictionaryPageComponent.EmitHelpers(builder);
@@ -397,7 +397,7 @@ internal static class CodeEmitter
             foreach (LeafColumn col in EmissionPlan.For(model).Columns)
             {
                 builder.AppendLine(
-                    $"        ValidatePhysicalType(reader, fileFieldsForTypeValidation, _field_{col.Slot}, footerStart);"
+                    $"        ValidatePhysicalType(reader, fileFieldsForTypeValidation, _field_{col.Slot});"
                 );
             }
         }

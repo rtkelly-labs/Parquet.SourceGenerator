@@ -101,11 +101,25 @@ internal static class SchemaComponent
     }
 
     /// <summary>
+    /// The emitted text that renders a <c>FieldPath</c> as a string. Parquet.Net 6 implements
+    /// <c>IFormattable</c> on it, so the modern backend passes an invariant provider (MA0011); a null
+    /// format is the same as <c>ToString()</c>. Parquet.Net 4.x/5.x has no such overload.
+    /// </summary>
+    private static string PathText(string expression, bool invariantPath) =>
+        invariantPath
+            ? $"{expression}.Path.ToString(null, global::System.Globalization.CultureInfo.InvariantCulture)"
+            : $"{expression}.Path.ToString()";
+
+    /// <summary>
     /// Emits ResolveSchemaField helper method.
     /// </summary>
     /// <param name="builder">The string builder.</param>
     /// <param name="usePath">When true, resolves via field.Path.ToString() (for v4/v5); when false, resolves via field.Name (for v6).</param>
-    public static void EmitResolveSchemaField(StringBuilder builder, bool usePath = false)
+    public static void EmitResolveSchemaField(
+        StringBuilder builder,
+        bool usePath = false,
+        bool invariantPath = false
+    )
     {
         builder.AppendLine("    /// <summary>");
         builder.AppendLine(
@@ -127,7 +141,9 @@ internal static class SchemaComponent
 
         if (usePath)
         {
-            builder.AppendLine("        string expectedPath = expected.Path.ToString();");
+            builder.AppendLine(
+                $"        string expectedPath = {PathText("expected", invariantPath)};"
+            );
             builder.AppendLine();
             builder.AppendLine(
                 "        // Ordered schemas resolve on a single index check. Every file this generator writes lands"
@@ -138,7 +154,7 @@ internal static class SchemaComponent
             builder.AppendLine("        // files written with a different column order.");
             builder.AppendLine("        if ((uint)index < (uint)fileFields.Length");
             builder.AppendLine(
-                "            && string.Equals(fileFields[index].Path.ToString(), expectedPath, global::System.StringComparison.OrdinalIgnoreCase))"
+                $"            && string.Equals({PathText("fileFields[index]", invariantPath)}, expectedPath, global::System.StringComparison.OrdinalIgnoreCase))"
             );
             builder.AppendLine("        {");
             builder.AppendLine("            var field = fileFields[index];");
@@ -167,7 +183,9 @@ internal static class SchemaComponent
             builder.AppendLine(
                 "                // not available to netstandard2.0 consumers, hence the explicit containment check."
             );
-            builder.AppendLine("                string path = fileFields[i].Path.ToString();");
+            builder.AppendLine(
+                $"                string path = {PathText("fileFields[i]", invariantPath)};"
+            );
             builder.AppendLine("                if (!byName.ContainsKey(path))");
             builder.AppendLine("                {");
             builder.AppendLine("                    byName.Add(path, fileFields[i]);");
@@ -296,7 +314,7 @@ internal static class SchemaComponent
     /// while changing a column chunk's physical type. The generated readers must reject that
     /// mismatch before asking Parquet.Net to allocate or decode a column buffer.
     /// </remarks>
-    public static void EmitValidatePhysicalType(StringBuilder builder)
+    public static void EmitValidatePhysicalType(StringBuilder builder, bool invariantPath = false)
     {
         builder.AppendLine("    /// <summary>");
         builder.AppendLine(
@@ -306,15 +324,14 @@ internal static class SchemaComponent
         builder.AppendLine("    private static void ValidatePhysicalType(");
         builder.AppendLine("        global::Parquet.ParquetReader reader,");
         builder.AppendLine("        global::Parquet.Schema.DataField[] fileFields,");
-        builder.AppendLine("        global::Parquet.Schema.DataField expected,");
-        builder.AppendLine("        long footerStart)");
+        builder.AppendLine("        global::Parquet.Schema.DataField expected)");
         builder.AppendLine("    {");
-        builder.AppendLine("        string expectedPath = expected.Path.ToString();");
+        builder.AppendLine($"        string expectedPath = {PathText("expected", invariantPath)};");
         builder.AppendLine("        int fieldIndex = -1;");
         builder.AppendLine("        for (int i = 0; i < fileFields.Length; i++)");
         builder.AppendLine("        {");
         builder.AppendLine(
-            "            if (string.Equals(fileFields[i].Path.ToString(), expectedPath, global::System.StringComparison.OrdinalIgnoreCase))"
+            $"            if (string.Equals({PathText("fileFields[i]", invariantPath)}, expectedPath, global::System.StringComparison.OrdinalIgnoreCase))"
         );
         builder.AppendLine("            {");
         builder.AppendLine("                fieldIndex = i;");

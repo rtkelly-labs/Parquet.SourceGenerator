@@ -177,7 +177,7 @@ internal static class LegacyCodeEmitter
         for (int i = 0; i < model.Properties.Length; i++)
         {
             builder.AppendLine(
-                $"        ValidatePhysicalType(reader, fileFieldsForTypeValidation, _field_{i}, footerStart);"
+                $"        ValidatePhysicalType(reader, fileFieldsForTypeValidation, _field_{i});"
             );
         }
         builder.AppendLine("    }");
@@ -265,7 +265,7 @@ internal static class LegacyCodeEmitter
         );
         builder.AppendLine("    /// </remarks>");
         builder.AppendLine(
-            "    private static global::Parquet.ParquetOptions BuildFormatOptions(global::Parquet.SourceGenerator.ParquetSerializerOptions options)"
+            "    private static global::Parquet.ParquetOptions BuildFormatOptions()"
         );
         builder.AppendLine("    {");
         builder.AppendLine("        return new global::Parquet.ParquetOptions();");
@@ -560,7 +560,7 @@ internal static class LegacyCodeEmitter
         );
         builder.AppendLine("            Schema,");
         builder.AppendLine("            stream,");
-        builder.AppendLine("            BuildFormatOptions(options),");
+        builder.AppendLine("            BuildFormatOptions(),");
         builder.AppendLine(
             "            cancellationToken: cancellationToken).ConfigureAwait(false))"
         );
@@ -607,7 +607,7 @@ internal static class LegacyCodeEmitter
         );
         builder.AppendLine("                Schema,");
         builder.AppendLine("                stream,");
-        builder.AppendLine("                BuildFormatOptions(options),");
+        builder.AppendLine("                BuildFormatOptions(),");
         builder.AppendLine(
             "                cancellationToken: cancellationToken).ConfigureAwait(false))"
         );
@@ -625,7 +625,7 @@ internal static class LegacyCodeEmitter
         );
         builder.AppendLine("            Schema,");
         builder.AppendLine("            stream,");
-        builder.AppendLine("            BuildFormatOptions(options),");
+        builder.AppendLine("            BuildFormatOptions(),");
         builder.AppendLine(
             "            cancellationToken: cancellationToken).ConfigureAwait(false))"
         );
@@ -720,7 +720,7 @@ internal static class LegacyCodeEmitter
             "        using (var reader = await global::Parquet.ParquetReader.CreateAsync("
         );
         builder.AppendLine("            guardedStream,");
-        builder.AppendLine("            BuildFormatOptions(options),");
+        builder.AppendLine("            BuildFormatOptions(),");
         builder.AppendLine(
             "            cancellationToken: cancellationToken).ConfigureAwait(false))"
         );
