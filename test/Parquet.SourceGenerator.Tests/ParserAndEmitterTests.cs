@@ -110,11 +110,14 @@ public sealed class ParserAndEmitterTests
         source.ShouldContain("WriteParquetRowGroupAsync");
         source.ShouldContain("WriteAllPartsAsync");
         source.ShouldContain("ReadParallelListCoreAsync");
-        source.ShouldContain("if (missing_1 || chunkStats_1?.NullCount == rowCount)");
-        source.ShouldContain("global::System.Array.Clear(buffer_1, 0, rowCount);");
+        // The all-null bypass is a shared helper per column shape, called once per nullable column (#552).
+        source.ShouldContain("if (missing || chunkStats?.NullCount == rowCount)");
+        source.ShouldContain("global::System.Array.Clear(buffer, 0, rowCount);");
+        source.ShouldContain("await ReadNullableStringColumnAsync(");
         source.ShouldContain(
-            "else\n                {\n                    await groupReader.ReadAsync("
+            "await ReadNullableColumnAsync<global::System.Guid>(groupReader, field_"
         );
+        source.ShouldContain("await ReadNullableByteArrayColumnAsync(groupReader, field_");
     }
 
     [Fact]

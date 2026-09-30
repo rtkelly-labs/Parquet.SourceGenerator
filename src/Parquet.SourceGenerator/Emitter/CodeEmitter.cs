@@ -72,6 +72,13 @@ internal static class CodeEmitter
             builder.AppendLine();
         }
 
+        // Shared per-column guards and pooled-buffer returns (#552): one helper each, one call
+        // per column, so emitted method complexity does not grow with the column count.
+        ColumnHelpersComponent.EmitHelpers(builder, model);
+        CompoundMapping.EmitReadHelpers(builder, model);
+        CompoundMapping.EmitWriteHelpers(builder, model);
+        builder.AppendLine();
+
         // Streaming row group writer — low level primitives, 100M+ scale, Native AOT compatible
         EmitWriteRowGroupAsync(builder, model);
         builder.AppendLine();
@@ -585,6 +592,11 @@ internal static class CodeEmitter
         return $"{indent}var field_{col.Slot} = ResolveSchemaField(fileFields, {col.Slot}, _field_{col.Slot}, ref fieldsByName, {missingArg});";
     }
 
+    /// <summary>
+    /// Emits a column read. Every per-column guard is a call to a shared helper (see
+    /// <see cref="ColumnHelpersComponent"/>), so the statements emitted here add no branches to
+    /// the enclosing method however many columns the model has (#552).
+    /// </summary>
     internal static void EmitReadWithNullBypass(
         StringBuilder builder,
         LeafColumn col,
@@ -593,49 +605,18 @@ internal static class CodeEmitter
         string indent = "                "
     )
     {
-        EmitDictionaryEntryLimitValidation(builder, col, fieldAccess, "stream", indent);
+        string missingArg = SupportsMissingColumn(col) ? $", missing_{col.Slot}" : "";
+        builder.AppendLine(
+            $"{indent}ValidateDictionaryEntryLimit(groupReader, stream, {fieldAccess}, \"{col.Leaf.Name}\", options{missingArg});"
+        );
 
         if (col.IsListLeaf)
         {
-            // Entries run ahead of rowCount for multi-element lists: size from the column
-            // metadata and re-rent on growth (docs/15 §2.3 — values buffer must cover
-            // NumValues, the packed lane follows inside it).
+            // Entries run ahead of rowCount for multi-element lists (docs/15 section 2.3).
             string packedL = col.PackedType;
             builder.AppendLine(
-                $"{indent}var entries_{col.Slot} = checked((int)groupReader.GetMetadata({fieldAccess}).MetaData.NumValues);"
+                $"{indent}var entries_{col.Slot} = PrepareListLeafBuffers<{packedL}>(groupReader, {fieldAccess}, \"{col.Leaf.Name}\", options, ref buffer_{col.Slot}, ref defLevels_{col.Slot}, ref repLevels_{col.Slot});"
             );
-            builder.AppendLine(
-                $"{indent}if (entries_{col.Slot} < 0 || entries_{col.Slot} > options.MaxAllocationValues)"
-            );
-            builder.AppendLine($"{indent}{{");
-            builder.AppendLine(
-                $"{indent}    throw new global::System.IO.InvalidDataException($\"Column '{col.Leaf.Name}' NumValues ({{entries_{col.Slot}}}) is invalid or exceeds maximum allowed {{options.MaxAllocationValues}}.\");"
-            );
-            builder.AppendLine($"{indent}}}");
-            builder.AppendLine($"{indent}if (entries_{col.Slot} > defLevels_{col.Slot}.Length)");
-            builder.AppendLine($"{indent}{{");
-            builder.AppendLine(
-                $"{indent}    var ndL_{col.Slot} = global::System.Buffers.ArrayPool<int>.Shared.Rent(entries_{col.Slot});"
-            );
-            builder.AppendLine(
-                $"{indent}    global::System.Buffers.ArrayPool<int>.Shared.Return(defLevels_{col.Slot}, clearArray: false);"
-            );
-            builder.AppendLine($"{indent}    defLevels_{col.Slot} = ndL_{col.Slot};");
-            builder.AppendLine(
-                $"{indent}    var nrL_{col.Slot} = global::System.Buffers.ArrayPool<int>.Shared.Rent(entries_{col.Slot});"
-            );
-            builder.AppendLine(
-                $"{indent}    global::System.Buffers.ArrayPool<int>.Shared.Return(repLevels_{col.Slot}, clearArray: false);"
-            );
-            builder.AppendLine($"{indent}    repLevels_{col.Slot} = nrL_{col.Slot};");
-            builder.AppendLine(
-                $"{indent}    var nvL_{col.Slot} = global::System.Buffers.ArrayPool<{packedL}>.Shared.Rent(entries_{col.Slot});"
-            );
-            builder.AppendLine(
-                $"{indent}    global::System.Buffers.ArrayPool<{packedL}>.Shared.Return(buffer_{col.Slot}, clearArray: true);"
-            );
-            builder.AppendLine($"{indent}    buffer_{col.Slot} = nvL_{col.Slot};");
-            builder.AppendLine($"{indent}}}");
             builder.AppendLine($"{indent}await groupReader.ReadRawAsync<{packedL}>(");
             builder.AppendLine($"{indent}    {fieldAccess},");
             builder.AppendLine(
@@ -684,7 +665,6 @@ internal static class CodeEmitter
         }
 
         PropertyModel prop = col.Leaf;
-        int propIndex = col.Slot;
         if (!prop.IsNullable)
         {
             builder.AppendLine(GetReadPrimitiveCall(prop, fieldAccess, bufName, indent));
@@ -692,89 +672,13 @@ internal static class CodeEmitter
         }
 
         builder.AppendLine(
-            $"{indent}// The column is absent from the file (optional-column schema evolution) or the chunk is"
+            GetNullableReadCall(prop, fieldAccess, bufName, $"missing_{col.Slot}", indent)
         );
-        builder.AppendLine(
-            $"{indent}// entirely null: either way the answer is nulls, with no page read, decompression or decoding."
-        );
-        builder.AppendLine(
-            $"{indent}var chunkStats_{propIndex} = missing_{propIndex} ? null : groupReader.GetStatistics({fieldAccess});"
-        );
-        builder.AppendLine(
-            $"{indent}if (missing_{propIndex} || chunkStats_{propIndex}?.NullCount == rowCount)"
-        );
-        builder.AppendLine($"{indent}{{");
-        builder.AppendLine($"{indent}    global::System.Array.Clear({bufName}, 0, rowCount);");
-        builder.AppendLine($"{indent}}}");
-        builder.AppendLine($"{indent}else");
-        builder.AppendLine($"{indent}{{");
-        builder.AppendLine(GetReadPrimitiveCall(prop, fieldAccess, bufName, indent + "    "));
-        builder.AppendLine($"{indent}}}");
     }
 
-    private static void EmitDictionaryEntryLimitValidation(
-        StringBuilder builder,
-        LeafColumn col,
-        string fieldAccess,
-        string streamVariable,
-        string indent
-    )
-    {
-        if (SupportsMissingColumn(col))
-        {
-            builder.AppendLine($"{indent}if (!missing_{col.Slot})");
-            builder.AppendLine($"{indent}{{");
-            EmitDictionaryEntryLimitValidationCore(
-                builder,
-                col,
-                fieldAccess,
-                streamVariable,
-                indent + "    "
-            );
-            builder.AppendLine($"{indent}}}");
-            return;
-        }
-
-        EmitDictionaryEntryLimitValidationCore(builder, col, fieldAccess, streamVariable, indent);
-    }
-
-    private static void EmitDictionaryEntryLimitValidationCore(
-        StringBuilder builder,
-        LeafColumn col,
-        string fieldAccess,
-        string streamVariable,
-        string indent
-    )
-    {
-        builder.AppendLine(
-            $"{indent}var metadata_{col.Slot} = groupReader.GetMetadata({fieldAccess}).MetaData;"
-        );
-        builder.AppendLine($"{indent}bool dictionaryEncoded_{col.Slot} = false;");
-        builder.AppendLine(
-            $"{indent}foreach (var encoding_{col.Slot} in metadata_{col.Slot}.Encodings)"
-        );
-        builder.AppendLine($"{indent}{{");
-        builder.AppendLine(
-            $"{indent}    if (encoding_{col.Slot} == global::Parquet.Meta.Encoding.PLAIN_DICTIONARY || encoding_{col.Slot} == global::Parquet.Meta.Encoding.RLE_DICTIONARY)"
-        );
-        builder.AppendLine($"{indent}    {{");
-        builder.AppendLine($"{indent}        dictionaryEncoded_{col.Slot} = true;");
-        builder.AppendLine($"{indent}        break;");
-        builder.AppendLine($"{indent}    }}");
-        builder.AppendLine($"{indent}}}");
-        builder.AppendLine(
-            $"{indent}int? dictionaryEntries_{col.Slot} = dictionaryEncoded_{col.Slot} ? ReadDictionaryEntryCount(groupReader, {streamVariable}, {fieldAccess}) : null;"
-        );
-        builder.AppendLine(
-            $"{indent}if (dictionaryEntries_{col.Slot}.HasValue && dictionaryEntries_{col.Slot}.Value > options.MaxDictionaryEntries)"
-        );
-        builder.AppendLine($"{indent}{{");
-        builder.AppendLine(
-            $"{indent}    throw new global::System.IO.InvalidDataException($\"Dictionary column '{col.Leaf.Name}' entry count {{dictionaryEntries_{col.Slot}.Value}} exceeds maximum allowed {{options.MaxDictionaryEntries}}.\");"
-        );
-        builder.AppendLine($"{indent}}}");
-    }
-
+    /// <summary>
+    /// The packed-string UTF-8 length guard for a compound or list leaf, as one helper call.
+    /// </summary>
     private static void EmitPackedStringLengthValidation(
         StringBuilder builder,
         LeafColumn col,
@@ -791,33 +695,33 @@ internal static class CodeEmitter
             return;
         }
 
-        builder.AppendLine($"{indent}int packedString_{col.Slot} = 0;");
-        builder.AppendLine(
-            $"{indent}for (int levelIndex_{col.Slot} = 0; levelIndex_{col.Slot} < {entriesVariable}; levelIndex_{col.Slot}++)"
-        );
-        builder.AppendLine($"{indent}{{");
-        builder.AppendLine(
-            $"{indent}    if (defLevels_{col.Slot}[levelIndex_{col.Slot}] != {col.MaxDef}) continue;"
-        );
-        builder.AppendLine($"{indent}    if (packedString_{col.Slot} >= {entriesVariable})");
-        builder.AppendLine($"{indent}    {{");
-        builder.AppendLine(
-            $"{indent}        throw new global::System.IO.InvalidDataException(\"Definition levels in column '{col.Leaf.Name}' exceeded values count.\");"
-        );
-        builder.AppendLine($"{indent}    }}");
-        builder.AppendLine(
-            $"{indent}    int stringByteCount_{col.Slot} = global::System.Text.Encoding.UTF8.GetByteCount({bufName}[packedString_{col.Slot}++].Span);"
-        );
-        builder.AppendLine(
-            $"{indent}    if (stringByteCount_{col.Slot} > options.MaxStringLengthBytes)"
-        );
-        builder.AppendLine($"{indent}    {{");
         string columnName = col.IsListLeaf ? col.ListMemberName : col.Leaf.Name;
         builder.AppendLine(
-            $"{indent}        throw new global::System.IO.InvalidDataException($\"String column '{columnName}' value at index {{levelIndex_{col.Slot}}} UTF-8 length {{stringByteCount_{col.Slot}}} exceeds maximum allowed {{options.MaxStringLengthBytes}}.\");"
+            $"{indent}ValidatePackedStringLengths({bufName}, defLevels_{col.Slot}, {entriesVariable}, {col.MaxDef}, \"{col.Leaf.Name}\", \"{columnName}\", options);"
         );
-        builder.AppendLine($"{indent}    }}");
-        builder.AppendLine($"{indent}}}");
+    }
+
+    /// <summary>
+    /// The read for a nullable flat column: the shared helper decides whether the column is absent
+    /// or entirely null (answer: nulls, no page read) and otherwise forwards to the normal read.
+    /// </summary>
+    private static string GetNullableReadCall(
+        PropertyModel prop,
+        string fieldAccess,
+        string bufName,
+        string missingVariable,
+        string indent
+    )
+    {
+        switch (ColumnHelpersComponent.GetNullableReadShape(prop))
+        {
+            case ColumnHelpersComponent.NullableReadShape.String:
+                return $"{indent}await ReadNullableStringColumnAsync(\n{indent}    groupReader,\n{indent}    {fieldAccess},\n{indent}    {missingVariable},\n{indent}    {bufName},\n{indent}    rowCount,\n{indent}    deduplicateStrings,\n{indent}    stringDeduplicator,\n{indent}    options.MaxStringLengthBytes,\n{indent}    cancellationToken).ConfigureAwait(false);";
+            case ColumnHelpersComponent.NullableReadShape.ByteArray:
+                return $"{indent}await ReadNullableByteArrayColumnAsync(groupReader, {fieldAccess}, {missingVariable}, {bufName}, rowCount, cancellationToken).ConfigureAwait(false);";
+            default:
+                return $"{indent}await ReadNullableColumnAsync<{ColumnHelpersComponent.GetReadElementType(prop)}>(groupReader, {fieldAccess}, {missingVariable}, {bufName}, rowCount, cancellationToken).ConfigureAwait(false);";
+        }
     }
 
     private static string GetReadPrimitiveCall(
@@ -827,53 +731,20 @@ internal static class CodeEmitter
         string indent = "                "
     )
     {
-        bool isString = prop.Kind == PropertyKind.Primitive && prop.TypeName.Contains("string");
-        bool isByteArray = prop.Kind == PropertyKind.ByteArray;
-
-        if (isString)
+        if (prop.Kind == PropertyKind.Primitive && prop.TypeName.Contains("string"))
         {
             // Every string uses the raw UTF-16 lane so the byte-length guard runs before any string
             // materialization, while the existing optional deduplication behavior is retained.
             return $"{indent}await ReadBoundedStringColumnAsync(\n{indent}    groupReader,\n{indent}    {fieldAccess},\n{indent}    {bufName},\n{indent}    rowCount,\n{indent}    deduplicateStrings,\n{indent}    stringDeduplicator,\n{indent}    options.MaxStringLengthBytes,\n{indent}    cancellationToken).ConfigureAwait(false);";
         }
-        else if (isByteArray)
+        if (prop.Kind == PropertyKind.ByteArray)
         {
             return $"{indent}await groupReader.ReadAsync(\n{indent}    {fieldAccess},\n{indent}    new global::System.Memory<byte[]?>({bufName}, 0, rowCount),\n{indent}    cancellationToken: cancellationToken).ConfigureAwait(false);";
         }
-        else if (prop.Kind == PropertyKind.Guid)
-        {
-            string memType = prop.IsNullable ? "global::System.Guid?" : "global::System.Guid";
-            return $"{indent}await groupReader.ReadAsync<global::System.Guid>(\n{indent}    {fieldAccess},\n{indent}    new global::System.Memory<{memType}>({bufName}, 0, rowCount),\n{indent}    cancellationToken: cancellationToken).ConfigureAwait(false);";
-        }
-        else if (prop.Kind == PropertyKind.DateOnly)
-        {
-            string memType = prop.IsNullable
-                ? "global::System.DateTime?"
-                : "global::System.DateTime";
-            return $"{indent}await groupReader.ReadAsync<global::System.DateTime>(\n{indent}    {fieldAccess},\n{indent}    new global::System.Memory<{memType}>({bufName}, 0, rowCount),\n{indent}    cancellationToken: cancellationToken).ConfigureAwait(false);";
-        }
-        else if (prop.Kind == PropertyKind.Enum)
-        {
-            string underlying = prop.EnumUnderlyingTypeName ?? "int";
-            string memType = prop.IsNullable ? $"{underlying}?" : underlying;
-            return $"{indent}await groupReader.ReadAsync<{underlying}>(\n{indent}    {fieldAccess},\n{indent}    new global::System.Memory<{memType}>({bufName}, 0, rowCount),\n{indent}    cancellationToken: cancellationToken).ConfigureAwait(false);";
-        }
-        else if (prop.Kind == PropertyKind.TimeSpan)
-        {
-            string memType = prop.IsNullable ? "int?" : "int";
-            return $"{indent}await groupReader.ReadAsync<int>(\n{indent}    {fieldAccess},\n{indent}    new global::System.Memory<{memType}>({bufName}, 0, rowCount),\n{indent}    cancellationToken: cancellationToken).ConfigureAwait(false);";
-        }
-        else if (prop.Kind == PropertyKind.TimeOnly)
-        {
-            string memType = prop.IsNullable ? "long?" : "long";
-            return $"{indent}await groupReader.ReadAsync<long>(\n{indent}    {fieldAccess},\n{indent}    new global::System.Memory<{memType}>({bufName}, 0, rowCount),\n{indent}    cancellationToken: cancellationToken).ConfigureAwait(false);";
-        }
-        else
-        {
-            string structType = prop.TypeName.TrimEnd('?');
-            string memType = prop.IsNullable ? $"{structType}?" : structType;
-            return $"{indent}await groupReader.ReadAsync<{structType}>(\n{indent}    {fieldAccess},\n{indent}    new global::System.Memory<{memType}>({bufName}, 0, rowCount),\n{indent}    cancellationToken: cancellationToken).ConfigureAwait(false);";
-        }
+
+        string readType = ColumnHelpersComponent.GetReadElementType(prop);
+        string memType = prop.IsNullable ? $"{readType}?" : readType;
+        return $"{indent}await groupReader.ReadAsync<{readType}>(\n{indent}    {fieldAccess},\n{indent}    new global::System.Memory<{memType}>({bufName}, 0, rowCount),\n{indent}    cancellationToken: cancellationToken).ConfigureAwait(false);";
     }
 
     // ──────────────────────────────────────────────────────────
@@ -2599,12 +2470,19 @@ internal static class CodeEmitter
             PropertyModel prop = col.Leaf;
             if (col.IsListLeaf)
             {
-                CompoundMapping.EmitListExtraction(builder, col, "item", prefix);
+                CompoundMapping.EmitListExtractionCall(builder, model, col, "item", prefix);
                 continue;
             }
             if (col.IsCompound)
             {
-                CompoundMapping.EmitCompoundExtraction(builder, col, "item", "i", prefix);
+                CompoundMapping.EmitCompoundExtractionCall(
+                    builder,
+                    model,
+                    col,
+                    "item",
+                    "i",
+                    prefix
+                );
                 continue;
             }
             if (BufferPoolComponent.UsesWriteAllParts(prop))
@@ -2654,12 +2532,19 @@ internal static class CodeEmitter
             PropertyModel prop = col.Leaf;
             if (col.IsListLeaf)
             {
-                CompoundMapping.EmitListExtraction(builder, col, "item", prefix);
+                CompoundMapping.EmitListExtractionCall(builder, model, col, "item", prefix);
                 continue;
             }
             if (col.IsCompound)
             {
-                CompoundMapping.EmitCompoundExtraction(builder, col, "item", "i", prefix);
+                CompoundMapping.EmitCompoundExtractionCall(
+                    builder,
+                    model,
+                    col,
+                    "item",
+                    "i",
+                    prefix
+                );
                 continue;
             }
             if (BufferPoolComponent.UsesWriteAllParts(prop))
@@ -2695,12 +2580,19 @@ internal static class CodeEmitter
             PropertyModel prop = col.Leaf;
             if (col.IsListLeaf)
             {
-                CompoundMapping.EmitListExtraction(builder, col, "item", prefix);
+                CompoundMapping.EmitListExtractionCall(builder, model, col, "item", prefix);
                 continue;
             }
             if (col.IsCompound)
             {
-                CompoundMapping.EmitCompoundExtraction(builder, col, "item", "idx", prefix);
+                CompoundMapping.EmitCompoundExtractionCall(
+                    builder,
+                    model,
+                    col,
+                    "item",
+                    "idx",
+                    prefix
+                );
                 continue;
             }
             if (BufferPoolComponent.UsesWriteAllParts(prop))
@@ -2782,12 +2674,9 @@ internal static class CodeEmitter
         string indent = "            "
     )
     {
-        if (EmissionPlan.For(model).HasCompound)
-        {
-            CompoundBuffers.EmitWriteReturns(builder, model, varPrefix, indent);
-            return;
-        }
-        BufferPoolComponent.EmitWriteReturns(builder, model, varPrefix, indent);
+        // Flat and compound models share CompoundBuffers' shape here: every return is a call to
+        // the shared ReturnPooledArray helper (#552).
+        CompoundBuffers.EmitWriteReturns(builder, model, varPrefix, indent);
     }
 
     private static void EmitArrayMaterializationFor(
