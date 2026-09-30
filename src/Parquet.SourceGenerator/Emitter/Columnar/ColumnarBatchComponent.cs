@@ -190,6 +190,58 @@ internal static class ColumnarBatchComponent
         return CSharpKeywords.Contains(camel) ? "@" + camel : camel;
     }
 
+    private static string Unescape(string name) =>
+        name.Length > 0 && name[0] == '@' ? name.Substring(1) : name;
+
+    /// <summary>
+    /// Parameter names for the batch constructor and the positional writer, which share one
+    /// column-to-parameter binding. The fixed parameters (<c>writer</c>, <c>rowCount</c>,
+    /// <c>cancellationToken</c>) are reserved, so a column whose camel-cased name lands on one is
+    /// renamed instead of producing a duplicate parameter (CS0100, the parameter half of #384).
+    /// </summary>
+    private sealed class ParameterNames
+    {
+        public string RowCount { get; } = "rowCount";
+
+        public string[] Values { get; }
+
+        public string?[] Levels { get; }
+
+        public ParameterNames(TargetClassModel model)
+        {
+            var used = new HashSet<string>(StringComparer.Ordinal)
+            {
+                "writer",
+                RowCount,
+                "cancellationToken",
+            };
+            Values = new string[model.Properties.Length];
+            Levels = new string?[model.Properties.Length];
+            for (int i = 0; i < model.Properties.Length; i++)
+            {
+                PropertyModel prop = model.Properties[i];
+                Values[i] = Unique(used, prop.Name);
+                if (BufferPoolComponent.UsesWriteAllParts(prop))
+                {
+                    Levels[i] = Unique(used, prop.Name + "DefinitionLevels");
+                }
+            }
+        }
+
+        private static string Unique(HashSet<string> used, string propertyName)
+        {
+            string candidate = Unescape(CamelCase(propertyName));
+            while (!used.Add(candidate))
+            {
+                candidate += "_";
+            }
+
+            return CSharpKeywords.Contains(candidate) ? "@" + candidate : candidate;
+        }
+    }
+
+    private static ParameterNames ParameterNamesFor(TargetClassModel model) => new(model);
+
     /// <summary>
     /// Emits the batch struct at namespace scope (after the extensions class closes).
     /// </summary>
@@ -197,6 +249,7 @@ internal static class ColumnarBatchComponent
     {
         string batchType = BatchTypeName(model);
         string rowCountMember = RowCountMemberName(model);
+        ParameterNames names = ParameterNamesFor(model);
 
         builder.AppendLine("/// <summary>");
         builder.AppendLine(
@@ -208,17 +261,24 @@ internal static class ColumnarBatchComponent
             "/// Buffers are passed to Parquet.Net verbatim — nothing here is rented, copied or pooled."
         );
         builder.AppendLine(
-            "/// Members are public fields rather than <c>init</c> properties so the type needs no"
+            "/// The struct is immutable: the constructor checks every column against the row count once,"
         );
         builder.AppendLine(
-            "/// <c>IsExternalInit</c> polyfill on downstream targets, and object-initializer syntax keeps the"
+            "/// and nothing can change the row count or swap a column afterwards. The buffers' contents"
         );
-        builder.AppendLine("/// column-to-buffer binding by name instead of by position.");
+        builder.AppendLine(
+            "/// stay caller-owned and must not change while a write is in flight. A <c>default</c> batch"
+        );
+        builder.AppendLine("/// describes zero rows and writes nothing.");
         builder.AppendLine("/// </remarks>");
-        builder.AppendLine($"public struct {batchType}");
+        builder.AppendLine($"public readonly struct {batchType}");
         builder.AppendLine("{");
+
+        EmitConstructor(builder, model, batchType, rowCountMember, names);
+
+        builder.AppendLine();
         builder.AppendLine("    /// <summary>Number of rows this batch describes.</summary>");
-        builder.AppendLine($"    public int {rowCountMember};");
+        builder.AppendLine($"    public int {rowCountMember} {{ get; }}");
 
         foreach (PropertyModel prop in model.Properties)
         {
@@ -228,13 +288,13 @@ internal static class ColumnarBatchComponent
                 builder.AppendLine(
                     $"    /// <summary>Packed non-null values for nullable column <c>{prop.Name}</c>; length equals the number of 1s in <c>{prop.Name}DefinitionLevels</c>.</summary>"
                 );
-                builder.AppendLine($"    public {ColumnMemoryType(prop)} {prop.Name};");
+                builder.AppendLine($"    public {ColumnMemoryType(prop)} {prop.Name} {{ get; }}");
                 builder.AppendLine();
                 builder.AppendLine(
                     $"    /// <summary>Definition levels for column <c>{prop.Name}</c>: one entry per row, 1 = present, 0 = null.</summary>"
                 );
                 builder.AppendLine(
-                    $"    public global::System.ReadOnlyMemory<int> {prop.Name}DefinitionLevels;"
+                    $"    public global::System.ReadOnlyMemory<int> {prop.Name}DefinitionLevels {{ get; }}"
                 );
             }
             else
@@ -259,11 +319,105 @@ internal static class ColumnarBatchComponent
                         "    /// stores an empty value where a null was meant.</remarks>"
                     );
                 }
-                builder.AppendLine($"    public {ColumnMemoryType(prop)} {prop.Name};");
+                builder.AppendLine($"    public {ColumnMemoryType(prop)} {prop.Name} {{ get; }}");
             }
         }
 
         builder.AppendLine("}");
+    }
+
+    /// <summary>
+    /// Emits the validating constructor: the only way to build a non-default batch. Every column is
+    /// checked against the row count here, in O(1), so no instance can disagree with itself.
+    /// </summary>
+    private static void EmitConstructor(
+        StringBuilder builder,
+        TargetClassModel model,
+        string batchType,
+        string rowCountMember,
+        ParameterNames names
+    )
+    {
+        builder.AppendLine("    /// <summary>");
+        builder.AppendLine(
+            "    /// Creates a batch after checking every column against the row count."
+        );
+        builder.AppendLine("    /// </summary>");
+        builder.AppendLine(
+            $"    /// <param name=\"{names.RowCount}\">Number of rows; must not be negative.</param>"
+        );
+        for (int i = 0; i < model.Properties.Length; i++)
+        {
+            PropertyModel prop = model.Properties[i];
+            builder.AppendLine(
+                $"    /// <param name=\"{Unescape(names.Values[i])}\">Column <c>{prop.Name}</c>: at least <paramref name=\"{names.RowCount}\"/> entries{(BufferPoolComponent.UsesWriteAllParts(prop) ? " of packed non-null values, sized by the definition levels" : string.Empty)}.</param>"
+            );
+            if (names.Levels[i] is string levels)
+            {
+                builder.AppendLine(
+                    $"    /// <param name=\"{Unescape(levels)}\">Definition levels for <c>{prop.Name}</c>: at least <paramref name=\"{names.RowCount}\"/> entries.</param>"
+                );
+            }
+        }
+        builder.AppendLine(
+            $"    /// <exception cref=\"global::System.ArgumentOutOfRangeException\"><paramref name=\"{names.RowCount}\"/> is negative.</exception>"
+        );
+        builder.AppendLine(
+            "    /// <exception cref=\"global::System.ArgumentException\">A column is shorter than the row count.</exception>"
+        );
+        builder.AppendLine($"    public {batchType}(");
+        builder.AppendLine($"        int {names.RowCount},");
+        var parameters = new List<string>();
+        for (int i = 0; i < model.Properties.Length; i++)
+        {
+            PropertyModel prop = model.Properties[i];
+            parameters.Add($"        {ColumnMemoryType(prop)} {names.Values[i]}");
+            if (names.Levels[i] is string levels)
+            {
+                parameters.Add($"        global::System.ReadOnlyMemory<int> {levels}");
+            }
+        }
+        builder.AppendLine(string.Join(",\n", parameters) + ")");
+        builder.AppendLine("    {");
+        builder.AppendLine(
+            // The (paramName, actualValue, message) overload takes the value as object, which
+            // boxes the int — and the boxing guard in ZeroBoxingSerializationTests counts it.
+            $"        if ({names.RowCount} < 0) throw new global::System.ArgumentOutOfRangeException(nameof({names.RowCount}), \"{rowCountMember} cannot be negative.\");"
+        );
+
+        // O(1) shape validation. Packed value lanes are intentionally not counted against the
+        // definition levels: that would be an O(n) pass, which is the cost this API removes.
+        for (int i = 0; i < model.Properties.Length; i++)
+        {
+            PropertyModel prop = model.Properties[i];
+            if (names.Levels[i] is string levels)
+            {
+                builder.AppendLine(
+                    $"        if ({levels}.Length < {names.RowCount}) throw new global::System.ArgumentException(\"Column '{prop.Name}' supplied \" + {levels}.Length + \" definition levels for \" + {names.RowCount} + \" rows.\", nameof({levels}));"
+                );
+            }
+            else
+            {
+                string value = names.Values[i];
+                builder.AppendLine(
+                    $"        if ({value}.Length < {names.RowCount}) throw new global::System.ArgumentException(\"Column '{prop.Name}' supplied \" + {value}.Length + \" values for \" + {names.RowCount} + \" rows.\", nameof({value}));"
+                );
+            }
+        }
+
+        builder.AppendLine();
+        builder.AppendLine($"        {rowCountMember} = {names.RowCount};");
+        for (int i = 0; i < model.Properties.Length; i++)
+        {
+            PropertyModel prop = model.Properties[i];
+            builder.AppendLine($"        {prop.Name} = {names.Values[i]};");
+            if (names.Levels[i] is string levels)
+            {
+                builder.AppendLine($"        {prop.Name}DefinitionLevels = {levels};");
+            }
+        }
+
+        builder.AppendLine("    }");
     }
 
     /// <summary>
@@ -279,7 +433,7 @@ internal static class ColumnarBatchComponent
         EmitNullPreservingConverters(builder, model);
         EmitBatchRowGroupWriter(builder, model, batchType, rowCountMember);
         builder.AppendLine();
-        EmitPositionalWriter(builder, model, batchType, rowCountMember);
+        EmitPositionalWriter(builder, model, batchType);
         builder.AppendLine();
         EmitBatchStreamWriter(builder, batchType);
     }
@@ -370,33 +524,12 @@ internal static class ColumnarBatchComponent
         builder.AppendLine("    {");
         builder.AppendLine("        global::System.ArgumentNullException.ThrowIfNull(writer);");
         builder.AppendLine();
+        // The batch is a readonly struct built by a validating constructor, so its lanes already
+        // agree with RowCount. The one instance the constructor never saw is default(T): it has
+        // RowCount 0 and empty lanes, which is consistent, and the early return below makes it a
+        // no-op. Nothing needs re-validating here.
         builder.AppendLine($"        int count = batch.{rowCountMember};");
-        builder.AppendLine(
-            // The (paramName, actualValue, message) overload takes the value as object, which
-            // boxes the int — and the boxing guard in ZeroBoxingSerializationTests counts it.
-            $"        if (count < 0) throw new global::System.ArgumentOutOfRangeException(nameof(batch), \"{rowCountMember} cannot be negative.\");"
-        );
         builder.AppendLine("        if (count == 0) return;");
-        builder.AppendLine();
-
-        // O(1) shape validation. Packed value lanes are intentionally not counted against the
-        // definition levels: that would be an O(n) pass, which is the cost this API removes.
-        foreach (PropertyModel prop in model.Properties)
-        {
-            if (BufferPoolComponent.UsesWriteAllParts(prop))
-            {
-                builder.AppendLine(
-                    $"        if (batch.{prop.Name}DefinitionLevels.Length < count) throw new global::System.ArgumentException(\"Column '{prop.Name}' supplied \" + batch.{prop.Name}DefinitionLevels.Length + \" definition levels for \" + count + \" rows.\", nameof(batch));"
-                );
-            }
-            else
-            {
-                builder.AppendLine(
-                    $"        if (batch.{prop.Name}.Length < count) throw new global::System.ArgumentException(\"Column '{prop.Name}' supplied \" + batch.{prop.Name}.Length + \" values for \" + count + \" rows.\", nameof(batch));"
-                );
-            }
-        }
-
         builder.AppendLine();
         builder.AppendLine("        using (var groupWriter = writer.CreateRowGroup())");
         builder.AppendLine("        {");
@@ -438,32 +571,31 @@ internal static class ColumnarBatchComponent
     private static void EmitPositionalWriter(
         StringBuilder builder,
         TargetClassModel model,
-        string batchType,
-        string rowCountMember
+        string batchType
     )
     {
+        ParameterNames names = ParameterNamesFor(model);
         builder.AppendLine("    /// <summary>");
         builder.AppendLine(
             "    /// Positional form of the columnar hand-off: one parameter per schema column, in schema order."
         );
         builder.AppendLine(
-            $"    /// Prefer the <c>{batchType}</c> overload — it binds buffers to columns by name."
+            $"    /// Prefer the <c>{batchType}</c> overload — it binds buffers to columns by name, and its constructor validates them."
         );
         builder.AppendLine("    /// </summary>");
         builder.AppendLine(
             "    internal static global::System.Threading.Tasks.Task WriteParquetRowGroupColumnarAsync("
         );
         builder.AppendLine("        this global::Parquet.ParquetWriter writer,");
-        builder.AppendLine("        int rowCount,");
+        builder.AppendLine($"        int {names.RowCount},");
 
-        foreach (PropertyModel prop in model.Properties)
+        for (int i = 0; i < model.Properties.Length; i++)
         {
-            builder.AppendLine($"        {ColumnMemoryType(prop)} {CamelCase(prop.Name)},");
-            if (BufferPoolComponent.UsesWriteAllParts(prop))
+            PropertyModel prop = model.Properties[i];
+            builder.AppendLine($"        {ColumnMemoryType(prop)} {names.Values[i]},");
+            if (names.Levels[i] is string levels)
             {
-                builder.AppendLine(
-                    $"        global::System.ReadOnlyMemory<int> {CamelCase(prop.Name + "DefinitionLevels")},"
-                );
+                builder.AppendLine($"        global::System.ReadOnlyMemory<int> {levels},");
             }
         }
 
@@ -471,20 +603,17 @@ internal static class ColumnarBatchComponent
             "        global::System.Threading.CancellationToken cancellationToken = default)"
         );
         builder.AppendLine("    {");
-        builder.AppendLine($"        var batch = new {batchType}");
-        builder.AppendLine("        {");
-        builder.AppendLine($"            {rowCountMember} = rowCount,");
-        foreach (PropertyModel prop in model.Properties)
+        builder.AppendLine($"        var batch = new {batchType}(");
+        var args = new List<string> { $"            {names.RowCount}" };
+        for (int i = 0; i < model.Properties.Length; i++)
         {
-            builder.AppendLine($"            {prop.Name} = {CamelCase(prop.Name)},");
-            if (BufferPoolComponent.UsesWriteAllParts(prop))
+            args.Add($"            {names.Values[i]}");
+            if (names.Levels[i] is string levels)
             {
-                builder.AppendLine(
-                    $"            {prop.Name}DefinitionLevels = {CamelCase(prop.Name + "DefinitionLevels")},"
-                );
+                args.Add($"            {levels}");
             }
         }
-        builder.AppendLine("        };");
+        builder.AppendLine(string.Join(",\n", args) + ");");
         builder.AppendLine(
             "        return writer.WriteParquetRowGroupAsync(batch, cancellationToken);"
         );

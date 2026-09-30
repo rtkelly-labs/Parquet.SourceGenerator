@@ -83,6 +83,17 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   number is known is vacuous or permanently red.
 
 ### Changed
+- **BREAKING: the emitted `{T}ColumnarBatch` is a `readonly struct` with get-only properties and a
+  validating constructor (#550, part of #508 and #554).** It no longer exposes mutable public fields,
+  so `RowCount` cannot drift from the column lanes. The constructor takes `rowCount` and one
+  `ReadOnlyMemory<…>` per column in schema order (a definition-levels lane follows each nullable
+  value column) and throws `ArgumentOutOfRangeException` or `ArgumentException` naming the column
+  when a lane is shorter than `rowCount`. A `default` batch is an empty batch and writes no row
+  group. The column layout is unchanged. Migration: replace
+  `new FooColumnarBatch { RowCount = n, Id = ids, … }` with
+  `new FooColumnarBatch(rowCount: n, id: ids, …)`, and build a modified batch by constructing a new
+  one rather than assigning a field. Unifying it with the read-side `ColumnBatch` is still open in #508.
+  The Arrow `RecordBatch` bridge no longer builds this struct internally.
 - **Derived outputs are generated in CI, not checked in.** The golden files
   (`GoldenFiles/*.g.cs`, `*.api.txt`, `*.api.shape.txt`, `*.metrics.txt`), the `src/` metrics and
   duplication baselines (`metrics/`), the call-graph edge baselines (`graph/*.callgraph.txt`) and
