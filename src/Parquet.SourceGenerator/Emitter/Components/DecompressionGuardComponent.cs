@@ -53,7 +53,7 @@ internal static class DecompressionGuardComponent
         builder.AppendLine("        }");
         builder.AppendLine();
         builder.AppendLine(
-            "        public override void Flush() => throw new global::System.NotSupportedException();"
+            "        public override void Flush() { /* Read-only stream: there is nothing buffered to flush. */ }"
         );
         builder.AppendLine(
             "        public override int Read(byte[] buffer, int offset, int count) => _inner.Read(buffer, offset, count);"
@@ -62,6 +62,14 @@ internal static class DecompressionGuardComponent
         builder.AppendLine(
             "        public override global::System.Threading.Tasks.Task<int> ReadAsync(byte[] buffer, int offset, int count, global::System.Threading.CancellationToken cancellationToken) => _inner.ReadAsync(buffer, offset, count, cancellationToken);"
         );
+        builder.AppendLine("#if NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER");
+        builder.AppendLine(
+            "        public override int Read(global::System.Span<byte> buffer) => _inner.Read(buffer);"
+        );
+        builder.AppendLine(
+            "        public override global::System.Threading.Tasks.ValueTask<int> ReadAsync(global::System.Memory<byte> buffer, global::System.Threading.CancellationToken cancellationToken = default) => _inner.ReadAsync(buffer, cancellationToken);"
+        );
+        builder.AppendLine("#endif");
         builder.AppendLine(
             "        public override long Seek(long offset, global::System.IO.SeekOrigin origin)"
         );
@@ -76,7 +84,13 @@ internal static class DecompressionGuardComponent
         builder.AppendLine(
             "        public override void Write(byte[] buffer, int offset, int count) => throw new global::System.NotSupportedException();"
         );
-        builder.AppendLine("        protected override void Dispose(bool disposing) { }");
+        builder.AppendLine("        protected override void Dispose(bool disposing)");
+        builder.AppendLine("        {");
+        builder.AppendLine(
+            "            // The inner stream is owned by the caller and is deliberately not disposed."
+        );
+        builder.AppendLine("            base.Dispose(disposing);");
+        builder.AppendLine("        }");
         builder.AppendLine();
         builder.AppendLine("        private void ValidatePageAt(long offset)");
         builder.AppendLine("        {");

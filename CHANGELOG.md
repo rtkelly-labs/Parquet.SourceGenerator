@@ -183,6 +183,10 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   output keeps the manual throw behind `#if` for net472), the internal `Read*CoreAsync` helpers take
   `CancellationToken` last, and unused parameters and redundant jumps are gone. No public API
   change.
+- **The emitted `DecompressionGuardStream` now honours the `Stream` contract** (#547, part of
+  #554). `Flush()` is a no-op instead of throwing, `Dispose(bool)` calls the base and documents that
+  the caller owns the inner stream, and `Read(Span<byte>)` / `ReadAsync(Memory<byte>)` pass through
+  like the array overloads (gated for net472). Clears CA2215, CA1844, CA1835 and S1186 in emitted code.
 - **Coexistence of the two row-group pruning mechanisms is now pinned by a behavioural
   test** (`PredicatePushdownAndSortedLookupCoexistOnOneModel`, completes #264's coverage).
   `SortedEvent` carries both the predicate zone-map path and three sort-key binary-search
