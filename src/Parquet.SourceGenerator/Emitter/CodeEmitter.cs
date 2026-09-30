@@ -1672,9 +1672,9 @@ internal static class CodeEmitter
         builder.AppendLine(
             $"    private static async global::System.Collections.Generic.IAsyncEnumerable<{model.ClassName}> ReadEnumerableIteratorAsync("
         );
-        builder.AppendLine($"        global::System.IO.Stream stream,");
+        builder.AppendLine("        global::System.IO.Stream stream,");
         builder.AppendLine(
-            $"        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,"
+            "        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,"
         );
         builder.Append(RowGroupPruningComponent.PredicateParameterLine(model));
         builder.AppendLine(

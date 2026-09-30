@@ -56,7 +56,7 @@ public sealed class AsyncIteratorContractTests
     }
 
     [Fact]
-    public async Task RowEnumerableStillObservesWithCancellationToken()
+    public async Task RowEnumerableStillObservesWithCancellationTokenAsync()
     {
         using MemoryStream stream = await WriteSampleAsync();
         using var cts = new CancellationTokenSource();
@@ -76,7 +76,7 @@ public sealed class AsyncIteratorContractTests
     }
 
     [Fact]
-    public async Task BatchesStillObserveWithCancellationToken()
+    public async Task BatchesStillObserveWithCancellationTokenAsync()
     {
         using MemoryStream stream = await WriteSampleAsync();
         using var cts = new CancellationTokenSource();
