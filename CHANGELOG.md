@@ -175,6 +175,7 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   only for code that referenced the Attributes helpers directly.
 
 ### Fixed
+- **Emitted read and write methods are bounded by column shape, not column count.** The per-column dictionary guard, all-null bypass, list-leaf sizing, list lanes, struct reconstruction, compound extraction and pooled-buffer returns are now shared or per-column `private static` helpers called once per column, clearing CA1502 and CA1505 in the generated output with no public API change (#552, part of #554).
 - **Emitted code braces multi-statement blocks under `if`** in the compound list readers, clearing S2681
   in the generated output (#551, part of #554).
 - **Emitted code now calls `ConfigureAwait(false)` on every await** and passes its cancellation token to the

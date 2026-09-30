@@ -473,96 +473,14 @@ internal static class SchemaComponent
             "            for (int columnIndex = 0; columnIndex < rowGroup.Columns.Count; columnIndex++)"
         );
         builder.AppendLine("            {");
-        builder.AppendLine("                var column = rowGroup.Columns[columnIndex];");
-        builder.AppendLine("                var metadata = column.MetaData;");
-        builder.AppendLine("                if (metadata is null)");
-        builder.AppendLine("                {");
         builder.AppendLine(
-            "                    throw new global::System.IO.InvalidDataException($\"Column chunk metadata is missing for row group {rowGroupIndex}, column {columnIndex}.\");"
+            "                if (!TryGetColumnChunkRange(rowGroup, rowGroupIndex, columnIndex, footerStart, out long chunkStart, out long chunkEnd))"
         );
-        builder.AppendLine("                }");
-        builder.AppendLine("                if (metadata.TotalCompressedSize < 0)");
         builder.AppendLine("                {");
-        builder.AppendLine(
-            "                    throw new global::System.IO.InvalidDataException($\"Column chunk {columnIndex} in row group {rowGroupIndex} has a negative compressed size.\");"
-        );
-        builder.AppendLine("                }");
-        builder.AppendLine("                if (metadata.TotalCompressedSize == 0)");
-        builder.AppendLine("                {");
-        builder.AppendLine("                    if (rowGroup.NumRows > 0)");
-        builder.AppendLine("                    {");
-        builder.AppendLine(
-            "                        throw new global::System.IO.InvalidDataException($\"Column chunk {columnIndex} in row group {rowGroupIndex} has no compressed data.\");"
-        );
-        builder.AppendLine("                    }");
         builder.AppendLine("                    continue;");
         builder.AppendLine("                }");
-        builder.AppendLine("                long dataPageOffset = metadata.DataPageOffset;");
-        builder.AppendLine(
-            "                if (dataPageOffset < 4 || dataPageOffset >= footerStart)"
-        );
-        builder.AppendLine("                {");
-        builder.AppendLine(
-            "                    throw new global::System.IO.InvalidDataException($\"Column chunk {columnIndex} in row group {rowGroupIndex} has data page offset {dataPageOffset} outside the file data bounds.\");"
-        );
-        builder.AppendLine("                }");
-        builder.AppendLine("                long chunkStart = dataPageOffset;");
-        builder.AppendLine("                if (metadata.IndexPageOffset.HasValue)");
-        builder.AppendLine("                {");
-        builder.AppendLine(
-            "                    long indexPageOffset = metadata.IndexPageOffset.Value;"
-        );
-        builder.AppendLine(
-            "                    if (indexPageOffset < 4 || indexPageOffset >= footerStart)"
-        );
-        builder.AppendLine("                    {");
-        builder.AppendLine(
-            "                        throw new global::System.IO.InvalidDataException($\"Column chunk {columnIndex} in row group {rowGroupIndex} has index page offset {indexPageOffset} outside the file data bounds.\");"
-        );
-        builder.AppendLine("                    }");
-        builder.AppendLine("                    if (indexPageOffset > dataPageOffset)");
-        builder.AppendLine("                    {");
-        builder.AppendLine(
-            "                        throw new global::System.IO.InvalidDataException($\"Column chunk {columnIndex} in row group {rowGroupIndex} has an index page after its first data page.\");"
-        );
-        builder.AppendLine("                    }");
-        builder.AppendLine("                    chunkStart = indexPageOffset;");
-        builder.AppendLine("                }");
-        builder.AppendLine("                if (metadata.DictionaryPageOffset.HasValue)");
-        builder.AppendLine("                {");
-        builder.AppendLine(
-            "                    long dictionaryPageOffset = metadata.DictionaryPageOffset.Value;"
-        );
-        builder.AppendLine(
-            "                    if (dictionaryPageOffset < 4 || dictionaryPageOffset >= footerStart)"
-        );
-        builder.AppendLine("                    {");
-        builder.AppendLine(
-            "                        throw new global::System.IO.InvalidDataException($\"Column chunk {columnIndex} in row group {rowGroupIndex} has dictionary page offset {dictionaryPageOffset} outside the file data bounds.\");"
-        );
-        builder.AppendLine("                    }");
-        builder.AppendLine("                    if (dictionaryPageOffset > dataPageOffset)");
-        builder.AppendLine("                    {");
-        builder.AppendLine(
-            "                        throw new global::System.IO.InvalidDataException($\"Column chunk {columnIndex} in row group {rowGroupIndex} has a dictionary page after its data page.\");"
-        );
-        builder.AppendLine("                    }");
-        builder.AppendLine(
-            "                    if (dictionaryPageOffset < chunkStart) chunkStart = dictionaryPageOffset;"
-        );
-        builder.AppendLine("                }");
-        builder.AppendLine(
-            "                if (metadata.TotalCompressedSize > footerStart - chunkStart)"
-        );
-        builder.AppendLine("                {");
-        builder.AppendLine(
-            "                    throw new global::System.IO.InvalidDataException($\"Column chunk {columnIndex} in row group {rowGroupIndex} extends beyond the file data bounds.\");"
-        );
-        builder.AppendLine("                }");
         builder.AppendLine("                starts[rangeCount] = chunkStart;");
-        builder.AppendLine(
-            "                ends[rangeCount] = chunkStart + metadata.TotalCompressedSize;"
-        );
+        builder.AppendLine("                ends[rangeCount] = chunkEnd;");
         builder.AppendLine("                rangeCount++;");
         builder.AppendLine("            }");
         builder.AppendLine("        }");
@@ -581,6 +499,95 @@ internal static class SchemaComponent
         builder.AppendLine("                previousEnd = ends[i];");
         builder.AppendLine("            }");
         builder.AppendLine("        }");
+        builder.AppendLine("    }");
+        builder.AppendLine();
+        builder.AppendLine(
+            "    private static bool TryGetColumnChunkRange(global::Parquet.Meta.RowGroup rowGroup, int rowGroupIndex, int columnIndex, long footerStart, out long chunkStart, out long chunkEnd)"
+        );
+        builder.AppendLine("    {");
+        builder.AppendLine("        chunkStart = 0;");
+        builder.AppendLine("        chunkEnd = 0;");
+        builder.AppendLine("        var metadata = rowGroup.Columns[columnIndex].MetaData;");
+        builder.AppendLine("        if (metadata is null)");
+        builder.AppendLine("        {");
+        builder.AppendLine(
+            "            throw new global::System.IO.InvalidDataException($\"Column chunk metadata is missing for row group {rowGroupIndex}, column {columnIndex}.\");"
+        );
+        builder.AppendLine("        }");
+        builder.AppendLine("        if (metadata.TotalCompressedSize < 0)");
+        builder.AppendLine("        {");
+        builder.AppendLine(
+            "            throw new global::System.IO.InvalidDataException($\"Column chunk {columnIndex} in row group {rowGroupIndex} has a negative compressed size.\");"
+        );
+        builder.AppendLine("        }");
+        builder.AppendLine("        if (metadata.TotalCompressedSize == 0)");
+        builder.AppendLine("        {");
+        builder.AppendLine("            if (rowGroup.NumRows > 0)");
+        builder.AppendLine("            {");
+        builder.AppendLine(
+            "                throw new global::System.IO.InvalidDataException($\"Column chunk {columnIndex} in row group {rowGroupIndex} has no compressed data.\");"
+        );
+        builder.AppendLine("            }");
+        builder.AppendLine("            return false;");
+        builder.AppendLine("        }");
+        builder.AppendLine("        long dataPageOffset = metadata.DataPageOffset;");
+        builder.AppendLine("        if (dataPageOffset < 4 || dataPageOffset >= footerStart)");
+        builder.AppendLine("        {");
+        builder.AppendLine(
+            "            throw new global::System.IO.InvalidDataException($\"Column chunk {columnIndex} in row group {rowGroupIndex} has data page offset {dataPageOffset} outside the file data bounds.\");"
+        );
+        builder.AppendLine("        }");
+        builder.AppendLine("        chunkStart = dataPageOffset;");
+        builder.AppendLine("        if (metadata.IndexPageOffset.HasValue)");
+        builder.AppendLine("        {");
+        builder.AppendLine("            long indexPageOffset = metadata.IndexPageOffset.Value;");
+        builder.AppendLine(
+            "            if (indexPageOffset < 4 || indexPageOffset >= footerStart)"
+        );
+        builder.AppendLine("            {");
+        builder.AppendLine(
+            "                throw new global::System.IO.InvalidDataException($\"Column chunk {columnIndex} in row group {rowGroupIndex} has index page offset {indexPageOffset} outside the file data bounds.\");"
+        );
+        builder.AppendLine("            }");
+        builder.AppendLine("            if (indexPageOffset > dataPageOffset)");
+        builder.AppendLine("            {");
+        builder.AppendLine(
+            "                throw new global::System.IO.InvalidDataException($\"Column chunk {columnIndex} in row group {rowGroupIndex} has an index page after its first data page.\");"
+        );
+        builder.AppendLine("            }");
+        builder.AppendLine("            chunkStart = indexPageOffset;");
+        builder.AppendLine("        }");
+        builder.AppendLine("        if (metadata.DictionaryPageOffset.HasValue)");
+        builder.AppendLine("        {");
+        builder.AppendLine(
+            "            long dictionaryPageOffset = metadata.DictionaryPageOffset.Value;"
+        );
+        builder.AppendLine(
+            "            if (dictionaryPageOffset < 4 || dictionaryPageOffset >= footerStart)"
+        );
+        builder.AppendLine("            {");
+        builder.AppendLine(
+            "                throw new global::System.IO.InvalidDataException($\"Column chunk {columnIndex} in row group {rowGroupIndex} has dictionary page offset {dictionaryPageOffset} outside the file data bounds.\");"
+        );
+        builder.AppendLine("            }");
+        builder.AppendLine("            if (dictionaryPageOffset > dataPageOffset)");
+        builder.AppendLine("            {");
+        builder.AppendLine(
+            "                throw new global::System.IO.InvalidDataException($\"Column chunk {columnIndex} in row group {rowGroupIndex} has a dictionary page after its data page.\");"
+        );
+        builder.AppendLine("            }");
+        builder.AppendLine(
+            "            if (dictionaryPageOffset < chunkStart) chunkStart = dictionaryPageOffset;"
+        );
+        builder.AppendLine("        }");
+        builder.AppendLine("        if (metadata.TotalCompressedSize > footerStart - chunkStart)");
+        builder.AppendLine("        {");
+        builder.AppendLine(
+            "            throw new global::System.IO.InvalidDataException($\"Column chunk {columnIndex} in row group {rowGroupIndex} extends beyond the file data bounds.\");"
+        );
+        builder.AppendLine("        }");
+        builder.AppendLine("        chunkEnd = chunkStart + metadata.TotalCompressedSize;");
+        builder.AppendLine("        return true;");
         builder.AppendLine("    }");
     }
 }

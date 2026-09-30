@@ -123,6 +123,11 @@ internal static class CompoundBuffers
         }
     }
 
+    /// <summary>
+    /// Emits the write-side <c>finally</c> returns. Each is one <c>ReturnPooledArray</c> call (the
+    /// null guard lives in the helper), so the method's complexity does not grow with the column
+    /// count (#552). Flat and compound columns share this one shape.
+    /// </summary>
     public static void EmitWriteReturns(
         StringBuilder builder,
         TargetClassModel model,
@@ -135,35 +140,25 @@ internal static class CompoundBuffers
             int i = col.Slot;
             if (col.IsCompound || col.IsListLeaf)
             {
-                builder.AppendLine(
-                    $"{indent}if ({varPrefix}{i} != null) global::System.Buffers.ArrayPool<{col.PackedType}>.Shared.Return({varPrefix}{i}, clearArray: true);"
-                );
-                builder.AppendLine(
-                    $"{indent}if (defLevels_{i} != null) global::System.Buffers.ArrayPool<int>.Shared.Return(defLevels_{i}, clearArray: false);"
-                );
+                builder.AppendLine($"{indent}ReturnPooledArray({varPrefix}{i}, clearArray: true);");
+                builder.AppendLine($"{indent}ReturnPooledArray(defLevels_{i}, clearArray: false);");
                 if (col.IsListLeaf)
                     builder.AppendLine(
-                        $"{indent}if (repLevels_{i} != null) global::System.Buffers.ArrayPool<int>.Shared.Return(repLevels_{i}, clearArray: false);"
+                        $"{indent}ReturnPooledArray(repLevels_{i}, clearArray: false);"
                     );
             }
             else if (BufferPoolComponent.UsesWriteAllParts(col.Leaf))
             {
-                string nonNullType = BufferPoolComponent.GetNonNullableBufferType(col.Leaf);
                 builder.AppendLine(
-                    $"{indent}if ({varPrefix}{i} != null) global::System.Buffers.ArrayPool<{nonNullType}>.Shared.Return({varPrefix}{i}, clearArray: false);"
+                    $"{indent}ReturnPooledArray({varPrefix}{i}, clearArray: false);"
                 );
-                builder.AppendLine(
-                    $"{indent}if (defLevels_{i} != null) global::System.Buffers.ArrayPool<int>.Shared.Return(defLevels_{i}, clearArray: false);"
-                );
+                builder.AppendLine($"{indent}ReturnPooledArray(defLevels_{i}, clearArray: false);");
             }
             else
             {
-                string bufType = BufferPoolComponent.GetWriteBufferElementType(col.Leaf);
                 bool isRef = BufferPoolComponent.IsReferenceTypeBuffer(col.Leaf, isWrite: true);
                 string clearArg = isRef ? "clearArray: true" : "clearArray: false";
-                builder.AppendLine(
-                    $"{indent}if ({varPrefix}{i} != null) global::System.Buffers.ArrayPool<{bufType}>.Shared.Return({varPrefix}{i}, {clearArg});"
-                );
+                builder.AppendLine($"{indent}ReturnPooledArray({varPrefix}{i}, {clearArg});");
             }
         }
     }
