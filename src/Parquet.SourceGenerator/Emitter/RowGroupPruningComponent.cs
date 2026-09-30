@@ -79,22 +79,19 @@ internal static class RowGroupPruningComponent
             ? $"global::{MetadataTypeName(model)}"
             : $"global::{model.Namespace}.{MetadataTypeName(model)}";
 
-    /// <summary>The predicate parameter line appended to a read method's parameter list.</summary>
-    public static string PredicateParameter(TargetClassModel model) =>
-        $"        global::System.Func<{QualifiedMetadataTypeName(model)}, bool>? predicate = null";
-
     /// <summary>
-    /// Closing text for a read method's parameter list: appends the optional pruning predicate
-    /// when the model has at least one column whose statistics can be projected.
+    /// The optional pruning predicate parameter, ending in a newline, for a read method's parameter
+    /// list. It precedes the trailing <c>CancellationToken</c> (CA1068); empty when the model has no
+    /// column whose statistics can be projected.
     /// </summary>
-    public static string SignatureSuffix(TargetClassModel model) =>
+    public static string PredicateParameterLine(TargetClassModel model) =>
         IsEnabled(model)
-            ? $",\n        global::System.Func<{QualifiedMetadataTypeName(model)}, bool>? predicate = null)"
-            : ")";
+            ? $"        global::System.Func<{QualifiedMetadataTypeName(model)}, bool>? predicate = null,\n"
+            : string.Empty;
 
-    /// <summary>Argument text forwarding the predicate to a delegating overload.</summary>
-    public static string ForwardArgument(TargetClassModel model) =>
-        IsEnabled(model) ? ", predicate" : string.Empty;
+    /// <summary>Argument text forwarding the predicate (before the token) to a delegating overload.</summary>
+    public static string ForwardPredicate(TargetClassModel model) =>
+        IsEnabled(model) ? "predicate, " : string.Empty;
 
     /// <summary>The call arguments passing every statistics column's resolved field to the guard.</summary>
     private static string FieldArguments(TargetClassModel model)

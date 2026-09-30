@@ -864,7 +864,7 @@ internal static class CodeEmitter
             $"        global::System.Collections.Generic.IReadOnlyCollection<{model.ClassName}> chunk,"
         );
         builder.AppendLine(
-            $"        global::System.Threading.CancellationToken cancellationToken = default)"
+            "        global::System.Threading.CancellationToken cancellationToken = default)"
         );
         builder.AppendLine("    {");
         builder.AppendLine("        global::System.ArgumentNullException.ThrowIfNull(writer);");
@@ -1076,7 +1076,7 @@ internal static class CodeEmitter
             $"        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,"
         );
         builder.AppendLine(
-            $"        global::System.Threading.CancellationToken cancellationToken = default)"
+            "        global::System.Threading.CancellationToken cancellationToken = default)"
         );
         builder.AppendLine("    {");
         builder.AppendLine("        global::System.ArgumentNullException.ThrowIfNull(items);");
@@ -1126,7 +1126,7 @@ internal static class CodeEmitter
             $"        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,"
         );
         builder.AppendLine(
-            $"        global::System.Threading.CancellationToken cancellationToken = default)"
+            "        global::System.Threading.CancellationToken cancellationToken = default)"
         );
         builder.AppendLine("    {");
         builder.AppendLine("        global::System.ArgumentNullException.ThrowIfNull(items);");
@@ -1217,7 +1217,7 @@ internal static class CodeEmitter
             $"        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,"
         );
         builder.AppendLine(
-            $"        global::System.Threading.CancellationToken cancellationToken = default)"
+            "        global::System.Threading.CancellationToken cancellationToken = default)"
         );
         builder.AppendLine("    {");
         builder.AppendLine("        global::System.ArgumentNullException.ThrowIfNull(items);");
@@ -1289,8 +1289,9 @@ internal static class CodeEmitter
         builder.AppendLine(
             $"        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,"
         );
+        builder.Append(RowGroupPruningComponent.PredicateParameterLine(model));
         builder.AppendLine(
-            $"        global::System.Threading.CancellationToken cancellationToken = default{RowGroupPruningComponent.SignatureSuffix(model)}"
+            "        global::System.Threading.CancellationToken cancellationToken = default)"
         );
         builder.AppendLine("    {");
         builder.AppendLine("        global::System.ArgumentNullException.ThrowIfNull(stream);");
@@ -1503,8 +1504,9 @@ internal static class CodeEmitter
         builder.AppendLine(
             $"        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,"
         );
+        builder.Append(RowGroupPruningComponent.PredicateParameterLine(model));
         builder.AppendLine(
-            $"        global::System.Threading.CancellationToken cancellationToken = default{RowGroupPruningComponent.SignatureSuffix(model)}"
+            "        global::System.Threading.CancellationToken cancellationToken = default)"
         );
         builder.AppendLine("    {");
         builder.AppendLine("        global::System.ArgumentNullException.ThrowIfNull(stream);");
@@ -1622,8 +1624,9 @@ internal static class CodeEmitter
         builder.AppendLine(
             $"        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,"
         );
+        builder.Append(RowGroupPruningComponent.PredicateParameterLine(model));
         builder.AppendLine(
-            $"        [global::System.Runtime.CompilerServices.EnumeratorCancellation] global::System.Threading.CancellationToken cancellationToken = default{RowGroupPruningComponent.SignatureSuffix(model)}"
+            "        [global::System.Runtime.CompilerServices.EnumeratorCancellation] global::System.Threading.CancellationToken cancellationToken = default)"
         );
         builder.AppendLine("    {");
         builder.AppendLine("        global::System.ArgumentNullException.ThrowIfNull(stream);");
@@ -1742,7 +1745,7 @@ internal static class CodeEmitter
             $"        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,"
         );
         builder.AppendLine(
-            $"        global::System.Threading.CancellationToken cancellationToken = default)"
+            "        global::System.Threading.CancellationToken cancellationToken = default)"
         );
         builder.AppendLine("    {");
         builder.AppendLine(
@@ -1767,7 +1770,7 @@ internal static class CodeEmitter
             $"        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,"
         );
         builder.AppendLine(
-            $"        global::System.Threading.CancellationToken cancellationToken = default)"
+            "        global::System.Threading.CancellationToken cancellationToken = default)"
         );
         builder.AppendLine("    {");
         builder.AppendLine(
@@ -1794,13 +1797,14 @@ internal static class CodeEmitter
         builder.AppendLine(
             $"        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,"
         );
+        builder.Append(RowGroupPruningComponent.PredicateParameterLine(model));
         builder.AppendLine(
-            $"        [global::System.Runtime.CompilerServices.EnumeratorCancellation] global::System.Threading.CancellationToken cancellationToken = default{RowGroupPruningComponent.SignatureSuffix(model)}"
+            "        [global::System.Runtime.CompilerServices.EnumeratorCancellation] global::System.Threading.CancellationToken cancellationToken = default)"
         );
         builder.AppendLine("    {");
         builder.AppendLine("        using var stream = CreateBufferStream(parquetBytes);");
         builder.AppendLine(
-            $"        await foreach (var item in global::System.Threading.Tasks.TaskAsyncEnumerableExtensions.ConfigureAwait(ReadEnumerableCoreAsync(stream, options, cancellationToken{RowGroupPruningComponent.ForwardArgument(model)}), false))"
+            $"        await foreach (var item in global::System.Threading.Tasks.TaskAsyncEnumerableExtensions.ConfigureAwait(ReadEnumerableCoreAsync(stream, options, {RowGroupPruningComponent.ForwardPredicate(model)}cancellationToken), false))"
         );
         builder.AppendLine("        {");
         builder.AppendLine("            yield return item;");
@@ -2043,7 +2047,7 @@ internal static class CodeEmitter
             $"        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,"
         );
         builder.AppendLine(
-            $"        global::System.Threading.CancellationToken cancellationToken = default)"
+            "        global::System.Threading.CancellationToken cancellationToken = default)"
         );
         builder.AppendLine("    {");
         builder.AppendLine(
@@ -2171,7 +2175,7 @@ internal static class CodeEmitter
             $"        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,"
         );
         builder.AppendLine(
-            $"        global::System.Threading.CancellationToken cancellationToken = default)"
+            "        global::System.Threading.CancellationToken cancellationToken = default)"
         );
         builder.AppendLine("    {");
         builder.AppendLine("        cancellationToken.ThrowIfCancellationRequested();");
@@ -2323,7 +2327,7 @@ internal static class CodeEmitter
             $"        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,"
         );
         builder.AppendLine(
-            $"        global::System.Threading.CancellationToken cancellationToken = default)"
+            "        global::System.Threading.CancellationToken cancellationToken = default)"
         );
         builder.AppendLine("    {");
         builder.AppendLine(
