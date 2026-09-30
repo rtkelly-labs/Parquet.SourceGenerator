@@ -328,7 +328,7 @@ internal static class CompoundMapping
         builder.AppendLine($"{indent}for (int p_{n} = 0; p_{n} < entries_{n}; p_{n}++)");
         builder.AppendLine($"{indent}{{");
         builder.AppendLine(
-            $"{indent}    if (repLevels_{n}[p_{n}] == 0) {{ if (st_{n}) {{ if (rc_{n} >= lane_{n}.Length) throw new global::System.IO.InvalidDataException(\"Repetition levels in column '{col.Leaf.Name}' produced more rows than row group capacity (\" + lane_{n}.Length + \").\"); lane_{n}[rc_{n}++] = bk_{n}; }} st_{n} = true; bk_{n} = null; }}"
+            $"{indent}    if (repLevels_{n}[p_{n}] == 0) {{ if (st_{n}) {{ if (rc_{n} >= lane_{n}.Length) {{ throw new global::System.IO.InvalidDataException(\"Repetition levels in column '{col.Leaf.Name}' produced more rows than row group capacity (\" + lane_{n}.Length + \").\"); }} lane_{n}[rc_{n}++] = bk_{n}; }} st_{n} = true; bk_{n} = null; }}"
         );
         builder.AppendLine($"{indent}    int dv_{n} = defLevels_{n}[p_{n}];");
         builder.AppendLine(
@@ -340,14 +340,14 @@ internal static class CompoundMapping
         builder.AppendLine($"{indent}    else if (dv_{n} >= {col.ListElementRung}) {{");
         builder.AppendLine($"{indent}        bk_{n} ??= new {listType}();");
         builder.AppendLine(
-            $"{indent}        if (dv_{n} == {col.MaxDef}) {{ if (vc_{n} >= entries_{n}) throw new global::System.IO.InvalidDataException(\"Definition levels in column '{col.Leaf.Name}' exceeded values count (\" + entries_{n} + \").\"); bk_{n}.Add({GetCompoundLeafReadExpression(col.Leaf, $"buffer_{n}[vc_{n}++]")}); }}"
+            $"{indent}        if (dv_{n} == {col.MaxDef}) {{ if (vc_{n} >= entries_{n}) {{ throw new global::System.IO.InvalidDataException(\"Definition levels in column '{col.Leaf.Name}' exceeded values count (\" + entries_{n} + \").\"); }} bk_{n}.Add({GetCompoundLeafReadExpression(col.Leaf, $"buffer_{n}[vc_{n}++]")}); }}"
         );
         if (col.Leaf.IsNullable)
             builder.AppendLine($"{indent}        else bk_{n}.Add(null!);");
         builder.AppendLine($"{indent}    }}");
         builder.AppendLine($"{indent}}}");
         builder.AppendLine(
-            $"{indent}if (st_{n}) {{ if (rc_{n} >= lane_{n}.Length) throw new global::System.IO.InvalidDataException(\"Repetition levels in column '{col.Leaf.Name}' produced more rows than row group capacity (\" + lane_{n}.Length + \").\"); lane_{n}[rc_{n}++] = bk_{n}; }}"
+            $"{indent}if (st_{n}) {{ if (rc_{n} >= lane_{n}.Length) {{ throw new global::System.IO.InvalidDataException(\"Repetition levels in column '{col.Leaf.Name}' produced more rows than row group capacity (\" + lane_{n}.Length + \").\"); }} lane_{n}[rc_{n}++] = bk_{n}; }}"
         );
         builder.AppendLine($"{indent}_ = rc_{n};");
     }
@@ -380,7 +380,7 @@ internal static class CompoundMapping
         builder.AppendLine($"{indent}for (int p_{a} = 0; p_{a} < entries_{a}; p_{a}++)");
         builder.AppendLine($"{indent}{{");
         builder.AppendLine(
-            $"{indent}    if (repLevels_{a}[p_{a}] == 0) {{ if (st_{a}) {{ if (rc_{a} >= lane_{a}.Length) throw new global::System.IO.InvalidDataException(\"Repetition levels in column '{anchor.Leaf.Name}' produced more rows than row group capacity (\" + lane_{a}.Length + \").\"); lane_{a}[rc_{a}++] = bk_{a}; }} st_{a} = true; bk_{a} = null; }}"
+            $"{indent}    if (repLevels_{a}[p_{a}] == 0) {{ if (st_{a}) {{ if (rc_{a} >= lane_{a}.Length) {{ throw new global::System.IO.InvalidDataException(\"Repetition levels in column '{anchor.Leaf.Name}' produced more rows than row group capacity (\" + lane_{a}.Length + \").\"); }} lane_{a}[rc_{a}++] = bk_{a}; }} st_{a} = true; bk_{a} = null; }}"
         );
         builder.AppendLine($"{indent}    int dv_{a} = defLevels_{a}[p_{a}];");
         builder.AppendLine(
@@ -416,7 +416,7 @@ internal static class CompoundMapping
         builder.AppendLine($"{indent}    }}");
         builder.AppendLine($"{indent}}}");
         builder.AppendLine(
-            $"{indent}if (st_{a}) {{ if (rc_{a} >= lane_{a}.Length) throw new global::System.IO.InvalidDataException(\"Repetition levels in column '{anchor.Leaf.Name}' produced more rows than row group capacity (\" + lane_{a}.Length + \").\"); lane_{a}[rc_{a}++] = bk_{a}; }}"
+            $"{indent}if (st_{a}) {{ if (rc_{a} >= lane_{a}.Length) {{ throw new global::System.IO.InvalidDataException(\"Repetition levels in column '{anchor.Leaf.Name}' produced more rows than row group capacity (\" + lane_{a}.Length + \").\"); }} lane_{a}[rc_{a}++] = bk_{a}; }}"
         );
         builder.AppendLine($"{indent}_ = rc_{a};");
     }
