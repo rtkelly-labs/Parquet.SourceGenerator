@@ -1102,7 +1102,9 @@ internal static class CodeEmitter
         builder.AppendLine(
             "            cancellationToken: cancellationToken).ConfigureAwait(false);"
         );
-        builder.AppendLine("        await using var writerScope = writer.ConfigureAwait(false);");
+        builder.AppendLine(
+            "        await using var writerScope = global::System.Threading.Tasks.TaskAsyncEnumerableExtensions.ConfigureAwait(writer, false);"
+        );
         builder.AppendLine(
             "        await writer.WriteParquetRowGroupAsync(items, cancellationToken).ConfigureAwait(false);"
         );
@@ -1152,7 +1154,7 @@ internal static class CodeEmitter
             "                cancellationToken: cancellationToken).ConfigureAwait(false);"
         );
         builder.AppendLine(
-            "            await using var singleWriterScope = singleWriter.ConfigureAwait(false);"
+            "            await using var singleWriterScope = global::System.Threading.Tasks.TaskAsyncEnumerableExtensions.ConfigureAwait(singleWriter, false);"
         );
         builder.AppendLine(
             "            await singleWriter.WriteParquetRowGroupAsync(col, cancellationToken).ConfigureAwait(false);"
@@ -1167,7 +1169,9 @@ internal static class CodeEmitter
         builder.AppendLine(
             "            cancellationToken: cancellationToken).ConfigureAwait(false);"
         );
-        builder.AppendLine("        await using var writerScope = writer.ConfigureAwait(false);");
+        builder.AppendLine(
+            "        await using var writerScope = global::System.Threading.Tasks.TaskAsyncEnumerableExtensions.ConfigureAwait(writer, false);"
+        );
         builder.AppendLine(
             $"        var buffer = new global::System.Collections.Generic.List<{model.ClassName}>(targetChunkSize);"
         );
@@ -1226,7 +1230,9 @@ internal static class CodeEmitter
         builder.AppendLine(
             "            cancellationToken: cancellationToken).ConfigureAwait(false);"
         );
-        builder.AppendLine("        await using var writerScope = writer.ConfigureAwait(false);");
+        builder.AppendLine(
+            "        await using var writerScope = global::System.Threading.Tasks.TaskAsyncEnumerableExtensions.ConfigureAwait(writer, false);"
+        );
         builder.AppendLine(
             $"        var buffer = new global::System.Collections.Generic.List<{model.ClassName}>(targetChunkSize);"
         );
@@ -1298,7 +1304,9 @@ internal static class CodeEmitter
         builder.AppendLine(
             "            cancellationToken: cancellationToken).ConfigureAwait(false);"
         );
-        builder.AppendLine("        await using var readerScope = reader.ConfigureAwait(false);");
+        builder.AppendLine(
+            "        await using var readerScope = global::System.Threading.Tasks.TaskAsyncEnumerableExtensions.ConfigureAwait(reader, false);"
+        );
         builder.AppendLine("        guardedStream.Activate();");
         builder.AppendLine(
             "        await ValidateReaderAsync(reader, stream, options, cancellationToken).ConfigureAwait(false);"
@@ -1505,7 +1513,9 @@ internal static class CodeEmitter
         builder.AppendLine(
             "            cancellationToken: cancellationToken).ConfigureAwait(false);"
         );
-        builder.AppendLine("        await using var readerScope = reader.ConfigureAwait(false);");
+        builder.AppendLine(
+            "        await using var readerScope = global::System.Threading.Tasks.TaskAsyncEnumerableExtensions.ConfigureAwait(reader, false);"
+        );
         builder.AppendLine("        guardedStream.Activate();");
         builder.AppendLine(
             "        await ValidateReaderAsync(reader, stream, options, cancellationToken).ConfigureAwait(false);"
@@ -1619,7 +1629,9 @@ internal static class CodeEmitter
         builder.AppendLine(
             "            cancellationToken: cancellationToken).ConfigureAwait(false);"
         );
-        builder.AppendLine("        await using var readerScope = reader.ConfigureAwait(false);");
+        builder.AppendLine(
+            "        await using var readerScope = global::System.Threading.Tasks.TaskAsyncEnumerableExtensions.ConfigureAwait(reader, false);"
+        );
         builder.AppendLine("        guardedStream.Activate();");
         builder.AppendLine(
             "        await ValidateReaderAsync(reader, stream, options, cancellationToken).ConfigureAwait(false);"
@@ -1867,7 +1879,9 @@ internal static class CodeEmitter
         builder.AppendLine(
             "            cancellationToken: cancellationToken).ConfigureAwait(false);"
         );
-        builder.AppendLine("        await using var readerScope = reader.ConfigureAwait(false);");
+        builder.AppendLine(
+            "        await using var readerScope = global::System.Threading.Tasks.TaskAsyncEnumerableExtensions.ConfigureAwait(reader, false);"
+        );
         builder.AppendLine("        guardedStream.Activate();");
         builder.AppendLine(
             "        await ValidateReaderAsync(reader, stream, options, cancellationToken).ConfigureAwait(false);"
@@ -2023,7 +2037,9 @@ internal static class CodeEmitter
         builder.AppendLine(
             "            cancellationToken: cancellationToken).ConfigureAwait(false);"
         );
-        builder.AppendLine("        await using var readerScope = reader.ConfigureAwait(false);");
+        builder.AppendLine(
+            "        await using var readerScope = global::System.Threading.Tasks.TaskAsyncEnumerableExtensions.ConfigureAwait(reader, false);"
+        );
         builder.AppendLine("        guardedStream.Activate();");
         builder.AppendLine(
             "        await ValidateReaderAsync(reader, stream, options, cancellationToken).ConfigureAwait(false);"
@@ -2162,7 +2178,9 @@ internal static class CodeEmitter
         builder.AppendLine(
             "                cancellationToken: cancellationToken).ConfigureAwait(false);"
         );
-        builder.AppendLine("            await using var probeScope = probe.ConfigureAwait(false);");
+        builder.AppendLine(
+            "            await using var probeScope = global::System.Threading.Tasks.TaskAsyncEnumerableExtensions.ConfigureAwait(probe, false);"
+        );
         builder.AppendLine("            guardedProbeStream.Activate();");
         builder.AppendLine(
             "            await ValidateReaderAsync(probe, probeStream, options, cancellationToken).ConfigureAwait(false);"
@@ -2339,7 +2357,7 @@ internal static class CodeEmitter
             "                cancellationToken: cancellationToken).ConfigureAwait(false);"
         );
         builder.AppendLine(
-            "            await using var readerScope = reader.ConfigureAwait(false);"
+            "            await using var readerScope = global::System.Threading.Tasks.TaskAsyncEnumerableExtensions.ConfigureAwait(reader, false);"
         );
         builder.AppendLine("            guardedStream.Activate();");
         builder.AppendLine(

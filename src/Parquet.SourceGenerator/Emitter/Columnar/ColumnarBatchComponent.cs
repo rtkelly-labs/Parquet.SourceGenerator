@@ -528,7 +528,9 @@ internal static class ColumnarBatchComponent
         builder.AppendLine(
             "            cancellationToken: cancellationToken).ConfigureAwait(false);"
         );
-        builder.AppendLine("        await using var writerScope = writer.ConfigureAwait(false);");
+        builder.AppendLine(
+            "        await using var writerScope = global::System.Threading.Tasks.TaskAsyncEnumerableExtensions.ConfigureAwait(writer, false);"
+        );
         builder.AppendLine(
             "        await writer.WriteParquetRowGroupAsync(batch, cancellationToken).ConfigureAwait(false);"
         );

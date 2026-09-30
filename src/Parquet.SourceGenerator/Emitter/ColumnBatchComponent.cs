@@ -209,7 +209,9 @@ internal static class ColumnBatchComponent
         builder.AppendLine(
             "            cancellationToken: cancellationToken).ConfigureAwait(false);"
         );
-        builder.AppendLine("        await using var readerScope = reader.ConfigureAwait(false);");
+        builder.AppendLine(
+            "        await using var readerScope = global::System.Threading.Tasks.TaskAsyncEnumerableExtensions.ConfigureAwait(reader, false);"
+        );
         builder.AppendLine(
             "        await ValidateReaderAsync(reader, stream, options, cancellationToken).ConfigureAwait(false);"
         );
