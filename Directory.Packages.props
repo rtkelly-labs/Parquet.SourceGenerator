@@ -39,5 +39,6 @@
         <PackageVersion Include="CommandLineParser" Version="2.9.1" />
         <PackageVersion Include="System.Text.Json" Version="8.0.5" />
         <PackageVersion Include="SonarAnalyzer.CSharp" Version="10.7.0.110445" />
+        <PackageVersion Include="Roslynator.Analyzers" Version="4.12.9" />
     </ItemGroup>
 </Project>
