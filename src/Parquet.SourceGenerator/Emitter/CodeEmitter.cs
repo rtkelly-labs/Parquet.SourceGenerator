@@ -1768,7 +1768,7 @@ internal static class CodeEmitter
         );
         builder.AppendLine("    {");
         builder.AppendLine(
-            $"        var results = await ReadBufferSequentialArrayAsync(parquetBytes, options, cancellationToken).ConfigureAwait(false);"
+            "        var results = await ReadBufferSequentialArrayAsync(parquetBytes, options, cancellationToken).ConfigureAwait(false);"
         );
         builder.AppendLine(
             $"        return new global::System.Collections.Generic.List<{model.ClassName}>(results);"
@@ -2351,7 +2351,7 @@ internal static class CodeEmitter
         );
         builder.AppendLine("    {");
         builder.AppendLine(
-            $"        var resultArray = await ReadParallelArrayCoreAsync(parquetBytes, options, cancellationToken).ConfigureAwait(false);"
+            "        var resultArray = await ReadParallelArrayCoreAsync(parquetBytes, options, cancellationToken).ConfigureAwait(false);"
         );
         builder.AppendLine(
             $"        return new global::System.Collections.Generic.List<{model.ClassName}>(resultArray);"

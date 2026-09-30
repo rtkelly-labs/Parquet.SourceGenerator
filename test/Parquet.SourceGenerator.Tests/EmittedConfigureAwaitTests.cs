@@ -56,7 +56,7 @@ public class EmittedConfigureAwaitTests
     }
 
     [Fact]
-    public async Task StreamingWriteFlowsCancellationIntoTheSourceEnumerator()
+    public async Task StreamingWriteFlowsCancellationIntoTheSourceEnumeratorAsync()
     {
         var probe = new CancellationProbe();
         using var cts = new CancellationTokenSource();
