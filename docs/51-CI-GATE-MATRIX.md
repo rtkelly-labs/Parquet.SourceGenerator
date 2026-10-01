@@ -45,9 +45,9 @@ permanently pending required check afterwards.
 protection. Read line by line:
 
 - `if: always()` (`ci.yml:680`): the job runs even when a dependency failed, was cancelled or was
+  skipped, so the required check always reports. Without it a failed `needs` job would skip
   `build`, and GitHub counts a job skipped by its own condition as passing, not failed, so a failing
   dependency would let the required check through. "Expected" means the check never reported at all.
-  `build`, and a skipped required check reads as "expected", not "failed".
 - `needs: [test, derived, generated-analysis]` (`ci.yml:681`).
 - Each result is read from `needs.<job>.result` (`ci.yml:686-688`), the job's own conclusion, not
   from a step output. A job that dies before its last step still reports `failure`, so the
