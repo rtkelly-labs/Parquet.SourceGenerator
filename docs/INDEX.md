@@ -191,16 +191,16 @@ The documentation is organized into three distinct tiers based on audience and i
      - CSharpGeneratorDriver throughput and managed allocation measurements for initial, unrelated-file, and per-model edits.
      - Public Roslyn tracked-output evidence, model value-equality proof, and the resolved `WithTrackingName` compatibility limitation.
 
-23. **[36 - Feature Profiles and Per-Type Overrides](./36-FEATURE-PROFILES-SCOPE-225.md)**
+25. **[36 - Feature Profiles and Per-Type Overrides](./36-FEATURE-PROFILES-SCOPE-225.md)**
      - Scope decision for named profiles and per-type configuration overrides.
 
-24. **[48 - Flat-Read Removal Before 0.1 (#480)](./48-FLAT-READ-REMOVAL-480.md)**
+26. **[48 - Flat-Read Removal Before 0.1 (#480)](./48-FLAT-READ-REMOVAL-480.md)**
      - Removes the flat `ReadParquet*Async` methods from the modern emitter; the builder is the only
        modern read surface. Supersedes [document 41](./41-FLAT-READ-FREEZE-SCOPE-262.md) (#262).
      - The legacy emitter keeps its flat reads as its declared subset (#246); no `[Obsolete]` release.
      - Measured shrinkage (−66 members, −222 parameter slots) and the flat → builder migration table.
 
-25. **[49 - Legacy Backend Parity (#490)](./49-LEGACY-PARITY-490.md)**
+27. **[49 - Legacy Backend Parity (#490)](./49-LEGACY-PARITY-490.md)**
      - Decision: the legacy (net472) backend is to expose the same generated API as modern, with
        differences listed in a shrinking allowlist. This is the target, not current output: the two
        backends still emit different surfaces until #492 to #496 land. Supersedes the #246
@@ -208,17 +208,21 @@ The documentation is organized into three distinct tiers based on audience and i
      - Parquet.Net 4.25 evidence, the shared-surface / per-backend column-I/O split, and the
        one-package end state.
 
-26. **[50 - Generated Code Analysis](./50-GENERATED-CODE-ANALYSIS.md)**
+28. **[50 - Generated Code Analysis](./50-GENERATED-CODE-ANALYSIS.md)**
      - Every analyzer `src/` runs (NetAnalyzers, Meziantou, Sonar, Roslynator, code style, metric and
        AOT rules), run over the golden models' emitted source through `analysis/`.
      - Why none of them saw emitted code before: the `src/` scope, `NoWarn` in consumer projects,
        and generated-code classification (three switches undo it).
      - Gate: any finding fails the `generated-analysis` CI job; the baseline is empty and stays so.
 
-27. **[51 - CI Gate Matrix](./51-CI-GATE-MATRIX.md)**
+29. **[51 - CI Gate Matrix](./51-CI-GATE-MATRIX.md)**
      - Every gate the project relies on: where it runs, whether branch protection reaches it, how it
        can pass vacuously, and what is open. Includes the line-by-line read of the `build` aggregate.
      - Read it before adding, renaming or removing a CI job; a gate outside `build` blocks nothing.
+
+30. **[44 - Roslyn Generator Tooling Evaluation](./44-GENERATOR-TOOLING-EVALUATION.md)**
+     - Verdicts on polyfills, dependency bundling, generator test frameworks, syntax builders, and author analyzers against what this repository already does.
+     - Why none of it should be adopted as a package, and where the parts that survive evaluation already live in the backlog (#439, #471, #472).
 
 ---
 
