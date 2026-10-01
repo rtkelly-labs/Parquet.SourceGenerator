@@ -468,7 +468,11 @@ static bool IsClassDeclarationFor(string line, string typeName)
     var declaredName = declaration
         .Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
         .LastOrDefault(t => !string.Equals(t, "{", StringComparison.Ordinal));
-    return string.Equals(declaredName?.Trim('\''), typeName[(plus + 1)..], StringComparison.Ordinal);
+    return string.Equals(
+        declaredName?.Trim('\''),
+        typeName[(plus + 1)..],
+        StringComparison.Ordinal
+    );
 }
 
 static string ExtractClassIl(string fullIl, string typeName)
