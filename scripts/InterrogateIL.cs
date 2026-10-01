@@ -331,16 +331,7 @@ static List<string> ListClassesFromIl(string il)
             continue;
         }
 
-        // Drop a generic parameter list (`Pair`2<T, U>`) so the name is the type, not `U>`.
-        int genericStart = line.IndexOf('<', StringComparison.Ordinal);
-        var declaration = genericStart >= 0 ? line[..genericStart] : line;
-
-        var name = declaration
-            .Split(
-                [' ', '\t'],
-                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries
-            )
-            .LastOrDefault(t => !string.Equals(t, "{", StringComparison.Ordinal));
+        var name = DeclaredTypeName(line);
         if (!string.IsNullOrEmpty(name))
         {
             list.Add(name);
@@ -463,16 +454,37 @@ static bool IsClassDeclarationFor(string line, string typeName)
         return false;
     }
 
-    int genericStart = trimmed.IndexOf('<', StringComparison.Ordinal);
-    var declaration = genericStart >= 0 ? trimmed[..genericStart] : trimmed;
-    var declaredName = declaration
-        .Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-        .LastOrDefault(t => !string.Equals(t, "{", StringComparison.Ordinal));
     return string.Equals(
-        declaredName?.Trim('\''),
+        DeclaredTypeName(trimmed)?.Trim('\''),
         typeName[(plus + 1)..],
         StringComparison.Ordinal
     );
+}
+
+// The name a `.class` line declares: its last token, with any generic parameter list
+// (`Pair`2<T, U>`) dropped. A '<' inside a single-quoted name is part of the name, not a generic
+// list: compiler-generated types are declared as '<ReadAsync>d__53'.
+static string? DeclaredTypeName(string classLine)
+{
+    bool inQuote = false;
+    int genericStart = -1;
+    for (int i = 0; i < classLine.Length; i++)
+    {
+        if (classLine[i] == '\'')
+        {
+            inQuote = !inQuote;
+        }
+        else if (classLine[i] == '<' && !inQuote)
+        {
+            genericStart = i;
+            break;
+        }
+    }
+
+    var declaration = genericStart >= 0 ? classLine[..genericStart] : classLine;
+    return declaration
+        .Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        .LastOrDefault(t => !string.Equals(t, "{", StringComparison.Ordinal));
 }
 
 static string ExtractClassIl(string fullIl, string typeName)
