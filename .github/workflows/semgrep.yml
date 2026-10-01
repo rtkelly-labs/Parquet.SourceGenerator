@@ -19,7 +19,7 @@ jobs:
 
       - name: Run Semgrep OSS
         run: |
-          docker run --rm -v "${{ github.workspace }}:/src" returntocorp/semgrep semgrep scan \
+          docker run --rm -v "${{ github.workspace }}:/src" returntocorp/semgrep@sha256:acaac22ffc7b7cc5926de0751b223bce0b2491c33d18422fa72f632c78d81198 semgrep scan \
             --config "p/csharp" \
             --config "p/owasp-top-ten" \
             --sarif --output semgrep.sarif src/

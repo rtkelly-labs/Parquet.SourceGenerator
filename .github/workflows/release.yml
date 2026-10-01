@@ -103,6 +103,9 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          # Exact version: the action otherwise installs the latest uv on every run.
+          version: "0.12.21"
 
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
@@ -129,7 +132,10 @@ jobs:
         uses: ./.github/actions/verify-test-data
 
       - name: Run Tests
-        run: dotnet test Parquet.SourceGenerator.slnx --configuration Release --no-build
+        # ExternalInterop needs fixtures from PyArrow and DuckDB, which this build does not produce;
+        # CI runs them. With CI=true they would fail, not pass,
+        # when their input is unset (#566), so they are excluded rather than left to pass over nothing.
+        run: dotnet test Parquet.SourceGenerator.slnx --configuration Release --no-build --filter "Category!=ExternalInterop"
 
       - name: Execute Sample (CoreCLR)
         run: dotnet run --project samples/Parquet.SourceGenerator.SampleAot/Parquet.SourceGenerator.SampleAot.csproj --configuration Release
