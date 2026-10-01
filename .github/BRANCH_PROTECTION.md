@@ -30,10 +30,19 @@ Applied with `enforcement: active`, targeting `refs/heads/main`.
   one check per job, so requiring a workflow name means the check never reports and every pull
   request blocks indefinitely on "N of N required status checks are expected", with nothing naming
   what it is waiting for:
-    - `build` (`ci.yml`) — an aggregate job that succeeds only when both `test` (restore, build,
-      tests, pack, interop) and `derived` (derived outputs and their gates) succeed
+    - `build` (`ci.yml`) — an aggregate job that succeeds only when `test` (restore, build,
+      tests, pack, interop), `derived` (derived outputs and their gates) and `generated-analysis`
+      (analyzers over the emitted code) all succeed
     - `pr-title` (`pr-title.yml`)
-  - These two strings are an API between the workflows here and
+  - `protected-paths` (`protected-paths.yml`) is **not required yet**: it reports on pull requests
+    but the ruleset does not name it. It fails a pull request from a fork that changes a path
+    listed in `.github/protected-paths.txt` (CI, build and tooling), and fails closed when it
+    cannot list every changed file. It runs on `pull_request_target`, so it is the base branch's
+    copy of the check that runs; it never checks out the pull request. Pull requests from
+    branches of this repository pass. To require it, add it to `REPO_REQUIRED_CHECKS_MAP` in
+    shared-utilities and apply that to the live ruleset, then update this list and
+    [docs/51](../docs/51-CI-GATE-MATRIX.md).
+  - These strings are an API between the workflows here and
     `REPO_REQUIRED_CHECKS_MAP` in shared-utilities. Renaming a job silently breaks the ruleset, so
     rename the job and update that map in the same change. An earlier pair of long descriptive
     names containing `&` and parentheses caused exactly the failure above.
