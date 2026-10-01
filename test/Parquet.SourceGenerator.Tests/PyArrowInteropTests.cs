@@ -67,9 +67,10 @@ public sealed class PyArrowInteropTests
     [Trait("Category", "ExternalInterop")]
     public async Task GeneratedReaderReadsPyArrowCanonicalFixture()
     {
-        string? path = Environment.GetEnvironmentVariable("PARQUET_PYARROW_INTEROP_INPUT");
-        // The regular suite remains self-contained; CI's ExternalInterop job supplies the fixture.
-        if (string.IsNullOrWhiteSpace(path))
+        string? path = ExternalInteropInput.Resolve("PARQUET_PYARROW_INTEROP_INPUT");
+        // A plain local run stays self-contained and returns here. Under CI (or
+        // PARQUET_REQUIRE_EXTERNAL_INTEROP=1) an unset input fails inside Resolve instead.
+        if (path is null)
         {
             return;
         }
@@ -92,8 +93,8 @@ public sealed class PyArrowInteropTests
     [Trait("Category", "ExternalInterop")]
     public async Task GeneratedReaderReadsDuckDbCanonicalFixture()
     {
-        string? path = Environment.GetEnvironmentVariable("DUCKDB_INTEROP_INPUT");
-        if (string.IsNullOrWhiteSpace(path))
+        string? path = ExternalInteropInput.Resolve("DUCKDB_INTEROP_INPUT");
+        if (path is null)
         {
             return;
         }
