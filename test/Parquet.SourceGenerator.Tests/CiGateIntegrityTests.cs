@@ -126,24 +126,59 @@ public sealed class CiGateIntegrityTests
 
         // The aggregate-gate trap: only an exact "success" passes. A skipped, cancelled or
         // never-reported job must fail the aggregate, not be forgiven by an empty comparison.
+        // Mentioning a result in an env var or an echo is not deciding on it: each job's result
+        // variable must appear in the failing comparison itself.
+        string decision = string.Join(
+            "\n",
+            aggregate
+                .Split('\n')
+                .Where(l => l.TrimStart().StartsWith("if [", StringComparison.Ordinal))
+        );
+        decision.ShouldNotBeEmpty("the build job must decide in an `if [ ... ]` test");
         foreach (string job in gated)
         {
-            aggregate.ShouldContain($"needs.{job}.result");
+            Match variable = Regex.Match(
+                aggregate,
+                @"^\s+(?<name>[A-Z_][A-Z0-9_]*):\s*\$\{\{\s*needs\."
+                    + Regex.Escape(job)
+                    + @"\.result\s*\}\}",
+                RegexOptions.Multiline
+                    | RegexOptions.ExplicitCapture
+                    | RegexOptions.CultureInvariant,
+                RegexTimeout
+            );
+            variable.Success.ShouldBeTrue($"build must bind needs.{job}.result to a variable");
+            decision.ShouldContain(
+                $"\"${variable.Groups["name"].Value}\" != \"success\"",
+                customMessage: $"build must fail unless {job} succeeded"
+            );
         }
-
-        aggregate.ShouldContain("!= \"success\"");
     }
 
     private static string[] WorkflowAndActionFiles(string root)
     {
         string workflows = Path.Combine(root, ".github", "workflows");
         string actions = Path.Combine(root, ".github", "actions");
-        IEnumerable<string> workflowFiles = Directory.EnumerateFiles(workflows, "*.yml");
+        IEnumerable<string> workflowFiles = EnumerateYaml(
+            workflows,
+            "*",
+            SearchOption.TopDirectoryOnly
+        );
         IEnumerable<string> actionFiles = Directory.Exists(actions)
-            ? Directory.EnumerateFiles(actions, "action.yml", SearchOption.AllDirectories)
+            ? EnumerateYaml(actions, "action", SearchOption.AllDirectories)
             : [];
         return workflowFiles.Concat(actionFiles).OrderBy(f => f, StringComparer.Ordinal).ToArray();
     }
+
+    // GitHub reads both extensions; scanning only one would let the other bypass the policy.
+    private static IEnumerable<string> EnumerateYaml(
+        string directory,
+        string stem,
+        SearchOption option
+    ) =>
+        Directory
+            .EnumerateFiles(directory, stem + ".yml", option)
+            .Concat(Directory.EnumerateFiles(directory, stem + ".yaml", option));
 
     private static string JobsSection(string workflow)
     {
