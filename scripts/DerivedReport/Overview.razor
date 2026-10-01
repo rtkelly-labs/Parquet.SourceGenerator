@@ -1,0 +1,57 @@
+@*
+    Titled tables with their notes: the PR summary and drift in the diff view, the current numbers
+    in the state view.
+*@
+@if (Tables.Count > 0)
+{
+    <section class="overview" aria-label="@Heading">
+        <h2>@Heading</h2>
+        @foreach (var table in Tables)
+        {
+            <h3>@table.Title</h3>
+            @if (table.Columns.Count > 0 && table.Rows.Count > 0)
+            {
+                <table>
+                    <thead>
+                        <tr>
+                            @foreach (var column in table.Columns)
+                            {
+                                <th><InlineText Text="@column" /></th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in table.Rows)
+                        {
+                            <tr>
+                                @foreach (var cell in row)
+                                {
+                                    <td><InlineText Text="@cell" /></td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+            @foreach (var note in table.Notes)
+            {
+                <p class="note">
+                    <InlineText Text="@note.Text" />
+                    @for (int i = 0; i < note.Items.Count; i++)
+                    {
+                        @(i == 0 ? ": " : ", ")
+                        <code>@note.Items[i]</code>
+                    }
+                </p>
+            }
+        }
+    </section>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public string Heading { get; set; } = "";
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<Table> Tables { get; set; } = [];
+}

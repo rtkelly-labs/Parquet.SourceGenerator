@@ -1,0 +1,20 @@
+@*
+    Text written for Markdown, rendered as HTML: `backtick` spans become <code>, the rest is
+    encoded as plain text.
+*@
+@foreach (var (text, isCode) in Inline.Split(Text))
+{
+    if (isCode)
+    {
+        <code>@text</code>
+    }
+    else
+    {
+        @text
+    }
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public string Text { get; set; } = "";
+}

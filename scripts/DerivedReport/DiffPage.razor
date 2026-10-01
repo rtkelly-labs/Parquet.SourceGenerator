@@ -1,0 +1,141 @@
+@*
+    The diff view: the PR summary and drift tables, then every changed derived file's diff in full,
+    grouped by section.
+*@
+<Shell Title="@($"PR summary vs {Report.BaseLabel}")" Interactive="Report.HasChanges">
+    <header>
+        <h1>PR summary vs <code>@Report.BaseLabel</code></h1>
+        @if (Report.HasChanges)
+        {
+            <p class="meta">
+                @Html.N(Files.Count) derived files changed,
+                <span class="a n">+@Html.N(Files.Sum(f => f.Added))</span>
+                @(" ")
+                <span class="d n">−@Html.N(Files.Sum(f => f.Removed))</span>
+            </p>
+        }
+        @if (Report.BaseSource is { } source)
+        {
+            <p class="meta">Merge-base outputs: <InlineText Text="@source" />.</p>
+        }
+    </header>
+
+    @if (!Report.HasChanges)
+    {
+        <main>
+            <Overview Heading="Changes" Tables="Report.Summary" />
+            <p class="empty"><strong>No derived output changed.</strong></p>
+        </main>
+    }
+    else
+    {
+        <Nav>
+            @foreach (var section in Report.Sections)
+            {
+                <div class="@SectionClass("toc", section)">
+                    <h2>
+                        <a href="#@SectionId(section)">@section.Title</a>
+                        @(" ")
+                        <Counts Added="section.Added" Removed="section.Removed" />
+                    </h2>
+                    <ul>
+                        @foreach (var file in section.Files)
+                        {
+                            <li>
+                                <a href="#@FileId(file.Path)">
+                                    <PathLabel Path="@file.Path" />
+                                    <Counts Added="file.Added" Removed="file.Removed" Largest="Largest" />
+                                </a>
+                            </li>
+                        }
+                    </ul>
+                </div>
+            }
+        </Nav>
+
+        <main>
+            <Overview Heading="Changes" Tables="Report.Summary" />
+            <Overview Heading="Derived output drift" Tables="Report.Drift" />
+
+            @foreach (var section in Report.Sections)
+            {
+                <section class="@SectionClass("sec", section)" id="@SectionId(section)">
+                    <h2>
+                        @section.Title
+                        @(" ")
+                        <span class="n">
+                            @Html.N(section.Files.Count) files,
+                            <span class="a">+@Html.N(section.Added)</span>
+                            @(" ")
+                            <span class="d">−@Html.N(section.Removed)</span>
+                        </span>
+                    </h2>
+                    @if (section.Expanded)
+                    {
+                        <p>
+                            Changes to the public surface the generator emits. Read these first:
+                            the sections below follow from them.
+                        </p>
+                    }
+                    @foreach (var file in section.Files)
+                    {
+                        var lines = file.Lines;
+                        <details open="@section.Expanded" id="@FileId(file.Path)">
+                            <summary>
+                                <PathLabel Path="@file.Path" />
+                                @if (file.Status is "added" or "removed")
+                                {
+                                    <span class="st @file.Status">@file.Status</span>
+                                }
+                                @if (lines.Count >= 200)
+                                {
+                                    <span class="size n">@Html.N(lines.Count) lines</span>
+                                }
+                                <Counts Added="file.Added" Removed="file.Removed" Largest="Largest" />
+                            </summary>
+                            <table class="diff">
+                                @foreach (var line in lines)
+                                {
+                                    <tr class="@RowClass(line.Kind)">
+                                        <td>@line.Old</td>
+                                        <td>@line.New</td>
+                                        <td>@line.Text</td>
+                                    </tr>
+                                }
+                            </table>
+                        </details>
+                    }
+                </section>
+            }
+
+            <p class="empty" id="none" hidden>No file path contains that text.</p>
+        </main>
+    }
+</Shell>
+
+@code {
+    [Parameter, EditorRequired]
+    public DiffReport Report { get; set; } = null!;
+
+    private List<FileChange> Files => Report.Sections.SelectMany(s => s.Files).ToList();
+
+    private int Largest => Files.Select(f => f.Added + f.Removed).DefaultIfEmpty(0).Max();
+
+    private static string SectionClass(string kind, Section section) =>
+        section.Expanded ? $"{kind} api" : kind;
+
+    private static string SectionId(Section section) => Html.Slug("s-" + section.Title);
+
+    private static string FileId(string path) => Html.Slug("f-" + path);
+
+    // Context rows carry no class; the stylesheet keys the others off these.
+    private static string? RowClass(DiffLineKind kind) =>
+        kind switch
+        {
+            DiffLineKind.Added => "a",
+            DiffLineKind.Removed => "d",
+            DiffLineKind.Hunk => "h",
+            DiffLineKind.Meta => "m",
+            _ => null,
+        };
+}
