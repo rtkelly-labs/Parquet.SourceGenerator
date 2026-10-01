@@ -440,6 +440,37 @@ static TypeIlReport InterrogateType(
     );
 }
 
+// Matches the (possibly indented) `.class` line that declares `typeName`. ilspycmd lists a nested
+// type as `Outer+Inner`, but its IL declares it by simple name (`.class nested ... Inner`), so a
+// nested name is matched on that simple name. The first match wins if two outer types nest a type
+// with the same simple name.
+static bool IsClassDeclarationFor(string line, string typeName)
+{
+    var trimmed = line.Trim();
+    if (!trimmed.StartsWith(".class ", StringComparison.Ordinal))
+    {
+        return false;
+    }
+
+    int plus = typeName.LastIndexOf('+');
+    if (plus < 0)
+    {
+        return trimmed.Contains(typeName, StringComparison.Ordinal);
+    }
+
+    if (!trimmed.Contains(" nested ", StringComparison.Ordinal))
+    {
+        return false;
+    }
+
+    int genericStart = trimmed.IndexOf('<', StringComparison.Ordinal);
+    var declaration = genericStart >= 0 ? trimmed[..genericStart] : trimmed;
+    var declaredName = declaration
+        .Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        .LastOrDefault(t => !string.Equals(t, "{", StringComparison.Ordinal));
+    return string.Equals(declaredName?.Trim('\''), typeName[(plus + 1)..], StringComparison.Ordinal);
+}
+
 static string ExtractClassIl(string fullIl, string typeName)
 {
     var lines = fullIl.Split(['\r', '\n']);
@@ -451,10 +482,7 @@ static string ExtractClassIl(string fullIl, string typeName)
     {
         if (!insideClass)
         {
-            if (
-                line.TrimStart().StartsWith(".class ", StringComparison.Ordinal)
-                && line.Contains(typeName, StringComparison.Ordinal)
-            )
+            if (IsClassDeclarationFor(line, typeName))
             {
                 insideClass = true;
                 sb.AppendLine(line);
