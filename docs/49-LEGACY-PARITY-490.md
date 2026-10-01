@@ -72,6 +72,15 @@ upstream change that would remove it are recorded in
 | `ReadOnlyMemory<byte>` / `ReadOnlyMemory<char>` members (PARQ011) | The v4 `DataColumn` API has no `ReadOnlyMemory` column representation, so the classic parser rejects these today. They can be mapped onto `byte[]` / `string` columns at one copy per value on write and read. That is emitter work, recorded in [UPSTREAM_DEPENDENCY_LIMITATIONS.md](../UPSTREAM_DEPENDENCY_LIMITATIONS.md). | #494 |
 | Arrow `RecordBatch` bridge | Not yet built for v4. Apache.Arrow supports `netstandard2.0`, so it is possible. | #490 |
 
+### Legacy-only members
+
+The legacy flat `ReadParquet*Async` methods have no modern counterpart: the modern emitter removed
+them in favour of the builder ([48](./48-FLAT-READ-REMOVAL-480.md), #480), and 48 keeps them on the
+legacy emitter only until a legacy replacement exists. The legacy builder (#494) is that
+replacement, so the flat methods are a **temporary** legacy-only entry: they are carried until #494
+lands and are removed with it, not kept as a permanent second read surface. Document 48 stays as
+the record of why they were kept.
+
 Everything else in the modern surface is in scope for parity: the reader and its options, buffer
 and stream sources, `ToArrayAsync`, `AsAsyncEnumerable`, `Where` and row-group metadata,
 `Parallel()`, `<Model>ColumnarBatch`, and the `IReadOnlyCollection<T>` / `IAsyncEnumerable<T>` /
