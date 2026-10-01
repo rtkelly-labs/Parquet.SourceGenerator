@@ -209,6 +209,14 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   the caller owns the inner stream, and `Read(Span<byte>)` / `ReadAsync(Memory<byte>)` pass through
   like the array overloads (gated for net472). Clears CA2215, CA1844, CA1835 and S1186 in emitted code.
 - **Emitted async iterators validate arguments at call time, and the modern parallel readers cancel with `CancelAsync`** (#548). `ReadEnumerableCoreAsync` and `ReadBatchesCoreAsync` (stream overloads) are now non-iterator wrappers that throw `ArgumentNullException` on the call, not on the first `MoveNextAsync`, then return a private iterator; the modern emitter's parallel readers `await linkedCts.CancelAsync().ConfigureAwait(false)` instead of a synchronous `Cancel()` (the net472 legacy emitter keeps `Cancel()`, which has no async form there). Clears S4456 (9) and S6966 (12) from the generated-code analysis. No public API change.
+- **Arrow bridge no longer rounds wide decimals.** `WriteParquetRowGroupAsync(writer, RecordBatch)`
+  read `Decimal128` values with Apache.Arrow's `Decimal128Array.GetValue`, which silently rounds a
+  value with more significant digits than `System.Decimal` holds — so a 38-digit value in a
+  `Decimal128(38, 18)` column (the default mapping) reached the Parquet file rounded, with no error.
+  The bridge now decodes the unscaled 128-bit integer itself, strips trailing decimal zeros (so
+  `10^19` at scale 18, stored as `10^37`, is still read exactly), accepts the value only when it is
+  then exactly representable in `System.Decimal`, and otherwise throws `InvalidDataException` naming
+  the column and row. Found while building Arrow.SourceGenerator.
 - **Coexistence of the two row-group pruning mechanisms is now pinned by a behavioural
   test** (`PredicatePushdownAndSortedLookupCoexistOnOneModel`, completes #264's coverage).
   `SortedEvent` carries both the predicate zone-map path and three sort-key binary-search

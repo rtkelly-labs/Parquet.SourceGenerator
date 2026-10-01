@@ -51,12 +51,14 @@ internal static class ArrowBridgeEmitter
 
         bool needsEpoch = false;
         bool needsGuid = false;
+        bool needsDecimal = false;
         bool needsFixedWidthView = false;
         for (int i = 0; i < model.Properties.Length; i++)
         {
             ArrowLeafMapping map = ArrowMappingComponent.TryMap(model.Properties[i])!;
             needsEpoch |= map.ConvertExpression?.Contains("_arrowUnixEpoch") == true;
             needsGuid |= map.ConvertExpression?.Contains("ArrowGuidFromBigEndian") == true;
+            needsDecimal |= map.ConvertExpression?.Contains("ArrowDecimalExact") == true;
             needsFixedWidthView |=
                 map.Mode == ArrowExtractionMode.Direct && !model.Properties[i].IsNullable;
         }
@@ -92,6 +94,12 @@ internal static class ArrowBridgeEmitter
         {
             builder.AppendLine();
             EmitGuidHelper(builder);
+        }
+
+        if (needsDecimal)
+        {
+            builder.AppendLine();
+            EmitDecimalHelper(builder);
         }
 
         builder.AppendLine("}");
@@ -773,6 +781,84 @@ internal static class ArrowBridgeEmitter
         builder.AppendLine("        }");
         builder.AppendLine("    }");
         builder.AppendLine("#endif");
+    }
+
+    /// <summary>
+    /// Emits the exact Decimal128 reader. Portable by construction — plain shifts over the 16
+    /// little-endian bytes, no <c>Int128</c> and no <c>BinaryPrimitives</c> — because the bridge is
+    /// emitted into any compilation that references Apache.Arrow, netstandard2.0 included.
+    /// </summary>
+    private static void EmitDecimalHelper(StringBuilder builder)
+    {
+        builder.AppendLine("    /// <summary>");
+        builder.AppendLine(
+            "    /// Reads one Decimal128 value exactly: the 128-bit two's-complement unscaled integer is"
+        );
+        builder.AppendLine(
+            "    /// accepted only when it is exactly representable in System.Decimal. Never rounds."
+        );
+        builder.AppendLine("    /// </summary>");
+        builder.AppendLine("    private static decimal ArrowDecimalExact(");
+        builder.AppendLine("        global::Apache.Arrow.Decimal128Array array,");
+        builder.AppendLine("        int index,");
+        builder.AppendLine("        int scale,");
+        builder.AppendLine("        string column)");
+        builder.AppendLine("    {");
+        builder.AppendLine(
+            "        global::System.ReadOnlySpan<byte> bytes = array.GetBytes(index);"
+        );
+        builder.AppendLine("        ulong low = 0;");
+        builder.AppendLine("        ulong high = 0;");
+        builder.AppendLine("        for (int k = 7; k >= 0; k--)");
+        builder.AppendLine("        {");
+        builder.AppendLine("            low = (low << 8) | bytes[k];");
+        builder.AppendLine("            high = (high << 8) | bytes[k + 8];");
+        builder.AppendLine("        }");
+        builder.AppendLine();
+        builder.AppendLine("        bool negative = (high & 0x8000000000000000UL) != 0;");
+        builder.AppendLine("        if (negative)");
+        builder.AppendLine("        {");
+        builder.AppendLine("            low = unchecked(~low + 1UL);");
+        builder.AppendLine("            high = unchecked(~high + (low == 0UL ? 1UL : 0UL));");
+        builder.AppendLine("        }");
+        builder.AppendLine();
+        builder.AppendLine(
+            "        // A wide unscaled integer can still be exact: strip trailing decimal zeros (reducing the"
+        );
+        builder.AppendLine(
+            "        // scale) until the magnitude fits 96 bits and the scale fits 28; 10^19 at scale 18 is 10^37."
+        );
+        builder.AppendLine("        while ((high >> 32) != 0UL || scale > 28)");
+        builder.AppendLine("        {");
+        builder.AppendLine("            ulong remainder = high >> 32;");
+        builder.AppendLine("            ulong q3 = remainder / 10UL;");
+        builder.AppendLine(
+            "            remainder = ((remainder % 10UL) << 32) | (high & 0xFFFFFFFFUL);"
+        );
+        builder.AppendLine("            ulong q2 = remainder / 10UL;");
+        builder.AppendLine("            remainder = ((remainder % 10UL) << 32) | (low >> 32);");
+        builder.AppendLine("            ulong q1 = remainder / 10UL;");
+        builder.AppendLine(
+            "            remainder = ((remainder % 10UL) << 32) | (low & 0xFFFFFFFFUL);"
+        );
+        builder.AppendLine("            ulong q0 = remainder / 10UL;");
+        builder.AppendLine("            if (scale == 0 || remainder % 10UL != 0UL)");
+        builder.AppendLine("            {");
+        builder.AppendLine("                throw new global::System.IO.InvalidDataException(");
+        builder.AppendLine(
+            "                    column + \": row \" + index + \" holds a Decimal128 value outside the range of System.Decimal; it is refused rather than rounded.\");"
+        );
+        builder.AppendLine("            }");
+        builder.AppendLine();
+        builder.AppendLine("            high = (q3 << 32) | q2;");
+        builder.AppendLine("            low = (q1 << 32) | q0;");
+        builder.AppendLine("            scale--;");
+        builder.AppendLine("        }");
+        builder.AppendLine();
+        builder.AppendLine(
+            "        return unchecked(new decimal((int)(uint)low, (int)(uint)(low >> 32), (int)(uint)high, negative, (byte)scale));"
+        );
+        builder.AppendLine("    }");
     }
 
     private static void EmitGuidHelper(StringBuilder builder)
