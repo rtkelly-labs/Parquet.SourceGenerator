@@ -137,6 +137,11 @@ For the same reason the gate refuses to run at all when `benchmarks/baseline.jso
 no measurements — it fails the job and tells you to dispatch `update_baseline` rather than
 bootstrapping itself green.
 
+The tool fails (exit 1) when the results directory is missing or empty, when the baseline is missing
+or empty (unless `--bootstrap` or `--update-baseline` asks for a recording), and when no benchmark in
+the run matches the baseline. A full-suite run in the workflow also passes `--fail-on-not-run`, so a
+benchmark that vanished from the run fails it.
+
 Optional flags: `--alloc-tolerance <fraction>` (default `0.05`), `--time-tolerance <fraction>`
 (default `0.50`) and `--fail-on-time`, which promotes wall-clock regressions to failures and is only
 meaningful on a quiet machine.

@@ -263,7 +263,19 @@ jobs:
       # RegressionCheck.cs, HasFailures and the allocation tolerance gate nothing (#404).
       - name: Benchmark Regression Gate
         if: steps.pr_info.outputs.update_baseline != 'true'
+        env:
+          FILTER: ${{ steps.pr_info.outputs.filter }}
+          PARAMS_FLAG: ${{ steps.pr_info.outputs.params_flag }}
         run: |
+          # A full-suite run (no filter, no scale restriction) must execute every benchmark the
+          # baseline holds, or one has silently vanished. A filtered /benchmark run legitimately
+          # covers a subset, so only the full run is strict. Either way the tool fails when the
+          # run shares no benchmark with the baseline, and when the results directory is missing.
+          strict=""
+          if [ "$FILTER" = "*" ] && [ -z "$PARAMS_FLAG" ]; then
+            strict="--fail-on-not-run"
+          fi
+
           # A missing or empty baseline must fail rather than bootstrap itself green: the tool
           # cannot tell "first ever run" from "somebody deleted the reference" (#412), and a run
           # that records its own regressed numbers as the new truth hides them forever after.
@@ -283,7 +295,7 @@ jobs:
 
           set +e
           dotnet run -c Release --project tools/BenchmarkSummaryGenerator/BenchmarkSummaryGenerator.csproj \
-            -- BenchmarkDotNet.Artifacts/results --baseline "$BENCHMARK_BASELINE" --report benchmark-regression.md
+            -- BenchmarkDotNet.Artifacts/results --baseline "$BENCHMARK_BASELINE" --report benchmark-regression.md $strict
           status=$?
           set -e
 

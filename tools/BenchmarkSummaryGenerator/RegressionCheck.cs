@@ -635,6 +635,16 @@ public static class RegressionCheck
         );
     }
 
+    /// <summary>
+    /// How many benchmarks were present in both the baseline and the run.
+    /// </summary>
+    public static int CountCompared(IReadOnlyList<BenchmarkComparison> comparisons)
+    {
+        ArgumentNullException.ThrowIfNull(comparisons);
+
+        return comparisons.Count(c => c.Baseline is not null && c.Current is not null);
+    }
+
     private static string FormatBytes(long bytes)
     {
         if (bytes >= 1024L * 1024L)

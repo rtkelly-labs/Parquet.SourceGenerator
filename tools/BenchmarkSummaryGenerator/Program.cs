@@ -28,16 +28,19 @@ public static class Program
             a != resultsDir && !a.StartsWith("--", StringComparison.Ordinal)
         );
 
-        if (!Directory.Exists(resultsDir))
-        {
-            Console.WriteLine($"Results directory '{resultsDir}' does not exist.");
-            return 0;
-        }
-
+        // The regression check owns the missing-directory case (#408): a gate that finds no
+        // results has examined nothing, which is a failure, not the "nothing to summarise" exit
+        // below.
         string? baselinePath = OptionValue(args, "--baseline");
         if (baselinePath is not null)
         {
             return RunRegressionCheck(resultsDir, baselinePath, args);
+        }
+
+        if (!Directory.Exists(resultsDir))
+        {
+            Console.WriteLine($"Results directory '{resultsDir}' does not exist.");
+            return 0;
         }
 
         string headlineTable = BuildHeadlineTable(resultsDir);
@@ -79,8 +82,9 @@ public static class Program
 
         if (current.Count == 0)
         {
-            // Not a pass. A filter that matched nothing, or a run that crashed before exporting,
-            // would otherwise be indistinguishable from a clean result.
+            // Not a pass. A filter that matched nothing, a run that crashed before exporting, or
+            // a results directory that was never created would otherwise be indistinguishable
+            // from a clean result (#408).
             Console.Error.WriteLine(
                 $"No benchmark results found in '{resultsDir}'. Nothing to compare."
             );
@@ -100,13 +104,22 @@ public static class Program
 
         if (baseline.Count == 0)
         {
-            // First run bootstraps rather than failing: there is nothing to regress against, and
-            // demanding a baseline before one can exist would make the check impossible to adopt.
+            // A check never writes its own reference (#412). A missing or empty baseline is
+            // indistinguishable from "somebody deleted it", and recording the current numbers as
+            // the new truth on the same invocation would hide whatever regressed. Recording is
+            // either --update-baseline or, for a deliberate first run, --bootstrap.
+            if (!args.Contains("--bootstrap", StringComparer.Ordinal))
+            {
+                Console.Error.WriteLine(
+                    $"Baseline '{baselinePath}' is missing or empty. Record one with --update-baseline (or --bootstrap for a first run); a check never writes its own baseline."
+                );
+                return 1;
+            }
+
             WriteBaselineFile(baselinePath, current);
             Console.WriteLine(
-                $"No baseline at '{baselinePath}' — recorded this run as the baseline ({current.Count} measurements)."
+                $"Bootstrapped baseline '{baselinePath}' with {current.Count} measurement(s). Commit it, and subsequent runs will be compared against it."
             );
-            Console.WriteLine("Commit it, and subsequent runs will be compared against it.");
             return 0;
         }
 
@@ -131,6 +144,33 @@ public static class Program
 
         string report = RegressionCheck.BuildReport(comparisons);
         Console.WriteLine(report);
+
+        // Examined-N: a run that shares no benchmark with the baseline (every method renamed, or
+        // a filter that skipped them all) compared nothing, and every row is New or NotRun,
+        // neither of which fails. Say how many were compared and refuse zero.
+        int compared = RegressionCheck.CountCompared(comparisons);
+        Console.WriteLine(
+            $"{compared} benchmark(s) compared against {baseline.Count} baseline measurement(s)."
+        );
+
+        if (compared == 0)
+        {
+            Console.Error.WriteLine(
+                "No benchmark in this run matches the baseline. Nothing was compared."
+            );
+            return 1;
+        }
+
+        if (
+            args.Contains("--fail-on-not-run", StringComparer.Ordinal)
+            && comparisons.Any(c => c.Kind == RegressionKind.NotRun)
+        )
+        {
+            Console.Error.WriteLine(
+                "The baseline holds benchmarks this run did not execute (--fail-on-not-run)."
+            );
+            return 1;
+        }
 
         string? reportPath = OptionValue(args, "--report");
         if (reportPath is not null)
