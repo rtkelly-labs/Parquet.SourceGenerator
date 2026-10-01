@@ -62,15 +62,20 @@ for (int i = 0; i < args.Length; i++)
             break;
         case "--min-packages":
             if (
-                i + 1 < args.Length
-                && int.TryParse(
+                i + 1 >= args.Length
+                || !int.TryParse(
                     args[++i],
                     NumberStyles.Integer,
                     CultureInfo.InvariantCulture,
                     out int mp
                 )
+                || mp < 1
             )
-                minPackages = mp;
+            {
+                Console.Error.WriteLine("❌ --min-packages requires an integer >= 1.");
+                return 1;
+            }
+            minPackages = mp;
             break;
         case "--help":
         case "-h":
