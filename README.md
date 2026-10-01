@@ -360,7 +360,7 @@ OrderEventParquetExtensions.WriteParquetRowGroupAsync(writer, recordBatch);
 
 ## 📖 Documentation Hub
 
-> 🌐 **Interactive Documentation & API Catalog**: Visit [docs.ryankelly.dev/parquet-sourcegenerator](https://docs.ryankelly.dev/parquet-sourcegenerator) for interactive guides, live search, architecture diagrams, and generated API symbol catalogs pinned to each release's derived output. The profile-aware API grid remains a post-freeze follow-up; see [document 39](docs/39-API-SITE-SCOPE-229.md).
+> 🌐 **Interactive Documentation & API Catalog**: Visit [docs.ryankelly.dev/parquet-sourcegenerator](https://docs.ryankelly.dev/parquet-sourcegenerator) for interactive guides, live search and architecture diagrams. The generated API symbol catalog is planned, not yet populated: it will be pinned to each release's derived output, and the profile-aware API grid remains a post-freeze follow-up; see [document 39](docs/39-API-SITE-SCOPE-229.md).
 
 | Document | Topic |
 |:--- |:--- |
