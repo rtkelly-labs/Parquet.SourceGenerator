@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Parquet.SourceGenerator.Diagnostics;
 using Parquet.SourceGenerator.Models;
 using Shouldly;
 using Xunit;
@@ -202,6 +203,61 @@ public sealed class IncrementalityTests
                     )
                     .SourceText.ToString()
             );
+    }
+
+    [Fact]
+    public void GeneratedNameCollisionTracksDeclarationsInOtherFilesOnAReusedDriver()
+    {
+        // PARQ016 depends on the whole set of targets, but it is computed inside each target's
+        // parse. A.BC's own file never changes here, so this pins that the parse is re-evaluated
+        // against the current compilation: were it ever cached per node, the collision would go
+        // stale when AB.C comes and goes.
+        const string NestedSource = """
+            using Parquet.SourceGenerator;
+
+            namespace Demo;
+
+            public partial class A
+            {
+                [ParquetSerializable]
+                public partial class BC { [ParquetColumn("x")] public int X { get; init; } }
+            }
+            """;
+        const string CollidingSource = """
+            using Parquet.SourceGenerator;
+
+            namespace Demo;
+
+            public partial class AB
+            {
+                [ParquetSerializable]
+                public partial class C { [ParquetColumn("x")] public int X { get; init; } }
+            }
+            """;
+        const string NestedHint = "Demo.A.BC.ParquetSerializer.g.cs";
+        SyntaxTree nested = CSharpSyntaxTree.ParseText(NestedSource);
+        SyntaxTree colliding = CSharpSyntaxTree.ParseText(CollidingSource);
+        CSharpCompilation initial = CreateCompilation(
+            nested,
+            CSharpSyntaxTree.ParseText(ModelBSource),
+            CSharpSyntaxTree.ParseText(UnrelatedSource)
+        );
+
+        GeneratorRunResult alone = Run(CreateDriver(), initial, out GeneratorDriver driver);
+        GeneratorRunResult together = Run(driver, initial.AddSyntaxTrees(colliding), out driver);
+        GeneratorRunResult aloneAgain = Run(driver, initial, out _);
+
+        static int Collisions(GeneratorRunResult result) =>
+            result.Diagnostics.Count(d => d.Id == DiagnosticDescriptors.GeneratedNameCollision.Id);
+
+        Collisions(alone).ShouldBe(0);
+        alone.GeneratedSources.ShouldContain(source => source.HintName == NestedHint);
+
+        Collisions(together).ShouldBe(2, "both targets report once the second one appears");
+        together.GeneratedSources.ShouldNotContain(source => source.HintName == NestedHint);
+
+        Collisions(aloneAgain).ShouldBe(0, "no stale PARQ016 once the collision is gone");
+        aloneAgain.GeneratedSources.ShouldContain(source => source.HintName == NestedHint);
     }
 
     [Fact]

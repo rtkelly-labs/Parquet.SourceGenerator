@@ -22,6 +22,7 @@ This document details all diagnostic codes, their severity, rationale, and remed
 | **[`PARQ010`](#parq010-generic-type-not-supported)** | **Error** | Generic types not supported | Target type is generic. |
 | **[`PARQ011`](#parq011-type-unsupported-on-classic-v5-api)** | **Error** | Unsupported on classic API | Member type is supported by Parquet.Net 6 but not by the 4.x/5.x API. |
 | **[`PARQ015`](#parq015-invalid-generator-feature-level)** | **Error** | Invalid generator feature level | `ParquetGeneratorFeatureLevel` is present but is not a defined level. |
+| **[`PARQ016`](#parq016-generated-type-names-collide)** | **Error** | Generated type names collide | Two targets whose containing-type paths flatten to the same name, such as `A.BC` and `AB.C`. |
 
 ---
 
@@ -174,3 +175,18 @@ This document details all diagnostic codes, their severity, rationale, and remed
 - **Why**: Silently falling back to the default level makes a misspelled build property change the
   generated API without any indication that the requested policy was ignored.
 - **Remediation**: Use `Level1Flat`, `Level2CompoundPreview`, or `Level3ModernCSharp`.
+
+---
+
+### PARQ016: Generated Type Names Collide
+- **Severity**: Error
+- **Cause**: Two `[ParquetSerializable]` types in the same namespace have containing-type paths that
+  become the same identifier once the dots are removed: `A.BC` and `AB.C`, or a nested `A.BC` and
+  a top-level `ABC`.
+- **Why**: Generated types (`…ParquetExtensions`, `…RowGroupMetadata`, `…ColumnarBatch`, the read
+  sources) are emitted at namespace scope under that flattened name, so both targets would declare
+  the same types. Before this rule the build failed with a cascade of `CS0101` errors inside
+  generated files that named neither declaration.
+- **Remediation**: Rename one of the types (or one of their containing types), or move one to
+  another namespace.
+
