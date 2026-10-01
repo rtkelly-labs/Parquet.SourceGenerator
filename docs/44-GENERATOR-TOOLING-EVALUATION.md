@@ -24,7 +24,7 @@ Two items were not in the backlog and are now #471 and #472.
 | Scriban | Reject | Reintroduces the bundling problem this repo does not have |
 | `IndentedTextWriter` / an indentation abstraction | Adopt — **already #439** | This doc adds only: no package reference needed |
 | Microsoft.CodeAnalysis.Analyzers (upgrade) | Adopt — **filed as #471** | Pinned at 3.3.3; every generator-author rule postdates it |
-| Roslynator.Analyzers | Already adopted | Applied to every non-test project in `Directory.Build.props`, alongside Meziantou and Sonar (docs 50) |
+| Roslynator.Analyzers | Already adopted | Applied in `Directory.Build.props` to every project outside tests, benchmarks and samples, alongside Meziantou and Sonar (docs 50) |
 
 ---
 
@@ -135,7 +135,8 @@ This is worth recording because the repository has two live instances of exactly
 were found by review, and nothing automated will find the next one.
 
 Roslynator.Analyzers needs no decision: `Directory.Build.props` already applies it, with
-`Meziantou.Analyzer` and `SonarAnalyzer.CSharp`, to every non-test project, and
+`Meziantou.Analyzer` and `SonarAnalyzer.CSharp`, to every project outside tests,
+benchmarks and samples, and
 [50](./50-GENERATED-CODE-ANALYSIS.md) runs the same set over the emitted code.
 
 ## 6. The Roslyn floor — filed as #472
@@ -153,7 +154,8 @@ resolves the two together. Neither can take that path at the current 4.0.1 pin.
 | 4.3.0 | **present** | **present** |
 | 4.8.0 | **present** | **present** |
 
-Both arrive in 4.3.0. Only the generator project's own `VersionOverride="4.0.1"` blocks them.
+Both are present at 4.3.0, the earliest version inspected where either exists (4.1 and 4.2 were
+not checked, so 4.3.0 is the joint floor, not a proven first version for each). Only the generator project's own `VersionOverride="4.0.1"` blocks them.
 `docs/28`'s conclusion stands — raising the reference is still a consumer-compatibility decision —
 but the price is one bump for three payoffs, not an unavailable API. Closed #258 records the
 opposite version fact. See **#472**.
