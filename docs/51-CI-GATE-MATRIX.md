@@ -177,15 +177,15 @@ Branch protection (read-only audit; nothing was changed):
 - **R4.** Decide whether CodeQL is wanted. If so, enable default setup for `csharp` and `actions`;
   if not, leave the scanner list as it is and stop describing CodeQL as present.
 
-Workflow and test follow-ups (filed as issues where noted in the pull request):
+Workflow and test follow-ups (R5 to R8 are filed; R9 and R10 are not). Also filed: [#568](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/568), pull requests opened by `GITHUB_TOKEN` never receive the required checks.
 
-- **R5.** Add a `windows-latest` job that executes `PackageConsumptionLegacy` on net472, from the
+- **R5.** ([#565](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/565)) Add a `windows-latest` job that executes `PackageConsumptionLegacy` on net472, from the
   packages the `test` job built. Add it to the `build` aggregate once it is stable.
-- **R6.** Open an issue when a scheduled workflow fails, as `metrics-oracle.yml` does, for
+- **R6.** ([#564](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/564)) Open an issue when a scheduled workflow fails, as `metrics-oracle.yml` does, for
   `mutation.yml` and `fuzz.yml`.
-- **R7.** Make an `ExternalInterop` test fail, not return, when `CI` is set and its variable is
+- **R7.** ([#566](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/566)) Make an `ExternalInterop` test fail, not return, when `CI` is set and its variable is
   empty; filter the category out of `release.yml:111-112` or supply the variables there.
-- **R8.** Verify the DuckDB CLI zip against a pinned SHA-256, pin the Semgrep image by digest, and
+- **R8.** ([#567](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/567)) Verify the DuckDB CLI zip against a pinned SHA-256, pin the Semgrep image by digest, and
   pin the uv version.
 - **R9.** Add positive controls where only absence of evidence exists today: a seeded RS0016 and
   PARQAPI002 violation, a seeded CA1502 violation, a nonzero node count on the `src/` call graph, a
