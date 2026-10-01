@@ -304,9 +304,9 @@ internal static class TargetParser
 
             if (
                 SymbolEqualityComparer.Default.Equals(candidate, target)
-                || !candidate
+                || candidate
                     .GetAttributes()
-                    .Any(a => a.AttributeClass?.ToDisplayString() == AttributeFullName)
+                    .All(a => a.AttributeClass?.ToDisplayString() != AttributeFullName)
             )
             {
                 continue;
