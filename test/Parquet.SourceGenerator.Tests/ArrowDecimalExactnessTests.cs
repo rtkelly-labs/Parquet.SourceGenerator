@@ -118,7 +118,7 @@ public sealed class ArrowDecimalExactnessTests
     {
         decimal max = decimal.MaxValue / OneE18;
         decimal min = decimal.MinValue / OneE18;
-        decimal tiny = 0.000000000000000001m;
+        decimal tiny = 1e-18m;
         var builder = new Decimal128Array.Builder(Wide)
             .Append(max)
             .Append(min)
