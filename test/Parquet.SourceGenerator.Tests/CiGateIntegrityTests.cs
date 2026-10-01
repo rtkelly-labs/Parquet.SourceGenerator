@@ -173,6 +173,71 @@ public sealed class CiGateIntegrityTests
         AggregateProblems(aggregate, gated).ShouldBeEmpty();
     }
 
+    [Fact]
+    public void TheReleaseWorkflowDefaultsToADryRunAndKeepsItsMainOnlyGuards()
+    {
+        string release = Read(FindRepositoryRoot(), ".github", "workflows", "release.yml");
+
+        // A real publish needs an explicit `dry_run: false`.
+        Regex
+            .IsMatch(
+                release,
+                @"^      dry_run:\n(?:        .*\n)*?        default: true\s*$",
+                Options,
+                RegexTimeout
+            )
+            .ShouldBeTrue("the dry_run input must default to true");
+
+        // Both brakes from #465: the hard failure in prepare and the structural one on publish.
+        string prepare = JobBlock(release, "prepare");
+        prepare.ShouldContain("if: ${{ !inputs.dry_run }}");
+        prepare.ShouldContain("\"$GITHUB_REF\" != \"refs/heads/main\"");
+        prepare.ShouldContain("exit 1");
+
+        string publish = JobBlock(release, "publish");
+        publish.ShouldContain("!inputs.dry_run && github.ref == 'refs/heads/main'");
+    }
+
+    [Fact]
+    public void ThePublishJobRequiresTheCommitsBuildCheckToHaveSucceeded()
+    {
+        string release = Read(FindRepositoryRoot(), ".github", "workflows", "release.yml");
+
+        string publish = JobBlock(release, "publish");
+        Match needs = Regex.Match(
+            publish,
+            @"^    needs:\s*\[(?<list>[^\]]*)\]",
+            Options,
+            RegexTimeout
+        );
+        needs.Success.ShouldBeTrue("publish must declare `needs: [...]`");
+        needs
+            .Groups["list"]
+            .Value.Split(',', StringSplitOptions.TrimEntries)
+            .ShouldContain("verify-ci");
+
+        string verify = JobBlock(release, "verify-ci");
+        verify.ShouldContain("check_name=build");
+        verify.ShouldContain("commits/$GITHUB_SHA/check-runs");
+        verify.ShouldContain("!= \"success\"");
+        verify.ShouldContain("exit 1");
+        verify.ShouldNotContain("exit 0");
+        verify.ShouldNotContain("continue-on-error");
+
+        // Least privilege: `checks: read` is held by this job alone, and the workflow default
+        // stays read-only on contents.
+        Regex.Count(release, @"^\s+checks:\s*read\s*$", Options, RegexTimeout).ShouldBe(1);
+        verify.ShouldContain("checks: read");
+        Regex
+            .IsMatch(
+                verify,
+                @"^\s+(contents|id-token|actions|packages|pull-requests):\s*write",
+                Options,
+                RegexTimeout
+            )
+            .ShouldBeFalse();
+    }
+
     private const string GoodAggregate = """
           build:
             name: build
