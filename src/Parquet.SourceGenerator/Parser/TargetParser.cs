@@ -230,13 +230,18 @@ internal static class TargetParser
 
         // Emission is suppressed whenever a fatal diagnostic already explains the problem. Emitting
         // anyway buries that message under cascading errors from the generated file.
-        bool nameCollides = ReportGeneratedNameCollision(
-            typeSymbol,
-            className,
-            namespaceName,
-            fallbackLocation,
-            diagnostics
-        );
+        // A target that already cannot emit (generic, or nested out of reach) claims no names, so it
+        // neither collides nor causes another target to be suppressed.
+        bool nameCollides =
+            !isGeneric
+            && !nestedUnreachable
+            && ReportGeneratedNameCollision(
+                typeSymbol,
+                className,
+                namespaceName,
+                fallbackLocation,
+                diagnostics
+            );
 
         bool canEmit =
             isPartial
@@ -304,6 +309,11 @@ internal static class TargetParser
 
             if (
                 SymbolEqualityComparer.Default.Equals(candidate, target)
+                || candidate.TypeParameters.Length > 0
+                || (
+                    candidate.ContainingType is not null
+                    && !IsReachableFromGeneratedCode(candidate.DeclaredAccessibility)
+                )
                 || candidate
                     .GetAttributes()
                     .All(a => a.AttributeClass?.ToDisplayString() != AttributeFullName)

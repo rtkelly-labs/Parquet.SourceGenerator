@@ -454,6 +454,43 @@ public sealed class DiagnosticTests
         diagnostics.Count(d => d.Id == DiagnosticDescriptors.GeneratedNameCollision.Id).ShouldBe(2);
     }
 
+    [Theory]
+    [InlineData("public partial class C<T>")]
+    [InlineData("private partial class C")]
+    public void TargetThatCannotEmitDoesNotCollideOrSuppressAnEmittableOne(string declaration)
+    {
+        // AB.C is generic (PARQ010) or out of reach (PARQ009), so it emits nothing and claims no
+        // names. It must not report PARQ016 or suppress A.BC, which is otherwise fine.
+        string source = $$"""
+            using Parquet.SourceGenerator;
+
+            namespace Demo;
+
+            public partial class A
+            {
+                [ParquetSerializable]
+                public partial class BC { [ParquetColumn("x")] public int X { get; init; } }
+            }
+
+            public partial class AB
+            {
+                [ParquetSerializable]
+                {{declaration}} { [ParquetColumn("x")] public int X { get; init; } }
+            }
+            """;
+
+        var (diagnostics, outputTrees) = RunGenerator(source);
+
+        diagnostics
+            .Select(d => d.Id)
+            .ShouldNotContain(DiagnosticDescriptors.GeneratedNameCollision.Id);
+        outputTrees
+            .Select(t => t.ToString())
+            .ShouldContain(t =>
+                t.Contains("ABCParquetExtensions", System.StringComparison.Ordinal)
+            );
+    }
+
     [Fact]
     public void PrivateNestedTypeStillTriggersPARQ009()
     {
