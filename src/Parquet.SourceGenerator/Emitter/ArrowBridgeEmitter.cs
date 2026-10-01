@@ -82,6 +82,8 @@ internal static class ArrowBridgeEmitter
 
         EmitValidation(builder, model);
         builder.AppendLine();
+        EmitStructuralHelpers(builder, model);
+        builder.AppendLine();
         EmitWriteRowGroup(builder, model);
 
         if (needsFixedWidthView)
@@ -153,6 +155,15 @@ internal static class ArrowBridgeEmitter
                 $"                errors.Add({label} + \"column is missing from the Arrow schema (expected {map.ExpectedDescription}).\");"
             );
             builder.AppendLine("            }");
+            // A duplicated name would otherwise resolve to its first occurrence, silently.
+            builder.AppendLine(
+                $"            else if (ArrowFieldOccurrences(batch.Schema, {name}) > 1)"
+            );
+            builder.AppendLine("            {");
+            builder.AppendLine(
+                $"                errors.Add({label} + \"column appears \" + ArrowFieldOccurrences(batch.Schema, {name}) + \" times in the Arrow schema, so it is ambiguous.\");"
+            );
+            builder.AppendLine("            }");
             builder.AppendLine("            else");
             builder.AppendLine("            {");
             builder.AppendLine(
@@ -177,6 +188,15 @@ internal static class ArrowBridgeEmitter
                 $"                    errors.Add({label} + \"expected Arrow {map.ExpectedDescription}, found \" + dataType.Name + \".\");"
             );
             builder.AppendLine("                }");
+            // The schema is only a claim about the column; the cast below trusts the array.
+            builder.AppendLine(
+                "                else if (column.Data.DataType.TypeId != dataType.TypeId)"
+            );
+            builder.AppendLine("                {");
+            builder.AppendLine(
+                $"                    errors.Add({label} + \"the schema declares \" + dataType.Name + \" but the column holds \" + column.Data.DataType.Name + \".\");"
+            );
+            builder.AppendLine("                }");
 
             if (map.ParameterCheck is not null)
             {
@@ -184,6 +204,16 @@ internal static class ArrowBridgeEmitter
                 builder.AppendLine("                {");
                 builder.AppendLine(
                     $"                    errors.Add({label} + {map.ParameterMessage});"
+                );
+                builder.AppendLine("                }");
+                // Same type id is not same type: the values are decoded with the array's own
+                // parameters (unit, scale, width), so those must match too, not just the schema's.
+                builder.AppendLine(
+                    $"                else if (!({OnArrayType(map.ParameterCheck)}))"
+                );
+                builder.AppendLine("                {");
+                builder.AppendLine(
+                    $"                    errors.Add({label} + \"the column's array disagrees with its schema field: \" + {OnArrayType(map.ParameterMessage!)});"
                 );
                 builder.AppendLine("                }");
             }
@@ -195,12 +225,33 @@ internal static class ArrowBridgeEmitter
             );
             builder.AppendLine("                }");
 
+            if (map.Mode is ArrowExtractionMode.Utf8 or ArrowExtractionMode.Binary)
+            {
+                builder.AppendLine(
+                    "                else if (!ArrowOffsetsSound((global::Apache.Arrow.BinaryArray)column))"
+                );
+                builder.AppendLine("                {");
+                builder.AppendLine(
+                    $"                    errors.Add({label} + \"offsets decrease or run past the value buffer.\");"
+                );
+                builder.AppendLine("                }");
+            }
+
             if (!prop.IsNullable)
             {
                 builder.AppendLine("                else if (column.NullCount > 0)");
                 builder.AppendLine("                {");
                 builder.AppendLine(
                     $"                    errors.Add({label} + \"the Parquet column is required but the Arrow column carries \" + column.NullCount + \" null(s).\");"
+                );
+                builder.AppendLine("                }");
+                // NullCount is only a claim; a required column's values are read without a
+                // per-row null check, so a bitmap marking nulls it does not declare would
+                // materialise undefined slots as values.
+                builder.AppendLine("                else if (!ArrowNullCountAgrees(column))");
+                builder.AppendLine("                {");
+                builder.AppendLine(
+                    $"                    errors.Add({label} + \"the Arrow column's validity bitmap marks nulls that its null count does not declare.\");"
                 );
                 builder.AppendLine("                }");
             }
@@ -222,6 +273,129 @@ internal static class ArrowBridgeEmitter
         );
         builder.AppendLine("                + string.Join(\" | \", errors));");
         builder.AppendLine("        }");
+        builder.AppendLine("    }");
+    }
+
+    /// <summary>
+    /// Helpers for the structural checks validation performs before any column is cast or sliced.
+    /// Offset soundness is emitted only for models with a Utf8 or Binary column.
+    /// </summary>
+    /// <summary>
+    /// Rewrites a parameter check (or its message) written against the schema field's
+    /// <c>dataType</c> to read the array's own <c>column.Data.DataType</c> instead.
+    /// </summary>
+    private static string OnArrayType(string expression) =>
+        expression.Replace(")dataType)", ")column.Data.DataType)");
+
+    private static void EmitStructuralHelpers(StringBuilder builder, TargetClassModel model)
+    {
+        builder.AppendLine("    private static int ArrowFieldOccurrences(");
+        builder.AppendLine("        global::Apache.Arrow.Schema schema,");
+        builder.AppendLine("        string name)");
+        builder.AppendLine("    {");
+        builder.AppendLine("        int count = 0;");
+        builder.AppendLine("        for (int i = 0; i < schema.FieldsList.Count; i++)");
+        builder.AppendLine("        {");
+        builder.AppendLine(
+            "            if (string.Equals(schema.FieldsList[i].Name, name, global::System.StringComparison.Ordinal)) count++;"
+        );
+        builder.AppendLine("        }");
+        builder.AppendLine();
+        builder.AppendLine("        return count;");
+        builder.AppendLine("    }");
+
+        bool hasRequired = false;
+        for (int i = 0; i < model.Properties.Length; i++)
+        {
+            hasRequired |= !model.Properties[i].IsNullable;
+        }
+
+        if (hasRequired)
+        {
+            EmitNullCountHelper(builder);
+        }
+
+        bool hasVariableWidth = false;
+        for (int i = 0; i < model.Properties.Length; i++)
+        {
+            hasVariableWidth |=
+                ArrowMappingComponent.TryMap(model.Properties[i])!.Mode
+                    is ArrowExtractionMode.Utf8
+                        or ArrowExtractionMode.Binary;
+        }
+
+        if (!hasVariableWidth)
+        {
+            return;
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("    /// <summary>");
+        builder.AppendLine(
+            "    /// Whether a Utf8/Binary column's offsets are non-decreasing and stay inside its value"
+        );
+        builder.AppendLine(
+            "    /// buffer, so that slicing a row can neither throw nor read another row's bytes."
+        );
+        builder.AppendLine("    /// </summary>");
+        builder.AppendLine(
+            "    private static bool ArrowOffsetsSound(global::Apache.Arrow.BinaryArray array)"
+        );
+        builder.AppendLine("    {");
+        builder.AppendLine("        long slots = (long)array.Offset + array.Length + 1;");
+        builder.AppendLine(
+            "        if (array.ValueOffsetsBuffer.Length < slots * sizeof(int)) return false;"
+        );
+        builder.AppendLine(
+            "        global::System.ReadOnlySpan<int> offsets = array.ValueOffsets;"
+        );
+        builder.AppendLine("        int valuesLength = array.ValueBuffer.Length;");
+        builder.AppendLine("        int previous = offsets[0];");
+        builder.AppendLine("        if (previous < 0 || previous > valuesLength) return false;");
+        builder.AppendLine("        for (int k = 1; k < offsets.Length; k++)");
+        builder.AppendLine("        {");
+        builder.AppendLine(
+            "            if (offsets[k] < previous || offsets[k] > valuesLength) return false;"
+        );
+        builder.AppendLine("            previous = offsets[k];");
+        builder.AppendLine("        }");
+        builder.AppendLine();
+        builder.AppendLine("        return true;");
+        builder.AppendLine("    }");
+    }
+
+    private static void EmitNullCountHelper(StringBuilder builder)
+    {
+        builder.AppendLine();
+        builder.AppendLine("    /// <summary>");
+        builder.AppendLine(
+            "    /// Whether a column's declared null count matches the unset bits of its validity"
+        );
+        builder.AppendLine(
+            "    /// bitmap. A negative count means not yet computed, which Apache.Arrow derives from"
+        );
+        builder.AppendLine("    /// the bitmap itself.");
+        builder.AppendLine("    /// </summary>");
+        builder.AppendLine(
+            "    private static bool ArrowNullCountAgrees(global::Apache.Arrow.IArrowArray column)"
+        );
+        builder.AppendLine("    {");
+        builder.AppendLine("        global::Apache.Arrow.ArrayData data = column.Data;");
+        builder.AppendLine(
+            "        if (data.NullCount < 0 || data.Buffers.Length == 0 || data.Buffers[0].IsEmpty) return true;"
+        );
+        builder.AppendLine("        long end = (long)data.Offset + data.Length;");
+        builder.AppendLine("        global::System.ReadOnlySpan<byte> map = data.Buffers[0].Span;");
+        builder.AppendLine("        if (map.Length < (end + 7) / 8) return false;");
+        builder.AppendLine("        long unset = 0;");
+        builder.AppendLine("        for (long i = data.Offset; i < end; i++)");
+        builder.AppendLine("        {");
+        builder.AppendLine(
+            "            if ((map[(int)(i >> 3)] & (1 << (int)(i & 7))) == 0) unset++;"
+        );
+        builder.AppendLine("        }");
+        builder.AppendLine();
+        builder.AppendLine("        return unset == data.NullCount;");
         builder.AppendLine("    }");
     }
 

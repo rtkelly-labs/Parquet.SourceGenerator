@@ -209,6 +209,17 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   the caller owns the inner stream, and `Read(Span<byte>)` / `ReadAsync(Memory<byte>)` pass through
   like the array overloads (gated for net472). Clears CA2215, CA1844, CA1835 and S1186 in emitted code.
 - **Emitted async iterators validate arguments at call time, and the modern parallel readers cancel with `CancelAsync`** (#548). `ReadEnumerableCoreAsync` and `ReadBatchesCoreAsync` (stream overloads) are now non-iterator wrappers that throw `ArgumentNullException` on the call, not on the first `MoveNextAsync`, then return a private iterator; the modern emitter's parallel readers `await linkedCts.CancelAsync().ConfigureAwait(false)` instead of a synchronous `Cancel()` (the net472 legacy emitter keeps `Cancel()`, which has no async form there). Clears S4456 (9) and S6966 (12) from the generated-code analysis. No public API change.
+- **Arrow bridge validation checks structure, not just the schema.** Before any column is cast or
+  sliced, `WriteParquetRowGroupAsync(writer, RecordBatch)` now also rejects: a field name that
+  appears more than once (it previously resolved silently to the first occurrence); a schema whose
+  declared type disagrees with the array it describes (previously an `InvalidCastException` from
+  inside the bridge); an array whose type parameters (decimal precision/scale, time unit,
+  fixed-size width) disagree with its schema field, which previously passed and was decoded with
+  the schema's parameters, silently shifting every value; a required column whose validity bitmap
+  marks nulls its `NullCount` does not declare (the null check trusted `NullCount`, so the undefined
+  slots were written as values); and Utf8/Binary offsets that decrease or run past the value buffer
+  (previously an `ArgumentOutOfRangeException` while slicing). Each is reported with the other
+  validation errors in the one `InvalidDataException`. Backported from Arrow.SourceGenerator.
 - **Arrow bridge no longer rounds wide decimals.** `WriteParquetRowGroupAsync(writer, RecordBatch)`
   read `Decimal128` values with Apache.Arrow's `Decimal128Array.GetValue`, which silently rounds a
   value with more significant digits than `System.Decimal` holds — so a 38-digit value in a
