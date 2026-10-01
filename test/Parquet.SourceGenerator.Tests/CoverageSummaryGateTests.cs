@@ -17,7 +17,7 @@ public class CoverageSummaryGateTests
 {
     [Fact]
     [Trait("Category", "Integration")]
-    public async Task ReportWithNoLineElementsFailsTheGate()
+    public async Task ReportWithNoLineElementsFailsTheGateAsync()
     {
         const string report = """
             <?xml version="1.0" encoding="utf-8"?>
@@ -41,7 +41,7 @@ public class CoverageSummaryGateTests
 
     [Fact]
     [Trait("Category", "Integration")]
-    public async Task ReportWhereEveryPackageIsFilteredOutFailsTheGate()
+    public async Task ReportWhereEveryPackageIsFilteredOutFailsTheGateAsync()
     {
         const string report = """
             <?xml version="1.0" encoding="utf-8"?>
@@ -81,7 +81,7 @@ public class CoverageSummaryGateTests
 
     [Fact]
     [Trait("Category", "Integration")]
-    public async Task ReportWithoutConditionCoverageAttributesFailsTheGate()
+    public async Task ReportWithoutConditionCoverageAttributesFailsTheGateAsync()
     {
         const string report = """
             <?xml version="1.0" encoding="utf-8"?>
@@ -114,7 +114,7 @@ public class CoverageSummaryGateTests
 
     [Fact]
     [Trait("Category", "Integration")]
-    public async Task WellMeasuredReportAboveThresholdsPassesTheGate()
+    public async Task WellMeasuredReportAboveThresholdsPassesTheGateAsync()
     {
         const string report = """
             <?xml version="1.0" encoding="utf-8"?>
