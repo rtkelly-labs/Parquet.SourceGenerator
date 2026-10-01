@@ -165,9 +165,9 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   so composing a read still allocates nothing. `ToArrayAsync(ct)` and `AsAsyncEnumerable(ct)` are
   the stable terminals; `Batches(ct)` is unchanged in shape (its ownership model is #369). The
   internal `List<T>`-only read paths (`ReadListCoreAsync`, `ReadParallelListCoreAsync`) are no
-  longer emitted, since nothing reaches them. Measured on the golden models: `OrderEvent` 64 → 47
-  members and 37 → 23 parameters; `ListOrder` / `NestedOrder` / `PocoOrder` 35 → 19 and 31 → 18;
-  `SortedShipment` 57 → 40 and 59 → 45. The legacy package is unchanged.
+  longer emitted, since nothing reaches them. Measured on the golden models: `OrderEvent` 65 → 48
+  members and 48 → 34 parameters; `ListOrder` / `NestedOrder` / `PocoOrder` 35 → 19 and 31 → 18;
+  `SortedShipment` 58 → 41 and 64 → 50. The legacy package is unchanged.
 
   Combinations the separate types made unrepresentable now throw `NotSupportedException` from the
   call that completes them (never silently degraded): `From(stream).Parallel()` (the message names

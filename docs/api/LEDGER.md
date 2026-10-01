@@ -113,8 +113,8 @@ The rule, the three surfaces and the author process are in
   options, predicate and a parallel flag — and `static {T}Parquet.From(Stream stream)` and
   `static {T}Parquet.From(ReadOnlyMemory<byte> parquetBytes)` both return it (return-type change on
   two lines per model). Catalogue effect per golden model, from `.api.shape.txt`: `OrderEvent` and
-  `ScalarMetric` 64 → 47 members, 37 → 23 parameters; `ListOrder`, `NestedOrder`, `PocoOrder`
-  35 → 19 members, 31 → 18 parameters; `SortedShipment` 57 → 40 members, 59 → 45 parameters.
+  `ScalarMetric` 65 → 48 members, 48 → 34 parameters; `ListOrder`, `NestedOrder`, `PocoOrder`
+  35 → 19 members, 31 → 18 parameters; `SortedShipment` 58 → 41 members, 64 → 50 parameters.
   Legacy (`LegacyRecord` 6 / 14) unchanged — it has no builder (#246). The figures include the
   #479 `ToListAsync` removal.
 - **Rationale:** the #217 builder removed the method-name cross-product and replaced it with a
