@@ -15,17 +15,17 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Run DevSkim Scanner
-        uses: microsoft/DevSkim-Action@v1
+        uses: microsoft/DevSkim-Action@4b5047945a44163b94642a1cecc0d93a3f428cc6 # v1.0.16
         with:
           directory-to-scan: 'src'
           output-filename: 'devskim-results.sarif'
           should-scan-archives: false
 
       - name: Upload DevSkim SARIF Report
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
         if: always()
         with:
           sarif_file: devskim-results.sarif

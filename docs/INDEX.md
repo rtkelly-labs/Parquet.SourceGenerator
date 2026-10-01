@@ -207,6 +207,11 @@ The documentation is organized into three distinct tiers based on audience and i
        and generated-code classification (three switches undo it).
      - Gate: any finding fails the `generated-analysis` CI job; the baseline is empty and stays so.
 
+26. **[51 - CI Gate Matrix](./51-CI-GATE-MATRIX.md)**
+     - Every gate the project relies on: where it runs, whether branch protection reaches it, how it
+       can pass vacuously, and what is open. Includes the line-by-line read of the `build` aggregate.
+     - Read it before adding, renaming or removing a CI job; a gate outside `build` blocks nothing.
+
 ---
 
 ## ⚡ Quick Summary of Intent

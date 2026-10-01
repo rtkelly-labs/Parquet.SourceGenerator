@@ -44,8 +44,13 @@ jobs:
             8.0.x
             10.0.x
 
+      # The same dotnet/sdk #53783 workaround ci.yml carries. A cold tool-resolver cache
+      # misattributes a package's commands on the first restore ("The command dotnet-stryker ...
+      # is not contained in the package ... The commands contained are dotnet-inspect") and exits
+      # non-zero; the second restore succeeds. Without the retry this job failed at this step on
+      # every nightly run, and since it only informs, nobody noticed (docs/51-CI-GATE-MATRIX.md).
       - name: Restore local tools
-        run: dotnet tool restore --disable-parallel
+        run: dotnet tool restore --disable-parallel || dotnet tool restore --disable-parallel
 
       - name: Restore solution dependencies
         run: dotnet restore Parquet.SourceGenerator.slnx
