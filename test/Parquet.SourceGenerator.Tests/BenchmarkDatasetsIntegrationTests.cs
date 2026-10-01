@@ -154,7 +154,7 @@ public sealed class BenchmarkDatasetsIntegrationTests
     );
 
     [Fact]
-    public async Task ToArrayAsyncDeserializesTpchLineitemDataset()
+    public async Task ToArrayAsyncDeserializesTpchLineitemDatasetAsync()
     {
         string filePath = Path.Combine(BenchmarkDataRoot, "tpch_lineitem_sf001.parquet");
         System.IO.File.Exists(filePath).ShouldBeTrue($"File not found: {filePath}");
@@ -189,7 +189,7 @@ public sealed class BenchmarkDatasetsIntegrationTests
     }
 
     [Fact]
-    public async Task ToArrayAsyncDeserializesAdultCensusIncomeDataset()
+    public async Task ToArrayAsyncDeserializesAdultCensusIncomeDatasetAsync()
     {
         string filePath = Path.Combine(BenchmarkDataRoot, "adult_census_income.parquet");
         System.IO.File.Exists(filePath).ShouldBeTrue($"File not found: {filePath}");
@@ -218,7 +218,7 @@ public sealed class BenchmarkDatasetsIntegrationTests
     }
 
     [Fact]
-    public async Task ToArrayAsyncDeserializesDiamondsDataset()
+    public async Task ToArrayAsyncDeserializesDiamondsDatasetAsync()
     {
         string filePath = Path.Combine(BenchmarkDataRoot, "diamonds.parquet");
         System.IO.File.Exists(filePath).ShouldBeTrue($"File not found: {filePath}");

@@ -248,7 +248,7 @@ public sealed class ParserAndEmitterTests
     }
 
     [Fact]
-    public async Task ToArrayAsyncNullStreamThrowsArgumentNullException()
+    public async Task ToArrayAsyncNullStreamThrowsArgumentNullExceptionAsync()
     {
         await Should.ThrowAsync<ArgumentNullException>(() =>
             TypeCoverageRecordParquet.From((Stream)null!).ToArrayAsync()

@@ -75,7 +75,7 @@ public sealed class TestDataIntegrationTests
         );
 
     [Fact]
-    public async Task ToArrayAsyncDeserializesPyArrowV1Dataset()
+    public async Task ToArrayAsyncDeserializesPyArrowV1DatasetAsync()
     {
         string filePath = Path.Combine(TestDataRoot, "v1", "01_small_flat_primitives.parquet");
         System.IO.File.Exists(filePath).ShouldBeTrue($"File not found: {filePath}");
@@ -96,7 +96,7 @@ public sealed class TestDataIntegrationTests
     }
 
     [Fact]
-    public async Task ToArrayAsyncDeserializesPyArrowV2Dataset()
+    public async Task ToArrayAsyncDeserializesPyArrowV2DatasetAsync()
     {
         string filePath = Path.Combine(TestDataRoot, "v2", "01_small_flat_primitives.parquet");
         System.IO.File.Exists(filePath).ShouldBeTrue($"File not found: {filePath}");
@@ -111,7 +111,7 @@ public sealed class TestDataIntegrationTests
     }
 
     [Fact]
-    public async Task ToArrayAsyncDeserializesCSharpV3Dataset()
+    public async Task ToArrayAsyncDeserializesCSharpV3DatasetAsync()
     {
         string filePath = Path.Combine(
             TestDataCSharpRoot,
@@ -130,7 +130,7 @@ public sealed class TestDataIntegrationTests
     }
 
     [Fact]
-    public async Task ToArrayAsyncDeserializesNullableDataset()
+    public async Task ToArrayAsyncDeserializesNullableDatasetAsync()
     {
         string filePath = Path.Combine(
             TestDataCSharpRoot,
@@ -151,7 +151,7 @@ public sealed class TestDataIntegrationTests
     }
 
     [Fact]
-    public async Task ToArrayAsyncDeserializesLargeScaleDataset()
+    public async Task ToArrayAsyncDeserializesLargeScaleDatasetAsync()
     {
         string filePath = Path.Combine(TestDataCSharpRoot, "v3", "05_large_scale_flat.parquet");
         System.IO.File.Exists(filePath).ShouldBeTrue($"File not found: {filePath}");

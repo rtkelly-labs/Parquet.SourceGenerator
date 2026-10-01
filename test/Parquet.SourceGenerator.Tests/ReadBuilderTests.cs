@@ -44,7 +44,7 @@ public sealed class ReadBuilderTests
     }
 
     [Fact]
-    public async Task StreamSourceMaterializesEveryShape()
+    public async Task StreamReaderMaterializesEveryShapeAsync()
     {
         byte[] bytes = await WriteAsync(120);
 
@@ -72,7 +72,7 @@ public sealed class ReadBuilderTests
     }
 
     [Fact]
-    public async Task MemorySourceMaterializesEveryShapeIncludingParallel()
+    public async Task BufferReaderMaterializesEveryShapeIncludingParallelAsync()
     {
         byte[] bytes = await WriteAsync(120);
         var memory = new ReadOnlyMemory<byte>(bytes);
@@ -96,7 +96,7 @@ public sealed class ReadBuilderTests
     }
 
     [Fact]
-    public async Task CallersNeedingAListConvertTheArray()
+    public async Task CallersNeedingAListConvertTheArrayAsync()
     {
         // #479: List<T> versus T[] is a collection preference, not a storage-engine capability, so
         // the reader offers one materialised shape. This is the documented migration.
@@ -111,7 +111,7 @@ public sealed class ReadBuilderTests
     }
 
     [Fact]
-    public async Task OptionsFlowThroughTheBuilder()
+    public async Task OptionsFlowThroughTheBuilderAsync()
     {
         byte[] bytes = await WriteAsync(60);
         var options = new ParquetSerializerOptions { DeduplicateStrings = true };
@@ -125,7 +125,7 @@ public sealed class ReadBuilderTests
     }
 
     [Fact]
-    public async Task OptionsAppliedAfterParallelOrWhereKeepThatState()
+    public async Task OptionsAppliedAfterParallelOrWhereKeepThatStateAsync()
     {
         // WithOptions replaces only the options: a later WithOptions must not drop the parallel
         // flag or the predicate that an earlier call set.
@@ -157,7 +157,7 @@ public sealed class ReadBuilderTests
     }
 
     [Fact]
-    public async Task WhereAppliesTheSamePruningFromEitherSource()
+    public async Task WhereAppliesTheSamePruningFromEitherSourceAsync()
     {
         // The removed flat methods grew `predicate` on the stream overloads of ReadParquetAsync
         // and ReadParquetArrayAsync but never on the buffer ones, so buffer + List and buffer +
@@ -183,7 +183,7 @@ public sealed class ReadBuilderTests
     }
 
     [Fact]
-    public async Task FilteredArrayAndEnumerableAgree()
+    public async Task FilteredArrayAndEnumerableAgreeAsync()
     {
         byte[] bytes = await WriteAsync(200);
         var memory = new ReadOnlyMemory<byte>(bytes);
@@ -334,7 +334,7 @@ public sealed class ReadBuilderTests
     }
 
     [Fact]
-    public async Task ParallelThenAsAsyncEnumerableThrows()
+    public async Task ParallelThenAsAsyncEnumerableThrowsAsync()
     {
         byte[] bytes = await WriteAsync(10);
         BuilderOrderParquetReader reader = BuilderOrderParquet
@@ -347,7 +347,7 @@ public sealed class ReadBuilderTests
     }
 
     [Fact]
-    public async Task ParallelThenBatchesThrows()
+    public async Task ParallelThenBatchesThrowsAsync()
     {
         byte[] bytes = await WriteAsync(10);
         BuilderOrderParquetReader reader = BuilderOrderParquet
@@ -383,7 +383,7 @@ public sealed class ReadBuilderTests
     }
 
     [Fact]
-    public async Task WhereThenBatchesThrowsRatherThanIgnoringThePredicate()
+    public async Task WhereThenBatchesThrowsRatherThanIgnoringThePredicateAsync()
     {
         // The #217 filtered source had no Batches(); the column-batch reader takes no predicate,
         // so running it would silently return unpruned row groups.

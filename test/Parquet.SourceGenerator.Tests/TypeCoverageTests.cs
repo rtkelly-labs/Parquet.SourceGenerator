@@ -295,7 +295,7 @@ public sealed class TypeCoverageTests
     }
 
     [Fact]
-    public async Task ParallelToArrayAsyncRoundtripsCorrectly()
+    public async Task ParallelToArrayAsyncRoundtripsCorrectlyAsync()
     {
         var items = TestFakers.CreateTypeCoverageRecordFaker().Generate(1_000);
 
