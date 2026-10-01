@@ -138,3 +138,33 @@ jobs:
           name: stryker-reports
           path: StrykerOutput/**/reports/*.json
           if-no-files-found: warn
+
+  # A scheduled gate that only turns red is muted by its own history (#564: this workflow failed
+  # unseen for weeks). When the job above fails, open one `area:ci` issue, or comment on the open
+  # one. It is a separate job so the only job that runs repo code never holds `issues: write`,
+  # and it needs no checkout. Same pattern as metrics-oracle.yml.
+  notify-failure:
+    name: Report scheduled failure
+    needs: mutate
+    if: ${{ always() && needs.mutate.result == 'failure' }}
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Open or update the failure issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          title="[CI] scheduled mutation failed"
+          body="The scheduled mutation workflow failed: [run]($RUN_URL). Open the run for the failing step. This issue is updated with a comment on each further failure; close it once the workflow is green again."
+          gh label create "area:ci" --color B60205 --description "CI and workflow gates" >/dev/null 2>&1 || true
+          existing=$(gh issue list --state open --label "area:ci" --search "\"$title\" in:title" \
+            --json number,title --jq "[.[] | select(.title == \"$title\")][0].number // empty")
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "Failed again: [run]($RUN_URL)."
+          else
+            gh issue create --title "$title" --body "$body" --label "area:ci"
+          fi
