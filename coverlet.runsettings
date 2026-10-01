@@ -7,7 +7,7 @@
           <Format>cobertura</Format>
           <!--
             Coverage is collected here and gated afterwards: ci.yml runs scripts/CoverageSummary.cs
-            with --min-line 85.0 --min-branch 70.0 over the report this produces, and that step
+            with minimum line rate 85.0 and branch rate 70.0 over the report this produces, and that step
             fails the `test` job (and so the required `build` check). See
             docs/51-CI-GATE-MATRIX.md for the known limits of that gate.
           -->
