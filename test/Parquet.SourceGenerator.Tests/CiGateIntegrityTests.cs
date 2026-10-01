@@ -238,6 +238,30 @@ public sealed class CiGateIntegrityTests
             .ShouldBeFalse();
     }
 
+    [Fact]
+    public void TheNet472ConsumerIsExecutedOnWindowsNotJustCompiled()
+    {
+        string root = FindRepositoryRoot();
+        string workflow = Read(root, ".github", "workflows", "net472-consumer.yml");
+
+        workflow.ShouldContain("runs-on: windows-latest");
+
+        // `dotnet build --framework net472` is what ci.yml already does; the gate is the run.
+        Regex
+            .IsMatch(
+                workflow,
+                @"dotnet run --project \S*PackageConsumptionLegacy\.csproj\s*\\\n\s*--framework net472",
+                Options,
+                RegexTimeout
+            )
+            .ShouldBeTrue("the workflow must `dotnet run` the consumer on net472");
+        workflow.ShouldNotContain("continue-on-error");
+
+        // The consumer must keep the scenario that proves it does not deadlock a blocked caller.
+        string program = Read(root, "test", "PackageConsumptionLegacy", "Program.cs");
+        program.ShouldContain("SynchronizationContextScenario.Run()");
+    }
+
     private const string GoodAggregate = """
           build:
             name: build
