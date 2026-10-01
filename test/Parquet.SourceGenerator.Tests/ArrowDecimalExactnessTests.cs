@@ -55,7 +55,7 @@ public sealed class ArrowDecimalExactnessTests
         }
 
         stream.Position = 0;
-        return await ArrowWideDecimalRowParquet.From(stream).ToListAsync();
+        return (await ArrowWideDecimalRowParquet.From(stream).ToArrayAsync()).ToList();
     }
 
     [Fact]

@@ -135,28 +135,28 @@ public class EmittedConfigureAwaitTests
                 .GetResult();
 
             stream.Position = 0;
-            List<StreamingChunkModel> sequential = StreamingChunkModelParquet
+            StreamingChunkModel[] sequential = StreamingChunkModelParquet
                 .From(stream)
-                .ToListAsync()
+                .ToArrayAsync()
                 .GetAwaiter()
                 .GetResult();
-            sequential.Count.ShouldBe(items.Count);
+            sequential.Length.ShouldBe(items.Count);
 
             // Buffer-backed builder: the await foreach over ReadEnumerableCoreAsync (#423).
-            List<StreamingChunkModel> fromBytes = StreamingChunkModelParquet
+            StreamingChunkModel[] fromBytes = StreamingChunkModelParquet
                 .From(stream.ToArray())
-                .ToListAsync()
+                .ToArrayAsync()
                 .GetAwaiter()
                 .GetResult();
-            fromBytes.Count.ShouldBe(items.Count);
+            fromBytes.Length.ShouldBe(items.Count);
 
-            List<StreamingChunkModel> parallel = StreamingChunkModelParquet
+            StreamingChunkModel[] parallel = StreamingChunkModelParquet
                 .From(stream.ToArray())
                 .Parallel()
-                .ToListAsync()
+                .ToArrayAsync()
                 .GetAwaiter()
                 .GetResult();
-            parallel.Count.ShouldBe(items.Count);
+            parallel.Length.ShouldBe(items.Count);
         });
     }
 }

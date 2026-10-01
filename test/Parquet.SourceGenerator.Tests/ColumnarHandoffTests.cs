@@ -420,9 +420,9 @@ public sealed class ColumnarHandoffTests
         using var stream = new MemoryStream();
         await batch.WriteParquetAsync(stream);
         stream.Position = 0;
-        List<ColumnarHandoffModel> read = await ColumnarHandoffModelParquet
+        ColumnarHandoffModel[] read = await ColumnarHandoffModelParquet
             .From(stream)
-            .ToListAsync();
+            .ToArrayAsync();
 
         read.ShouldBeEmpty();
     }
@@ -493,9 +493,9 @@ public sealed class ColumnarHandoffTests
         using var stream = new MemoryStream();
         await batch.WriteParquetAsync(stream);
         stream.Position = 0;
-        List<ColumnarCollisionModel> read = await ColumnarCollisionModelParquet
+        ColumnarCollisionModel[] read = await ColumnarCollisionModelParquet
             .From(stream)
-            .ToListAsync();
+            .ToArrayAsync();
 
         read.Select(r => r.RowCount).ToArray().ShouldBe(rowCounts);
         read.Select(r => r.Writer).ToArray().ShouldBe(writers);
