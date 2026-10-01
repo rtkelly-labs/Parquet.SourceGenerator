@@ -128,6 +128,7 @@ internal static class Program
             || !await BatchedWriteRoundTripsAsync()
             || !await SchemaEvolutionRoundTripsAsync()
             || !await DecompressionLimitIsAppliedAsync()
+            || !SynchronizationContextScenario.Run()
         )
         {
             return 1;
