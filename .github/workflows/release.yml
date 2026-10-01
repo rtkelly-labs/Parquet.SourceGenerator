@@ -10,10 +10,11 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: 'Build, pack and verify only — no NuGet push, no GitHub release'
+        description: 'Build, pack and verify only — no NuGet push, no GitHub release. Untick to publish for real.'
         required: false
         type: boolean
-        default: false
+        # A real publish needs an explicit `false`: an unmodified dispatch is a dry run.
+        default: true
 
 # Least privilege by default: only the `publish` job — the one that exchanges the OIDC token at
 # nuget.org and creates the GitHub release — gets anything beyond read. The `build` job executes
@@ -265,9 +266,53 @@ jobs:
           path: ${{ runner.temp }}/derived-outputs.tar.gz
           if-no-files-found: error
 
+  # The release build below omits several CI gates (CSharpier, ledger, IL, conformance,
+  # generated-analysis), so a release is only as good as the `build` check that CI recorded for
+  # this exact commit. This job refuses a commit whose `build` check run is missing, still
+  # running, or not `success`. It holds `checks: read` and nothing else, and runs no repo code.
+  # On a dry run it reports the same verdict without failing, so a branch can exercise it.
+  verify-ci:
+    name: Verify the commit passed CI
+    runs-on: ubuntu-latest
+    permissions:
+      checks: read
+    steps:
+      - name: Require a successful build check run for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          # filter=latest keeps only the most recent run of each check name, so a re-run that
+          # passed replaces the failed attempt. The app filter ignores a same-named check from
+          # any other integration; branch protection pins the same app (GitHub Actions).
+          json=$(gh api -H "Accept: application/vnd.github+json" \
+            "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs?check_name=build&filter=latest&per_page=100")
+          found=$(jq '[.check_runs[] | select(.app.slug == "github-actions")] | length' <<<"$json")
+          bad=$(jq '[.check_runs[] | select(.app.slug == "github-actions")
+                     | select(.status != "completed" or .conclusion != "success")] | length' <<<"$json")
+          echo "build check runs for $GITHUB_SHA: found=$found not-successful=$bad"
+          jq -r '.check_runs[] | "  \(.app.slug) \(.name) status=\(.status) conclusion=\(.conclusion)"' <<<"$json"
+
+          problem=""
+          if [ "$found" -eq 0 ]; then
+            problem="no 'build' check run exists for $GITHUB_SHA; CI has not run on this commit"
+          elif [ "$bad" -ne 0 ]; then
+            problem="the 'build' check run for $GITHUB_SHA is pending or did not conclude success"
+          fi
+
+          if [ -z "$problem" ]; then
+            echo "The build check run concluded success."
+          elif [ "$DRY_RUN" = "true" ]; then
+            echo "::warning::$problem (dry run, not failing; a real release would stop here)"
+          else
+            echo "::error::$problem. Wait for CI on this commit, or release a commit that has passed it."
+            exit 1
+          fi
+
   publish:
     name: Publish packages
-    needs: [prepare, build]
+    needs: [prepare, build, verify-ci]
     # The ref condition repeats the hard failure in `prepare` as a second, structural brake: the
     # push to nuget.org and the GitHub release can only ever run against main.
     if: ${{ !inputs.dry_run && github.ref == 'refs/heads/main' }}
