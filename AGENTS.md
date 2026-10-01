@@ -34,3 +34,10 @@
     duplication and call-graph edges are generated from the code (`dotnet run
     scripts/DerivedOutputs.cs`, output in gitignored `artifacts/`) and published by CI as the
     `derived-outputs` artifact. Never commit them.
+
+14. **Emitted-code analyzer gate**: every analyzer `src/` runs also runs over the golden models'
+    emitted source (`analysis/`, CI job `generated-analysis`, aggregated by the required `build`
+    check). Any finding fails it and the baseline (`analysis/GeneratedCodeBaseline.props`) is empty.
+    Fix the emitter; never add a baseline entry, `NoWarn` or an `.editorconfig` downgrade. Run it
+    locally with `dotnet run scripts/GeneratedCodeAnalysis.cs` after publishing the golden outputs.
+    Full rule: `docs/50-GENERATED-CODE-ANALYSIS.md`.

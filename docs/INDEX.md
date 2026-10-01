@@ -200,6 +200,13 @@ The documentation is organized into three distinct tiers based on audience and i
      - The legacy emitter keeps its flat reads as its declared subset (#246); no `[Obsolete]` release.
      - Measured shrinkage (−66 members, −222 parameter slots) and the flat → builder migration table.
 
+25. **[50 - Generated Code Analysis](./50-GENERATED-CODE-ANALYSIS.md)**
+     - Every analyzer `src/` runs (NetAnalyzers, Meziantou, Sonar, Roslynator, code style, metric and
+       AOT rules), run over the golden models' emitted source through `analysis/`.
+     - Why none of them saw emitted code before: the `src/` scope, `NoWarn` in consumer projects,
+       and generated-code classification (three switches undo it).
+     - Gate: any finding fails the `generated-analysis` CI job; the baseline is empty and stays so.
+
 ---
 
 ## ⚡ Quick Summary of Intent

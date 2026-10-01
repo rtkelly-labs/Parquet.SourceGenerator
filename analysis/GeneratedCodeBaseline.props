@@ -1,0 +1,15 @@
+<Project>
+    <!--
+    The rules the emitted code is allowed to violate: none (docs/50-GENERATED-CODE-ANALYSIS.md).
+
+    This list is empty and must stay empty. The first run found 1,468 findings in 20 rules; the
+    emitter fixes (#418, #547-#552) cleared every one. A rule listed in WarningsNotAsErrors still
+    reports without failing the build, and that is exactly the escape hatch this file closes:
+    scripts/GeneratedCodeAnalysis.cs fails on ANY finding, listed or not, so a line added here
+    turns nothing green. A new finding is an emitter regression: fix the emitter. A rule the
+    emitter breaks on purpose belongs in .editorconfig's generated-code section, with the reason.
+  -->
+    <PropertyGroup>
+        <WarningsNotAsErrors>$(WarningsNotAsErrors)</WarningsNotAsErrors>
+    </PropertyGroup>
+</Project>

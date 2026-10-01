@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <!-- The modern (Parquet.Net 6) golden models. See ../Directory.Build.props. -->
+    <PropertyGroup>
+        <GoldenPattern>*ParquetExtensions.g.cs</GoldenPattern>
+    </PropertyGroup>
+    <ItemGroup>
+        <Compile
+            Include="$(GoldenModelDirectory)/*.cs"
+            Exclude="$(GoldenModelDirectory)/LegacyRecord.cs"
+        />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Parquet.Net" />
+        <PackageReference Include="Apache.Arrow" />
+        <ProjectReference Include="../../src/Parquet.SourceGenerator.Attributes/Parquet.SourceGenerator.Attributes.csproj" />
+    </ItemGroup>
+</Project>

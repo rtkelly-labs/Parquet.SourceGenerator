@@ -613,25 +613,82 @@ jobs:
             gh pr comment "$PR_NUMBER" --repo "$REPO" --body-file "$body"
           fi
 
+  # Every analyzer the shipped src/ projects run, run over the golden models' emitted source
+  # (docs/50-GENERATED-CODE-ANALYSIS.md). Any finding fails the job, and so the required `build`
+  # check: the baseline is empty and there is no list to add a rule to. Kept apart from `derived`
+  # so a red result names the rule and count, and so it gates without needing a base to diff.
+  #
+  # Two things keep it from passing by examining nothing. The script fails when the emitted files
+  # it compiled do not match the golden models declared in test/.../GoldenModels, or when either
+  # backend compiled none; and the positive control below runs the same pipeline over a seeded
+  # violation and fails unless the gate catches it in both backends (compare the zero-boxing IL
+  # gate, #467, and the coverage gate, #416).
+  generated-analysis:
+    name: generated-analysis
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      # Publishes each golden model's emitted source to artifacts/golden/ (gitignored).
+      - name: Publish golden outputs
+        run: >-
+          dotnet test test/Parquet.SourceGenerator.Tests/Parquet.SourceGenerator.Tests.csproj
+          --configuration Release --filter "FullyQualifiedName~GoldenCodeGenRegressionTests"
+
+      # Positive control: a seeded CA2007 violation in each backend must fail the gate.
+      - name: Positive control (a seeded violation must fail the gate)
+        run: dotnet run scripts/GeneratedCodeAnalysis.cs -- --self-test
+
+      # The summary is written even when the gate fails, so a red run still shows its table.
+      - name: Analyze emitted code
+        run: |
+          dotnet run scripts/GeneratedCodeAnalysis.cs -- --summary "$RUNNER_TEMP/generated-analysis.md"
+
+      - name: Publish analysis summary
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/generated-analysis.md" ]; then
+            cat "$RUNNER_TEMP/generated-analysis.md" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload generated-diagnostics.txt
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: generated-diagnostics
+          path: artifacts/analysis/generated-diagnostics.txt
+          if-no-files-found: error
+
   # The required status check. The job name is the check name that branch protection matches on
   # (.github/BRANCH_PROTECTION.md, REPO_REQUIRED_CHECKS_MAP in shared-utilities), so it is
   # deliberately short, lowercase, and free of characters that are easy to mistype or that GitHub
   # HTML-escapes. Treat it as an identifier: renaming it silently breaks the ruleset. It exists so
-  # the gates in `derived` (emitted code compiles, call-graph rules, CodeMetricsConfig.txt) block a
-  # merge exactly as the ones in `test` do, while the two jobs still run in parallel.
+  # the gates in `derived` (emitted code compiles, call-graph rules, CodeMetricsConfig.txt) and
+  # `generated-analysis` (analyzer findings in emitted code) block a merge exactly as the ones in
+  # `test` do, while the jobs still run in parallel.
   build:
     name: build
     if: always()
-    needs: [test, derived]
+    needs: [test, derived, generated-analysis]
     runs-on: ubuntu-latest
     steps:
-      - name: Require test and derived
+      - name: Require test, derived and generated-analysis
         env:
           TEST_RESULT: ${{ needs.test.result }}
           DERIVED_RESULT: ${{ needs.derived.result }}
+          ANALYSIS_RESULT: ${{ needs.generated-analysis.result }}
         run: |
-          echo "test: $TEST_RESULT, derived: $DERIVED_RESULT"
-          if [ "$TEST_RESULT" != "success" ] || [ "$DERIVED_RESULT" != "success" ]; then
-            echo "::error::Required jobs did not all succeed (test=$TEST_RESULT, derived=$DERIVED_RESULT)."
+          echo "test: $TEST_RESULT, derived: $DERIVED_RESULT, generated-analysis: $ANALYSIS_RESULT"
+          if [ "$TEST_RESULT" != "success" ] || [ "$DERIVED_RESULT" != "success" ] || [ "$ANALYSIS_RESULT" != "success" ]; then
+            echo "::error::Required jobs did not all succeed (test=$TEST_RESULT, derived=$DERIVED_RESULT, generated-analysis=$ANALYSIS_RESULT)."
             exit 1
           fi

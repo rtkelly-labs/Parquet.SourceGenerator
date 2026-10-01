@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <!--
+    The legacy (Parquet.Net 4.x/5.x DataColumn API) golden model, against 4.25.0 — the pin
+    test/PackageConsumptionLegacy and scripts/CodeMetrics.cs use. See ../Directory.Build.props.
+  -->
+    <PropertyGroup>
+        <GoldenPattern>*ParquetLegacyExtensions.g.cs</GoldenPattern>
+    </PropertyGroup>
+    <ItemGroup>
+        <Compile Include="$(GoldenModelDirectory)/LegacyRecord.cs" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Parquet.Net" VersionOverride="4.25.0" />
+        <ProjectReference Include="../../src/Parquet.SourceGenerator.Attributes/Parquet.SourceGenerator.Attributes.csproj" />
+    </ItemGroup>
+</Project>
