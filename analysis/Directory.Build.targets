@@ -1,0 +1,22 @@
+<Project>
+    <!--
+    Copies the golden files this project analyses ($(GoldenPattern)) into obj/golden/ under the
+    project: .editorconfig sections match on a file's real path, and CI publishes the golden files
+    outside the repository. The copy is recreated on every build so a golden model that was removed
+    cannot linger, and finding none is an error — an analysis that checked nothing must not pass.
+  -->
+    <Target Name="IncludeGoldenFiles" BeforeTargets="BeforeBuild;CoreCompile">
+        <RemoveDir Directories="$(GoldenCopyDirectory)" />
+        <ItemGroup>
+            <_GoldenSource Include="$(GoldenDirectory)/$(GoldenPattern)" />
+        </ItemGroup>
+        <Error
+            Condition="'@(_GoldenSource)' == ''"
+            Text="No golden files matching '$(GoldenPattern)' in $(GoldenDirectory). Publish them first: dotnet test test/Parquet.SourceGenerator.Tests --filter GoldenCodeGenRegressionTests"
+        />
+        <Copy SourceFiles="@(_GoldenSource)" DestinationFolder="$(GoldenCopyDirectory)" />
+        <ItemGroup>
+            <Compile Include="@(_GoldenSource->'$(GoldenCopyDirectory)/%(Filename)%(Extension)')" />
+        </ItemGroup>
+    </Target>
+</Project>

@@ -11,6 +11,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 Changes since `0.0.4`; this section becomes the next release entry when one is cut.
 
 ### Added
+- **CI gate: every `src/` analyzer runs on the emitted code, and any finding fails** (`analysis/`,
+  `scripts/GeneratedCodeAnalysis.cs`, `docs/50-GENERATED-CODE-ANALYSIS.md`, #553). The golden
+  models' emitted source is compiled bare (no implicit usings) against both backends with
+  NetAnalyzers, Meziantou, Sonar, Roslynator, the metric gates and the trim/AOT analyzers, with
+  generated-code classification switched off. The baseline is empty. The `generated-analysis` job
+  names each rule and count on failure, and a seeded-violation positive control keeps the gate from
+  passing without examining the emitted files.
 - **`stack` workflow for GitHub native stacked pull requests.** Labelling the bottom pull request of
   a chain `stack:link` (or dispatching the workflow with explicit numbers) walks the open pull
   requests upward, requires the chain to be linear, and runs `gh stack link` over it. Merge a linked
