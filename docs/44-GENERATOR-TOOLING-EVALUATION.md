@@ -19,12 +19,12 @@ Two items were not in the backlog and are now #471 and #472.
 | Nullable (package) | Skip | No nullability attributes used anywhere in the generator |
 | ILRepack / Costura.Fody / Paket | Not applicable, and harmful if adopted | Zero third-party runtime dependencies; `DebugType=embedded` |
 | Microsoft.CodeAnalysis.CSharp.SourceGenerators.Testing | Skip | Duplicates existing suites; package last shipped at 1.1.4 |
-| Verify.SourceGenerators | Skip | `GoldenCodeGenRegressionTests` is a strict superset |
+| Verify.SourceGenerators | Skip | Emitted output is derived and diffed, not snapshotted (docs 17); `GoldenCodeGenRegressionTests` asserts more per model |
 | SyntaxFactory / `Microsoft.CodeAnalysis.CSharp.Workspaces` | Reject | Workspaces must not be referenced from an analyzer (RS1038) |
 | Scriban | Reject | Reintroduces the bundling problem this repo does not have |
 | `IndentedTextWriter` / an indentation abstraction | Adopt — **already #439** | This doc adds only: no package reference needed |
 | Microsoft.CodeAnalysis.Analyzers (upgrade) | Adopt — **filed as #471** | Pinned at 3.3.3; every generator-author rule postdates it |
-| Roslynator.Analyzers | Optional | Overlaps Meziantou.Analyzer, already repo-wide |
+| Roslynator.Analyzers | Already adopted | Applied to every non-test project in `Directory.Build.props`, alongside Meziantou and Sonar (docs 50) |
 
 ---
 
@@ -73,26 +73,30 @@ and expected-generated-source assertions. Both are covered — `DiagnosticTests.
 `GoldenCodeGenRegressionTests.cs` for the latter. The package's latest published version is
 **1.1.4**; it would pin Roslyn test dependencies against versions this repo deliberately controls.
 
-`Verify.SourceGenerators` is better maintained (latest 2.5.0) but would be a lateral move. The
-golden harness asserts more per model than a Verify snapshot does — byte-identical text, a syntax
-parse, and the `.api.txt` / `.api.shape.txt` / `.metrics.txt` companions that carry the API change
-contract from `docs/18-API-CHANGE-CONTRACT.md` — and five of the eight goldens additionally run
-`RunGeneratorsAndUpdateCompilation` and assert the bound compilation has no errors. It also already
-has the acceptance workflow Verify is usually adopted for (`UPDATE_GOLDEN_FILES=true`).
+`Verify.SourceGenerators` is better maintained (latest 2.5.0) but would be a lateral move, and it
+would reintroduce what this repository retired. Emitted source and API are no longer snapshotted:
+they are derived from the emitter in CI and diffed against the merge base as a review aid
+([17](./17-GENERATED-API-BASELINES.md), [18](./18-API-CHANGE-CONTRACT.md)), and the repository does
+not commit them. A Verify `.verified.cs` file is exactly that committed copy. What the golden
+harness gates instead is per model: no generator error, syntax-clean source, a non-empty public API,
+a semantic compile of every emitted file against its declaration (`CodeMetrics.cs`, run in the
+`derived` job), and, through `generated-analysis` ([50](./50-GENERATED-CODE-ANALYSIS.md)), zero
+analyzer findings in the emitted code. Several goldens also run `RunGeneratorsAndUpdateCompilation`
+and assert the bound compilation has no errors.
 
-**On the gaps in that harness, see the backlog, not this document.** #413 covers the three goldens
-built from hand-typed models that are parsed but never bound — which also means they never exercise
-`TargetParser → emitter` end to end. #407 covers the self-healing baseline. Neither suggested
-package addresses either, and adopting Verify would not have caught them: a snapshot framework
-records what the emitter produced, it does not type-check it.
+**On the gaps in the original harness, see the backlog, not this document.** The two gaps this
+section first listed are closed: #407 (self-healing baseline) is closed as obsolete now that nothing
+is checked in, and #413 (goldens parsed but never bound) is satisfied by the semantic compile of
+every golden model ([51](./51-CI-GATE-MATRIX.md)). Neither suggested package would have caught them:
+a snapshot framework records what the emitter produced, it does not type-check it.
 
 ## 4. Emission — real, and already filed as #439
 
 The recommendation to replace hand-threaded indentation with `IndentedTextWriter` is correct, and
 #439 has it with better evidence (89 whitespace literals, 337 `{indent}` splices, 6 string-arithmetic
 sites, 16-space literal default parameters) and the right conclusion, including the same rejection
-of a template engine and the same note that the golden files are the safety net for a
-byte-identical refactor. #439 is also the prerequisite for #434.
+of a template engine and the same note that the derived-output diff (an empty diff for a
+byte-identical refactor) is the safety net. #439 is also the prerequisite for #434.
 
 **The one thing this evaluation adds:** `System.CodeDom.Compiler.IndentedTextWriter` is present in
 the `netstandard2.0` reference assembly — verified by inspecting `build/netstandard2.0/ref/netstandard.dll`
@@ -105,7 +109,7 @@ On the alternatives the generic advice offers in place of #439's approach:
 - *SyntaxFactory / Workspaces.* `Microsoft.CodeAnalysis.CSharp.Workspaces` must not be referenced
   from an analyzer assembly at all — RS1038 in §5 exists to catch exactly that. Bare `SyntaxFactory`
   cannot normalize whitespace usefully, and re-expressing the emitters as AST construction would
-  rewrite every golden file and every `.api.txt` baseline.
+  change every emitted file and every derived `.api.txt` surface.
 - *Scriban.* See §2. It would also move emitted text out of C# and into embedded resources, where
   `docs/22-GENERATED-CODE-METRICS.md` and the duplication gate in `docs/23-DUPLICATION.md` cannot
   see it.
@@ -130,8 +134,9 @@ This is worth recording because the repository has two live instances of exactly
 `DiagnosticInfo`) — and it would be easy to assume the #471 upgrade closes them. It does not. Both
 were found by review, and nothing automated will find the next one.
 
-Roslynator.Analyzers is optional: its value here overlaps `Meziantou.Analyzer`, which
-`Directory.Build.props` already applies to every non-test project.
+Roslynator.Analyzers needs no decision: `Directory.Build.props` already applies it, with
+`Meziantou.Analyzer` and `SonarAnalyzer.CSharp`, to every non-test project, and
+[50](./50-GENERATED-CODE-ANALYSIS.md) runs the same set over the emitted code.
 
 ## 6. The Roslyn floor — filed as #472
 
@@ -166,7 +171,7 @@ maps onto work already tracked:
 | Analyzer package upgrade + `EnforceExtendedAnalyzerRules` | #471 |
 | Roslyn floor decision; `docs/28` correction | #472 (gates #395, #368) |
 | Pipeline retention of Roslyn objects | #395, #398 |
-| Golden coverage gaps | #413, #407 |
+| Golden coverage gaps | #413, #407 (both closed; see section 3) |
 | `docs/03` drift, `docs/INDEX.md` completeness | #464 |
 
 Of these, #471 is the only one with no consumer impact and no dependency on another decision.
