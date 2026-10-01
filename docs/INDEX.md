@@ -201,8 +201,10 @@ The documentation is organized into three distinct tiers based on audience and i
      - Measured shrinkage (−66 members, −222 parameter slots) and the flat → builder migration table.
 
 25. **[49 - Legacy Backend Parity (#490)](./49-LEGACY-PARITY-490.md)**
-     - The legacy (net472) backend exposes the same generated API as modern; differences live in a
-       shrinking allowlist. Supersedes the #246 declared-subset policy.
+     - Decision: the legacy (net472) backend is to expose the same generated API as modern, with
+       differences listed in a shrinking allowlist. This is the target, not current output: the two
+       backends still emit different surfaces until #492 to #496 land. Supersedes the #246
+       declared-subset policy.
      - Parquet.Net 4.25 evidence, the shared-surface / per-backend column-I/O split, and the
        one-package end state.
 
