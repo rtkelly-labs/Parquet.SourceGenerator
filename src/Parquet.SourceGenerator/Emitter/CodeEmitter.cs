@@ -990,7 +990,7 @@ internal static class CodeEmitter
         builder.AppendLine(
             "            cancellationToken: cancellationToken).ConfigureAwait(false);"
         );
-        // try/finally instead of an `await using` scope: see the CA1506 note on EmitReadAsync.
+        // try/finally instead of an `await using` scope: ConfigureAwait on an IAsyncDisposable needs ConfiguredAsyncDisposable, and these methods sit at the CA1506 ceiling.
         builder.AppendLine("        try");
         builder.AppendLine("        {");
         builder.AppendLine(
@@ -1042,7 +1042,7 @@ internal static class CodeEmitter
         builder.AppendLine(
             "                cancellationToken: cancellationToken).ConfigureAwait(false);"
         );
-        // try/finally instead of an `await using` scope: see the CA1506 note on EmitReadAsync.
+        // try/finally instead of an `await using` scope: ConfigureAwait on an IAsyncDisposable needs ConfiguredAsyncDisposable, and these methods sit at the CA1506 ceiling.
         builder.AppendLine("            try");
         builder.AppendLine("            {");
         builder.AppendLine(
@@ -1065,7 +1065,7 @@ internal static class CodeEmitter
         builder.AppendLine(
             "            cancellationToken: cancellationToken).ConfigureAwait(false);"
         );
-        // try/finally instead of an `await using` scope: see the CA1506 note on EmitReadAsync.
+        // try/finally instead of an `await using` scope: ConfigureAwait on an IAsyncDisposable needs ConfiguredAsyncDisposable, and these methods sit at the CA1506 ceiling.
         builder.AppendLine("        try");
         builder.AppendLine("        {");
         builder.AppendLine(
@@ -1127,7 +1127,7 @@ internal static class CodeEmitter
         builder.AppendLine(
             "            cancellationToken: cancellationToken).ConfigureAwait(false);"
         );
-        // try/finally instead of an `await using` scope: see the CA1506 note on EmitReadAsync.
+        // try/finally instead of an `await using` scope: ConfigureAwait on an IAsyncDisposable needs ConfiguredAsyncDisposable, and these methods sit at the CA1506 ceiling.
         builder.AppendLine("        try");
         builder.AppendLine("        {");
         builder.AppendLine(
@@ -1205,7 +1205,7 @@ internal static class CodeEmitter
         builder.AppendLine(
             "            cancellationToken: cancellationToken).ConfigureAwait(false);"
         );
-        // try/finally instead of an `await using` scope: see the CA1506 note on EmitReadAsync.
+        // try/finally instead of an `await using` scope: ConfigureAwait on an IAsyncDisposable needs ConfiguredAsyncDisposable, and these methods sit at the CA1506 ceiling.
         builder.AppendLine("        try");
         builder.AppendLine("        {");
         builder.AppendLine("        guardedStream.Activate();");
@@ -1575,7 +1575,7 @@ internal static class CodeEmitter
         builder.AppendLine(
             "            cancellationToken: cancellationToken).ConfigureAwait(false);"
         );
-        // try/finally instead of an `await using` scope: see the CA1506 note on EmitReadAsync.
+        // try/finally instead of an `await using` scope: ConfigureAwait on an IAsyncDisposable needs ConfiguredAsyncDisposable, and these methods sit at the CA1506 ceiling.
         builder.AppendLine("        try");
         builder.AppendLine("        {");
         builder.AppendLine("        guardedStream.Activate();");
@@ -1738,7 +1738,7 @@ internal static class CodeEmitter
         builder.AppendLine(
             "            cancellationToken: cancellationToken).ConfigureAwait(false);"
         );
-        // try/finally instead of an `await using` scope: see the CA1506 note on EmitReadAsync.
+        // try/finally instead of an `await using` scope: ConfigureAwait on an IAsyncDisposable needs ConfiguredAsyncDisposable, and these methods sit at the CA1506 ceiling.
         builder.AppendLine("        try");
         builder.AppendLine("        {");
         builder.AppendLine("        guardedStream.Activate();");
@@ -1884,7 +1884,7 @@ internal static class CodeEmitter
         builder.AppendLine(
             "                cancellationToken: cancellationToken).ConfigureAwait(false);"
         );
-        // try/finally instead of an `await using` scope: see the CA1506 note on EmitReadAsync.
+        // try/finally instead of an `await using` scope: ConfigureAwait on an IAsyncDisposable needs ConfiguredAsyncDisposable, and these methods sit at the CA1506 ceiling.
         builder.AppendLine("            try");
         builder.AppendLine("            {");
         builder.AppendLine("            guardedProbeStream.Activate();");
@@ -2042,7 +2042,7 @@ internal static class CodeEmitter
         builder.AppendLine(
             "                cancellationToken: cancellationToken).ConfigureAwait(false);"
         );
-        // try/finally instead of an `await using` scope: see the CA1506 note on EmitReadAsync.
+        // try/finally instead of an `await using` scope: ConfigureAwait on an IAsyncDisposable needs ConfiguredAsyncDisposable, and these methods sit at the CA1506 ceiling.
         builder.AppendLine("            try");
         builder.AppendLine("            {");
         builder.AppendLine("            guardedStream.Activate();");

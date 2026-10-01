@@ -245,9 +245,7 @@ internal static class ReadBuilderComponent
         );
         builder.AppendLine($"    public {name} Where({pred} predicate)");
         builder.AppendLine("    {");
-        builder.AppendLine(
-            "        if (predicate is null) throw new global::System.ArgumentNullException(nameof(predicate));"
-        );
+        builder.AppendLine("        global::System.ArgumentNullException.ThrowIfNull(predicate);");
         builder.AppendLine("        if (_parallel)");
         builder.AppendLine(
             $"            throw new {NotSupported}(\"Where() cannot be combined with Parallel(): no parallel reader accepts a row-group predicate yet (#222). Drop Parallel() to filter sequentially.\");"

@@ -420,9 +420,7 @@ public sealed class ColumnarHandoffTests
         using var stream = new MemoryStream();
         await batch.WriteParquetAsync(stream);
         stream.Position = 0;
-        ColumnarHandoffModel[] read = await ColumnarHandoffModelParquet
-            .From(stream)
-            .ToArrayAsync();
+        ColumnarHandoffModel[] read = await ColumnarHandoffModelParquet.From(stream).ToArrayAsync();
 
         read.ShouldBeEmpty();
     }
