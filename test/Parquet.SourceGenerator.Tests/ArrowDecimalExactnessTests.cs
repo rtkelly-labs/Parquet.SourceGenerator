@@ -29,6 +29,9 @@ public sealed class ArrowDecimalExactnessTests
 {
     private static readonly Decimal128Type Wide = new(38, 18);
 
+    // 10^18, the Decimal128(38, 18) scale factor, written as an exponent rather than a long digit run.
+    private const decimal OneE18 = 1e18m;
+
     private static RecordBatch Batch(Decimal128Array values) =>
         new(
             new Apache.Arrow.Schema.Builder()
@@ -113,8 +116,8 @@ public sealed class ArrowDecimalExactnessTests
     [Fact]
     public async Task ValuesAtTheSystemDecimalLimitsRoundTripExactlyAsync()
     {
-        decimal max = decimal.MaxValue / 1_000_000_000_000_000_000m;
-        decimal min = decimal.MinValue / 1_000_000_000_000_000_000m;
+        decimal max = decimal.MaxValue / OneE18;
+        decimal min = decimal.MinValue / OneE18;
         decimal tiny = 0.000000000000000001m;
         var builder = new Decimal128Array.Builder(Wide)
             .Append(max)
