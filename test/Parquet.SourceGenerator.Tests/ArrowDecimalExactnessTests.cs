@@ -81,6 +81,8 @@ public sealed class ArrowDecimalExactnessTests
     [InlineData("10000000000000000000.000000000000000000", "10000000000000000000")]
     [InlineData("-12345678901234567890.000000000000000000", "-12345678901234567890")]
     [InlineData("12345678901234567890.123400000000000000", "12345678901234567890.1234")]
+    // Unscaled -2^64: the low word is zero, which overflows a checked negation in a consumer build.
+    [InlineData("-18.446744073709551616", "-18.446744073709551616")]
     public async Task WideValueWithTrailingZerosIsAcceptedExactlyAsync(
         string stored,
         string expected

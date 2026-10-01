@@ -818,8 +818,8 @@ internal static class ArrowBridgeEmitter
         builder.AppendLine("        bool negative = (high & 0x8000000000000000UL) != 0;");
         builder.AppendLine("        if (negative)");
         builder.AppendLine("        {");
-        builder.AppendLine("            low = ~low + 1UL;");
-        builder.AppendLine("            high = ~high + (low == 0UL ? 1UL : 0UL);");
+        builder.AppendLine("            low = unchecked(~low + 1UL);");
+        builder.AppendLine("            high = unchecked(~high + (low == 0UL ? 1UL : 0UL));");
         builder.AppendLine("        }");
         builder.AppendLine();
         builder.AppendLine(
@@ -856,7 +856,7 @@ internal static class ArrowBridgeEmitter
         builder.AppendLine("        }");
         builder.AppendLine();
         builder.AppendLine(
-            "        return new decimal((int)(uint)low, (int)(uint)(low >> 32), (int)(uint)high, negative, (byte)scale);"
+            "        return unchecked(new decimal((int)(uint)low, (int)(uint)(low >> 32), (int)(uint)high, negative, (byte)scale));"
         );
         builder.AppendLine("    }");
     }
