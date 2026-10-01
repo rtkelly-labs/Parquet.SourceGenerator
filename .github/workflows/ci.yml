@@ -564,6 +564,7 @@ jobs:
       # state as it is. Each is written only when there is something to show.
       - name: Render Reports
         if: always() && github.event_name == 'pull_request'
+        continue-on-error: true
         env:
           HEAD_STATUS: ${{ steps.head.outcome }}
           BASE_STATUS: ${{ steps.base.outcome }}
@@ -589,6 +590,7 @@ jobs:
       - name: Upload Diff (HTML)
         id: diff_html
         if: always() && github.event_name == 'pull_request'
+        continue-on-error: true
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           path: ${{ runner.temp }}/derived-diff.html
@@ -598,6 +600,7 @@ jobs:
       - name: Upload State (HTML)
         id: state_html
         if: always() && github.event_name == 'pull_request'
+        continue-on-error: true
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           path: ${{ runner.temp }}/derived-state.html
@@ -608,6 +611,7 @@ jobs:
       # or a statement that the head failed or the base could not be produced.
       - name: Render Review Comment
         if: always() && github.event_name == 'pull_request'
+        continue-on-error: true
         env:
           HEAD_STATUS: ${{ steps.head.outcome }}
           BASE_STATUS: ${{ steps.base.outcome }}
