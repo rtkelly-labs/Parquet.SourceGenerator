@@ -190,3 +190,10 @@ This document details all diagnostic codes, their severity, rationale, and remed
 - **Remediation**: Rename one of the types (or one of their containing types), or move one to
   another namespace.
 
+---
+
+## Deferred diagnostics
+
+- **Disabled-feature omission diagnostic (#226).** Reporting the cause when a member is missing
+  because a feature is disabled is deferred until the feature-profile and configuration state it
+  would read is settled. See [document 37](37-DISABLED-FEATURE-DIAGNOSTIC-SCOPE-226.md).
