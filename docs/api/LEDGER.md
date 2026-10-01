@@ -16,6 +16,31 @@ The rule, the three surfaces and the author process are in
 
 <!-- Add new entries directly below this line, newest first. -->
 
+### 2026-10-01 — `{T}ColumnarBatch` becomes a `readonly struct` with get-only properties and a validating constructor (#550)
+
+- **Surface:** emitted
+- **Semver:** breaking-major
+- **Issue:** [#550](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/550), part of
+  [#508](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/508) and tracker
+  [#554](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/554)
+- **Change:** for each flat model, `public struct {T}ColumnarBatch` with one public mutable field
+  per column (plus `RowCount`) is now `public readonly struct {T}ColumnarBatch` with a get-only
+  property per column and a public constructor `{T}ColumnarBatch(int rowCount, <one
+  ReadOnlyMemory<…> per column in schema order, plus a definition-levels lane after each nullable
+  value column>)`. The constructor throws `ArgumentOutOfRangeException` for a negative row count
+  and `ArgumentException` (naming the column) for a lane shorter than the row count. The column
+  layout is unchanged: packed values plus definition levels for nullable value columns,
+  inline-nullable text and binary.
+- **Rationale:** a mutable public struct let `RowCount` drift from the lanes it describes, and
+  public fields cannot become properties later without a binary break (CA1051, S1104 in the
+  generated-code analysis). Validating once at construction makes an inconsistent batch
+  unrepresentable, so the write call no longer re-checks; `default(T)` is a valid empty batch.
+- **Replaces** the earlier note that `{T}ColumnarBatch` fields stay public because they are how a
+  caller builds the batch: the constructor is now how.
+- **Not decided here:** unifying it with the read-side `ColumnBatch` and the nullable layout
+  remain open in #508.
+- **Note:** pre-1.0 break; `0.0.x` permits it without a major bump.
+
 ### 2026-09-22 — `{T}RowGroupMetadata(int rowGroupIndex, long rowCount, bool hasStatistics, …column_N)` constructor made internal (#459)
 
 - **Surface:** emitted

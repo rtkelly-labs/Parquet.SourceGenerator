@@ -270,8 +270,8 @@ public sealed class ArrowConditionalEmissionTests
         // The nullable long column cannot be zero-copy: values are packed and def levels derived
         // from the validity bitmap, which does rent before the column is written.
         string qtyBlock = ColumnBlock(arrow, "// column 2: qty");
-        qtyBlock.ShouldContain("columnarBatch.Qty =", Case.Sensitive);
-        qtyBlock.ShouldContain("columnarBatch.QtyDefinitionLevels =", Case.Sensitive);
+        qtyBlock.ShouldContain("var lane_2 =", Case.Sensitive);
+        qtyBlock.ShouldContain("var levels_2 =", Case.Sensitive);
         qtyBlock.ShouldContain("IsValid(row)", Case.Sensitive);
     }
 
@@ -288,10 +288,7 @@ public sealed class ArrowConditionalEmissionTests
             .Single(s => s.HintName.EndsWith(".Arrow.g.cs", StringComparison.Ordinal))
             .SourceText.ToString();
 
-        arrow.ShouldContain(
-            "var columnarBatch = new TradeColumnarBatch { RowCount = count };",
-            Case.Sensitive
-        );
+        arrow.ShouldNotContain("columnarBatch", Case.Sensitive);
         arrow.ShouldContain("using (var groupWriter = writer.CreateRowGroup())", Case.Sensitive);
         arrow.ShouldContain("await groupWriter.WriteAsync<int>(", Case.Sensitive);
         arrow.ShouldContain("await groupWriter.WriteAllPartsAsync<long>(", Case.Sensitive);

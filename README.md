@@ -131,18 +131,18 @@ await eventStream.WriteParquetAsync(
 
 If the caller already holds contiguous column buffers — Arrow arrays, a query engine's column
 vectors, pre-split `ReadOnlyMemory<T>` — there is no reason to materialise POCOs first. Flat models
-also get a generated batch struct whose buffers go straight to Parquet.Net with no pooled rental and
+also get a generated `readonly struct` batch, built through a validating constructor, whose buffers go straight to Parquet.Net with no pooled rental and
 no copy:
 
 ```csharp
-var batch = new UserEventColumnarBatch
-{
-    RowCount = rowCount,
-    Id = idBuffer,                                  // ReadOnlyMemory<int>
-    Name = nameBuffer,                              // ReadOnlyMemory<ReadOnlyMemory<char>?>
-    Score = packedScores,                           // packed non-nulls only
-    ScoreDefinitionLevels = scoreDefinitionLevels,  // 1 = present, 0 = null, one per row
-};
+// Validates every column against rowCount and throws ArgumentException if one is short.
+var batch = new UserEventColumnarBatch(
+    rowCount: rowCount,
+    id: idBuffer,                                  // ReadOnlyMemory<int>
+    name: nameBuffer,                              // ReadOnlyMemory<ReadOnlyMemory<char>?>
+    score: packedScores,                           // packed non-nulls only
+    scoreDefinitionLevels: scoreDefinitionLevels   // 1 = present, 0 = null, one per row
+);
 
 await batch.WriteParquetAsync(stream);
 ```

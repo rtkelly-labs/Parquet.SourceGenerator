@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using Parquet.SourceGenerator.Emitter;
 using Parquet.SourceGenerator.Models;
@@ -59,6 +60,26 @@ public partial record ColumnarDenseModel
 
     [ParquetColumn("b")]
     public double B { get; init; }
+}
+
+/// <summary>
+/// Columns whose camel-cased names land on the fixed parameters of the generated writers
+/// (<c>writer</c>, <c>rowCount</c>, <c>cancellationToken</c>) or on a C# keyword.
+/// </summary>
+[ParquetSerializable]
+public partial record ColumnarCollisionModel
+{
+    [ParquetColumn("row_count")]
+    public int RowCount { get; init; }
+
+    [ParquetColumn("writer")]
+    public long Writer { get; init; }
+
+    [ParquetColumn("cancellation_token")]
+    public double CancellationToken { get; init; }
+
+    [ParquetColumn("event")]
+    public int Event { get; init; }
 }
 
 /// <summary>
@@ -145,21 +166,20 @@ public sealed class ColumnarHandoffTests
             }
         }
 
-        return new ColumnarHandoffModelColumnarBatch
-        {
-            RowCount = count,
-            Id = id,
-            Name = name,
-            Score = score,
-            OptionalScore = optionalScore.AsMemory(0, scorePacked),
-            OptionalScoreDefinitionLevels = optionalScoreDefs,
-            Flag = flag,
-            CorrelationId = correlationId,
-            CreatedAt = createdAt,
-            OptionalCount = optionalCount.AsMemory(0, countPacked),
-            OptionalCountDefinitionLevels = optionalCountDefs,
-            Payload = payload,
-        };
+        return new ColumnarHandoffModelColumnarBatch(
+            rowCount: count,
+            id: id,
+            name: name,
+            score: score,
+            optionalScore: optionalScore.AsMemory(0, scorePacked),
+            optionalScoreDefinitionLevels: optionalScoreDefs,
+            flag: flag,
+            correlationId: correlationId,
+            createdAt: createdAt,
+            optionalCount: optionalCount.AsMemory(0, countPacked),
+            optionalCountDefinitionLevels: optionalCountDefs,
+            payload: payload
+        );
     }
 
     [Fact]
@@ -260,8 +280,6 @@ public sealed class ColumnarHandoffTests
         // A caller reusing a large scratch buffer supplies more entries than rows; only RowCount
         // of them may reach the file.
         const int shortCount = 100;
-        ColumnarHandoffModelColumnarBatch sliced = full;
-        sliced.RowCount = shortCount;
         int packedScores = 0;
         int packedCounts = 0;
         for (int i = 0; i < shortCount; i++)
@@ -269,8 +287,12 @@ public sealed class ColumnarHandoffTests
             packedScores += full.OptionalScoreDefinitionLevels.Span[i];
             packedCounts += full.OptionalCountDefinitionLevels.Span[i];
         }
-        sliced.OptionalScore = full.OptionalScore.Slice(0, packedScores);
-        sliced.OptionalCount = full.OptionalCount.Slice(0, packedCounts);
+        ColumnarHandoffModelColumnarBatch sliced = Rebuild(
+            full,
+            rowCount: shortCount,
+            optionalScore: full.OptionalScore.Slice(0, packedScores),
+            optionalCount: full.OptionalCount.Slice(0, packedCounts)
+        );
 
         using var stream = new MemoryStream();
         await sliced.WriteParquetAsync(stream);
@@ -291,7 +313,20 @@ public sealed class ColumnarHandoffTests
     [Fact]
     public async Task EmptyBatchWritesNoRowGroup()
     {
-        var batch = new ColumnarHandoffModelColumnarBatch { RowCount = 0 };
+        var batch = new ColumnarHandoffModelColumnarBatch(
+            rowCount: 0,
+            id: default,
+            name: default,
+            score: default,
+            optionalScore: default,
+            optionalScoreDefinitionLevels: default,
+            flag: default,
+            correlationId: default,
+            createdAt: default,
+            optionalCount: default,
+            optionalCountDefinitionLevels: default,
+            payload: default
+        );
 
         using var stream = new MemoryStream();
         await batch.WriteParquetAsync(stream);
@@ -304,45 +339,172 @@ public sealed class ColumnarHandoffTests
     }
 
     [Fact]
-    public async Task ShortValueColumnIsRejectedWithTheColumnName()
+    public void ShortValueColumnIsRejectedAtConstructionWithTheColumnName()
     {
-        List<ColumnarHandoffModel> rows = BuildRows(RowCount);
-        ColumnarHandoffModelColumnarBatch batch = Transpose(rows);
-        batch.Score = batch.Score.Slice(0, RowCount - 1);
+        ColumnarHandoffModelColumnarBatch valid = Transpose(BuildRows(RowCount));
 
-        using var stream = new MemoryStream();
-        ArgumentException error = await Should.ThrowAsync<ArgumentException>(async () =>
-            await batch.WriteParquetAsync(stream)
+        ArgumentException error = Should.Throw<ArgumentException>(() =>
+            Rebuild(valid, score: valid.Score.Slice(0, RowCount - 1))
         );
         error.Message.ShouldContain("Score");
+        error.ParamName.ShouldBe("score");
     }
 
     [Fact]
-    public async Task ShortDefinitionLevelColumnIsRejectedWithTheColumnName()
+    public void ShortNullableStringLaneIsRejectedAtConstruction()
     {
-        List<ColumnarHandoffModel> rows = BuildRows(RowCount);
-        ColumnarHandoffModelColumnarBatch batch = Transpose(rows);
-        batch.OptionalScoreDefinitionLevels = batch.OptionalScoreDefinitionLevels.Slice(
-            0,
-            RowCount - 1
-        );
+        ColumnarHandoffModelColumnarBatch valid = Transpose(BuildRows(RowCount));
 
-        using var stream = new MemoryStream();
-        ArgumentException error = await Should.ThrowAsync<ArgumentException>(async () =>
-            await batch.WriteParquetAsync(stream)
+        ArgumentException error = Should.Throw<ArgumentException>(() =>
+            Rebuild(valid, name: valid.Name.Slice(0, RowCount - 1))
+        );
+        error.Message.ShouldContain("Name");
+        error.ParamName.ShouldBe("name");
+    }
+
+    [Fact]
+    public void ShortDefinitionLevelColumnIsRejectedAtConstructionWithTheColumnName()
+    {
+        ColumnarHandoffModelColumnarBatch valid = Transpose(BuildRows(RowCount));
+
+        ArgumentException error = Should.Throw<ArgumentException>(() =>
+            Rebuild(
+                valid,
+                optionalScoreDefinitionLevels: valid.OptionalScoreDefinitionLevels.Slice(
+                    0,
+                    RowCount - 1
+                )
+            )
         );
         error.Message.ShouldContain("OptionalScore");
         error.Message.ShouldContain("definition levels");
+        error.ParamName.ShouldBe("optionalScoreDefinitionLevels");
     }
 
     [Fact]
-    public async Task NegativeRowCountIsRejected()
+    public void RowCountLargerThanEveryLaneIsRejectedAtConstruction()
     {
-        var batch = new ColumnarHandoffModelColumnarBatch { RowCount = -1 };
-        using var stream = new MemoryStream();
-        await Should.ThrowAsync<ArgumentOutOfRangeException>(async () =>
-            await batch.WriteParquetAsync(stream)
+        ColumnarHandoffModelColumnarBatch valid = Transpose(BuildRows(RowCount));
+
+        // The "out of step" state #550 describes: RowCount claims more rows than the lanes hold.
+        Should.Throw<ArgumentException>(() => Rebuild(valid, rowCount: RowCount + 1));
+    }
+
+    [Fact]
+    public void NegativeRowCountIsRejectedAtConstruction()
+    {
+        ColumnarHandoffModelColumnarBatch valid = Transpose(BuildRows(RowCount));
+
+        ArgumentOutOfRangeException error = Should.Throw<ArgumentOutOfRangeException>(() =>
+            Rebuild(valid, rowCount: -1)
         );
+        error.ParamName.ShouldBe("rowCount");
+    }
+
+    [Fact]
+    public void ValidBatchExposesItsRowCountAndLanes()
+    {
+        List<ColumnarHandoffModel> rows = BuildRows(RowCount);
+        ColumnarHandoffModelColumnarBatch batch = Transpose(rows);
+
+        batch.RowCount.ShouldBe(RowCount);
+        batch.Id.Length.ShouldBe(RowCount);
+        batch.OptionalScoreDefinitionLevels.Length.ShouldBe(RowCount);
+        batch.Id.Span[5].ShouldBe(5);
+    }
+
+    [Fact]
+    public async Task DefaultBatchIsAnEmptyBatchThatWritesNoRowGroupAsync()
+    {
+        // default(T) never goes through the constructor. It has RowCount 0 and empty lanes, which is
+        // a consistent (empty) batch, so the write is a no-op rather than an error.
+        ColumnarHandoffModelColumnarBatch batch = default;
+        batch.RowCount.ShouldBe(0);
+
+        using var stream = new MemoryStream();
+        await batch.WriteParquetAsync(stream);
+        stream.Position = 0;
+        List<ColumnarHandoffModel> read = await ColumnarHandoffModelParquet
+            .From(stream)
+            .ToListAsync();
+
+        read.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void BatchIsAReadOnlyStructWithGetOnlyPropertiesAndNoPublicFields()
+    {
+        Type type = typeof(ColumnarHandoffModelColumnarBatch);
+
+        type.IsValueType.ShouldBeTrue();
+        type.GetCustomAttributes(inherit: false)
+            .Any(a => a.GetType().FullName == "System.Runtime.CompilerServices.IsReadOnlyAttribute")
+            .ShouldBeTrue("the batch must be a readonly struct");
+        type.GetFields(BindingFlags.Public | BindingFlags.Instance).ShouldBeEmpty();
+
+        PropertyInfo[] properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+        properties.Length.ShouldBe(12);
+        foreach (PropertyInfo property in properties)
+        {
+            property.CanRead.ShouldBeTrue(property.Name);
+            property.SetMethod.ShouldBeNull(property.Name);
+        }
+    }
+
+    /// <summary>
+    /// Builds a copy of <paramref name="batch"/> with some arguments replaced. Every copy goes
+    /// through the validating constructor, which is the point: a mismatched lane cannot be built.
+    /// </summary>
+    private static ColumnarHandoffModelColumnarBatch Rebuild(
+        ColumnarHandoffModelColumnarBatch batch,
+        int? rowCount = null,
+        ReadOnlyMemory<ReadOnlyMemory<char>?>? name = null,
+        ReadOnlyMemory<double>? score = null,
+        ReadOnlyMemory<double>? optionalScore = null,
+        ReadOnlyMemory<int>? optionalScoreDefinitionLevels = null,
+        ReadOnlyMemory<long>? optionalCount = null
+    ) =>
+        new(
+            rowCount: rowCount ?? batch.RowCount,
+            id: batch.Id,
+            name: name ?? batch.Name,
+            score: score ?? batch.Score,
+            optionalScore: optionalScore ?? batch.OptionalScore,
+            optionalScoreDefinitionLevels: optionalScoreDefinitionLevels
+                ?? batch.OptionalScoreDefinitionLevels,
+            flag: batch.Flag,
+            correlationId: batch.CorrelationId,
+            createdAt: batch.CreatedAt,
+            optionalCount: optionalCount ?? batch.OptionalCount,
+            optionalCountDefinitionLevels: batch.OptionalCountDefinitionLevels,
+            payload: batch.Payload
+        );
+
+    [Fact]
+    public async Task ColumnNamesThatCollideWithFixedParametersStillBuildAndWriteAsync()
+    {
+        int[] rowCounts = [1, 2, 3];
+        long[] writers = [4, 5, 6];
+        double[] tokens = [7.5, 8.5, 9.5];
+        int[] events = [10, 11, 12];
+
+        var batch = new ColumnarCollisionModelColumnarBatch(3, rowCounts, writers, tokens, events);
+
+        // The model's own RowCount column cannot share the member name with the batch row count.
+        batch.BatchRowCount.ShouldBe(3);
+        batch.RowCount.ToArray().ShouldBe(rowCounts);
+
+        using var stream = new MemoryStream();
+        await batch.WriteParquetAsync(stream);
+        stream.Position = 0;
+        List<ColumnarCollisionModel> read = await ColumnarCollisionModelParquet
+            .From(stream)
+            .ToListAsync();
+
+        read.Select(r => r.RowCount).ToArray().ShouldBe(rowCounts);
+        read.Select(r => r.Writer).ToArray().ShouldBe(writers);
+        read.Select(r => r.CancellationToken).ToArray().ShouldBe(tokens);
+        read.Select(r => r.Event).ToArray().ShouldBe(events);
     }
 
     private static readonly long[] DenseA = [1, 2, 3];
@@ -351,12 +513,7 @@ public sealed class ColumnarHandoffTests
     [Fact]
     public async Task DenseModelWithoutNullableColumnsExposesNoDefinitionLevelParameters()
     {
-        var batch = new ColumnarDenseModelColumnarBatch
-        {
-            RowCount = 3,
-            A = DenseA,
-            B = DenseB,
-        };
+        var batch = new ColumnarDenseModelColumnarBatch(rowCount: 3, a: DenseA, b: DenseB);
 
         using var stream = new MemoryStream();
         await batch.WriteParquetAsync(stream);
@@ -465,10 +622,14 @@ public sealed class ColumnarHandoffTests
     {
         string source = EmitFlatSource();
 
-        source.ShouldContain("public global::System.ReadOnlyMemory<double> Weight;");
-        source.ShouldContain("public global::System.ReadOnlyMemory<int> WeightDefinitionLevels;");
+        source.ShouldContain("public readonly struct WidgetColumnarBatch");
+        source.ShouldContain("public global::System.ReadOnlyMemory<double> Weight { get; }");
+        source.ShouldContain(
+            "public global::System.ReadOnlyMemory<int> WeightDefinitionLevels { get; }"
+        );
         source.ShouldContain("global::System.ReadOnlyMemory<double> weight,");
-        source.ShouldContain("global::System.ReadOnlyMemory<int> weightDefinitionLevels,");
+        source.ShouldContain("global::System.ReadOnlyMemory<int> weightDefinitionLevels");
+        source.ShouldNotContain("public int RowCount;");
     }
 
     [Fact]

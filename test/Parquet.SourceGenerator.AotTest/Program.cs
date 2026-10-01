@@ -758,28 +758,27 @@ internal static class Program
             }
         }
 
-        var batch = new AotNullableRecordColumnarBatch
-        {
-            RowCount = rows,
-            Id = id,
-            Int32Value = int32Values.AsMemory(0, packed),
-            Int32ValueDefinitionLevels = int32Defs,
-            Int64Value = int64Values.AsMemory(0, packed),
-            Int64ValueDefinitionLevels = int64Defs,
-            DoubleValue = doubleValues.AsMemory(0, packed),
-            DoubleValueDefinitionLevels = doubleDefs,
-            BoolValue = boolValues.AsMemory(0, packed),
-            BoolValueDefinitionLevels = boolDefs,
-            StringValue = stringValues,
-            DateTimeValue = dateTimeValues.AsMemory(0, packed),
-            DateTimeValueDefinitionLevels = dateTimeDefs,
-            TimeSpanValue = timeSpanValues.AsMemory(0, packed),
-            TimeSpanValueDefinitionLevels = timeSpanDefs,
-            GuidValue = guidValues.AsMemory(0, packed),
-            GuidValueDefinitionLevels = guidDefs,
-            EnumValue = enumValues.AsMemory(0, packed),
-            EnumValueDefinitionLevels = enumDefs,
-        };
+        var batch = new AotNullableRecordColumnarBatch(
+            rowCount: rows,
+            id: id,
+            int32Value: int32Values.AsMemory(0, packed),
+            int32ValueDefinitionLevels: int32Defs,
+            int64Value: int64Values.AsMemory(0, packed),
+            int64ValueDefinitionLevels: int64Defs,
+            doubleValue: doubleValues.AsMemory(0, packed),
+            doubleValueDefinitionLevels: doubleDefs,
+            boolValue: boolValues.AsMemory(0, packed),
+            boolValueDefinitionLevels: boolDefs,
+            stringValue: stringValues,
+            dateTimeValue: dateTimeValues.AsMemory(0, packed),
+            dateTimeValueDefinitionLevels: dateTimeDefs,
+            timeSpanValue: timeSpanValues.AsMemory(0, packed),
+            timeSpanValueDefinitionLevels: timeSpanDefs,
+            guidValue: guidValues.AsMemory(0, packed),
+            guidValueDefinitionLevels: guidDefs,
+            enumValue: enumValues.AsMemory(0, packed),
+            enumValueDefinitionLevels: enumDefs
+        );
 
         using var stream = new MemoryStream();
         await batch.WriteParquetAsync(stream);

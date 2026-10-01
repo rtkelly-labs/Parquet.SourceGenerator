@@ -272,9 +272,6 @@ internal static class ArrowBridgeEmitter
         builder.AppendLine("        int count = batch.Length;");
         builder.AppendLine("        if (count == 0) return;");
         builder.AppendLine();
-        builder.AppendLine(
-            $"        var columnarBatch = new {ColumnarBatchComponent.BatchTypeName(model)} {{ {ColumnarBatchComponent.RowCountMemberName(model)} = count }};"
-        );
         for (int i = 0; i < model.Properties.Length; i++)
         {
             EmitColumnDeclarations(builder, model.Properties[i], i);
@@ -310,10 +307,8 @@ internal static class ArrowBridgeEmitter
                 $"                await groupWriter.WriteAllPartsAsync<{nonNullableElementType}>("
             );
             builder.AppendLine($"                    {fieldAccess},");
-            builder.AppendLine($"                    columnarBatch.{prop.Name},");
-            builder.AppendLine(
-                $"                    columnarBatch.{prop.Name}DefinitionLevels.Slice(0, count),"
-            );
+            builder.AppendLine($"                    lane_{slot},");
+            builder.AppendLine($"                    levels_{slot}.Slice(0, count),");
             builder.AppendLine("                    null,");
             builder.AppendLine(
                 "                    cancellationToken: cancellationToken).ConfigureAwait(false);"
@@ -324,7 +319,7 @@ internal static class ArrowBridgeEmitter
         string columnElementType = BufferPoolComponent.GetWriteBufferElementType(prop).TrimEnd('?');
         builder.AppendLine($"                await groupWriter.WriteAsync<{columnElementType}>(");
         builder.AppendLine($"                    {fieldAccess},");
-        builder.AppendLine($"                    columnarBatch.{prop.Name}.Slice(0, count),");
+        builder.AppendLine($"                    lane_{slot}.Slice(0, count),");
         builder.AppendLine(
             "                    cancellationToken: cancellationToken).ConfigureAwait(false);"
         );
@@ -348,7 +343,7 @@ internal static class ArrowBridgeEmitter
         switch (map.Mode)
         {
             case ArrowExtractionMode.Direct when !prop.IsNullable:
-                EmitDirectRequired(builder, map, arr, prop.Name);
+                EmitDirectRequired(builder, map, arr, slot);
                 break;
             case ArrowExtractionMode.Utf8:
                 EmitUtf8(builder, prop, arr, slot);
@@ -357,10 +352,10 @@ internal static class ArrowBridgeEmitter
                 EmitBinary(builder, prop, arr, slot);
                 break;
             case ArrowExtractionMode.Convert when !prop.IsNullable:
-                EmitConvertRequired(builder, map, arr, prop.Name, slot);
+                EmitConvertRequired(builder, map, arr, slot);
                 break;
             default:
-                EmitPackedNullable(builder, map, arr, prop.Name, slot);
+                EmitPackedNullable(builder, map, arr, slot);
                 break;
         }
     }
@@ -409,7 +404,7 @@ internal static class ArrowBridgeEmitter
         StringBuilder builder,
         ArrowLeafMapping map,
         string arr,
-        string propertyName
+        int slot
     )
     {
         string t = map.ParquetElementType;
@@ -417,7 +412,7 @@ internal static class ArrowBridgeEmitter
             "                // Zero-copy: the Arrow value buffer is reinterpreted in place."
         );
         builder.AppendLine(
-            $"                columnarBatch.{propertyName} = ArrowFixedWidthMemory<{t}>({arr}.ValueBuffer, {arr}.Offset, count);"
+            $"                var lane_{slot} = ArrowFixedWidthMemory<{t}>({arr}.ValueBuffer, {arr}.Offset, count);"
         );
     }
 
@@ -425,7 +420,6 @@ internal static class ArrowBridgeEmitter
         StringBuilder builder,
         ArrowLeafMapping map,
         string arr,
-        string propertyName,
         int slot
     )
     {
@@ -448,7 +442,7 @@ internal static class ArrowBridgeEmitter
         builder.AppendLine("                    }");
         builder.AppendLine($"                    Fill_{slot}();");
         builder.AppendLine(
-            $"                    columnarBatch.{propertyName} = new global::System.ReadOnlyMemory<{t}>(buffer_{slot}, 0, count);"
+            $"                    var lane_{slot} = new global::System.ReadOnlyMemory<{t}>(buffer_{slot}, 0, count);"
         );
     }
 
@@ -456,7 +450,6 @@ internal static class ArrowBridgeEmitter
         StringBuilder builder,
         ArrowLeafMapping map,
         string arr,
-        string propertyName,
         int slot
     )
     {
@@ -513,10 +506,10 @@ internal static class ArrowBridgeEmitter
         builder.AppendLine("                    }");
         builder.AppendLine($"                    Pack_{slot}();");
         builder.AppendLine(
-            $"                    columnarBatch.{propertyName} = new global::System.ReadOnlyMemory<{t}>(packed_{slot}, 0, nonNullCount_{slot});"
+            $"                    var lane_{slot} = new global::System.ReadOnlyMemory<{t}>(packed_{slot}, 0, nonNullCount_{slot});"
         );
         builder.AppendLine(
-            $"                    columnarBatch.{propertyName}DefinitionLevels = new global::System.ReadOnlyMemory<int>(defLevels_{slot}, 0, count);"
+            $"                    var levels_{slot} = new global::System.ReadOnlyMemory<int>(defLevels_{slot}, 0, count);"
         );
     }
 
@@ -574,7 +567,7 @@ internal static class ArrowBridgeEmitter
         builder.AppendLine("                    }");
         builder.AppendLine($"                    Fill_{slot}();");
         builder.AppendLine(
-            $"                    columnarBatch.{prop.Name} = new global::System.ReadOnlyMemory<{element}>(buffer_{slot}, 0, count);"
+            $"                    var lane_{slot} = new global::System.ReadOnlyMemory<{element}>(buffer_{slot}, 0, count);"
         );
     }
 
@@ -613,7 +606,7 @@ internal static class ArrowBridgeEmitter
         builder.AppendLine("                    }");
         builder.AppendLine($"                    Fill_{slot}();");
         builder.AppendLine(
-            $"                    columnarBatch.{prop.Name} = new global::System.ReadOnlyMemory<{element}>(buffer_{slot}, 0, count);"
+            $"                    var lane_{slot} = new global::System.ReadOnlyMemory<{element}>(buffer_{slot}, 0, count);"
         );
     }
 
