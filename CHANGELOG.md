@@ -234,6 +234,14 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   and the rest into one namespace, and the build failed on a cascade of CS0101 errors inside
   generated files. Each colliding target now reports PARQ016, naming both types, and emits nothing.
   Found while building Arrow.SourceGenerator.
+- **Annotations on an overridden base property are no longer lost.** `[ParquetColumn]`,
+  `[ParquetDecimal]`, `[ParquetIgnore]` and the other member attributes are `Inherited = true`,
+  but an `override` replaces the base declaration during member collection and Roslyn's
+  `GetAttributes()` returns only attributes written on the override itself. An override that did
+  not repeat the annotation silently fell back to the defaults: the property's own name as the
+  column, `Decimal(38, 18)`, or a column that should have been ignored. Attribute lookup now walks
+  the overridden property; an annotation on the override still wins. Found while building
+  Arrow.SourceGenerator, which had the same gap.
 - **Coexistence of the two row-group pruning mechanisms is now pinned by a behavioural
   test** (`PredicatePushdownAndSortedLookupCoexistOnOneModel`, completes #264's coverage).
   `SortedEvent` carries both the predicate zone-map path and three sort-key binary-search
