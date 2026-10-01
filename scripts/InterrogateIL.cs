@@ -21,6 +21,7 @@ string? assemblyPath = null;
 string typeFilter = "*ParquetExtensions*";
 string outputDir = "temp/il";
 bool failOnBoxing = false;
+string? ilSourcePath = null;
 
 for (int i = 0; i < args.Length; i++)
 {
@@ -31,6 +32,9 @@ for (int i = 0; i < args.Length; i++)
             break;
         case "--assembly" when i + 1 < args.Length:
             assemblyPath = args[++i];
+            break;
+        case "--il-source" when i + 1 < args.Length:
+            ilSourcePath = args[++i];
             break;
         case "--type" when i + 1 < args.Length:
             typeFilter = args[++i];
@@ -52,29 +56,63 @@ Console.WriteLine("=============================================================
 Console.WriteLine("  Parquet.SourceGenerator - IL Interrogation & Codegen Analyzer");
 Console.WriteLine("===============================================================\n");
 
-// Ensure dotnet tools are restored
-EnsureDotnetTools();
+// Either read pre-captured IL text (used by the gate's own tests, so the detector can be
+// driven with known-good and known-bad input) or disassemble a real assembly via ilspycmd.
+bool usingIlSource = !string.IsNullOrEmpty(ilSourcePath);
+string assemblyIl;
+List<string> allClasses;
 
-// If assembly path is not provided, build the target project in Release configuration
-if (string.IsNullOrEmpty(assemblyPath))
+if (usingIlSource)
 {
-    Console.WriteLine($"🔨 Building project in Release configuration: {projectPath}...");
-    assemblyPath = BuildProject(projectPath);
+    if (!File.Exists(ilSourcePath))
+    {
+        Console.Error.WriteLine($"❌ IL source file not found: {ilSourcePath}");
+        return 1;
+    }
+
+    assemblyPath = ilSourcePath;
+    Console.WriteLine($"📄 Reading pre-captured IL from: {ilSourcePath}");
+    assemblyIl = File.ReadAllText(ilSourcePath!);
+    allClasses = ListClassesFromIl(assemblyIl);
+}
+else
+{
+    // Ensure dotnet tools are restored
+    EnsureDotnetTools();
+
+    // If assembly path is not provided, build the target project in Release configuration
+    if (string.IsNullOrEmpty(assemblyPath))
+    {
+        Console.WriteLine($"🔨 Building project in Release configuration: {projectPath}...");
+        assemblyPath = BuildProject(projectPath);
+    }
+
+    if (!File.Exists(assemblyPath))
+    {
+        Console.Error.WriteLine($"❌ Target assembly not found: {assemblyPath}");
+        return 1;
+    }
+
+    Console.WriteLine($"📦 Target assembly: {assemblyPath}");
+
+    // Discover classes in target assembly
+    Console.WriteLine("🔍 Discovering types in target assembly...");
+    allClasses = ListClasses(assemblyPath);
+
+    // Disassemble IL for target assembly once. A failed or empty disassembly is fatal: without
+    // IL there is nothing to interrogate, and a zero boxing count would be meaningless.
+    Console.WriteLine("⚡ Disassembling assembly IL...");
+    string? disassembled = DisassembleAssembly(assemblyPath);
+    if (disassembled is null)
+    {
+        return 1;
+    }
+    assemblyIl = disassembled;
 }
 
-if (!File.Exists(assemblyPath))
-{
-    Console.Error.WriteLine($"❌ Target assembly not found: {assemblyPath}");
-    return 1;
-}
-
-Console.WriteLine($"📦 Target assembly: {assemblyPath}");
 Directory.CreateDirectory(outputDir);
 Console.WriteLine($"📂 Output directory for IL & decompiled artifacts: {outputDir}\n");
 
-// Discover classes in target assembly
-Console.WriteLine("🔍 Discovering types in target assembly...");
-var allClasses = ListClasses(assemblyPath);
 var matchingClasses = FilterTypes(allClasses, typeFilter);
 
 if (matchingClasses.Count == 0)
@@ -94,12 +132,9 @@ foreach (var c in matchingClasses)
 }
 Console.WriteLine();
 
-// Disassemble IL for target assembly once
-Console.WriteLine("⚡ Disassembling assembly IL...");
-string assemblyIl = DisassembleAssembly(assemblyPath);
-
 var reports = new List<TypeIlReport>();
 int totalBoxes = 0;
+int totalIlLines = 0;
 
 foreach (var typeName in matchingClasses)
 {
@@ -109,10 +144,22 @@ foreach (var typeName in matchingClasses)
         assemblyPath,
         assemblyIl,
         outputDir,
-        decompileCs: !failOnBoxing
+        decompileCs: !failOnBoxing && !usingIlSource
     );
+
+    // Positive control: a type whose IL yielded no instructions was not actually examined, so
+    // its zero boxing count proves nothing. Refuse to report it as clean.
+    if (report.IlLineCount == 0)
+    {
+        Console.Error.WriteLine(
+            $"\n❌ IL verification failed: no IL instructions recovered for {typeName}; refusing to report zero boxing."
+        );
+        return 1;
+    }
+
     reports.Add(report);
     totalBoxes += report.BoxCount;
+    totalIlLines += report.IlLineCount;
 }
 
 // Generate Markdown Summary Report
@@ -122,6 +169,11 @@ Console.WriteLine($"\n📄 Detailed report written to: {reportPath}\n");
 
 // Print Summary Table to Console
 PrintSummaryTable(reports);
+
+// Positive control evidence: an empty disassembly cannot masquerade as a clean one.
+Console.WriteLine(
+    $"\n🧪 Positive control: {totalIlLines} IL instruction(s) examined across {reports.Count} type(s)."
+);
 
 if (failOnBoxing && totalBoxes > 0)
 {
@@ -143,6 +195,9 @@ static void PrintUsage()
         "  --project <path>    Project to compile and inspect (default: test/Parquet.SourceGenerator.CLI/...)"
     );
     Console.WriteLine("  --assembly <path>   Prebuilt assembly DLL to inspect directly");
+    Console.WriteLine(
+        "  --il-source <path>  Pre-captured IL text to interrogate instead of running ilspycmd"
+    );
     Console.WriteLine(
         "  --type <filter>     Type name pattern to match (default: *ParquetExtensions*)"
     );
@@ -242,16 +297,45 @@ static List<string> FilterTypes(List<string> types, string filterPattern)
         .ToList();
 }
 
-static string DisassembleAssembly(string assemblyFile)
+// Returns null when disassembly did not produce usable IL. Callers must treat that as fatal:
+// an empty disassembly yields zero boxing matches, which is indistinguishable from clean code.
+static string? DisassembleAssembly(string assemblyFile)
 {
     var (exitCode, stdout, stderr) = RunDotnet($"tool run ilspycmd -il \"{assemblyFile}\"");
     if (exitCode != 0)
     {
-        Console.Error.WriteLine($"Warning: Failed to disassemble assembly via ilspycmd:\n{stderr}");
-        return string.Empty;
+        Console.Error.WriteLine(
+            $"❌ ilspycmd failed to disassemble '{assemblyFile}' (exit code {exitCode}):\n{stderr}"
+        );
+        return null;
+    }
+    if (string.IsNullOrWhiteSpace(stdout))
+    {
+        Console.Error.WriteLine(
+            $"❌ ilspycmd produced no IL output for '{assemblyFile}'; refusing to interrogate an empty disassembly."
+        );
+        return null;
     }
     return stdout;
 }
+
+// Recovers type names from a pre-captured IL listing, mirroring what `ilspycmd -l c` reports.
+static List<string> ListClassesFromIl(string il)
+{
+    return ClassDeclarations(il.Split(['\r', '\n'])).Select(d => d.Path).ToList();
+}
+
+// Counts disassembled instructions ('IL_xxxx:' prefixed lines). Used as the gate's positive
+// control: zero instructions means nothing was examined, not that nothing was found.
+static int CountIlLines(string il) =>
+    Regex
+        .Matches(
+            il,
+            @"^\s*IL_[0-9a-fA-F]+:",
+            RegexOptions.Multiline | RegexOptions.ExplicitCapture,
+            TimeSpan.FromSeconds(2)
+        )
+        .Count;
 
 static TypeIlReport InterrogateType(
     string typeName,
@@ -284,8 +368,12 @@ static TypeIlReport InterrogateType(
 
     // Filter IL content for this specific class block
     string classIl = ExtractClassIl(assemblyIl, typeName);
-    if (string.IsNullOrWhiteSpace(classIl))
+    bool classIlExtracted = !string.IsNullOrWhiteSpace(classIl);
+    if (!classIlExtracted)
     {
+        // Still scan the whole listing for boxing so nothing is hidden, but the positive control
+        // below is scoped to the extracted type: another type's instructions are not evidence
+        // that this one was examined.
         classIl = assemblyIl;
     }
     File.WriteAllText(ilPath, classIl);
@@ -323,8 +411,83 @@ static TypeIlReport InterrogateType(
         boxingMatches.Count,
         callvirtMatches.Count,
         newobjMatches.Count,
+        classIlExtracted ? CountIlLines(classIl) : 0,
         boxingDetails
     );
+}
+
+// Finds every `.class` declaration in an IL listing and the full path ilspycmd reports for it.
+// ilspycmd lists a nested type as `Outer+Inner`, but the IL declares it by simple name
+// (`.class nested ... Inner`) inside its enclosing type's braces. The path is rebuilt by tracking
+// which type blocks enclose each declaration, so two outer types that nest a type with the same
+// simple name stay distinct.
+static List<(int LineIndex, string Path)> ClassDeclarations(string[] lines)
+{
+    var result = new List<(int LineIndex, string Path)>();
+    var enclosing = new List<(string Name, int DepthBefore, bool Opened)>();
+    int depth = 0;
+
+    for (int i = 0; i < lines.Length; i++)
+    {
+        var line = lines[i];
+        var trimmed = line.Trim();
+        if (trimmed.StartsWith(".class ", StringComparison.Ordinal))
+        {
+            var name = DeclaredTypeName(trimmed)?.Trim('\'');
+            if (!string.IsNullOrEmpty(name))
+            {
+                result.Add((i, string.Join('+', enclosing.Select(e => e.Name).Append(name))));
+                enclosing.Add((name, depth, false));
+            }
+        }
+
+        var (opens, closes) = BraceCounts(line);
+        depth += opens - closes;
+        for (int e = enclosing.Count - 1; e >= 0; e--)
+        {
+            var scope = enclosing[e];
+            // Record the opening before applying the closing, so a block that opens and closes
+            // on one line (`{}`) is removed in the same pass instead of swallowing its siblings.
+            if (!scope.Opened && opens > 0)
+            {
+                scope = scope with { Opened = true };
+                enclosing[e] = scope;
+            }
+
+            if (scope.Opened && depth <= scope.DepthBefore)
+            {
+                enclosing.RemoveAt(e);
+            }
+        }
+    }
+
+    return result;
+}
+
+// The name a `.class` line declares: its last token, with any generic parameter list
+// (`Pair`2<T, U>`) dropped. A '<' inside a single-quoted name is part of the name, not a generic
+// list: compiler-generated types are declared as '<ReadAsync>d__53'.
+static string? DeclaredTypeName(string classLine)
+{
+    bool inQuote = false;
+    int genericStart = -1;
+    for (int i = 0; i < classLine.Length; i++)
+    {
+        if (classLine[i] == '\'')
+        {
+            inQuote = !inQuote;
+        }
+        else if (classLine[i] == '<' && !inQuote)
+        {
+            genericStart = i;
+            break;
+        }
+    }
+
+    var declaration = genericStart >= 0 ? classLine[..genericStart] : classLine;
+    return declaration
+        .Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        .LastOrDefault(t => !string.Equals(t, "{", StringComparison.Ordinal));
 }
 
 static string ExtractClassIl(string fullIl, string typeName)
@@ -334,35 +497,72 @@ static string ExtractClassIl(string fullIl, string typeName)
     bool insideClass = false;
     int braceDepth = 0;
 
-    foreach (var line in lines)
+    // Compare the complete path, never a substring or a bare simple name: another type's
+    // instructions must not stand in for the requested type's.
+    var declaration = ClassDeclarations(lines)
+        .Where(d => string.Equals(d.Path, typeName, StringComparison.Ordinal))
+        .Select(d => (int?)d.LineIndex)
+        .FirstOrDefault();
+    if (declaration is null)
     {
+        return string.Empty;
+    }
+
+    for (int i = declaration.Value; i < lines.Length; i++)
+    {
+        var line = lines[i];
         if (!insideClass)
         {
-            if (
-                line.StartsWith(".class ", StringComparison.Ordinal)
-                && line.Contains(typeName, StringComparison.Ordinal)
-            )
-            {
-                insideClass = true;
-                sb.AppendLine(line);
-                if (line.Contains('{'))
-                    braceDepth++;
-            }
+            insideClass = true;
+            sb.AppendLine(line);
+            if (BraceCounts(line).Opens > 0)
+                braceDepth++;
         }
         else
         {
             sb.AppendLine(line);
-            braceDepth += line.Count(c => c == '{');
-            braceDepth -= line.Count(c => c == '}');
+            var (opens, closes) = BraceCounts(line);
+            braceDepth += opens - closes;
 
-            if (braceDepth <= 0 && line.Contains('}'))
+            if (braceDepth <= 0 && closes > 0)
             {
                 break;
             }
         }
     }
 
-    return sb.Length > 0 ? sb.ToString() : fullIl;
+    return sb.ToString();
+}
+
+// Counts the braces that structure the listing, ignoring any inside a string literal (`ldstr " { "`)
+// or a trailing `//` comment, which would otherwise unbalance the block tracking.
+static (int Opens, int Closes) BraceCounts(string line)
+{
+    int opens = 0;
+    int closes = 0;
+    bool inString = false;
+    for (int i = 0; i < line.Length; i++)
+    {
+        char c = line[i];
+        if (inString)
+        {
+            if (c == '\\')
+                i++;
+            else if (c == '"')
+                inString = false;
+            continue;
+        }
+
+        if (c == '"')
+            inString = true;
+        else if (c == '/' && i + 1 < line.Length && line[i + 1] == '/')
+            break;
+        else if (c == '{')
+            opens++;
+        else if (c == '}')
+            closes++;
+    }
+    return (opens, closes);
 }
 
 static void PrintSummaryTable(List<TypeIlReport> reports)
@@ -371,11 +571,12 @@ static void PrintSummaryTable(List<TypeIlReport> reports)
     Console.WriteLine(
         string.Format(
             CultureInfo.InvariantCulture,
-            "{0,-45} | {1,5} | {2,8} | {3,8}",
+            "{0,-45} | {1,5} | {2,8} | {3,8} | {4,8}",
             "Type Name",
             "Box",
             "Callvirt",
-            "HeapAlloc"
+            "HeapAlloc",
+            "IL Lines"
         )
     );
     Console.WriteLine("-----------------------------------------------------------------------");
@@ -386,11 +587,12 @@ static void PrintSummaryTable(List<TypeIlReport> reports)
         Console.WriteLine(
             string.Format(
                 CultureInfo.InvariantCulture,
-                "{0,-45} | {1,5} | {2,8} | {3,8}",
+                "{0,-45} | {1,5} | {2,8} | {3,8} | {4,8}",
                 shortName,
                 r.BoxCount,
                 r.CallvirtCount,
-                r.HeapAllocCount
+                r.HeapAllocCount,
+                r.IlLineCount
             )
         );
     }
@@ -416,14 +618,14 @@ static void GenerateMarkdownReport(
 
     sb.AppendLine("## Summary Table\n");
     sb.AppendLine(
-        "| Type Name | `box` Opcodes | `callvirt` Calls | `newobj`/`newarr` Allocations |"
+        "| Type Name | `box` Opcodes | `callvirt` Calls | `newobj`/`newarr` Allocations | IL Instructions Examined |"
     );
-    sb.AppendLine("| :--- | :---: | :---: | :---: |");
+    sb.AppendLine("| :--- | :---: | :---: | :---: | :---: |");
 
     foreach (var r in reports)
     {
         sb.AppendLine(
-            $"| `{r.TypeName}` | {r.BoxCount} | {r.CallvirtCount} | {r.HeapAllocCount} |"
+            $"| `{r.TypeName}` | {r.BoxCount} | {r.CallvirtCount} | {r.HeapAllocCount} | {r.IlLineCount} |"
         );
     }
 
@@ -454,7 +656,7 @@ static void GenerateMarkdownReport(
         else
         {
             sb.AppendLine(
-                "\n> [!NOTE]\n> Zero boxing operations (`box`) detected. Value type fast-paths preserved."
+                $"\n> [!NOTE]\n> Zero boxing operations (`box`) detected across {r.IlLineCount} examined IL instruction(s). Value type fast-paths preserved."
             );
         }
         sb.AppendLine();
@@ -517,5 +719,6 @@ sealed record TypeIlReport(
     int BoxCount,
     int CallvirtCount,
     int HeapAllocCount,
+    int IlLineCount,
     List<string> BoxingDetails
 );
