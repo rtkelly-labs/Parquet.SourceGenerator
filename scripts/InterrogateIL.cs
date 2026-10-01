@@ -322,22 +322,7 @@ static string? DisassembleAssembly(string assemblyFile)
 // Recovers type names from a pre-captured IL listing, mirroring what `ilspycmd -l c` reports.
 static List<string> ListClassesFromIl(string il)
 {
-    var list = new List<string>();
-    foreach (var rawLine in il.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
-    {
-        var line = rawLine.Trim();
-        if (!line.StartsWith(".class ", StringComparison.Ordinal))
-        {
-            continue;
-        }
-
-        var name = DeclaredTypeName(line);
-        if (!string.IsNullOrEmpty(name))
-        {
-            list.Add(name);
-        }
-    }
-    return list;
+    return ClassDeclarations(il.Split(['\r', '\n'])).Select(d => d.Path).ToList();
 }
 
 // Counts disassembled instructions ('IL_xxxx:' prefixed lines). Used as the gate's positive
@@ -431,34 +416,48 @@ static TypeIlReport InterrogateType(
     );
 }
 
-// Matches the (possibly indented) `.class` line that declares `typeName`. ilspycmd lists a nested
-// type as `Outer+Inner`, but its IL declares it by simple name (`.class nested ... Inner`), so a
-// nested name is matched on that simple name. The first match wins if two outer types nest a type
-// with the same simple name.
-static bool IsClassDeclarationFor(string line, string typeName)
+// Finds every `.class` declaration in an IL listing and the full path ilspycmd reports for it.
+// ilspycmd lists a nested type as `Outer+Inner`, but the IL declares it by simple name
+// (`.class nested ... Inner`) inside its enclosing type's braces. The path is rebuilt by tracking
+// which type blocks enclose each declaration, so two outer types that nest a type with the same
+// simple name stay distinct.
+static List<(int LineIndex, string Path)> ClassDeclarations(string[] lines)
 {
-    var trimmed = line.Trim();
-    if (!trimmed.StartsWith(".class ", StringComparison.Ordinal))
+    var result = new List<(int LineIndex, string Path)>();
+    var enclosing = new List<(string Name, int DepthBefore, bool Opened)>();
+    int depth = 0;
+
+    for (int i = 0; i < lines.Length; i++)
     {
-        return false;
+        var line = lines[i];
+        var trimmed = line.Trim();
+        if (trimmed.StartsWith(".class ", StringComparison.Ordinal))
+        {
+            var name = DeclaredTypeName(trimmed)?.Trim('\'');
+            if (!string.IsNullOrEmpty(name))
+            {
+                result.Add((i, string.Join('+', enclosing.Select(e => e.Name).Append(name))));
+                enclosing.Add((name, depth, false));
+            }
+        }
+
+        var (opens, closes) = BraceCounts(line);
+        depth += opens - closes;
+        for (int e = enclosing.Count - 1; e >= 0; e--)
+        {
+            var scope = enclosing[e];
+            if (!scope.Opened && depth > scope.DepthBefore)
+            {
+                enclosing[e] = scope with { Opened = true };
+            }
+            else if (scope.Opened && depth <= scope.DepthBefore)
+            {
+                enclosing.RemoveAt(e);
+            }
+        }
     }
 
-    int plus = typeName.LastIndexOf('+');
-    if (plus < 0)
-    {
-        return trimmed.Contains(typeName, StringComparison.Ordinal);
-    }
-
-    if (!trimmed.Contains(" nested ", StringComparison.Ordinal))
-    {
-        return false;
-    }
-
-    return string.Equals(
-        DeclaredTypeName(trimmed)?.Trim('\''),
-        typeName[(plus + 1)..],
-        StringComparison.Ordinal
-    );
+    return result;
 }
 
 // The name a `.class` line declares: its last token, with any generic parameter list
@@ -494,25 +493,34 @@ static string ExtractClassIl(string fullIl, string typeName)
     bool insideClass = false;
     int braceDepth = 0;
 
-    foreach (var line in lines)
+    // Compare the complete path, never a substring or a bare simple name: another type's
+    // instructions must not stand in for the requested type's.
+    var declaration = ClassDeclarations(lines)
+        .Where(d => string.Equals(d.Path, typeName, StringComparison.Ordinal))
+        .Select(d => (int?)d.LineIndex)
+        .FirstOrDefault();
+    if (declaration is null)
     {
+        return string.Empty;
+    }
+
+    for (int i = declaration.Value; i < lines.Length; i++)
+    {
+        var line = lines[i];
         if (!insideClass)
         {
-            if (IsClassDeclarationFor(line, typeName))
-            {
-                insideClass = true;
-                sb.AppendLine(line);
-                if (line.Contains('{'))
-                    braceDepth++;
-            }
+            insideClass = true;
+            sb.AppendLine(line);
+            if (BraceCounts(line).Opens > 0)
+                braceDepth++;
         }
         else
         {
             sb.AppendLine(line);
-            braceDepth += line.Count(c => c == '{');
-            braceDepth -= line.Count(c => c == '}');
+            var (opens, closes) = BraceCounts(line);
+            braceDepth += opens - closes;
 
-            if (braceDepth <= 0 && line.Contains('}'))
+            if (braceDepth <= 0 && closes > 0)
             {
                 break;
             }
@@ -520,6 +528,37 @@ static string ExtractClassIl(string fullIl, string typeName)
     }
 
     return sb.ToString();
+}
+
+// Counts the braces that structure the listing, ignoring any inside a string literal (`ldstr " { "`)
+// or a trailing `//` comment, which would otherwise unbalance the block tracking.
+static (int Opens, int Closes) BraceCounts(string line)
+{
+    int opens = 0;
+    int closes = 0;
+    bool inString = false;
+    for (int i = 0; i < line.Length; i++)
+    {
+        char c = line[i];
+        if (inString)
+        {
+            if (c == '\\')
+                i++;
+            else if (c == '"')
+                inString = false;
+            continue;
+        }
+
+        if (c == '"')
+            inString = true;
+        else if (c == '/' && i + 1 < line.Length && line[i + 1] == '/')
+            break;
+        else if (c == '{')
+            opens++;
+        else if (c == '}')
+            closes++;
+    }
+    return (opens, closes);
 }
 
 static void PrintSummaryTable(List<TypeIlReport> reports)

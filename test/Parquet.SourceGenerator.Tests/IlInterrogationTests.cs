@@ -168,6 +168,46 @@ public class IlInterrogationTests
 
     [Fact]
     [Trait("Category", "Integration")]
+    public async Task GateKeepsSameNamedNestedTypesOfDifferentOuterTypesApartAsync()
+    {
+        // Both outer types nest a type called Inner. OuterA+Inner is instructionless and
+        // OuterB+Inner is busy: asking for one must never be answered with the other.
+        const string il = """
+            .class public auto ansi sealed Sample.OuterA
+            {
+                .class nested public auto ansi sealed Inner
+                {
+                }
+            }
+            .class public auto ansi sealed Sample.OuterB
+            {
+                .class nested public auto ansi sealed Inner
+                {
+                    .method public hidebysig static int32 Add(int32 a, int32 b) cil managed
+                    {
+                        IL_0000: ldarg.0
+                        IL_0001: ldarg.1
+                        IL_0002: add
+                        IL_0003: ret
+                    }
+                }
+            }
+            """;
+
+        var (emptyExit, _, emptyStderr) = await RunAgainstIlAsync(il, "Sample.OuterA+Inner");
+        var (busyExit, busyStdout, busyStderr) = await RunAgainstIlAsync(il, "Sample.OuterB+Inner");
+
+        emptyExit.ShouldBe(1, $"OuterA+Inner borrowed OuterB+Inner's IL.\nStderr:\n{emptyStderr}");
+        emptyStderr.ShouldContain("refusing to report zero boxing");
+        busyExit.ShouldBe(
+            0,
+            $"OuterB+Inner was not found.\nStdout:\n{busyStdout}\nStderr:\n{busyStderr}"
+        );
+        ExtractExaminedInstructionCount(busyStdout).ShouldBe(4);
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
     public async Task GateMatchesGenericTypesInCapturedIlAsync()
     {
         const string il = """
