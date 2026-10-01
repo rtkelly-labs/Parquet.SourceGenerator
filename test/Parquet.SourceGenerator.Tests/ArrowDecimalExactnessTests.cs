@@ -56,7 +56,7 @@ public sealed class ArrowDecimalExactnessTests
     }
 
     [Fact]
-    public async Task ValueWiderThanSystemDecimalIsRejectedNotRounded()
+    public async Task ValueWiderThanSystemDecimalIsRejectedNotRoundedAsync()
     {
         var builder = new Decimal128Array.Builder(Wide);
         builder.Append(SqlDecimal.Parse("99999999999999999999.999999999999999999"));
@@ -78,7 +78,10 @@ public sealed class ArrowDecimalExactnessTests
     [InlineData("10000000000000000000.000000000000000000", "10000000000000000000")]
     [InlineData("-12345678901234567890.000000000000000000", "-12345678901234567890")]
     [InlineData("12345678901234567890.123400000000000000", "12345678901234567890.1234")]
-    public async Task WideValueWithTrailingZerosIsAcceptedExactly(string stored, string expected)
+    public async Task WideValueWithTrailingZerosIsAcceptedExactlyAsync(
+        string stored,
+        string expected
+    )
     {
         var builder = new Decimal128Array.Builder(Wide);
         builder.Append(SqlDecimal.Parse(stored));
@@ -93,7 +96,7 @@ public sealed class ArrowDecimalExactnessTests
     }
 
     [Fact]
-    public async Task ValueStillTooWideAfterStrippingZerosIsRejected()
+    public async Task ValueStillTooWideAfterStrippingZerosIsRejectedAsync()
     {
         // 30 significant digits once the trailing zeros go: one more than System.Decimal holds.
         var builder = new Decimal128Array.Builder(Wide);
@@ -108,7 +111,7 @@ public sealed class ArrowDecimalExactnessTests
     }
 
     [Fact]
-    public async Task ValuesAtTheSystemDecimalLimitsRoundTripExactly()
+    public async Task ValuesAtTheSystemDecimalLimitsRoundTripExactlyAsync()
     {
         decimal max = decimal.MaxValue / 1_000_000_000_000_000_000m;
         decimal min = decimal.MinValue / 1_000_000_000_000_000_000m;
