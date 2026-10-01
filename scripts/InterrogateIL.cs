@@ -446,11 +446,15 @@ static List<(int LineIndex, string Path)> ClassDeclarations(string[] lines)
         for (int e = enclosing.Count - 1; e >= 0; e--)
         {
             var scope = enclosing[e];
-            if (!scope.Opened && depth > scope.DepthBefore)
+            // Record the opening before applying the closing, so a block that opens and closes
+            // on one line (`{}`) is removed in the same pass instead of swallowing its siblings.
+            if (!scope.Opened && opens > 0)
             {
-                enclosing[e] = scope with { Opened = true };
+                scope = scope with { Opened = true };
+                enclosing[e] = scope;
             }
-            else if (scope.Opened && depth <= scope.DepthBefore)
+
+            if (scope.Opened && depth <= scope.DepthBefore)
             {
                 enclosing.RemoveAt(e);
             }

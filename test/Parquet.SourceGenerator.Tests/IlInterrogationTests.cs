@@ -208,6 +208,31 @@ public class IlInterrogationTests
 
     [Fact]
     [Trait("Category", "Integration")]
+    public async Task GateIsNotThrownOffBySiblingThatOpensAndClosesOnOneLineAsync()
+    {
+        const string il = """
+            .class public auto ansi sealed Sample.Empty
+            {}
+            .class public auto ansi sealed Sample.Busy
+            {
+                .method public hidebysig static int32 Add(int32 a, int32 b) cil managed
+                {
+                    IL_0000: ldarg.0
+                    IL_0001: ret
+                }
+            }
+            """;
+
+        var (exitCode, stdout, stderr) = await RunAgainstIlAsync(il, "Sample.Busy");
+
+        (exitCode == 0).ShouldBeTrue(
+            $"A preceding empty type hid Sample.Busy.\nStdout:\n{stdout}\nStderr:\n{stderr}"
+        );
+        ExtractExaminedInstructionCount(stdout).ShouldBe(2);
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
     public async Task GateMatchesGenericTypesInCapturedIlAsync()
     {
         const string il = """
