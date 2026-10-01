@@ -262,6 +262,37 @@ public sealed class CiGateIntegrityTests
         program.ShouldContain("SynchronizationContextScenario.Run()");
     }
 
+    [Fact]
+    public void TheProtectedPathsCheckRunsTheBaseBranchAndNeverChecksOutThePullRequest()
+    {
+        string root = FindRepositoryRoot();
+        string workflow = Read(root, ".github", "workflows", "protected-paths.yml");
+
+        JobName(JobBlock(workflow, "protected-paths")).ShouldBe("protected-paths");
+
+        // pull_request_target hands the job a token and the base branch's copy of this file,
+        // which is what stops a fork editing its way past the check. That is only safe while no
+        // step checks out or runs the pull request's own code.
+        workflow.ShouldContain("pull_request_target:");
+        string code = CommentLine.Replace(workflow, string.Empty);
+        code.ShouldNotContain("github.event.pull_request.head.sha");
+        code.ShouldNotContain("github.event.pull_request.head.ref");
+        code.ShouldNotContain("github.head_ref");
+        code.ShouldNotContain("refs/pull/");
+        Regex.IsMatch(code, @"^\s+ref:", Options, RegexTimeout).ShouldBeFalse();
+
+        // It must fail closed: an unreadable or truncated file listing is a failure, not a pass.
+        workflow.ShouldContain("refusing to pass unchecked");
+        workflow.ShouldContain("changed_files");
+
+        // The list it reads must exist on the base branch and name something.
+        IOFile.Exists(Path.Combine(root, ".github", "protected-paths.txt")).ShouldBeTrue();
+        string list = Read(root, ".github", "protected-paths.txt");
+        list.Split('\n')
+            .Count(l => l.Trim().Length > 0 && !l.TrimStart().StartsWith('#'))
+            .ShouldBeGreaterThan(0);
+    }
+
     private const string GoodAggregate = """
           build:
             name: build

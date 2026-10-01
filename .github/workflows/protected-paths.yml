@@ -39,6 +39,7 @@ jobs:
           REPO: ${{ github.repository }}
           HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          CHANGED_FILES: ${{ github.event.pull_request.changed_files }}
         run: |
           set -euo pipefail
           if [ "$HEAD_REPO" = "$REPO" ]; then
@@ -47,9 +48,31 @@ jobs:
           fi
 
           mapfile -t entries < <(grep -vE '^\s*(#|$)' .github/protected-paths.txt | sed 's/[[:space:]]*$//')
+          if [ ${#entries[@]} -eq 0 ]; then
+            echo "::error::.github/protected-paths.txt lists no paths, so nothing would be checked."
+            exit 1
+          fi
+
+          # Fail closed on the API. The call is made on its own, outside a process substitution,
+          # because `mapfile < <(cmd)` returns success when cmd fails and would leave `files`
+          # empty, which reads below as "nothing protected changed".
+          listing=$(gh api --paginate "repos/$REPO/pulls/$PR_NUMBER/files" \
+            --jq '.[] | [.filename, (.previous_filename // "")] | @tsv') || {
+            echo "::error::Could not list the files of pull request #$PR_NUMBER; refusing to pass unchecked."
+            exit 1
+          }
+
+          # The endpoint returns at most 3,000 files however many pages are read, so a larger pull
+          # request cannot be verified: refuse it rather than pass on a truncated list. The count
+          # is also checked against the pull request's own figure, so a short listing fails too.
+          listed=$(printf '%s\n' "$listing" | grep -c . || true)
+          if [ "$CHANGED_FILES" -gt 3000 ] || [ "$listed" -ne "$CHANGED_FILES" ]; then
+            echo "::error::Listed $listed of $CHANGED_FILES changed files (the API returns at most 3000); the check cannot see every path, so it fails."
+            exit 1
+          fi
+
           # A rename counts on both sides: moving a protected file out is a change to it.
-          mapfile -t files < <(gh api --paginate "repos/$REPO/pulls/$PR_NUMBER/files" \
-            --jq '.[] | .filename, (.previous_filename // empty)' | sort -u)
+          mapfile -t files < <(printf '%s\n' "$listing" | tr '\t' '\n' | grep . | sort -u)
 
           hits=()
           for file in "${files[@]}"; do
