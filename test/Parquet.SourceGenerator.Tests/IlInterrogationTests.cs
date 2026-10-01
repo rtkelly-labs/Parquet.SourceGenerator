@@ -80,7 +80,7 @@ public class IlInterrogationTests
 
     [Fact]
     [Trait("Category", "Integration")]
-    public async Task GateFailsWhenInterrogatedIlContainsBoxing()
+    public async Task GateFailsWhenInterrogatedIlContainsBoxingAsync()
     {
         var (exitCode, stdout, stderr) = await RunAgainstIlAsync(
             BoxingIl,
@@ -97,7 +97,7 @@ public class IlInterrogationTests
 
     [Fact]
     [Trait("Category", "Integration")]
-    public async Task GateFailsWhenNoIlInstructionsWereRecovered()
+    public async Task GateFailsWhenNoIlInstructionsWereRecoveredAsync()
     {
         var (exitCode, stdout, stderr) = await RunAgainstIlAsync(
             InstructionlessIl,
@@ -114,7 +114,7 @@ public class IlInterrogationTests
 
     [Fact]
     [Trait("Category", "Integration")]
-    public async Task GateReportsNonZeroInstructionCountForCleanIl()
+    public async Task GateReportsNonZeroInstructionCountForCleanIlAsync()
     {
         var (exitCode, stdout, stderr) = await RunAgainstIlAsync(
             CleanIl,
@@ -130,6 +130,65 @@ public class IlInterrogationTests
                 0,
                 $"The gate passed without reporting any examined instructions.\nStdout:\n{stdout}"
             );
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task GateFailsWhenOnlyAnotherIndentedTypeHasInstructionsAsync()
+    {
+        // The target is instructionless; a sibling type in the same (indented) listing has
+        // instructions. Those must not count as evidence that the target was examined.
+        const string il = """
+            .class public auto ansi sealed Sample.Outer
+            {
+                .class nested public auto ansi sealed Sample.EmptyTarget
+                {
+                }
+                .class nested public auto ansi sealed Sample.Busy
+                {
+                    .method public hidebysig static int32 Add(int32 a, int32 b) cil managed
+                    {
+                        IL_0000: ldarg.0
+                        IL_0001: ldarg.1
+                        IL_0002: add
+                        IL_0003: ret
+                    }
+                }
+            }
+            """;
+
+        var (exitCode, stdout, stderr) = await RunAgainstIlAsync(il, "*EmptyTarget*");
+
+        exitCode.ShouldBe(
+            1,
+            $"The gate counted another type's instructions as evidence.\nStdout:\n{stdout}\nStderr:\n{stderr}"
+        );
+        stderr.ShouldContain("refusing to report zero boxing");
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task GateMatchesGenericTypesInCapturedIlAsync()
+    {
+        const string il = """
+            .class public auto ansi beforefieldinit Sample.Pair`2<T, U>
+                extends [System.Runtime]System.Object
+            {
+                .method public hidebysig instance !T First() cil managed
+                {
+                    IL_0000: ldarg.0
+                    IL_0001: ldfld !0 class Sample.Pair`2<!T, !U>::first
+                    IL_0006: ret
+                }
+            } // end of class Sample.Pair`2
+            """;
+
+        var (exitCode, stdout, stderr) = await RunAgainstIlAsync(il, "Sample.Pair*");
+
+        (exitCode == 0).ShouldBeTrue(
+            $"A generic type declaration was not matched by name.\nStdout:\n{stdout}\nStderr:\n{stderr}"
+        );
+        ExtractExaminedInstructionCount(stdout).ShouldBeGreaterThan(0);
     }
 
     private static async Task<(int ExitCode, string Stdout, string Stderr)> RunAgainstIlAsync(
@@ -194,7 +253,14 @@ public class IlInterrogationTests
         match.Success.ShouldBeTrue(
             $"InterrogateIL.cs did not report a positive control count.\nStdout:\n{stdout}"
         );
-        return int.Parse(match.Groups["count"].Value, CultureInfo.InvariantCulture);
+        int.TryParse(
+                match.Groups["count"].Value,
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out int count
+            )
+            .ShouldBeTrue("The positive control count was not a valid integer.");
+        return count;
     }
 
     private static string FindRepoRoot()

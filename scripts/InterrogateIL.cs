@@ -331,7 +331,12 @@ static List<string> ListClassesFromIl(string il)
             continue;
         }
 
-        var name = line.Split(
+        // Drop a generic parameter list (`Pair`2<T, U>`) so the name is the type, not `U>`.
+        int genericStart = line.IndexOf('<', StringComparison.Ordinal);
+        var declaration = genericStart >= 0 ? line[..genericStart] : line;
+
+        var name = declaration
+            .Split(
                 [' ', '\t'],
                 StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries
             )
@@ -387,8 +392,12 @@ static TypeIlReport InterrogateType(
 
     // Filter IL content for this specific class block
     string classIl = ExtractClassIl(assemblyIl, typeName);
-    if (string.IsNullOrWhiteSpace(classIl))
+    bool classIlExtracted = !string.IsNullOrWhiteSpace(classIl);
+    if (!classIlExtracted)
     {
+        // Still scan the whole listing for boxing so nothing is hidden, but the positive control
+        // below is scoped to the extracted type: another type's instructions are not evidence
+        // that this one was examined.
         classIl = assemblyIl;
     }
     File.WriteAllText(ilPath, classIl);
@@ -426,7 +435,7 @@ static TypeIlReport InterrogateType(
         boxingMatches.Count,
         callvirtMatches.Count,
         newobjMatches.Count,
-        CountIlLines(classIl),
+        classIlExtracted ? CountIlLines(classIl) : 0,
         boxingDetails
     );
 }
@@ -443,7 +452,7 @@ static string ExtractClassIl(string fullIl, string typeName)
         if (!insideClass)
         {
             if (
-                line.StartsWith(".class ", StringComparison.Ordinal)
+                line.TrimStart().StartsWith(".class ", StringComparison.Ordinal)
                 && line.Contains(typeName, StringComparison.Ordinal)
             )
             {
@@ -466,7 +475,7 @@ static string ExtractClassIl(string fullIl, string typeName)
         }
     }
 
-    return sb.Length > 0 ? sb.ToString() : fullIl;
+    return sb.ToString();
 }
 
 static void PrintSummaryTable(List<TypeIlReport> reports)
