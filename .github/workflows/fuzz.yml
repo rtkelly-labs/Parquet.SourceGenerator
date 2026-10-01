@@ -64,6 +64,10 @@ jobs:
       - name: Restore
         run: dotnet restore Parquet.SourceGenerator.slnx
 
+      # DefaultSeedsAreDeterministicAndStable guards the per-push CI contract: with NO override the
+      # suite runs one fixed seed set. This job overrides both variables by design, so that test
+      # fails here by construction; it failed every weekly run and hid whether any real fuzz case
+      # did. It still runs, unchanged, in ci.yml on every push.
       - name: Run Property-Based Suite On Broad Seeds
         env:
           PARQUET_FUZZ_SEED: ${{ steps.seed.outputs.seed }}
@@ -71,7 +75,7 @@ jobs:
         run: |
           dotnet test test/Parquet.SourceGenerator.Tests/Parquet.SourceGenerator.Tests.csproj \
             --configuration Release \
-            --filter "FullyQualifiedName~PropertyBased" \
+            --filter "FullyQualifiedName~PropertyBased&FullyQualifiedName!~DefaultSeedsAreDeterministicAndStable" \
             --logger "trx;LogFileName=fuzz.trx"
 
       - name: Upload Minimised Failing Cases

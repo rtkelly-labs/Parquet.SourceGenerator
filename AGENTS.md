@@ -41,3 +41,8 @@
     Fix the emitter; never add a baseline entry, `NoWarn` or an `.editorconfig` downgrade. Run it
     locally with `dotnet run scripts/GeneratedCodeAnalysis.cs` after publishing the golden outputs.
     Full rule: `docs/50-GENERATED-CODE-ANALYSIS.md`.
+
+15. **CI gate matrix**: `docs/51-CI-GATE-MATRIX.md` records what each gate protects, where it
+    runs and whether a required check reaches it. A new CI job in `ci.yml` must be added to the
+    `build` aggregate's `needs` and result check (`CiGateIntegrityTests` fails otherwise), and a
+    new gate needs a positive control or an "examined N" assertion so it cannot pass on nothing.

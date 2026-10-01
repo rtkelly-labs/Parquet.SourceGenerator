@@ -6,13 +6,10 @@
         <Configuration>
           <Format>cobertura</Format>
           <!--
-            Coverage is collected and reported, but not yet gated.
-
-            A hard 80% line+branch threshold has to be met by every pull request independently,
-            so it blocks incremental work: a small, correct fix that adds a branch fails the gate
-            on arithmetic rather than on merit. Restore a threshold once the suite covers the
-            emitter, and ratchet it upward from the measured baseline rather than starting at a
-            round number nothing has been checked against.
+            Coverage is collected here and gated afterwards: ci.yml runs scripts/CoverageSummary.cs
+            with minimum line rate 85.0 and branch rate 70.0 over the report this produces, and that step
+            fails the `test` job (and so the required `build` check). See
+            docs/51-CI-GATE-MATRIX.md for the known limits of that gate.
           -->
           <Exclude>[BenchmarkSummaryGenerator]*,[Parquet.SourceGenerator.Tests]*,[Parquet.SourceGenerator.CLI]*,[Parquet.SourceGenerator.AotTest]*,[Parquet.SourceGenerator.SampleAot]*</Exclude>
           <ExcludeByAttribute>GeneratedCodeAttribute,CompilerGeneratedAttribute</ExcludeByAttribute>
