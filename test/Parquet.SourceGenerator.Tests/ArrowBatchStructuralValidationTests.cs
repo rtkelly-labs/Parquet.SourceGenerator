@@ -54,7 +54,7 @@ public sealed class ArrowBatchStructuralValidationTests
     }
 
     [Fact]
-    public async Task DuplicateFieldNameIsAmbiguousNotFirstMatch()
+    public async Task DuplicateFieldNameIsAmbiguousNotFirstMatchAsync()
     {
         var schema = new Apache.Arrow.Schema.Builder()
             .Field(f => f.Name("id").DataType(Int64Type.Default).Nullable(false))
@@ -74,7 +74,7 @@ public sealed class ArrowBatchStructuralValidationTests
     }
 
     [Fact]
-    public async Task SchemaThatDisagreesWithItsColumnIsRejectedNotCast()
+    public async Task SchemaThatDisagreesWithItsColumnIsRejectedNotCastAsync()
     {
         // The schema claims Int64 for "id" but the column is a string array.
         var schema = new Apache.Arrow.Schema.Builder()
@@ -90,7 +90,7 @@ public sealed class ArrowBatchStructuralValidationTests
     }
 
     [Fact]
-    public async Task ArrayWhoseTypeParametersDisagreeWithTheSchemaIsRejected()
+    public async Task ArrayWhoseTypeParametersDisagreeWithTheSchemaIsRejectedAsync()
     {
         // Same type id, different parameters: the schema claims the mapped Decimal128(38, 18) but
         // the array holds Decimal128(38, 4). Decoding it at scale 18 would silently shift every
@@ -117,7 +117,7 @@ public sealed class ArrowBatchStructuralValidationTests
     }
 
     [Fact]
-    public async Task NullCountThatDisagreesWithTheValidityBitmapIsRejected()
+    public async Task NullCountThatDisagreesWithTheValidityBitmapIsRejectedAsync()
     {
         // "id" is required. Bit 0 unset (row 0 null), bit 1 set, yet the array claims no nulls:
         // trusting NullCount would write row 0's undefined slot as a value.
@@ -140,7 +140,7 @@ public sealed class ArrowBatchStructuralValidationTests
     }
 
     [Fact]
-    public async Task MalformedOffsetsAreRejectedBeforeAnyValueIsSliced()
+    public async Task MalformedOffsetsAreRejectedBeforeAnyValueIsSlicedAsync()
     {
         // Offsets 0, 5, 2: decreasing, and 5 runs past a 3-byte value buffer.
         var offsets = new ArrowBuffer.Builder<int>().Append(0).Append(5).Append(2).Build();

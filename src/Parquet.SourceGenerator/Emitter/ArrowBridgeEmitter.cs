@@ -277,16 +277,16 @@ internal static class ArrowBridgeEmitter
     }
 
     /// <summary>
-    /// Helpers for the structural checks validation performs before any column is cast or sliced.
-    /// Offset soundness is emitted only for models with a Utf8 or Binary column.
-    /// </summary>
-    /// <summary>
     /// Rewrites a parameter check (or its message) written against the schema field's
     /// <c>dataType</c> to read the array's own <c>column.Data.DataType</c> instead.
     /// </summary>
     private static string OnArrayType(string expression) =>
         expression.Replace(")dataType)", ")column.Data.DataType)");
 
+    /// <summary>
+    /// Helpers for the structural checks validation performs before any column is cast or sliced.
+    /// Offset soundness is emitted only for models with a Utf8 or Binary column.
+    /// </summary>
     private static void EmitStructuralHelpers(StringBuilder builder, TargetClassModel model)
     {
         builder.AppendLine("    private static int ArrowFieldOccurrences(");
