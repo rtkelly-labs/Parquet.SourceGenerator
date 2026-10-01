@@ -637,6 +637,10 @@ internal static class TargetParser
         return name is not null && Array.IndexOf(shortNames, name) >= 0;
     }
 
+    /// <summary>
+    /// Finds a member attribute by name. For a property override, falls back to the nearest
+    /// overridden declaration.
+    /// </summary>
     /// <remarks>
     /// For a property override, falls back to the nearest overridden declaration. The member
     /// attributes are <c>Inherited = true</c>, but <c>GetAttributes()</c> returns only those
