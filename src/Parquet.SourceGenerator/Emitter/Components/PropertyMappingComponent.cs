@@ -97,11 +97,11 @@ internal static class PropertyMappingComponent
             PropertyModel prop = model.Properties[0];
             builder.AppendLine($"{indent}#if NET6_0_OR_GREATER");
             builder.AppendLine(
-                $"{indent}if (global::System.Runtime.CompilerServices.Unsafe.SizeOf<{model.ClassName}>() == global::System.Runtime.CompilerServices.Unsafe.SizeOf<{elemType}>())"
+                $"{indent}if (global::System.Runtime.CompilerServices.Unsafe.SizeOf<{EmittedText.Ident(model.ClassName)}>() == global::System.Runtime.CompilerServices.Unsafe.SizeOf<{elemType}>())"
             );
             builder.AppendLine($"{indent}{{");
             builder.AppendLine(
-                $"{indent}    global::System.Runtime.InteropServices.MemoryMarshal.Cast<{elemType}, {model.ClassName}>({bufferPrefix}0.AsSpan(0, {rowCountVar})).CopyTo({targetArrayVar}.AsSpan({startOffsetVar}, {rowCountVar}));"
+                $"{indent}    global::System.Runtime.InteropServices.MemoryMarshal.Cast<{elemType}, {EmittedText.Ident(model.ClassName)}>({bufferPrefix}0.AsSpan(0, {rowCountVar})).CopyTo({targetArrayVar}.AsSpan({startOffsetVar}, {rowCountVar}));"
             );
             builder.AppendLine($"{indent}}}");
             builder.AppendLine($"{indent}else");
@@ -111,7 +111,7 @@ internal static class PropertyMappingComponent
             );
             builder.AppendLine($"{indent}    {{");
             builder.AppendLine(
-                $"{indent}        {targetArrayVar}[{startOffsetVar} + {indexVar}] = new {model.ClassName} {{ {prop.Name} = {bufferPrefix}0[{indexVar}] }};"
+                $"{indent}        {targetArrayVar}[{startOffsetVar} + {indexVar}] = new {EmittedText.Ident(model.ClassName)} {{ {EmittedText.Ident(prop.Name)} = {bufferPrefix}0[{indexVar}] }};"
             );
             builder.AppendLine($"{indent}    }}");
             builder.AppendLine($"{indent}}}");
@@ -121,7 +121,7 @@ internal static class PropertyMappingComponent
             );
             builder.AppendLine($"{indent}{{");
             builder.AppendLine(
-                $"{indent}    {targetArrayVar}[{startOffsetVar} + {indexVar}] = new {model.ClassName} {{ {prop.Name} = {bufferPrefix}0[{indexVar}] }};"
+                $"{indent}    {targetArrayVar}[{startOffsetVar} + {indexVar}] = new {EmittedText.Ident(model.ClassName)} {{ {EmittedText.Ident(prop.Name)} = {bufferPrefix}0[{indexVar}] }};"
             );
             builder.AppendLine($"{indent}}}");
             builder.AppendLine($"{indent}#endif");
@@ -266,14 +266,14 @@ internal static class PropertyMappingComponent
             ? $"{targetArray}[{indexVar}]"
             : $"{targetArray}[{offsetExpr} + {indexVar}]";
 
-        builder.AppendLine($"{indent}{targetSlot} = new {model.ClassName}");
+        builder.AppendLine($"{indent}{targetSlot} = new {EmittedText.Ident(model.ClassName)}");
         builder.AppendLine($"{indent}{{");
 
         for (int i = 0; i < model.Properties.Length; i++)
         {
             PropertyModel prop = model.Properties[i];
             string readExpr = GetReadExpression(prop, $"{bufferPrefix}{i}[{indexVar}]");
-            builder.AppendLine($"{indent}    {prop.Name} = {readExpr},");
+            builder.AppendLine($"{indent}    {EmittedText.Ident(prop.Name)} = {readExpr},");
         }
 
         builder.AppendLine($"{indent}}};");
@@ -298,7 +298,7 @@ internal static class PropertyMappingComponent
             PropertyModel prop = model.Properties[p];
             string writeExpr = GetWriteExpression(
                 prop,
-                $"{itemVar}.{prop.Name}",
+                $"{itemVar}.{EmittedText.Ident(prop.Name)}",
                 useMemoryForTextAndBinary
             );
             builder.AppendLine($"{indent}{bufferPrefix}{p}[{indexVar}] = {writeExpr};");

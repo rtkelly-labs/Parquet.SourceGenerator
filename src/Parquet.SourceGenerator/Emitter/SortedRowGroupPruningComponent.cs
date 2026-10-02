@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Text;
+using Parquet.SourceGenerator.Emitter.Components;
 using Parquet.SourceGenerator.Emitter.Compound;
 using Parquet.SourceGenerator.Models;
 
@@ -325,7 +326,7 @@ internal static class SortedRowGroupPruningComponent
             );
             builder.AppendLine("    /// </summary>");
             builder.AppendLine(
-                $"    public static global::System.Threading.Tasks.Task<global::System.Collections.Generic.List<{model.ClassName}>> ReadParquetBy{name}Async("
+                $"    public static global::System.Threading.Tasks.Task<global::System.Collections.Generic.List<{EmittedText.Ident(model.ClassName)}>> ReadParquetBy{name}Async("
             );
             builder.AppendLine("        global::System.IO.Stream stream,");
             builder.AppendLine($"        {keyType} key,");
@@ -352,7 +353,7 @@ internal static class SortedRowGroupPruningComponent
             );
             builder.AppendLine("    /// </summary>");
             builder.AppendLine(
-                $"    public static global::System.Threading.Tasks.Task<global::System.Collections.Generic.List<{model.ClassName}>> ReadParquet{name}RangeAsync("
+                $"    public static global::System.Threading.Tasks.Task<global::System.Collections.Generic.List<{EmittedText.Ident(model.ClassName)}>> ReadParquet{name}RangeAsync("
             );
             builder.AppendLine("        global::System.IO.Stream stream,");
             builder.AppendLine($"        {keyType} inclusiveStart,");

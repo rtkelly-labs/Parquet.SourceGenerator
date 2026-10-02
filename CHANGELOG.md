@@ -268,6 +268,12 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   only for code that referenced the Attributes helpers directly.
 
 ### Fixed
+- **A property or type named after a C# keyword no longer breaks the generated code** (#376). Roslyn drops
+  the `@` from a member declared `@event`, so the model held the bare keyword and the emitters wrote
+  `item.event`, `{ event = ... }` and `new class` into generated source (CS1001, CS1525). Every
+  emitted use of a model name as a standalone identifier now goes through `EmittedText.Ident`, which
+  adds `@` to reserved and contextual keywords, and the batch parameter names use it in place of a
+  hand-kept keyword list. Names glued into a longer identifier (`{Name}DefinitionLevels`) stay raw.
 - **The generator pipeline caches value-equatable models, not a syntax context.** The main generator cached
   the `GeneratorSyntaxContext` itself, which retains a `SemanticModel` (and the compilation behind it) per
   target and has no value equality, so nothing downstream could compare as unchanged. It now parses inside

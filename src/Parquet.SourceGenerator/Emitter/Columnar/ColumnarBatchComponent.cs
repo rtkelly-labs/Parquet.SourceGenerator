@@ -38,87 +38,6 @@ namespace Parquet.SourceGenerator.Emitter.Columnar;
 /// </remarks>
 internal static class ColumnarBatchComponent
 {
-    private static readonly HashSet<string> CSharpKeywords = new(StringComparer.Ordinal)
-    {
-        "abstract",
-        "as",
-        "base",
-        "bool",
-        "break",
-        "byte",
-        "case",
-        "catch",
-        "char",
-        "checked",
-        "class",
-        "const",
-        "continue",
-        "decimal",
-        "default",
-        "delegate",
-        "do",
-        "double",
-        "else",
-        "enum",
-        "event",
-        "explicit",
-        "extern",
-        "false",
-        "finally",
-        "fixed",
-        "float",
-        "for",
-        "foreach",
-        "goto",
-        "if",
-        "implicit",
-        "in",
-        "int",
-        "interface",
-        "internal",
-        "is",
-        "lock",
-        "long",
-        "namespace",
-        "new",
-        "null",
-        "object",
-        "operator",
-        "out",
-        "override",
-        "params",
-        "private",
-        "protected",
-        "public",
-        "readonly",
-        "ref",
-        "return",
-        "sbyte",
-        "sealed",
-        "short",
-        "sizeof",
-        "stackalloc",
-        "static",
-        "string",
-        "struct",
-        "switch",
-        "this",
-        "throw",
-        "true",
-        "try",
-        "typeof",
-        "uint",
-        "ulong",
-        "unchecked",
-        "unsafe",
-        "ushort",
-        "using",
-        "virtual",
-        "void",
-        "volatile",
-        "while",
-    };
-
     /// <summary>
     /// Whether the model gets a columnar hand-off surface. Compound (struct / list / map) members
     /// are excluded — their level ladders are not expressible as flat caller-owned buffers.
@@ -349,7 +268,7 @@ internal static class ColumnarBatchComponent
             string camel =
                 char.ToLowerInvariant(name[0]).ToString(CultureInfo.InvariantCulture)
                 + name.Substring(1);
-            return CSharpKeywords.Contains(camel) ? "@" + camel : camel;
+            return EmittedText.Ident(camel);
         }
 
         private static string Unique(HashSet<string> used, string propertyName)
@@ -360,7 +279,7 @@ internal static class ColumnarBatchComponent
                 candidate += "_";
             }
 
-            return CSharpKeywords.Contains(candidate) ? "@" + candidate : candidate;
+            return EmittedText.Ident(candidate);
         }
     }
 
@@ -481,7 +400,7 @@ internal static class ColumnarBatchComponent
                     $"    /// <summary>Packed non-null values for nullable column <c>{prop.Name}</c>; length equals the number of 1s in <c>{levelsName}</c>.</summary>"
                 );
                 builder.AppendLine(
-                    $"    public {ColumnMemoryType(prop)} {prop.Name} => {members.Live}({members.LaneField(i)});"
+                    $"    public {ColumnMemoryType(prop)} {EmittedText.Ident(prop.Name)} => {members.Live}({members.LaneField(i)});"
                 );
                 builder.AppendLine();
                 builder.AppendLine(
@@ -516,7 +435,7 @@ internal static class ColumnarBatchComponent
                     );
                 }
                 builder.AppendLine(
-                    $"    public {ColumnMemoryType(prop)} {prop.Name} => {members.Live}({members.LaneField(i)});"
+                    $"    public {ColumnMemoryType(prop)} {EmittedText.Ident(prop.Name)} => {members.Live}({members.LaneField(i)});"
                 );
             }
         }
@@ -934,7 +853,7 @@ internal static class ColumnarBatchComponent
                 string nonNull = BufferPoolComponent.GetNonNullableBufferType(prop);
                 builder.AppendLine($"            await groupWriter.WriteAllPartsAsync<{nonNull}>(");
                 builder.AppendLine($"                {fieldAccess},");
-                builder.AppendLine($"                batch.{prop.Name},");
+                builder.AppendLine($"                batch.{EmittedText.Ident(prop.Name)},");
                 builder.AppendLine($"                batch.{members.Levels(i)}.Slice(0, count),");
                 builder.AppendLine("                null,");
                 builder.AppendLine(
@@ -946,7 +865,9 @@ internal static class ColumnarBatchComponent
                 string generic = ColumnElementType(prop).TrimEnd('?');
                 builder.AppendLine($"            await groupWriter.WriteAsync<{generic}>(");
                 builder.AppendLine($"                {fieldAccess},");
-                builder.AppendLine($"                batch.{prop.Name}.Slice(0, count),");
+                builder.AppendLine(
+                    $"                batch.{EmittedText.Ident(prop.Name)}.Slice(0, count),"
+                );
                 builder.AppendLine(
                     "                cancellationToken: cancellationToken).ConfigureAwait(false);"
                 );

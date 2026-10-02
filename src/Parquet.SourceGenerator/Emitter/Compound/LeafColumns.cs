@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Parquet.SourceGenerator.Emitter.Components;
 using Parquet.SourceGenerator.Models;
 
 namespace Parquet.SourceGenerator.Emitter.Compound;
@@ -198,7 +199,7 @@ internal sealed class EmissionPlan
                             RootPropertyIndex = root,
                             SchemaPath = [],
                             MaxDef = 2 + (element.IsNullable ? 1 : 0),
-                            MemberChain = [prop.Name],
+                            MemberChain = [EmittedText.Ident(prop.Name)],
                             StepKinds = [ChainStepKind.List],
                             StepDefBase = [0],
                             StepHasNullTest = [true],
@@ -207,7 +208,7 @@ internal sealed class EmissionPlan
                             ListPresenceRung = 1,
                             ListElementRung = 2,
                             MemberAnnotatedNullable = prop.IsNullable,
-                            ListMemberName = prop.Name,
+                            ListMemberName = EmittedText.Ident(prop.Name),
                             ListMemberIsArray = prop.TypeName.EndsWith(
                                 "[]",
                                 StringComparison.Ordinal
@@ -231,7 +232,11 @@ internal sealed class EmissionPlan
                             RootPropertyIndex = root,
                             SchemaPath = [c],
                             MaxDef = 3 + (child.IsNullable ? 1 : 0),
-                            MemberChain = [prop.Name, child.Name],
+                            MemberChain =
+                            [
+                                EmittedText.Ident(prop.Name),
+                                EmittedText.Ident(child.Name),
+                            ],
                             StepKinds = [ChainStepKind.List, ChainStepKind.Struct],
                             StepDefBase = [0, 2],
                             StepHasNullTest = [true, true],
@@ -241,7 +246,7 @@ internal sealed class EmissionPlan
                             ListPresenceRung = 1,
                             ListElementRung = 2,
                             MemberAnnotatedNullable = prop.IsNullable,
-                            ListMemberName = prop.Name,
+                            ListMemberName = EmittedText.Ident(prop.Name),
                             ListMemberIsArray = prop.TypeName.EndsWith(
                                 "[]",
                                 StringComparison.Ordinal
@@ -263,7 +268,7 @@ internal sealed class EmissionPlan
                         RootPropertyIndex = root,
                         SchemaPath = [],
                         MaxDef = prop.IsNullable ? 1 : 0,
-                        MemberChain = [prop.Name],
+                        MemberChain = [EmittedText.Ident(prop.Name)],
                     }
                 );
                 continue;
@@ -274,7 +279,7 @@ internal sealed class EmissionPlan
                 Id = nodes.Count,
                 ClrType = prop.TypeName.TrimEnd('?'),
                 IsValueType = prop.CompoundIsValueType,
-                MemberName = prop.Name,
+                MemberName = EmittedText.Ident(prop.Name),
                 ParentId = -1,
                 Depth = 0,
                 MemberAnnotatedNullable = prop.IsNullable,
@@ -290,7 +295,7 @@ internal sealed class EmissionPlan
                 depth: 0,
                 valueTypes: [prop.CompoundIsValueType],
                 nullableValueSteps: [prop.IsNullable && prop.CompoundIsValueType],
-                memberPrefix: [prop.Name],
+                memberPrefix: [EmittedText.Ident(prop.Name)],
                 columns,
                 nodes
             );
@@ -322,7 +327,7 @@ internal sealed class EmissionPlan
         {
             PropertyModel child = structProp.Children[c];
             int[] childPath = [.. schemaPrefix, c];
-            string[] chain = [.. memberPrefix, child.Name];
+            string[] chain = [.. memberPrefix, EmittedText.Ident(child.Name)];
 
             if (child.Kind == PropertyKind.Struct)
             {
@@ -331,7 +336,7 @@ internal sealed class EmissionPlan
                     Id = nodes.Count,
                     ClrType = child.TypeName.TrimEnd('?'),
                     IsValueType = child.CompoundIsValueType,
-                    MemberName = child.Name,
+                    MemberName = EmittedText.Ident(child.Name),
                     MemberAnnotatedNullable = child.IsNullable,
                     ParentId = node.Id,
                     // This node occupies ancestor position `depth + 1` in every

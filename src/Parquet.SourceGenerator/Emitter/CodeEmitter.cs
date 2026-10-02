@@ -688,7 +688,7 @@ internal static class CodeEmitter
             return;
         }
 
-        string columnName = col.IsListLeaf ? col.ListMemberName : col.Leaf.Name;
+        string columnName = col.IsListLeaf ? col.ListMemberName.TrimStart('@') : col.Leaf.Name;
         builder.AppendLine(
             $"{indent}ValidatePackedStringLengths({bufName}, defLevels_{col.Slot}, {entriesVariable}, {col.MaxDef}, \"{col.Leaf.Name}\", \"{columnName}\", options);"
         );
@@ -756,7 +756,7 @@ internal static class CodeEmitter
         );
         builder.AppendLine("        this global::Parquet.ParquetWriter writer,");
         builder.AppendLine(
-            $"        global::System.Collections.Generic.IReadOnlyCollection<{model.ClassName}> chunk,"
+            $"        global::System.Collections.Generic.IReadOnlyCollection<{EmittedText.Ident(model.ClassName)}> chunk,"
         );
         builder.AppendLine(
             "        global::System.Threading.CancellationToken cancellationToken = default)"
@@ -780,19 +780,19 @@ internal static class CodeEmitter
             string elemType = PropertyMappingComponent.GetSingleFieldBufferElementType(model);
             PropertyModel prop = model.Properties[0];
             builder.AppendLine(
-                $"            if (chunk is global::System.Collections.Generic.List<{model.ClassName}> listItems)"
+                $"            if (chunk is global::System.Collections.Generic.List<{EmittedText.Ident(model.ClassName)}> listItems)"
             );
             builder.AppendLine("            {");
             builder.AppendLine("#if NET6_0_OR_GREATER");
             builder.AppendLine(
-                $"                if (global::System.Runtime.CompilerServices.Unsafe.SizeOf<{model.ClassName}>() == global::System.Runtime.CompilerServices.Unsafe.SizeOf<{elemType}>())"
+                $"                if (global::System.Runtime.CompilerServices.Unsafe.SizeOf<{EmittedText.Ident(model.ClassName)}>() == global::System.Runtime.CompilerServices.Unsafe.SizeOf<{elemType}>())"
             );
             builder.AppendLine("                {");
             builder.AppendLine(
                 "                    var span = global::System.Runtime.InteropServices.CollectionsMarshal.AsSpan(listItems);"
             );
             builder.AppendLine(
-                $"                    global::System.Runtime.InteropServices.MemoryMarshal.Cast<{model.ClassName}, {elemType}>(span.Slice(0, count))"
+                $"                    global::System.Runtime.InteropServices.MemoryMarshal.Cast<{EmittedText.Ident(model.ClassName)}, {elemType}>(span.Slice(0, count))"
             );
             builder.AppendLine("                        .CopyTo(buffer_0.AsSpan(0, count));");
             builder.AppendLine("                }");
@@ -800,7 +800,9 @@ internal static class CodeEmitter
             builder.AppendLine("                {");
             builder.AppendLine("                    for (int i = 0; i < count; i++)");
             builder.AppendLine("                    {");
-            builder.AppendLine($"                        buffer_0[i] = listItems[i].{prop.Name};");
+            builder.AppendLine(
+                $"                        buffer_0[i] = listItems[i].{EmittedText.Ident(prop.Name)};"
+            );
             builder.AppendLine("                    }");
             builder.AppendLine("                }");
             builder.AppendLine("#else");
@@ -811,15 +813,17 @@ internal static class CodeEmitter
             builder.AppendLine("                }");
             builder.AppendLine("#endif");
             builder.AppendLine("            }");
-            builder.AppendLine($"            else if (chunk is {model.ClassName}[] arrayItems)");
+            builder.AppendLine(
+                $"            else if (chunk is {EmittedText.Ident(model.ClassName)}[] arrayItems)"
+            );
             builder.AppendLine("            {");
             builder.AppendLine("#if NET6_0_OR_GREATER");
             builder.AppendLine(
-                $"                if (global::System.Runtime.CompilerServices.Unsafe.SizeOf<{model.ClassName}>() == global::System.Runtime.CompilerServices.Unsafe.SizeOf<{elemType}>())"
+                $"                if (global::System.Runtime.CompilerServices.Unsafe.SizeOf<{EmittedText.Ident(model.ClassName)}>() == global::System.Runtime.CompilerServices.Unsafe.SizeOf<{elemType}>())"
             );
             builder.AppendLine("                {");
             builder.AppendLine(
-                $"                    global::System.Runtime.InteropServices.MemoryMarshal.Cast<{model.ClassName}, {elemType}>(arrayItems.AsSpan(0, count))"
+                $"                    global::System.Runtime.InteropServices.MemoryMarshal.Cast<{EmittedText.Ident(model.ClassName)}, {elemType}>(arrayItems.AsSpan(0, count))"
             );
             builder.AppendLine("                        .CopyTo(buffer_0.AsSpan(0, count));");
             builder.AppendLine("                }");
@@ -827,13 +831,17 @@ internal static class CodeEmitter
             builder.AppendLine("                {");
             builder.AppendLine("                    for (int i = 0; i < count; i++)");
             builder.AppendLine("                    {");
-            builder.AppendLine($"                        buffer_0[i] = arrayItems[i].{prop.Name};");
+            builder.AppendLine(
+                $"                        buffer_0[i] = arrayItems[i].{EmittedText.Ident(prop.Name)};"
+            );
             builder.AppendLine("                    }");
             builder.AppendLine("                }");
             builder.AppendLine("#else");
             builder.AppendLine("                for (int i = 0; i < count; i++)");
             builder.AppendLine("                {");
-            builder.AppendLine($"                    buffer_0[i] = arrayItems[i].{prop.Name};");
+            builder.AppendLine(
+                $"                    buffer_0[i] = arrayItems[i].{EmittedText.Ident(prop.Name)};"
+            );
             builder.AppendLine("                }");
             builder.AppendLine("#endif");
             builder.AppendLine("            }");
@@ -856,7 +864,7 @@ internal static class CodeEmitter
         {
             // List fast path
             builder.AppendLine(
-                $"            if (chunk is global::System.Collections.Generic.List<{model.ClassName}> listItems)"
+                $"            if (chunk is global::System.Collections.Generic.List<{EmittedText.Ident(model.ClassName)}> listItems)"
             );
             builder.AppendLine("            {");
             builder.AppendLine("#if NET6_0_OR_GREATER");
@@ -878,7 +886,9 @@ internal static class CodeEmitter
             builder.AppendLine("            }");
 
             // Array fast path
-            builder.AppendLine($"            else if (chunk is {model.ClassName}[] arrayItems)");
+            builder.AppendLine(
+                $"            else if (chunk is {EmittedText.Ident(model.ClassName)}[] arrayItems)"
+            );
             builder.AppendLine("            {");
             builder.AppendLine("#if NET6_0_OR_GREATER");
             builder.AppendLine("                void ExtractArray()");
@@ -964,7 +974,7 @@ internal static class CodeEmitter
             "    public static async global::System.Threading.Tasks.Task WriteParquetAsync("
         );
         builder.AppendLine(
-            $"        this global::System.Collections.Generic.IReadOnlyCollection<{model.ClassName}> items,"
+            $"        this global::System.Collections.Generic.IReadOnlyCollection<{EmittedText.Ident(model.ClassName)}> items,"
         );
         builder.AppendLine("        global::System.IO.Stream stream,");
         builder.AppendLine(
@@ -1014,7 +1024,7 @@ internal static class CodeEmitter
             "    public static async global::System.Threading.Tasks.Task WriteParquetBatchedAsync("
         );
         builder.AppendLine(
-            $"        this global::System.Collections.Generic.IEnumerable<{model.ClassName}> items,"
+            $"        this global::System.Collections.Generic.IEnumerable<{EmittedText.Ident(model.ClassName)}> items,"
         );
         builder.AppendLine("        global::System.IO.Stream stream,");
         builder.AppendLine(
@@ -1029,7 +1039,7 @@ internal static class CodeEmitter
         EmitRowGroupSizeResolution(builder);
         builder.AppendLine();
         builder.AppendLine(
-            $"        if (items is global::System.Collections.Generic.IReadOnlyCollection<{model.ClassName}> col && col.Count <= targetChunkSize)"
+            $"        if (items is global::System.Collections.Generic.IReadOnlyCollection<{EmittedText.Ident(model.ClassName)}> col && col.Count <= targetChunkSize)"
         );
         builder.AppendLine("        {");
         builder.AppendLine(
@@ -1068,7 +1078,7 @@ internal static class CodeEmitter
         builder.AppendLine("        try");
         builder.AppendLine("        {");
         builder.AppendLine(
-            $"        var buffer = new global::System.Collections.Generic.List<{model.ClassName}>(targetChunkSize);"
+            $"        var buffer = new global::System.Collections.Generic.List<{EmittedText.Ident(model.ClassName)}>(targetChunkSize);"
         );
         builder.AppendLine("        foreach (var item in items)");
         builder.AppendLine("        {");
@@ -1105,7 +1115,7 @@ internal static class CodeEmitter
             "    public static async global::System.Threading.Tasks.Task WriteParquetAsync("
         );
         builder.AppendLine(
-            $"        this global::System.Collections.Generic.IAsyncEnumerable<{model.ClassName}> items,"
+            $"        this global::System.Collections.Generic.IAsyncEnumerable<{EmittedText.Ident(model.ClassName)}> items,"
         );
         builder.AppendLine("        global::System.IO.Stream stream,");
         builder.AppendLine(
@@ -1130,7 +1140,7 @@ internal static class CodeEmitter
         builder.AppendLine("        try");
         builder.AppendLine("        {");
         builder.AppendLine(
-            $"        var buffer = new global::System.Collections.Generic.List<{model.ClassName}>(targetChunkSize);"
+            $"        var buffer = new global::System.Collections.Generic.List<{EmittedText.Ident(model.ClassName)}>(targetChunkSize);"
         );
         builder.AppendLine(
             "        await foreach (var item in global::System.Threading.Tasks.TaskAsyncEnumerableExtensions.WithCancellation(items, cancellationToken).ConfigureAwait(false))"
@@ -1178,7 +1188,7 @@ internal static class CodeEmitter
         );
         builder.AppendLine("    /// </summary>");
         builder.AppendLine(
-            $"    internal static async global::System.Threading.Tasks.Task<{model.ClassName}[]> ReadArrayCoreAsync("
+            $"    internal static async global::System.Threading.Tasks.Task<{EmittedText.Ident(model.ClassName)}[]> ReadArrayCoreAsync("
         );
         builder.AppendLine("        global::System.IO.Stream stream,");
         builder.AppendLine(
@@ -1227,7 +1237,9 @@ internal static class CodeEmitter
             builder.AppendLine();
         }
         RowGroupPruningComponent.EmitSelectionPass(builder, model, "totalRows");
-        builder.AppendLine($"        var results = new {model.ClassName}[totalRows];");
+        builder.AppendLine(
+            $"        var results = new {EmittedText.Ident(model.ClassName)}[totalRows];"
+        );
         builder.AppendLine("        int currentOffset = 0;");
         builder.AppendLine();
 
@@ -1300,7 +1312,7 @@ internal static class CodeEmitter
         // Not an iterator: arguments are validated when this is called, not on the first
         // MoveNextAsync (MA0050). The iterator below owns [EnumeratorCancellation].
         builder.AppendLine(
-            $"    internal static global::System.Collections.Generic.IAsyncEnumerable<{model.ClassName}> ReadEnumerableCoreAsync("
+            $"    internal static global::System.Collections.Generic.IAsyncEnumerable<{EmittedText.Ident(model.ClassName)}> ReadEnumerableCoreAsync("
         );
         builder.AppendLine("        global::System.IO.Stream stream,");
         builder.AppendLine(
@@ -1319,7 +1331,7 @@ internal static class CodeEmitter
         builder.AppendLine("    }");
         builder.AppendLine();
         builder.AppendLine(
-            $"    private static async global::System.Collections.Generic.IAsyncEnumerable<{model.ClassName}> ReadEnumerableIteratorAsync("
+            $"    private static async global::System.Collections.Generic.IAsyncEnumerable<{EmittedText.Ident(model.ClassName)}> ReadEnumerableIteratorAsync("
         );
         builder.AppendLine("        global::System.IO.Stream stream,");
         builder.AppendLine(
@@ -1406,7 +1418,9 @@ internal static class CodeEmitter
             );
         builder.AppendLine("                for (int i = 0; i < rowCount; i++)");
         builder.AppendLine("                {");
-        builder.AppendLine($"                    yield return new {model.ClassName}");
+        builder.AppendLine(
+            $"                    yield return new {EmittedText.Ident(model.ClassName)}"
+        );
         builder.AppendLine("                    {");
 
         CompoundMapping.EmitRootMemberAssignments(builder, model, "i", "                        ");
@@ -1437,7 +1451,7 @@ internal static class CodeEmitter
         );
         builder.AppendLine("    /// </summary>");
         builder.AppendLine(
-            $"    internal static async global::System.Threading.Tasks.Task<{model.ClassName}[]> ReadArrayCoreAsync("
+            $"    internal static async global::System.Threading.Tasks.Task<{EmittedText.Ident(model.ClassName)}[]> ReadArrayCoreAsync("
         );
         builder.AppendLine("        global::System.ReadOnlyMemory<byte> parquetBytes,");
         builder.AppendLine(
@@ -1465,7 +1479,7 @@ internal static class CodeEmitter
         );
         builder.AppendLine("    /// </summary>");
         builder.AppendLine(
-            $"    internal static async global::System.Collections.Generic.IAsyncEnumerable<{model.ClassName}> ReadEnumerableCoreAsync("
+            $"    internal static async global::System.Collections.Generic.IAsyncEnumerable<{EmittedText.Ident(model.ClassName)}> ReadEnumerableCoreAsync("
         );
         builder.AppendLine("        global::System.ReadOnlyMemory<byte> parquetBytes,");
         builder.AppendLine(
@@ -1532,14 +1546,16 @@ internal static class CodeEmitter
         );
         builder.AppendLine("    /// </summary>");
         builder.AppendLine(
-            $"    private static async global::System.Threading.Tasks.Task<global::System.Collections.Generic.List<{model.ClassName}>> ReadPrunedRangeAsync<TKey>("
+            $"    private static async global::System.Threading.Tasks.Task<global::System.Collections.Generic.List<{EmittedText.Ident(model.ClassName)}>> ReadPrunedRangeAsync<TKey>("
         );
         builder.AppendLine("        global::System.IO.Stream stream,");
         builder.AppendLine("        int keySlot,");
         builder.AppendLine("        global::Parquet.Schema.DataField keyFieldTemplate,");
         builder.AppendLine("        TKey lowerBound,");
         builder.AppendLine("        TKey upperBound,");
-        builder.AppendLine($"        global::System.Func<{model.ClassName}, TKey> keySelector,");
+        builder.AppendLine(
+            $"        global::System.Func<{EmittedText.Ident(model.ClassName)}, TKey> keySelector,"
+        );
         builder.AppendLine(
             "        global::Parquet.SourceGenerator.ParquetPruneStatistics? pruneStatistics,"
         );
@@ -1558,7 +1574,7 @@ internal static class CodeEmitter
             "        var keyComparer = global::System.Collections.Generic.Comparer<TKey>.Default;"
         );
         builder.AppendLine(
-            $"        var results = new global::System.Collections.Generic.List<{model.ClassName}>();"
+            $"        var results = new global::System.Collections.Generic.List<{EmittedText.Ident(model.ClassName)}>();"
         );
         builder.AppendLine("        if (keyComparer.Compare(lowerBound, upperBound) > 0)");
         builder.AppendLine("        {");
@@ -1671,7 +1687,9 @@ internal static class CodeEmitter
 
         builder.AppendLine("                for (int i = 0; i < rowCount; i++)");
         builder.AppendLine("                {");
-        builder.AppendLine($"                    var item = new {model.ClassName}");
+        builder.AppendLine(
+            $"                    var item = new {EmittedText.Ident(model.ClassName)}"
+        );
         builder.AppendLine("                    {");
 
         CompoundMapping.EmitRootMemberAssignments(builder, model, "i", "                        ");
@@ -1714,7 +1732,7 @@ internal static class CodeEmitter
         );
         builder.AppendLine("    /// </summary>");
         builder.AppendLine(
-            $"    private static async global::System.Threading.Tasks.Task<{model.ClassName}[]> ReadBufferSequentialArrayAsync("
+            $"    private static async global::System.Threading.Tasks.Task<{EmittedText.Ident(model.ClassName)}[]> ReadBufferSequentialArrayAsync("
         );
         builder.AppendLine("        global::System.ReadOnlyMemory<byte> parquetBytes,");
         builder.AppendLine(
@@ -1746,7 +1764,7 @@ internal static class CodeEmitter
         );
         builder.AppendLine("        int rowGroupCount = reader.RowGroupCount;");
         builder.AppendLine(
-            $"        if (rowGroupCount == 0) return global::System.Array.Empty<{model.ClassName}>();"
+            $"        if (rowGroupCount == 0) return global::System.Array.Empty<{EmittedText.Ident(model.ClassName)}>();"
         );
         builder.AppendLine();
         RowGroupLayoutComponent.EmitLayoutProbe(
@@ -1759,7 +1777,9 @@ internal static class CodeEmitter
             optionsVar: "options"
         );
         builder.AppendLine();
-        builder.AppendLine($"        var results = new {model.ClassName}[totalRows];");
+        builder.AppendLine(
+            $"        var results = new {EmittedText.Ident(model.ClassName)}[totalRows];"
+        );
         builder.AppendLine("        int currentOffset = 0;");
         builder.AppendLine("        var fileFields = reader.Schema.DataFields;");
         builder.AppendLine(
@@ -1842,7 +1862,7 @@ internal static class CodeEmitter
         );
         builder.AppendLine("    /// </summary>");
         builder.AppendLine(
-            $"    internal static async global::System.Threading.Tasks.Task<{model.ClassName}[]> ReadParallelArrayCoreAsync("
+            $"    internal static async global::System.Threading.Tasks.Task<{EmittedText.Ident(model.ClassName)}[]> ReadParallelArrayCoreAsync("
         );
         builder.AppendLine("        global::System.ReadOnlyMemory<byte> parquetBytes,");
         builder.AppendLine(
@@ -1909,7 +1929,7 @@ internal static class CodeEmitter
         builder.AppendLine("        }");
         builder.AppendLine();
         builder.AppendLine(
-            $"        if (rowGroupCount == 0) return global::System.Array.Empty<{model.ClassName}>();"
+            $"        if (rowGroupCount == 0) return global::System.Array.Empty<{EmittedText.Ident(model.ClassName)}>();"
         );
         builder.AppendLine();
         builder.AppendLine(
@@ -1922,7 +1942,9 @@ internal static class CodeEmitter
         );
         builder.AppendLine("        }");
         builder.AppendLine();
-        builder.AppendLine($"        var resultArray = new {model.ClassName}[totalRows];");
+        builder.AppendLine(
+            $"        var resultArray = new {EmittedText.Ident(model.ClassName)}[totalRows];"
+        );
         builder.AppendLine(
             "        using var linkedCts = global::System.Threading.CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);"
         );
@@ -2012,7 +2034,7 @@ internal static class CodeEmitter
         );
         builder.AppendLine("        global::System.ReadOnlyMemory<byte> parquetBytes,");
         builder.AppendLine("        global::Parquet.ParquetOptions formatOptions,");
-        builder.AppendLine($"        {model.ClassName}[] target,");
+        builder.AppendLine($"        {EmittedText.Ident(model.ClassName)}[] target,");
         builder.AppendLine("        int[] rowOffsets,");
         builder.AppendLine("        int[] cursor,");
         builder.AppendLine("        int rowGroupCount,");
@@ -2223,7 +2245,7 @@ internal static class CodeEmitter
                 string valVar = $"val_{i}";
                 string hasVar = $"has_{i}";
                 string flagVar = $"hv_{i}";
-                builder.AppendLine($"{prefix}var {valVar} = item.{prop.Name};");
+                builder.AppendLine($"{prefix}var {valVar} = item.{EmittedText.Ident(prop.Name)};");
                 builder.AppendLine($"{prefix}bool {hasVar} = {valVar}.HasValue;");
                 builder.AppendLine(
                     $"{prefix}int {flagVar} = global::System.Runtime.CompilerServices.Unsafe.As<bool, byte>(ref {hasVar});"
@@ -2238,7 +2260,7 @@ internal static class CodeEmitter
             }
             else
             {
-                string writeExpr = GetWriteExpression(prop, $"item.{prop.Name}");
+                string writeExpr = GetWriteExpression(prop, $"item.{EmittedText.Ident(prop.Name)}");
                 builder.AppendLine(
                     $"{prefix}global::System.Runtime.CompilerServices.Unsafe.Add(ref dstRef_{i}, i) = {writeExpr};"
                 );
@@ -2278,7 +2300,7 @@ internal static class CodeEmitter
             {
                 string valVar = $"val_{i}";
                 string flagVar = $"hv_{i}";
-                builder.AppendLine($"{prefix}var {valVar} = item.{prop.Name};");
+                builder.AppendLine($"{prefix}var {valVar} = item.{EmittedText.Ident(prop.Name)};");
                 builder.AppendLine($"{prefix}int {flagVar} = {valVar}.HasValue ? 1 : 0;");
                 builder.AppendLine(
                     $"{prefix}{bufPrefix}{i}[nonNullCount_{i}] = {GetBranchlessNonNullExpression(prop, valVar)};"
@@ -2288,7 +2310,7 @@ internal static class CodeEmitter
             }
             else
             {
-                string writeExpr = GetWriteExpression(prop, $"item.{prop.Name}");
+                string writeExpr = GetWriteExpression(prop, $"item.{EmittedText.Ident(prop.Name)}");
                 builder.AppendLine($"{prefix}{bufPrefix}{i}[i] = {writeExpr};");
             }
         }
@@ -2326,7 +2348,7 @@ internal static class CodeEmitter
             {
                 string valVar = $"val_{i}";
                 string flagVar = $"hv_{i}";
-                builder.AppendLine($"{prefix}var {valVar} = item.{prop.Name};");
+                builder.AppendLine($"{prefix}var {valVar} = item.{EmittedText.Ident(prop.Name)};");
                 builder.AppendLine($"{prefix}int {flagVar} = {valVar}.HasValue ? 1 : 0;");
                 builder.AppendLine(
                     $"{prefix}{bufPrefix}{i}[nonNullCount_{i}] = {GetBranchlessNonNullExpression(prop, valVar)};"
@@ -2336,7 +2358,7 @@ internal static class CodeEmitter
             }
             else
             {
-                string writeExpr = GetWriteExpression(prop, $"item.{prop.Name}");
+                string writeExpr = GetWriteExpression(prop, $"item.{EmittedText.Ident(prop.Name)}");
                 builder.AppendLine($"{prefix}{bufPrefix}{i}[idx] = {writeExpr};");
             }
         }
