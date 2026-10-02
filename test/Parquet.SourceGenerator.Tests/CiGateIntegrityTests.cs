@@ -298,14 +298,23 @@ public sealed class CiGateIntegrityTests
         string ci = Read(FindRepositoryRoot(), ".github", "workflows", "ci.yml");
         string testJob = JobBlock(ci, "test");
 
-        int build = testJob.IndexOf(
-            "dotnet build Parquet.SourceGenerator.slnx",
-            StringComparison.Ordinal
+        // Match the command as a step's `run:` value, so a comment or an `echo` of it does not count.
+        Match build = Regex.Match(
+            testJob,
+            @"^\s+run:\s+dotnet build Parquet\.SourceGenerator\.slnx\b",
+            Options,
+            RegexTimeout
         );
-        int readme = testJob.IndexOf("dotnet run scripts/CheckReadme.cs", StringComparison.Ordinal);
+        Match readme = Regex.Match(
+            testJob,
+            @"^\s+run:\s+dotnet run scripts/CheckReadme\.cs\s*$",
+            Options,
+            RegexTimeout
+        );
 
-        build.ShouldBeGreaterThanOrEqualTo(0);
-        readme.ShouldBeGreaterThan(build);
+        build.Success.ShouldBeTrue("the solution build step");
+        readme.Success.ShouldBeTrue("an executable README-check step");
+        readme.Index.ShouldBeGreaterThan(build.Index);
         IOFile
             .Exists(
                 Path.Combine(
