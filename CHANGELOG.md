@@ -280,6 +280,12 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   classification matched `System.Collections.Generic.List` and `Dictionary` by display name alone, so a `Dictionary<T>`
   declared into that namespace classified as a map and the parser indexed past its type arguments (`CS8785`,
   losing every generated type). Arity is now part of the match and the member is rejected with PARQ006 (#417).
+- **The columnar writer bounds a nullable column's packed lane by its definition levels** (#381). The batch
+  constructor checks lane shapes in O(1) and never counted the packed lane, so a lane shorter than the
+  rows marked present, or a level other than 0 or 1, reached Parquet.Net unchecked and was written as a
+  corrupt column chunk with no error. The writer now counts the present rows in the levels it is about
+  to write (it passes over them anyway), slices a longer lane to that count and rejects a shorter lane or
+  a bad level with an `InvalidOperationException` naming the column.
 - **A property or type named after a C# keyword no longer breaks the generated code** (#376). Roslyn drops
   the `@` from a member declared `@event`, so the model held the bare keyword and the emitters wrote
   `item.event`, `{ event = ... }` and `new class` into generated source (CS1001, CS1525). Every

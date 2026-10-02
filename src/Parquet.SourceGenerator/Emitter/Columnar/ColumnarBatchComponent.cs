@@ -733,6 +733,49 @@ internal static class ColumnarBatchComponent
     }
 
     /// <summary>
+    /// Emits the helper that bounds a packed lane by the definition levels written with it (#381).
+    /// </summary>
+    /// <remarks>
+    /// The batch constructor checks lane shapes in O(1) and never counts the packed lane, so the lane
+    /// may be longer than the rows marked present (the normal shape of a rented array) or, wrongly,
+    /// shorter. The writer is about to make an O(rows) pass over the levels anyway, so it counts the
+    /// present rows here: a longer lane is sliced to that count, a shorter one or a level other than
+    /// 0 or 1 is rejected by column name instead of being handed to Parquet.Net.
+    /// </remarks>
+    private static void EmitSlicePackedLane(StringBuilder builder)
+    {
+        builder.AppendLine(
+            "    private static global::System.ReadOnlyMemory<T> SlicePackedLane<T>(global::System.ReadOnlyMemory<T> packed, global::System.ReadOnlyMemory<int> levels, string column)"
+        );
+        builder.AppendLine("    {");
+        builder.AppendLine("        var span = levels.Span;");
+        builder.AppendLine("        int present = 0;");
+        builder.AppendLine("        for (int i = 0; i < span.Length; i++)");
+        builder.AppendLine("        {");
+        builder.AppendLine("            int level = span[i];");
+        builder.AppendLine("            if ((uint)level > 1u)");
+        builder.AppendLine("            {");
+        builder.AppendLine(
+            "                throw new global::System.InvalidOperationException(\"Column '\" + column + \"' has definition level \" + level + \" at row \" + i + \"; a nullable value column uses only 0 (null) and 1 (present).\");"
+        );
+        builder.AppendLine("            }");
+        builder.AppendLine();
+        builder.AppendLine("            present += level;");
+        builder.AppendLine("        }");
+        builder.AppendLine();
+        builder.AppendLine("        if (present > packed.Length)");
+        builder.AppendLine("        {");
+        builder.AppendLine(
+            "            throw new global::System.InvalidOperationException(\"Column '\" + column + \"' marks \" + present + \" rows present but its packed lane holds \" + packed.Length + \".\");"
+        );
+        builder.AppendLine("        }");
+        builder.AppendLine();
+        builder.AppendLine("        return packed.Slice(0, present);");
+        builder.AppendLine("    }");
+        builder.AppendLine();
+    }
+
+    /// <summary>
     /// Emits the batch-taking row group writer (Option B) plus the positional
     /// <c>WriteParquetRowGroupColumnarAsync</c> overload (Option A) and an end-to-end
     /// <c>WriteParquetAsync</c> convenience.
@@ -741,6 +784,15 @@ internal static class ColumnarBatchComponent
     {
         string batchType = BatchTypeName(model);
         EmitNullPreservingConverters(builder, model);
+        foreach (PropertyModel prop in model.Properties)
+        {
+            if (BufferPoolComponent.UsesWriteAllParts(prop))
+            {
+                EmitSlicePackedLane(builder);
+                break;
+            }
+        }
+
         EmitBatchRowGroupWriter(builder, model, batchType);
         builder.AppendLine();
         EmitPositionalWriter(builder, model, batchType);
@@ -853,7 +905,9 @@ internal static class ColumnarBatchComponent
                 string nonNull = BufferPoolComponent.GetNonNullableBufferType(prop);
                 builder.AppendLine($"            await groupWriter.WriteAllPartsAsync<{nonNull}>(");
                 builder.AppendLine($"                {fieldAccess},");
-                builder.AppendLine($"                batch.{EmittedText.Ident(prop.Name)},");
+                builder.AppendLine(
+                    $"                SlicePackedLane(batch.{EmittedText.Ident(prop.Name)}, batch.{members.Levels(i)}.Slice(0, count), \"{prop.Name}\"),"
+                );
                 builder.AppendLine($"                batch.{members.Levels(i)}.Slice(0, count),");
                 builder.AppendLine("                null,");
                 builder.AppendLine(
