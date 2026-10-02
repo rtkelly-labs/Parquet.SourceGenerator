@@ -23,10 +23,7 @@ internal static class CompoundSchema
             // M3a: row-level lists standard 3-level. ListField synthesizes the optional
             // group + repeated list wrapper with no nullability knobs (docs/15 §2.4
             // semantics for groups apply to the list group too).
-            string listName = Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(
-                prop.ParquetColumnName,
-                quote: true
-            );
+            string listName = EmittedText.Literal(prop.ParquetColumnName);
             PropertyModel element = prop.Element!;
             string itemField =
                 element.Kind == PropertyKind.Struct
@@ -40,10 +37,7 @@ internal static class CompoundSchema
 
         // Parquet.Net 6's StructField is always an optional group (docs/15 §2.4) — the
         // definition ladder in CompoundMapping counts that rung unconditionally.
-        string name = Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(
-            prop.ParquetColumnName,
-            quote: true
-        );
+        string name = EmittedText.Literal(prop.ParquetColumnName);
         string inner = indent + "    ";
         var sb = new StringBuilder();
         sb.Append($"{indent}new global::Parquet.Schema.StructField(\n");

@@ -343,7 +343,7 @@ internal static class CodeEmitter
                     _ => "global::Parquet.EncodingHint.Default",
                 };
                 builder.AppendLine(
-                    $"        formatOptions.ColumnEncodingHints[\"{prop.ParquetColumnName}\"] = {hintValue};"
+                    $"        formatOptions.ColumnEncodingHints[{EmittedText.Literal(prop.ParquetColumnName)}] = {hintValue};"
                 );
             }
         }

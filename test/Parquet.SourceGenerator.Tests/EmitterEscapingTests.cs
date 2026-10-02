@@ -14,7 +14,7 @@ namespace Parquet.SourceGenerator.Tests;
 [ParquetSerializable]
 public partial record AwkwardColumnNames
 {
-    [ParquetColumn("he said \"hi\"")]
+    [ParquetColumn("he said \"hi\"", Encoding = ParquetColumnEncoding.Dictionary)]
     public int Quoted { get; init; }
 
     [ParquetColumn(@"back\slash")]
@@ -22,6 +22,15 @@ public partial record AwkwardColumnNames
 
     [ParquetColumn("tab\tseparated")]
     public int Tabbed { get; init; }
+
+    // Newlines and comment or brace delimiters (#363, #364, #372). With Arrow referenced and an
+    // Encoding set, these names reach the encoding hint, the Arrow bridge comment and the
+    // pruning doc comment.
+    [ParquetColumn("line\nbreak", Encoding = ParquetColumnEncoding.Dictionary)]
+    public int Newline { get; init; }
+
+    [ParquetColumn("*/ } { <b>&")]
+    public int Delimiters { get; init; }
 }
 
 public sealed class EmitterEscapingTests
@@ -44,6 +53,8 @@ public sealed class EmitterEscapingTests
         names.ShouldContain("he said \"hi\"");
         names.ShouldContain(@"back\slash");
         names.ShouldContain("tab\tseparated");
+        names.ShouldContain("line\nbreak");
+        names.ShouldContain("*/ } { <b>&");
     }
 
     [Fact]
@@ -56,6 +67,8 @@ public sealed class EmitterEscapingTests
                 Quoted = 7,
                 Backslash = 9,
                 Tabbed = 11,
+                Newline = 13,
+                Delimiters = 15,
             },
         };
 
@@ -69,5 +82,7 @@ public sealed class EmitterEscapingTests
         read[0].Quoted.ShouldBe(7);
         read[0].Backslash.ShouldBe(9);
         read[0].Tabbed.ShouldBe(11);
+        read[0].Newline.ShouldBe(13);
+        read[0].Delimiters.ShouldBe(15);
     }
 }

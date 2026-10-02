@@ -509,7 +509,7 @@ internal static class ColumnarBatchComponent
                         $"    /// <remarks>Build entries with <c>{helper}</c>, or cast an explicit null to"
                     );
                     builder.AppendLine(
-                        $"    /// <c>{ColumnElementType(prop)}</c>: a bare conditional binds to the non-nullable memory type and"
+                        $"    /// <c>{EmittedText.XmlDoc(ColumnElementType(prop))}</c>: a bare conditional binds to the non-nullable memory type and"
                     );
                     builder.AppendLine(
                         "    /// stores an empty value where a null was meant.</remarks>"

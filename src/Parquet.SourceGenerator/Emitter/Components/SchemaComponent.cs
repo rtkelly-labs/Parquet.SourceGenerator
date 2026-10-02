@@ -18,10 +18,7 @@ internal static class SchemaComponent
     /// </summary>
     public static string GetFieldCreationExpression(PropertyModel prop)
     {
-        string name = Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(
-            prop.ParquetColumnName,
-            quote: true
-        );
+        string name = EmittedText.Literal(prop.ParquetColumnName);
 
         return prop.Kind switch
         {
