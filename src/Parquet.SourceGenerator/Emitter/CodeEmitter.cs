@@ -849,17 +849,7 @@ internal static class CodeEmitter
             builder.AppendLine("            }");
             builder.AppendLine("            else");
             builder.AppendLine("            {");
-            builder.AppendLine("                int idx = 0;");
-            builder.AppendLine("                foreach (var item in chunk)");
-            builder.AppendLine("                {");
-            EmitPropertyAssignmentsIndexed(
-                builder,
-                model,
-                "buffer_",
-                prefix: "                    "
-            );
-            builder.AppendLine("                    idx++;");
-            builder.AppendLine("                }");
+            EmitEnumerableFallbackBody(builder, model);
             builder.AppendLine("            }");
         }
         else
@@ -910,17 +900,7 @@ internal static class CodeEmitter
             // Enumerable fallback
             builder.AppendLine("            else");
             builder.AppendLine("            {");
-            builder.AppendLine("                int idx = 0;");
-            builder.AppendLine("                foreach (var item in chunk)");
-            builder.AppendLine("                {");
-            EmitPropertyAssignmentsIndexed(
-                builder,
-                model,
-                "buffer_",
-                prefix: "                    "
-            );
-            builder.AppendLine("                    idx++;");
-            builder.AppendLine("                }");
+            EmitEnumerableFallbackBody(builder, model);
             builder.AppendLine("            }");
         }
         builder.AppendLine();
@@ -2349,6 +2329,29 @@ internal static class CodeEmitter
                 builder.AppendLine($"{prefix}{bufPrefix}{i}[i] = {writeExpr};");
             }
         }
+    }
+
+    /// <summary>
+    /// The body of the enumerable fallback: a collection that is neither a list nor an array is
+    /// walked with an index, and every buffer was rented for the <c>Count</c> read at method entry.
+    /// A rented array is longer than asked for, so an under-reporting <c>Count</c> would write the
+    /// extra items into the slack and drop them when only <c>count</c> rows are written, and an
+    /// over-reporting one would leave stale pool data in the tail. Both are checked (#388).
+    /// </summary>
+    private static void EmitEnumerableFallbackBody(StringBuilder builder, TargetClassModel model)
+    {
+        builder.AppendLine("                int idx = 0;");
+        builder.AppendLine("                foreach (var item in chunk)");
+        builder.AppendLine("                {");
+        builder.AppendLine(
+            "                    if (idx >= count) throw new global::System.InvalidOperationException($\"Collection reported Count = {count} but yielded more items.\");"
+        );
+        EmitPropertyAssignmentsIndexed(builder, model, "buffer_", prefix: "                    ");
+        builder.AppendLine("                    idx++;");
+        builder.AppendLine("                }");
+        builder.AppendLine(
+            "                if (idx != count) throw new global::System.InvalidOperationException($\"Collection reported Count = {count} but yielded {idx} items.\");"
+        );
     }
 
     private static void EmitPropertyAssignmentsIndexed(

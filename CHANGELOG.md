@@ -310,6 +310,13 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   keeps path, span and line span as data, rebuilds the `Location` at report time, and holds its message arguments in
   an `EquatableArray` (#398).
 - **A list shorter than the count captured at the start of a write throws instead of being read past its end** (#375). The write fast
+- **A collection whose `Count` disagrees with its items now throws instead of writing the wrong rows** (#388).
+  The enumerable fallback of the row-group writer (anything that is neither a `List<T>` nor an array)
+  filled buffers rented for `Count` rows, but rented arrays are longer than asked for, so a collection
+  yielding more items than it reported wrote them into the slack and lost them silently, and one
+  yielding fewer wrote stale pool data. The loop is now bounded by `count` and checked afterwards, and
+  throws `InvalidOperationException` either way.
+- **A list that shrinks during a write throws instead of being read past its end** (#375). The write fast
   path walks the list's span with unchecked `Unsafe.Add`, sized by the count read at method entry. If
   the list lost elements in between, the walk passed the end of the span it had taken (into slots of
   removed items, or past the array when the list was cleared). The emitted code now detects a span
