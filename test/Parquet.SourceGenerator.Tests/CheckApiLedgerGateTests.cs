@@ -92,6 +92,28 @@ public class CheckApiLedgerGateTests
 
     [Fact]
     [Trait("Category", "Integration")]
+    public async Task UnavailablePreviousTipFailsClosedInsteadOfCheckingOnlyTheLastCommitAsync()
+    {
+        using var repo = new TempRepo();
+        repo.Write(Seams, "#nullable enable\n");
+        repo.Write(Ledger, "# Ledger\n");
+        repo.Commit("base");
+        repo.Write(Seams, "#nullable enable\nA.B.M() -> void\n");
+        repo.Commit("catalogue only");
+        repo.Write("README.md", "unrelated\n");
+        repo.Commit("unrelated tip");
+
+        // The first parent alone would show no catalogue change and pass: the earlier pushed commit
+        // would go unchecked. With a named but unobtainable previous tip there is no safe range.
+        ScriptResult result = await repo.RunAsync(("GITHUB_EVENT_BEFORE", new string('a', 40)));
+
+        result.ExitCode.ShouldBe(1, result.Describe());
+        result.Stderr.ShouldContain("cannot run");
+        result.Stdout.ShouldContain("refusing to fall back to the first parent");
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
     public async Task AllZeroEventBeforeShaFallsBackToTheFirstParentAsync()
     {
         using var repo = new TempRepo();

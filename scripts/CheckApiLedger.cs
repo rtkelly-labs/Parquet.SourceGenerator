@@ -105,7 +105,7 @@ if (range is null)
 {
     Console.Error.WriteLine(
         "::error::No base ref (not a pull request, and no --base given) and no pushed range "
-            + "(no GITHUB_EVENT_BEFORE, and HEAD has no parent): the catalogue-vs-ledger check "
+            + "(GITHUB_EVENT_BEFORE is unavailable, or HEAD has no parent): the catalogue-vs-ledger check "
             + "cannot run, and it fails rather than passing having compared nothing."
     );
     return 1;
@@ -327,11 +327,17 @@ static string? ResolvePushRange()
             return $"{before} HEAD";
         }
 
+        // The push named a previous tip that cannot be obtained. `HEAD~1` would cover only the last
+        // commit of a multi-commit push and let an earlier one change a catalogue unchecked, so there
+        // is no trustworthy boundary: fail closed rather than guess.
         Console.WriteLine(
-            $"Previous tip {before} is not available (force push?); using the first parent."
+            $"Previous tip {before} is not available; refusing to fall back to the first parent."
         );
+        return null;
     }
 
+    // No pushed range was supplied (a local run, or an all-zero `before` for a new branch): the first
+    // parent is the best available boundary.
     if (!CanResolve("HEAD~1"))
     {
         // A shallow checkout has only the pushed commit.
