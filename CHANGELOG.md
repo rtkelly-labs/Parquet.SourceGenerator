@@ -333,6 +333,7 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   co-location does not disable either mechanism. The #281 merge landed the combined golden
   and the convergence-constraint comments but not this test — the correctness floor the
   actual footer-read convergence will need.
+- **The decompression guard fails closed on a page header it cannot parse, and reads the header the way Parquet.Net does.** The guard parsed three i32 fields in one fixed order and silently skipped validation for any other legal Thrift encoding (reordered fields, a `crc` field, long-form field ids, a nested struct ahead of the sizes), so a page in that encoding bypassed `MaxDecompressedPageSize` and `MaxDecompressionExpansionRatio`. It now reads the header by field id to the stop byte, refuses a field type Parquet.Net would decode differently, and throws `InvalidDataException` for an unparseable header, an unsupported page type, a missing size or a page extending past the end of the stream. Seeks inside the page it last validated are not treated as new headers (#359).
 
 ---
 
