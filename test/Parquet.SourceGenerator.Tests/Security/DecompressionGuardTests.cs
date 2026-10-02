@@ -194,6 +194,33 @@ public sealed class DecompressionGuardTests
 
     [Theory]
     [MemberData(nameof(Flavours))]
+    public void UnknownBooleanListsAreChargedAgainstTheSkipBudget(string flavour)
+    {
+        // Every element of a boolean list is a byte, and the budget bounds the skip work, so
+        // enough of them across unknown fields is refused instead of being walked.
+        // 15 << 4 in the list header means the size follows as a varint (150 here).
+        byte[] list = Concat(
+            new byte[] { (15 << 4) | 1, 0x96, 0x01 },
+            Enumerable.Repeat((byte)1, 150).ToArray()
+        );
+        var fields = new List<byte[]>
+        {
+            Short(1, 5, I32(0)),
+            Short(1, 5, I32(64)),
+            Short(1, 5, I32(8)),
+        };
+        for (int id = 20; id < 30; id++)
+        {
+            fields.Add(Long(id, 9, list));
+        }
+
+        fields.Add(Stop);
+
+        ShouldRejectHeader(flavour, Concat(fields.ToArray()), "to validate");
+    }
+
+    [Theory]
+    [MemberData(nameof(Flavours))]
     public void LastWriterWinsOnARepeatedSizeSoARepeatIsRefused(string flavour)
     {
         // Parquet.Net keeps the last value it reads, so a small size followed by a huge one must

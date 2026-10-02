@@ -324,7 +324,12 @@ internal static class DecompressionGuardComponent
                 if (count > _budget) throw Malformed("has a list that is too long to validate");
                 for (long i = 0; i < count; i++)
                 {
-                    if (elementType == 1 || elementType == 2) ReadByte();
+                    if (elementType == 1 || elementType == 2)
+                    {
+                        // A boolean element is one byte and is not charged by SkipValue.
+                        if (--_budget < 0) throw Malformed("is too complex to validate");
+                        ReadByte();
+                    }
                     else SkipValue(elementType, depth + 1);
                 }
             }
