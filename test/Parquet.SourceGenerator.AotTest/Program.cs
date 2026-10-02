@@ -551,7 +551,7 @@ internal static class Program
 
     private static async Task ColumnBatchReadAsync()
     {
-        // Generic ReadOnlySpan<T> accessors over pooled arrays, driven by an async iterator: all
+        // Generic ReadOnlyMemory<T> lanes over pooled arrays, driven by an async iterator: all
         // statically reachable, but worth pinning in the native binary so a future change that
         // reaches for reflection here is caught by the publish, not by a consumer.
         var written = new List<AotNarrowRecord>();
@@ -571,16 +571,15 @@ internal static class Program
         int rows = 0;
         int groups = 0;
         string? lastLabel = null;
+        AotNarrowRecordBatch kept = default;
         await foreach (
-            AotNarrowRecordParquetExtensions.ColumnBatch batch in AotNarrowRecordParquet
-                .From(stream)
-                .Batches()
+            AotNarrowRecordBatch batch in AotNarrowRecordParquet.From(stream).AsBatches()
         )
         {
-            Expect(batch.RowGroupIndex == groups, $"row group index out of order at {groups}");
+            kept = batch;
             groups++;
-            ReadOnlySpan<int> ids = batch.IdSpan;
-            ReadOnlySpan<string> labels = batch.LabelSpan;
+            ReadOnlySpan<int> ids = batch.Id.Span;
+            ReadOnlySpan<ReadOnlyMemory<char>> labels = batch.Label.Span;
             Expect(
                 ids.Length == batch.RowCount && labels.Length == batch.RowCount,
                 "column spans must be RowCount long"
@@ -588,7 +587,7 @@ internal static class Program
             for (int i = 0; i < ids.Length; i++)
             {
                 idSum += ids[i];
-                lastLabel = labels[i];
+                lastLabel = labels[i].ToString();
             }
             rows += batch.RowCount;
         }
@@ -597,6 +596,19 @@ internal static class Program
         Expect(rows == 120, $"expected 120 rows across batches, saw {rows}");
         Expect(idSum == 7140, $"expected id sum 7140, got {idSum}");
         Expect(lastLabel == "row-119", $"expected last label row-119, got {lastLabel}");
+
+        // The borrowed-batch lease (#369) must also survive trimming and AOT: a kept batch throws.
+        bool expired = false;
+        try
+        {
+            _ = kept.Id;
+        }
+        catch (ObjectDisposedException)
+        {
+            expired = true;
+        }
+
+        Expect(expired, "a batch kept past its enumerator must throw ObjectDisposedException");
     }
 
     private static async Task ParallelReadAsync()
@@ -761,7 +773,7 @@ internal static class Program
             }
         }
 
-        var batch = new AotNullableRecordColumnarBatch(
+        var batch = new AotNullableRecordBatch(
             rowCount: rows,
             id: id,
             int32Value: int32Values.AsMemory(0, packed),

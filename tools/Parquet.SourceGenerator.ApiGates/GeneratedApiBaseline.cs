@@ -24,8 +24,8 @@ namespace Parquet.SourceGenerator.ApiGates;
 ///     are meaningful.</description></item>
 ///   <item><description>One member per line. Every line carries its fully-qualified containing
 ///     type, so a line is self-contained and does not change when an unrelated member is added or
-///     removed. One generated file routinely holds several types (the extensions class, a nested
-///     <c>ColumnBatch</c>, a row-group metadata struct, a columnar batch struct).</description></item>
+///     removed. One generated file routinely holds several types (the extensions class, the
+///     <c>&lt;Model&gt;Batch</c> struct, a row-group metadata struct).</description></item>
 ///   <item><description>A type contributes a bare line: <c>Ns.Type</c> — generic types keep their
 ///     type-parameter list, <c>Ns.Type&lt;T&gt;</c>.</description></item>
 ///   <item><description>Methods: <c>Ns.Type.Method(Type param, Type other = 4) -&gt; ReturnType</c>.

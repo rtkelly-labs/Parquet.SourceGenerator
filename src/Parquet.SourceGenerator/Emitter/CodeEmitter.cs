@@ -113,13 +113,12 @@ internal static class CodeEmitter
         // Zero-copy ReadOnlyMemory overloads
         EmitReadMemoryOverloads(builder, model);
 
-        // Struct-of-arrays columnar batch API (#147) — flat models only
-        if (ColumnBatchComponent.Supports(model))
+        // Columnar batch read (#147, #508) — flat models only. The batch type is the one the columnar
+        // writer above takes, emitted once at namespace scope below.
+        if (emitColumnar)
         {
             builder.AppendLine();
-            ColumnBatchComponent.EmitBatchStruct(builder, model);
-            builder.AppendLine();
-            ColumnBatchComponent.EmitReadBatchesAsync(
+            BatchReadComponent.EmitReadBatchesAsync(
                 builder,
                 model,
                 static (b, col, field, buf) => EmitReadWithNullBypass(b, col, field, buf)

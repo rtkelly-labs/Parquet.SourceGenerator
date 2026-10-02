@@ -122,7 +122,7 @@ public sealed class ColumnarHandoffTests
     /// A real caller would already hold these; the test builds them so the two write paths can be
     /// compared on identical data.
     /// </summary>
-    private static ColumnarHandoffModelColumnarBatch Transpose(List<ColumnarHandoffModel> rows)
+    private static ColumnarHandoffModelBatch Transpose(List<ColumnarHandoffModel> rows)
     {
         int count = rows.Count;
         var id = new int[count];
@@ -166,7 +166,7 @@ public sealed class ColumnarHandoffTests
             }
         }
 
-        return new ColumnarHandoffModelColumnarBatch(
+        return new ColumnarHandoffModelBatch(
             rowCount: count,
             id: id,
             name: name,
@@ -239,7 +239,7 @@ public sealed class ColumnarHandoffTests
     public async Task PositionalOverloadMatchesTheBatchOverload()
     {
         List<ColumnarHandoffModel> rows = BuildRows(RowCount);
-        ColumnarHandoffModelColumnarBatch batch = Transpose(rows);
+        ColumnarHandoffModelBatch batch = Transpose(rows);
 
         using var batchStream = new MemoryStream();
         await batch.WriteParquetAsync(batchStream);
@@ -275,7 +275,7 @@ public sealed class ColumnarHandoffTests
     public async Task OversizedBuffersAreSlicedToTheRowCount()
     {
         List<ColumnarHandoffModel> rows = BuildRows(RowCount);
-        ColumnarHandoffModelColumnarBatch full = Transpose(rows);
+        ColumnarHandoffModelBatch full = Transpose(rows);
 
         // A caller reusing a large scratch buffer supplies more entries than rows; only RowCount
         // of them may reach the file.
@@ -287,7 +287,7 @@ public sealed class ColumnarHandoffTests
             packedScores += full.OptionalScoreDefinitionLevels.Span[i];
             packedCounts += full.OptionalCountDefinitionLevels.Span[i];
         }
-        ColumnarHandoffModelColumnarBatch sliced = Rebuild(
+        ColumnarHandoffModelBatch sliced = Rebuild(
             full,
             rowCount: shortCount,
             optionalScore: full.OptionalScore.Slice(0, packedScores),
@@ -311,7 +311,7 @@ public sealed class ColumnarHandoffTests
     [Fact]
     public async Task EmptyBatchWritesNoRowGroup()
     {
-        var batch = new ColumnarHandoffModelColumnarBatch(
+        var batch = new ColumnarHandoffModelBatch(
             rowCount: 0,
             id: default,
             name: default,
@@ -337,7 +337,7 @@ public sealed class ColumnarHandoffTests
     [Fact]
     public void ShortValueColumnIsRejectedAtConstructionWithTheColumnName()
     {
-        ColumnarHandoffModelColumnarBatch valid = Transpose(BuildRows(RowCount));
+        ColumnarHandoffModelBatch valid = Transpose(BuildRows(RowCount));
 
         ArgumentException error = Should.Throw<ArgumentException>(() =>
             Rebuild(valid, score: valid.Score.Slice(0, RowCount - 1))
@@ -349,7 +349,7 @@ public sealed class ColumnarHandoffTests
     [Fact]
     public void ShortNullableStringLaneIsRejectedAtConstruction()
     {
-        ColumnarHandoffModelColumnarBatch valid = Transpose(BuildRows(RowCount));
+        ColumnarHandoffModelBatch valid = Transpose(BuildRows(RowCount));
 
         ArgumentException error = Should.Throw<ArgumentException>(() =>
             Rebuild(valid, name: valid.Name.Slice(0, RowCount - 1))
@@ -361,7 +361,7 @@ public sealed class ColumnarHandoffTests
     [Fact]
     public void ShortDefinitionLevelColumnIsRejectedAtConstructionWithTheColumnName()
     {
-        ColumnarHandoffModelColumnarBatch valid = Transpose(BuildRows(RowCount));
+        ColumnarHandoffModelBatch valid = Transpose(BuildRows(RowCount));
 
         ArgumentException error = Should.Throw<ArgumentException>(() =>
             Rebuild(
@@ -380,7 +380,7 @@ public sealed class ColumnarHandoffTests
     [Fact]
     public void RowCountLargerThanEveryLaneIsRejectedAtConstruction()
     {
-        ColumnarHandoffModelColumnarBatch valid = Transpose(BuildRows(RowCount));
+        ColumnarHandoffModelBatch valid = Transpose(BuildRows(RowCount));
 
         // The "out of step" state #550 describes: RowCount claims more rows than the lanes hold.
         Should.Throw<ArgumentException>(() => Rebuild(valid, rowCount: RowCount + 1));
@@ -389,7 +389,7 @@ public sealed class ColumnarHandoffTests
     [Fact]
     public void NegativeRowCountIsRejectedAtConstruction()
     {
-        ColumnarHandoffModelColumnarBatch valid = Transpose(BuildRows(RowCount));
+        ColumnarHandoffModelBatch valid = Transpose(BuildRows(RowCount));
 
         ArgumentOutOfRangeException error = Should.Throw<ArgumentOutOfRangeException>(() =>
             Rebuild(valid, rowCount: -1)
@@ -401,7 +401,7 @@ public sealed class ColumnarHandoffTests
     public void ValidBatchExposesItsRowCountAndLanes()
     {
         List<ColumnarHandoffModel> rows = BuildRows(RowCount);
-        ColumnarHandoffModelColumnarBatch batch = Transpose(rows);
+        ColumnarHandoffModelBatch batch = Transpose(rows);
 
         batch.RowCount.ShouldBe(RowCount);
         batch.Id.Length.ShouldBe(RowCount);
@@ -414,7 +414,7 @@ public sealed class ColumnarHandoffTests
     {
         // default(T) never goes through the constructor. It has RowCount 0 and empty lanes, which is
         // a consistent (empty) batch, so the write is a no-op rather than an error.
-        ColumnarHandoffModelColumnarBatch batch = default;
+        ColumnarHandoffModelBatch batch = default;
         batch.RowCount.ShouldBe(0);
 
         using var stream = new MemoryStream();
@@ -428,7 +428,7 @@ public sealed class ColumnarHandoffTests
     [Fact]
     public void BatchIsAReadOnlyStructWithGetOnlyPropertiesAndNoPublicFields()
     {
-        Type type = typeof(ColumnarHandoffModelColumnarBatch);
+        Type type = typeof(ColumnarHandoffModelBatch);
 
         type.IsValueType.ShouldBeTrue();
         type.GetCustomAttributes(inherit: false)
@@ -449,8 +449,8 @@ public sealed class ColumnarHandoffTests
     /// Builds a copy of <paramref name="batch"/> with some arguments replaced. Every copy goes
     /// through the validating constructor, which is the point: a mismatched lane cannot be built.
     /// </summary>
-    private static ColumnarHandoffModelColumnarBatch Rebuild(
-        ColumnarHandoffModelColumnarBatch batch,
+    private static ColumnarHandoffModelBatch Rebuild(
+        ColumnarHandoffModelBatch batch,
         int? rowCount = null,
         ReadOnlyMemory<ReadOnlyMemory<char>?>? name = null,
         ReadOnlyMemory<double>? score = null,
@@ -482,7 +482,7 @@ public sealed class ColumnarHandoffTests
         double[] tokens = [7.5, 8.5, 9.5];
         int[] events = [10, 11, 12];
 
-        var batch = new ColumnarCollisionModelColumnarBatch(3, rowCounts, writers, tokens, events);
+        var batch = new ColumnarCollisionModelBatch(3, rowCounts, writers, tokens, events);
 
         // The model's own RowCount column cannot share the member name with the batch row count.
         batch.BatchRowCount.ShouldBe(3);
@@ -507,7 +507,7 @@ public sealed class ColumnarHandoffTests
     [Fact]
     public async Task DenseModelWithoutNullableColumnsExposesNoDefinitionLevelParameters()
     {
-        var batch = new ColumnarDenseModelColumnarBatch(rowCount: 3, a: DenseA, b: DenseB);
+        var batch = new ColumnarDenseModelBatch(rowCount: 3, a: DenseA, b: DenseB);
 
         using var stream = new MemoryStream();
         await batch.WriteParquetAsync(stream);
@@ -522,7 +522,7 @@ public sealed class ColumnarHandoffTests
     public async Task MultipleBatchesAppendAsSeparateRowGroups()
     {
         List<ColumnarHandoffModel> rows = BuildRows(RowCount);
-        ColumnarHandoffModelColumnarBatch batch = Transpose(rows);
+        ColumnarHandoffModelBatch batch = Transpose(rows);
 
         using var stream = new MemoryStream();
         await using (
@@ -614,10 +614,11 @@ public sealed class ColumnarHandoffTests
     {
         string source = EmitFlatSource();
 
-        source.ShouldContain("public readonly struct WidgetColumnarBatch");
-        source.ShouldContain("public global::System.ReadOnlyMemory<double> Weight { get; }");
+        source.ShouldContain("public readonly struct WidgetBatch");
+        source.ShouldContain("public global::System.ReadOnlyMemory<double> Weight =>");
+        source.ShouldContain("public global::System.ReadOnlyMemory<int> WeightDefinitionLevels =>");
         source.ShouldContain(
-            "public global::System.ReadOnlyMemory<int> WeightDefinitionLevels { get; }"
+            "public void FillWeightNullable(global::System.Span<double?> destination)"
         );
         source.ShouldContain("global::System.ReadOnlyMemory<double> weight,");
         source.ShouldContain("global::System.ReadOnlyMemory<int> weightDefinitionLevels");
@@ -665,7 +666,7 @@ public sealed class ColumnarHandoffTests
 
         // Struct/list members carry a definition ladder a caller cannot express as flat buffers,
         // so those models keep the row-oriented API only (documented limitation of #137).
-        source.ShouldNotContain("ColumnarBatch");
+        source.ShouldNotContain("ShipmentBatch");
         source.ShouldNotContain("WriteParquetRowGroupColumnarAsync");
     }
 

@@ -293,3 +293,71 @@ definition–repetition ladder that a caller cannot express as flat per-column b
 models keep the row-oriented API alone. Lifting that restriction means designing a caller-facing
 representation of the level ladder, which is a separate piece of API design rather than an
 extension of this one.
+
+---
+
+## 🔁 7. One Batch Type for Read and Write — Layout Decision (issue #508)
+
+§6 measured the write side with a `<Model>ColumnarBatch` the caller builds. The read side had a
+separate nested `ColumnBatch` with `ReadOnlySpan<T>` accessors and `T?` spans for nullable columns,
+so what a reader yielded could not be handed to the writer. #508 replaces both with one top-level
+`<Model>Batch`: `AsBatches()` yields it and the columnar `WriteParquetAsync` takes it.
+
+### 7.1 The layout question
+
+For one nullable column of `T`, three candidates were weighed in the #561 experiment
+(`NullableBatchLayoutBenchmark`, branch `508-nullable-layout-experiment`):
+
+| | Layout | Notes |
+| :--- | :--- | :--- |
+| **A** | packed non-null values + definition levels | what `WriteAllPartsAsync` and the raw read decoder produce and consume natively |
+| **B** | `T?` per row | easy to consume; costs a transpose on write and doubles the width of small types |
+| **C** | A plus a materialising `T?` accessor | cached per batch, or rebuilt per call |
+
+### 7.2 Decision
+
+- **Numeric and other value columns use A**: a `ReadOnlyMemory<T>` of the packed non-null values and
+  a `ReadOnlyMemory<int>` of definition levels (one per row; the type the writer takes), exactly the
+  shape the write-side batch already had. In the experiment A was the cheapest of the three to
+  write, to read and to store.
+- **String and byte-array columns stay inline-nullable**, `ReadOnlyMemory<ReadOnlyMemory<char>?>` and
+  `ReadOnlyMemory<ReadOnlyMemory<byte>?>`, which is what the writer takes for them. Storing them packed
+  cost 28-280 us per column extra in the experiment.
+- **No cached `T?` accessor.** Materialising `T?` into a per-batch array allocated large arrays and
+  was 2x slower under Server GC. What exists instead is an explicit opt-in method per nullable value
+  column, `Fill<Column>Nullable(Span<T?> destination)`: O(rows), into a buffer the caller owns, with
+  no allocation and no caching. It is a convenience with a cost, documented as one; the packed lanes
+  stay the preferred way to consume a batch.
+
+### 7.3 How the read path produces layout A
+
+Fixed-width columns wrap the pooled buffer they were decoded into. A nullable value column is read
+raw (`ReadRawAsync`) into a packed value buffer plus definition levels, which is the decoder's own
+shape: there is no expansion pass and no copy (the experiment's "A wrap" rather than "A copy").
+Strings and byte arrays are decoded as on the POCO path and then wrapped, one inline-nullable
+memory per row; the memories alias the decoded objects, which the garbage collector owns. A column
+absent from the file, entirely null in a row group, or stored as required in the file answers with
+the matching levels and no extra page read.
+
+### 7.4 Ownership (issue #369)
+
+A batch from `AsBatches()` aliases pooled arrays, so it is *borrowed*: valid until the next
+`MoveNextAsync` or disposal. A copyable struct cannot stop a caller keeping it, so the batch carries a
+lease (a counter on a small object, one per enumeration, no per-batch allocation) which the
+iterator expires in the `finally` that returns the buffers, before it returns them. Every lane
+property checks the lease, so a kept batch throws `ObjectDisposedException` rather than reading
+memory another renter now owns. The same check covers the fill methods and writing the batch. A
+batch built by a caller has no lease and never expires; `default` is a valid empty batch.
+
+What this does not cover: a `ReadOnlyMemory<T>` already copied out of a live batch is a plain view
+over the pooled array and is not protected, and the check assumes one consumer advancing the
+enumerator. #369 asks for a model in which the borrowed buffers cannot escape at all (owned
+batches, or callback-scoped borrowing); the lease turns the common mistake into an immediate
+exception without changing the `await foreach` shape, and the stronger models remain open.
+
+### 7.5 Not measured here
+
+The write path was not re-benchmarked for this change. `<Model>Batch.WriteParquetAsync` calls the
+same writer with the same lanes as the §6 columnar handoff, plus one liveness check per lane
+property read, so the §6 numbers should hold; a `/benchmark` run of `ColumnarHandoffBenchmark`
+against §6.2 is still owed before merge.

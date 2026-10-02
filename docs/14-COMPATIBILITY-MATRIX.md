@@ -277,7 +277,7 @@ level arrays are needed, and the resulting file is byte-identical to the POCO wr
 
 The bridge validates the `RecordBatch`, materializes each Arrow column into a local lane, then
 opens its own row group (`writer.CreateRowGroup()`) and writes each column directly. It no longer
-builds a `{Type}ColumnarBatch`: that type is a validated `readonly struct` and cannot be filled
+builds a `{Type}Batch`: that type is a validated `readonly struct` and cannot be filled
 one column at a time. It does not delegate to the columnar row-group writer. Arrow-specific validation
 and offset/bitmap conversion stay at the adapter boundary.
 

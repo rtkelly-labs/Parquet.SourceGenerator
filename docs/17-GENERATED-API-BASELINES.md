@@ -74,8 +74,8 @@ Rules that hold for every line:
 
 1. **`->` introduces the return type.** `void` is written out rather than omitted.
 2. **Every line carries its fully-qualified containing type.** One generated file routinely holds
-   several types — the extensions class, a nested `ColumnBatch`, a `{T}RowGroupMetadata` struct, a
-   `{T}ColumnarBatch` struct, and the conditional Arrow bridge partial. A line is therefore
+   several types — the extensions class, the `{T}Batch` struct, a `{T}RowGroupMetadata` struct,
+   and the conditional Arrow bridge partial. A line is therefore
    self-contained: adding or removing an unrelated member never rewrites it.
 3. **Parameters carry type, name and default value**, in source order:
    `(System.IO.Stream stream, ParquetSerializerOptions? options = null)`. Parameter modifiers
@@ -237,8 +237,8 @@ types came and went; the same section of the full diff page is the line-level re
 the emitted consumer API, and reads exactly as the old baseline diff did:
 
 ```diff
--SampleDomain.Models.OrderEventColumnarBatch.RowCount -> long
-+SampleDomain.Models.OrderEventColumnarBatch.RowCount -> int
+-SampleDomain.Models.OrderEventBatch.RowCount -> long
++SampleDomain.Models.OrderEventBatch.RowCount -> int
 ```
 
 An empty section on a pull request that only retunes a loop is the evidence that it changed no

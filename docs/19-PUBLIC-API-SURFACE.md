@@ -213,6 +213,11 @@ filtered reader, `Where()` on a parallel or already-filtered reader, and `AsAsyn
 `ToArrayAsync` and `AsAsyncEnumerable` (plus `Batches`, whose shape #369 owns); `ToListAsync` was
 removed because `List<T>` versus `T[]` is a collection preference, not a read capability (#479).
 
+> **Amended (#507, #508).** The two batch types above are now one top-level `{T}Batch` (`ReadOnlyMemory<T>`
+> lanes, packed values plus `…DefinitionLevels` for nullable value columns, inline-nullable text and
+> binary), `Batches()` is `AsBatches()`, and the batch the reader yields is the batch the columnar
+> `WriteParquetAsync` takes. Layout reasoning and ownership: [12](12-BUFFER-REUSE-AND-EXTRACTION-STRATEGIES.md) §7.
+
 ### D3 — Fate of the existing flat methods
 
 **Removed from the modern emitter before `0.1.0` (#480).** The builder is the only modern read

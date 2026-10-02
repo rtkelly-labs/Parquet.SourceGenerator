@@ -108,14 +108,10 @@ public class ColumnBatchAggregationBenchmark
         using var stream = new MemoryStream(_parquetBytes);
         double sum = 0;
         long sumB = 0;
-        await foreach (
-            ScaleEventParquetExtensions.ColumnBatch batch in ScaleEventParquet
-                .From(stream)
-                .Batches()
-        )
+        await foreach (ScaleEventBatch batch in ScaleEventParquet.From(stream).AsBatches())
         {
-            ReadOnlySpan<double> a = batch.ValASpan;
-            ReadOnlySpan<long> b = batch.ValBSpan;
+            ReadOnlySpan<double> a = batch.ValA.Span;
+            ReadOnlySpan<long> b = batch.ValB.Span;
             for (int i = 0; i < a.Length; i++)
             {
                 sum += a[i];
@@ -135,14 +131,10 @@ public class ColumnBatchAggregationBenchmark
         using var stream = new MemoryStream(_parquetBytes);
         double sum = 0;
         long sumB = 0;
-        await foreach (
-            ScaleEventParquetExtensions.ColumnBatch batch in ScaleEventParquet
-                .From(stream)
-                .Batches()
-        )
+        await foreach (ScaleEventBatch batch in ScaleEventParquet.From(stream).AsBatches())
         {
-            sum += SumVectorized(batch.ValASpan);
-            sumB += SumVectorized(batch.ValBSpan);
+            sum += SumVectorized(batch.ValA.Span);
+            sumB += SumVectorized(batch.ValB.Span);
         }
         return sum + sumB;
     }
