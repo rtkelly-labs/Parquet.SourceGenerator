@@ -1,0 +1,29 @@
+name: Verify Package Layout
+description: Compare the exact entry list of every packed .nupkg with its committed manifest in .github/package-layout.
+
+inputs:
+  packages:
+    description: Directory holding the packed .nupkg files.
+    default: artifacts
+  version:
+    description: Expected package version. Empty skips the version check (CI packs a default version).
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    # One definition for CI and release (#400), so the gate cannot drift into two copies. The
+    # script fails on an entry the manifest does not list, a listed entry that is missing, a package
+    # without a manifest and a manifest without a package. A new packed path is a failure by default.
+    - name: Verify exact package entries against the committed manifests
+      shell: bash
+      env:
+        PACKAGES_DIR: ${{ inputs.packages }}
+        EXPECTED_VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+        args=(--packages "$PACKAGES_DIR")
+        if [ -n "$EXPECTED_VERSION" ]; then
+          args+=(--version "$EXPECTED_VERSION")
+        fi
+        dotnet run scripts/VerifyPackageLayout.cs -- "${args[@]}"
