@@ -2017,8 +2017,8 @@ internal static class TargetParser
     /// <c>GetMembers()</c> returns declared members only, so a type deriving from a base that
     /// carried columns silently lost every one of them — no diagnostic, just missing columns.
     /// <para>
-    /// Two deliberate choices. The walk stops at the first base type that is neither declared in source
-    /// nor Parquet-aware (see <see cref="ContributesColumns"/>), so a model deriving from a
+    /// Two deliberate choices. The walk skips every base type that is neither declared in source nor
+    /// Parquet-aware (see <see cref="ContributesColumns"/>), so a model deriving from a
     /// framework type does not drag in <c>Exception.Data</c> and friends as
     /// columns. And members are collected base-first, with a derived declaration replacing a
     /// shadowed base one *in the base's position* — so adding an <see langword="override"/> or <c>new</c>
@@ -2034,11 +2034,10 @@ internal static class TargetParser
             current = current.BaseType
         )
         {
-            chain.Add(current);
-
-            INamedTypeSymbol? next = current.BaseType;
-            if (next is null || !ContributesColumns(next))
-                break;
+            // An unannotated metadata base is skipped, not a stop: an annotated ancestor above it
+            // (a framework or third-party class in between) still contributes (#420).
+            if (ReferenceEquals(current, typeSymbol) || ContributesColumns(current))
+                chain.Add(current);
         }
 
         chain.Reverse();
@@ -2099,14 +2098,19 @@ internal static class TargetParser
         return false;
     }
 
+    // The parser's own matchers, so every spelling it honours on a member (including the legacy
+    // Parquet.Attributes and Parquet.Serialization.Attributes namespaces) marks a base as aware.
+    // The Json attributes are not Parquet attributes and do not count.
     private static bool IsParquetAttribute(AttributeData attribute) =>
-        attribute.AttributeClass?.ToDisplayString()
-            is AttributeFullName
-                or ColumnAttributeFullName
-                or IgnoreAttributeFullName
-                or DecimalAttributeFullName
-                or TimestampAttributeFullName
-                or SortKeyAttributeFullName;
+        attribute.AttributeClass?.ToDisplayString() == AttributeFullName
+        || MatchesAttributeName(attribute.AttributeClass, ColumnFullNames, ColumnShortNames)
+        || (
+            MatchesAttributeName(attribute.AttributeClass, IgnoreFullNames, IgnoreShortNames)
+            && attribute.AttributeClass?.Name.StartsWith("Json", StringComparison.Ordinal) != true
+        )
+        || MatchesAttributeName(attribute.AttributeClass, SortKeyFullNames, SortKeyShortNames)
+        || MatchesAttributeName(attribute.AttributeClass, DecimalFullNames, DecimalShortNames)
+        || MatchesAttributeName(attribute.AttributeClass, TimestampFullNames, TimestampShortNames);
 
     /// <summary>
     /// Types that pass straight through as a <see cref="PropertyKind.Primitive"/> <c>DataField</c>.

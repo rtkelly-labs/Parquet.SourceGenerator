@@ -41,6 +41,11 @@ public sealed class MetadataBaseColumnTests
         {
             public int Hidden { get; set; }
         }
+
+        public abstract class MiddleUnannotated : Audited
+        {
+            public int Hidden2 { get; set; }
+        }
         """;
 
     private const string ModelSource = """
@@ -65,6 +70,12 @@ public sealed class MetadataBaseColumnTests
         public partial class FromFramework : System.Exception
         {
             public int Code { get; set; }
+        }
+
+        [ParquetSerializable]
+        public partial class ThroughAnUnannotatedMiddle : Contracts.MiddleUnannotated
+        {
+            public int Own { get; set; }
         }
 
         [ParquetSerializable]
@@ -122,6 +133,10 @@ public sealed class MetadataBaseColumnTests
     [Fact]
     public void ABaseFromAnotherAssemblyMarkedSerializableContributesItsColumns() =>
         Columns("FromAnnotatedType").ShouldBe(["Amount", "Name"]);
+
+    [Fact]
+    public void AnAnnotatedAncestorAboveAnUnannotatedMetadataBaseStillContributes() =>
+        Columns("ThroughAnUnannotatedMiddle").ShouldBe(["id", "created_by", "Own"]);
 
     [Fact]
     public void AFrameworkBaseStillContributesNothing() =>
