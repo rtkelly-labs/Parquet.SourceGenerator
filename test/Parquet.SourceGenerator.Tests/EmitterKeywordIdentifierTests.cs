@@ -25,7 +25,7 @@ public partial record KeywordRow
 
     public int? @lock { get; init; }
 
-    public string @string { get; init; } = "";
+    public string @struct { get; init; } = "";
 
     public KeywordInner? @params { get; init; }
 
@@ -39,7 +39,7 @@ public partial record KeywordFlat
 
     public int? @lock { get; init; }
 
-    public string? @object { get; init; }
+    public string? @operator { get; init; }
 
     public int @value { get; init; }
 }
@@ -52,6 +52,11 @@ public partial record KeywordFlat
 /// </summary>
 public sealed class EmitterKeywordIdentifierTests
 {
+    private static readonly int[] EventValues = [1, 2];
+    private static readonly int?[] LockValues = [10, null];
+    private static readonly string?[] OperatorValues = ["a", null];
+    private static readonly int[] ValueValues = [7, 8];
+
     // Reserved keywords, contextual keywords and a type name, in every shape the emitters handle:
     // plain, nullable, string, list, struct, and a target type that is itself a keyword.
     private const string KeywordSource = """
@@ -105,7 +110,7 @@ public sealed class EmitterKeywordIdentifierTests
             {
                 @class = 1,
                 @lock = 2,
-                @string = "s",
+                @struct = "s",
                 @params = new KeywordInner { @in = 3 },
                 @checked = new List<int> { 4, 5 },
             },
@@ -121,7 +126,7 @@ public sealed class EmitterKeywordIdentifierTests
         read.Length.ShouldBe(2);
         read[0].@class.ShouldBe(1);
         read[0].@lock.ShouldBe(2);
-        read[0].@string.ShouldBe("s");
+        read[0].@struct.ShouldBe("s");
         read[0].@params!.@in.ShouldBe(3);
         read[0].@checked.ShouldBe(new List<int> { 4, 5 });
         read[1].@class.ShouldBe(6);
@@ -137,14 +142,14 @@ public sealed class EmitterKeywordIdentifierTests
             {
                 @event = 1,
                 @lock = 10,
-                @object = "a",
+                @operator = "a",
                 @value = 7,
             },
             new()
             {
                 @event = 2,
                 @lock = null,
-                @object = null,
+                @operator = null,
                 @value = 8,
             },
         };
@@ -164,9 +169,9 @@ public sealed class EmitterKeywordIdentifierTests
             rows.AddRange(await KeywordFlatParquet.From(rewritten).ToArrayAsync());
         }
 
-        rows.Select(r => r.@event).ShouldBe(new[] { 1, 2 });
-        rows.Select(r => r.@lock).ShouldBe(new int?[] { 10, null });
-        rows.Select(r => r.@object).ShouldBe(new string?[] { "a", null });
-        rows.Select(r => r.@value).ShouldBe(new[] { 7, 8 });
+        rows.Select(r => r.@event).ShouldBe(EventValues);
+        rows.Select(r => r.@lock).ShouldBe(LockValues);
+        rows.Select(r => r.@operator).ShouldBe(OperatorValues);
+        rows.Select(r => r.@value).ShouldBe(ValueValues);
     }
 }
