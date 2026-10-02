@@ -226,6 +226,12 @@ The [artifact-backed baseline approval proposal](./ARTIFACT-BACKED-BASELINES.md)
      - Verdicts on polyfills, dependency bundling, generator test frameworks, syntax builders, and author analyzers against what this repository already does.
      - Why none of it should be adopted as a package, and where the parts that survive evaluation already live in the backlog (#439, #471, #472).
 
+31. **[53 - Test Sufficiency Assessment (#477)](./53-TEST-SUFFICIENCY-ASSESSMENT.md)**
+     - Every level and type of test with counts, what CI runs and what blocks a merge, the coverage
+       numbers and what they do not measure, and a path matrix (shape, type, entry point, option,
+       backend) marked behavioural, golden-only or uncovered.
+     - Verdict against doc 47 and the prioritised list of tests to add before `0.1`.
+
 ---
 
 ## ⚡ Quick Summary of Intent
