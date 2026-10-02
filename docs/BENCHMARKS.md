@@ -113,7 +113,7 @@ dotnet run -c Release --project benchmarks/Parquet.SourceGenerator.Benchmarks/Pa
 The GitHub Actions performance workflow (`.github/workflows/benchmarks.yml`) automatically executes on manual dispatch or scheduled runs:
 1. Runs BenchmarkDotNet across `ScalingSerializationBenchmark`, `ScalingDeserializationBenchmark`, and `GuidInterchangeBenchmark`.
 2. Executes the native .NET tool `tools/BenchmarkSummaryGenerator` to format a clean 4-row executive summary table.
-3. Automatically opens a Pull Request updating `README.md` and `PACKAGE_README.md` whenever performance baseline numbers change.
+3. Opens a Pull Request updating `README.md` and `PACKAGE_README.md` only when a headline row moves past the noise thresholds: more than 10% in allocation or 30% in time, or a row appears, disappears or changes scale (`--alloc-threshold`, `--time-threshold`). A shared runner moves timing tens of percent between identical runs, so without the filter every Sunday would rewrite the table from noise. The PR is opened with the `WORKFLOW_PR_TOKEN` secret, because a PR opened with `GITHUB_TOKEN` starts no checks and can never merge (#568); without the secret the run says so and opens nothing (the table is in the run summary and the `benchmark-results` artifact). Setup: [docs/51](./51-CI-GATE-MATRIX.md), R11.
 4. Runs a separate **regression gate** job: a small curated set of benchmarks, compared on allocated bytes against the committed `benchmarks/baseline.json`. It fails the job on an allocation regression, and a failing Sunday run opens (or comments on) one `area:ci` issue.
 
 ### 📏 The regression gate

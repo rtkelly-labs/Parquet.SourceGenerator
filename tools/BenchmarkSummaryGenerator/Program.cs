@@ -54,8 +54,11 @@ public static class Program
                 combinedReadmeTable = $"{headlineTable}\n\n{realWorldTable}";
             }
 
-            UpdateReadmeFile("README.md", combinedReadmeTable);
-            UpdateReadmeFile("PACKAGE_README.md", combinedReadmeTable);
+            if (ReadmeChangeIsSignificant(combinedReadmeTable, args))
+            {
+                UpdateReadmeFile("README.md", combinedReadmeTable);
+                UpdateReadmeFile("PACKAGE_README.md", combinedReadmeTable);
+            }
         }
 
         if (!string.IsNullOrEmpty(outputPath))
@@ -70,6 +73,56 @@ public static class Program
         }
 
         return 0;
+    }
+
+    /// <summary>
+    /// Whether the README table should be rewritten. Without <c>--alloc-threshold</c> or
+    /// <c>--time-threshold</c> it always is, which is what a local run wants. The scheduled
+    /// workflow passes both so that run-to-run noise on a shared runner does not rewrite the table
+    /// and open a pull request (#568).
+    /// </summary>
+    private static bool ReadmeChangeIsSignificant(string freshTable, string[] args)
+    {
+        if (
+            OptionValue(args, "--alloc-threshold") is null
+            && OptionValue(args, "--time-threshold") is null
+        )
+        {
+            return true;
+        }
+
+        string committed = ReadmeTable("README.md");
+        bool significant = HeadlineNoiseFilter.IsSignificant(
+            committed,
+            freshTable,
+            ParseTolerance(
+                args,
+                "--alloc-threshold",
+                HeadlineNoiseFilter.DefaultAllocationThreshold
+            ),
+            ParseTolerance(args, "--time-threshold", HeadlineNoiseFilter.DefaultTimeThreshold),
+            out string reason
+        );
+
+        Console.WriteLine(
+            significant
+                ? $"Headline table will be rewritten: {reason}"
+                : $"Headline table left as committed: {reason}"
+        );
+        return significant;
+    }
+
+    private static string ReadmeTable(string path)
+    {
+        if (!File.Exists(path))
+            return string.Empty;
+
+        string content = File.ReadAllText(path, Encoding.UTF8);
+        int start = content.IndexOf(StartMarker, StringComparison.Ordinal);
+        int end = content.IndexOf(EndMarker, StringComparison.Ordinal);
+        return start >= 0 && end > start
+            ? content.Substring(start + StartMarker.Length, end - start - StartMarker.Length)
+            : string.Empty;
     }
 
     /// <summary>

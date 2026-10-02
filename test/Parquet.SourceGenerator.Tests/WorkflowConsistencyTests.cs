@@ -194,6 +194,56 @@ public sealed class WorkflowConsistencyTests
     }
 
     /// <summary>
+    /// A pull request opened with GITHUB_TOKEN starts no workflows, so it never receives the
+    /// required checks and can never merge (#568). Every workflow that opens one must do it with
+    /// the token that does start workflows, and must say so rather than open a check-less PR
+    /// when that token is not configured.
+    /// </summary>
+    [Fact]
+    public void WorkflowsThatOpenPullRequestsUseTheTokenThatStartsChecks()
+    {
+        string root = FindRepositoryRoot();
+        string workflows = Path.Combine(root, ".github", "workflows");
+        string[] opening = Directory
+            .GetFiles(workflows, "*.yml")
+            .Where(file =>
+                IOFile.ReadAllText(file).Contains("gh pr create", StringComparison.Ordinal)
+            )
+            .ToArray();
+
+        opening.ShouldNotBeEmpty("The scan found no workflow that opens a pull request.");
+
+        foreach (string file in opening)
+        {
+            string name = Path.GetFileName(file);
+            string text = IOFile.ReadAllText(file).Replace("\r\n", "\n", StringComparison.Ordinal);
+
+            text.ShouldContain("secrets.WORKFLOW_PR_TOKEN", customMessage: name);
+            text.ShouldContain("WORKFLOW_PR_TOKEN is not configured", customMessage: name);
+
+            // `gh pr create` runs under the PR token, never the default one.
+            int create = text.IndexOf("gh pr create", StringComparison.Ordinal);
+            string before = text[..create];
+            int stepStart = before.LastIndexOf("      - name:", StringComparison.Ordinal);
+            string step = text[stepStart..];
+            int stepEnd = step.IndexOf("\n      - name:", 1, StringComparison.Ordinal);
+            if (stepEnd > 0)
+                step = step[..stepEnd];
+
+            step.ShouldNotContain("secrets.GITHUB_TOKEN", customMessage: name);
+            step.ShouldContain("PR_TOKEN: ${{ secrets.WORKFLOW_PR_TOKEN }}", customMessage: name);
+        }
+    }
+
+    [Fact]
+    public void TheHeadlineRefreshAppliesTheNoiseThresholds()
+    {
+        string workflow = Read(FindRepositoryRoot(), ".github", "workflows", "benchmarks.yml");
+
+        workflow.ShouldContain("--update-readme --alloc-threshold 0.10 --time-threshold 0.30");
+    }
+
+    /// <summary>
     /// The gated list, the baseline and the examined-N rule have to agree: every listed benchmark
     /// has a baseline, and every baseline entry is listed. Otherwise the gate either fails on
     /// day one or silently stops covering something.
