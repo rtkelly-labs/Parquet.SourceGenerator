@@ -27,6 +27,8 @@ public sealed class ShadowedCollectionTests
             public class Dictionary<T> { }
 
             public class List<TFirst, TSecond> { }
+
+            public class IList<T> { }
         }
 
         namespace Demo
@@ -45,6 +47,14 @@ public sealed class ShadowedCollectionTests
                 public int Id { get; set; }
 
                 public global::System.Collections.Generic.List<int, int> Bad { get; set; } = new();
+            }
+
+            [ParquetSerializable]
+            public partial class ShadowedSameArity
+            {
+                public int Id { get; set; }
+
+                public global::System.Collections.Generic.IList<int> Bad { get; set; } = new();
             }
 
             [ParquetSerializable]
@@ -80,6 +90,7 @@ public sealed class ShadowedCollectionTests
     [Theory]
     [InlineData("ShadowedMap")]
     [InlineData("ShadowedList")]
+    [InlineData("ShadowedSameArity")]
     public void AShadowedCollectionNameWithAnotherArityIsRejectedNotIndexed(string name)
     {
         TargetParserResult result = Parse(name);

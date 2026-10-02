@@ -1449,8 +1449,12 @@ internal static class TargetParser
             // The name match is by display string, so a user type declared into the framework
             // namespace with another arity (a Dictionary<T>) would otherwise classify here and
             // throw on TypeArguments[1] in BuildCompoundModel. Arity is part of the match (#417).
+            // A type the compiling assembly declares itself is never the framework collection,
+            // whatever its name and arity, so only metadata definitions qualify.
+            bool fromMetadata = generic.ConstructedFrom.DeclaringSyntaxReferences.IsEmpty;
             if (
-                generic.TypeArguments.Length == 1
+                fromMetadata
+                && generic.TypeArguments.Length == 1
                 && Array.IndexOf(SupportedCollectionDefinitions, definition) >= 0
             )
             {
@@ -1459,7 +1463,8 @@ internal static class TargetParser
             }
 
             if (
-                generic.TypeArguments.Length == 2
+                fromMetadata
+                && generic.TypeArguments.Length == 2
                 && Array.IndexOf(SupportedDictionaryDefinitions, definition) >= 0
             )
             {
