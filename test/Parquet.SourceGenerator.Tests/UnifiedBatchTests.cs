@@ -775,7 +775,7 @@ public sealed class UnifiedBatchTests
             UShortValue = Keep(4) ? (ushort)seed : null,
             IntValue = Keep(5) ? seed * 1000 : null,
             UIntValue = Keep(6) ? (uint)seed : null,
-            LongValue = Keep(7) ? seed * 1_000_000_000L : null,
+            LongValue = Keep(7) ? seed * 100_000_000_000L : null,
             ULongValue = Keep(8) ? (ulong)seed : null,
             FloatValue = Keep(9) ? seed + 0.5f : null,
             DoubleValue = i < 8 || !Keep(10) ? null : seed + 0.25,
