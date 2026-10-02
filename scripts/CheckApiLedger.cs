@@ -193,12 +193,12 @@ if (addedCatalogueLines.Count == 0 && removedCatalogueLines.Count == 0)
     return failures == 0 ? 0 : 1;
 }
 
-string[] addedLedgerHeadings = Git($"diff --unified=0 --no-color {range} -- \"{LedgerPath}\"")
-    .Split('\n')
-    .Where(line => line.StartsWith("+### ", StringComparison.Ordinal))
-    .Select(line => line.Substring(1).TrimEnd('\r'))
-    .ToArray();
-int addedLedgerEntries = addedLedgerHeadings.Length;
+// Each added heading with its line number in the ledger at HEAD, from the hunk headers: two entries
+// may share a heading, so an entry is located by position and never by text.
+List<(string Heading, int Line)> addedLedgerHeadings = AddedHeadings(
+    Git($"diff --unified=0 --no-color {range} -- \"{LedgerPath}\"")
+);
+int addedLedgerEntries = addedLedgerHeadings.Count;
 
 Console.WriteLine(
     $"{addedCatalogueLines.Count} signature(s) added, {removedCatalogueLines.Count} signature(s) removed; "
@@ -274,16 +274,18 @@ else
 
 return failures == 0 ? 0 : 1;
 
-List<string> ValidateAddedEntries(string[] headings)
+List<string> ValidateAddedEntries(List<(string Heading, int Line)> headings)
 {
     var problems = new List<string>();
     string[] lines = File.ReadAllLines(LedgerPath);
-    foreach (string heading in headings)
+    foreach ((string heading, int line) in headings)
     {
-        int start = Array.FindIndex(lines, line => line.TrimEnd() == heading.TrimEnd());
-        if (start < 0)
+        int start = line - 1;
+        if (start < 0 || start >= lines.Length || lines[start].TrimEnd() != heading.TrimEnd())
         {
-            problems.Add($"'{heading}': the heading is not in {LedgerPath} at HEAD.");
+            problems.Add(
+                $"'{heading}': the heading is not at line {line} of {LedgerPath} at HEAD."
+            );
             continue;
         }
 
@@ -325,7 +327,50 @@ List<string> ValidateAddedEntries(string[] headings)
     return problems;
 }
 
-// The text of a `- **Key:** value` bullet, including its continuation lines up to the next bullet.
+// `- **Key:**` or `* **Key:**`: the line that ends the previous field's value.
+static bool IsKeyBullet(string line)
+{
+    string text = line.TrimStart();
+    return (
+        text.StartsWith("- **", StringComparison.Ordinal)
+        || text.StartsWith("* **", StringComparison.Ordinal)
+    );
+}
+
+static List<(string Heading, int Line)> AddedHeadings(string diff)
+{
+    var headings = new List<(string, int)>();
+    int next = 0;
+    foreach (string raw in diff.Split('\n'))
+    {
+        string line = raw.TrimEnd('\r');
+        if (line.StartsWith("@@", StringComparison.Ordinal))
+        {
+            // @@ -a,b +c,d @@: the added lines start at c in the new file.
+            int plus = line.IndexOf('+', StringComparison.Ordinal);
+            int end = plus < 0 ? -1 : line.IndexOfAny(new[] { ',', ' ' }, plus);
+            next =
+                end > plus && int.TryParse(line.Substring(plus + 1, end - plus - 1), out int start)
+                    ? start
+                    : 0;
+        }
+        else if (
+            line.StartsWith("+", StringComparison.Ordinal)
+            && !line.StartsWith("+++", StringComparison.Ordinal)
+        )
+        {
+            if (line.StartsWith("+### ", StringComparison.Ordinal))
+            {
+                headings.Add((line.Substring(1), next));
+            }
+
+            next++;
+        }
+    }
+
+    return headings;
+}
+
 // A bullet line without its leading `- ` or `* `; the `**` that opens a bold key must survive.
 static string BulletText(string line)
 {
@@ -337,6 +382,7 @@ static string BulletText(string line)
         : text;
 }
 
+// The text of a `- **Key:** value` bullet, including its continuation lines up to the next key bullet.
 string EntryValue(List<string> block, string key)
 {
     string marker = $"**{key}:**";
@@ -354,7 +400,7 @@ string EntryValue(List<string> block, string key)
     for (int i = index + 1; i < block.Count; i++)
     {
         string line = block[i];
-        if (line.TrimStart().StartsWith("- **", StringComparison.Ordinal))
+        if (IsKeyBullet(line))
         {
             break;
         }

@@ -152,6 +152,56 @@ public class CheckApiLedgerGateTests
 
     [Fact]
     [Trait("Category", "Integration")]
+    public async Task ANewIncompleteEntryWithTheSameHeadingAsACompleteOneIsStillCheckedAsync()
+    {
+        // The earlier entry is complete; the newly added one below it, with an identical heading,
+        // is not. Locating the entry by heading text would read the earlier block and pass.
+        var repo = new TempRepo();
+        using (repo)
+        {
+            repo.Write(Seams, "#nullable enable\n");
+            repo.Write(Ledger, "# Ledger\n\n" + FullEntry("A.B.M()"));
+            repo.Commit("base");
+            repo.Write(Seams, "#nullable enable\nA.B.M() -> void\n");
+            repo.Write(
+                Ledger,
+                "# Ledger\n\n" + FullEntry("A.B.M()") + "### 2026-10-02 - `A.B.M()`\n"
+            );
+            repo.Commit("catalogue and a bare duplicate heading");
+
+            ScriptResult result = await repo.RunAsync();
+
+            result.ExitCode.ShouldBe(1, result.Describe());
+            result.Stderr.ShouldContain("**Rationale:** is missing or empty");
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task AnEmptyFieldIsNotFilledByTheNextStarBulletAsync()
+    {
+        // `* ` bullets are accepted as keys, so they must also end the previous field's value:
+        // an empty Rationale followed by a filled `* **Alternatives considered:**` is still empty.
+        const string entry = """
+            # Ledger
+
+            ### 2026-10-02 - `A.B.M()`
+            * **Surface:** seam
+            * **Semver:** internal
+            * **Issue:** #1
+            * **Rationale:**
+            * **Alternatives considered:** none were viable
+            """;
+        using TempRepo repo = CatalogueGrowsBy(1, entry + "\n");
+
+        ScriptResult result = await repo.RunAsync();
+
+        result.ExitCode.ShouldBe(1, result.Describe());
+        result.Stderr.ShouldContain("**Rationale:** is missing or empty");
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
     public async Task OneCompleteEntryMayCoverSeveralCatalogueLinesAsync()
     {
         // The ledger's own entries do this (the #481 entry records 16 removed lines), so the rule
