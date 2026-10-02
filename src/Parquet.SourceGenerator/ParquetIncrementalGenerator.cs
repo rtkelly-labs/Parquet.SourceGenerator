@@ -24,24 +24,30 @@ internal sealed class ParquetIncrementalGenerator : IIncrementalGenerator
         IncrementalValueProvider<GeneratorConfiguration> configuration = context
             .CompilationProvider.Combine(context.AnalyzerConfigOptionsProvider)
             .Select(static (pair, _) => GeneratorConfiguration.From(pair.Left, pair.Right));
-        IncrementalValuesProvider<GeneratorSyntaxContext> targetNodes =
-            context.SyntaxProvider.CreateSyntaxProvider(
+        // The transform parses and returns models, never the syntax context: a context holds a
+        // SemanticModel, which roots the compilation, and has no value equality, so caching it
+        // retained a compilation per target and left nothing downstream able to compare as
+        // unchanged (#395). Only the declaration that carries [ParquetSerializable] yields a
+        // result (#368), so a partial type split across files is one element, not one per part.
+        IncrementalValuesProvider<TargetParseSet> parses = context
+            .SyntaxProvider.CreateSyntaxProvider(
                 predicate: static (s, _) => IsTargetSyntax(s),
-                transform: static (ctx, _) => ctx
-            );
-        // Only the declaration that carries [ParquetSerializable] yields a result (#368), so a
-        // partial type split across files is one element rather than one per part.
-        IncrementalValuesProvider<TargetParserResult> targets = targetNodes
+                transform: static (ctx, _) =>
+                    TargetParser.GetTargetParseSet(
+                        ctx,
+                        ParquetApiLevel.V6,
+                        CompoundKindsFor(GeneratorConfiguration.Default.FeatureLevel)
+                    )
+            )
+            .Where(static parse => parse is not null)!;
+        IncrementalValuesProvider<TargetParserResult> targets = parses
             .Combine(configuration)
             .Select(
                 static (pair, _) =>
-                    TargetParser.GetPrimaryTargetModel(
-                        pair.Left,
-                        ParquetApiLevel.V6,
-                        compoundKinds: CompoundKindsFor(pair.Right.FeatureLevel)
-                    )
-            )
-            .Where(static result => result is not null)!;
+                    CompoundKindsFor(pair.Right.FeatureLevel) == Parser.CompoundKinds.None
+                        ? pair.Left.Flat
+                        : pair.Left.Compound
+            );
 
         context.RegisterSourceOutput(
             configuration,

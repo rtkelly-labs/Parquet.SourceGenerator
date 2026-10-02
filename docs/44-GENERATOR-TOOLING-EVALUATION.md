@@ -129,10 +129,11 @@ The frequently repeated claim that `Microsoft.CodeAnalysis.Analyzers` warns "aga
 version**. No shipped Roslyn analyzer inspects incremental-pipeline lambda return types for
 retained symbols. RS1035/1036/1038/1041 are about banned APIs, references and target framework.
 
-This is worth recording because the repository has two live instances of exactly that failure mode
-— #395 (`GeneratorSyntaxContext` as a cached pipeline value) and #398 (`Location` inside
-`DiagnosticInfo`) — and it would be easy to assume the #471 upgrade closes them. It does not. Both
-were found by review, and nothing automated will find the next one.
+This is worth recording because the repository had two instances of exactly that failure mode
+— #395 (`GeneratorSyntaxContext` as a cached pipeline value, since fixed: the transform now parses
+and caches value-equatable models) and #398 (`Location` inside `DiagnosticInfo`, still live) — and it
+would be easy to assume the #471 upgrade closes them. It does not. Both were found by review, and
+nothing automated will find the next one.
 
 Roslynator.Analyzers needs no decision: `Directory.Build.props` already applies it, with
 `Meziantou.Analyzer` and `SonarAnalyzer.CSharp`, to every project outside tests,

@@ -20,6 +20,12 @@ internal sealed record TargetParserResult(
 );
 
 /// <summary>
+/// A target parsed under both dials: the compound one the feature level normally selects, and the
+/// flat one <c>Level1Flat</c> selects. Value-equatable, so it can be the pipeline's cached value.
+/// </summary>
+internal sealed record TargetParseSet(TargetParserResult Compound, TargetParserResult Flat);
+
+/// <summary>
 /// Extracts semantic models from Roslyn syntax contexts for decorated target types and validates compiler rules.
 /// </summary>
 internal static class TargetParser
@@ -166,6 +172,73 @@ internal static class TargetParser
         )
             ? GetTargetModelCore(typeSymbol!, declaration!, apiLevel, compoundKinds)
             : null;
+
+    /// <summary>
+    /// Pipeline entry point (#395). Parses the declaration under the compound dial the feature
+    /// level normally selects and, only when it matters, under the flat dial <c>Level1Flat</c>
+    /// selects, returning models only so the incremental cache compares values.
+    /// </summary>
+    /// <remarks>
+    /// The transform cannot see the feature level (it lives in the analyzer-config provider), and
+    /// the pipeline used to cache the <see cref="GeneratorSyntaxContext"/> to parse after combining
+    /// with it. A context holds a <see cref="SemanticModel"/>, which roots the compilation, and has
+    /// no value equality, so that retained a compilation per target and let nothing downstream
+    /// compare as unchanged. Parsing here under both dials keeps the feature-level choice in the
+    /// pipeline without caching a syntax object.
+    /// </remarks>
+    public static TargetParseSet? GetTargetParseSet(
+        GeneratorSyntaxContext context,
+        ParquetApiLevel apiLevel,
+        CompoundKinds compoundKinds
+    )
+    {
+        if (
+            !TryGetPrimaryTarget(
+                context,
+                out INamedTypeSymbol? typeSymbol,
+                out TypeDeclarationSyntax? declaration
+            )
+        )
+        {
+            return null;
+        }
+
+        TargetParserResult compound = GetTargetModelCore(
+            typeSymbol!,
+            declaration!,
+            apiLevel,
+            compoundKinds
+        );
+
+        // The flat dial only differs from the compound dial when a member is compound, so a valid
+        // model with no compound member needs no second parse. A failed parse might have failed
+        // before reaching its members, so it is parsed again rather than assumed equal.
+        bool needsFlat =
+            compoundKinds != CompoundKinds.None
+            && (compound.Model is null || HasCompoundMember(compound.Model));
+        TargetParserResult flat = needsFlat
+            ? GetTargetModelCore(typeSymbol!, declaration!, apiLevel, CompoundKinds.None)
+            : compound;
+        return new TargetParseSet(compound, flat);
+    }
+
+    private static bool HasCompoundMember(TargetClassModel model)
+    {
+        for (int i = 0; i < model.Properties.Length; i++)
+        {
+            if (
+                model.Properties[i].Kind
+                is PropertyKind.Struct
+                    or PropertyKind.List
+                    or PropertyKind.Map
+            )
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     /// <summary>
     /// Single-dial form of <see cref="GetPrimaryTargetModel(GeneratorSyntaxContext, ParquetApiLevel, CompoundKinds)"/>

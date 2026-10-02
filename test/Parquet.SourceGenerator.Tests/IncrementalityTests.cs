@@ -6,6 +6,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Parquet.SourceGenerator.Diagnostics;
 using Parquet.SourceGenerator.Models;
+using Parquet.SourceGenerator.Parser;
 using Shouldly;
 using Xunit;
 
@@ -138,6 +139,117 @@ public sealed class IncrementalityTests
             .ShouldAllBe(
                 output => output.Reason == IncrementalStepRunReason.Cached,
                 DescribeTrackedSteps(second)
+            );
+        second
+            .GeneratedSources.Select(source => source.SourceText.ToString())
+            .OrderBy(source => source, StringComparer.Ordinal)
+            .ShouldBe(
+                first
+                    .GeneratedSources.Select(source => source.SourceText.ToString())
+                    .OrderBy(source => source, StringComparer.Ordinal)
+                    .ToArray()
+            );
+    }
+
+    // The step that holds the parsed targets has no tracking name: WithTrackingName needs Roslyn 4.3
+    // and the generator keeps its 4.0.1 floor. Output steps always record their inputs, so the
+    // parse step is found by walking back from them and recognising what it carries.
+    private static IncrementalGeneratorRunStep[] ParseSteps(GeneratorRunResult result)
+    {
+        var found = new List<IncrementalGeneratorRunStep>();
+        var pending = new Stack<IncrementalGeneratorRunStep>(AllTrackedOutputSteps(result));
+        var seen = new HashSet<IncrementalGeneratorRunStep>();
+        while (pending.Count > 0)
+        {
+            IncrementalGeneratorRunStep step = pending.Pop();
+            if (!seen.Add(step))
+            {
+                continue;
+            }
+
+            if (
+                step.Outputs.Any(output => output.Value is TargetParseSet or GeneratorSyntaxContext)
+            )
+            {
+                found.Add(step);
+            }
+
+            foreach ((IncrementalGeneratorRunStep source, int _) in step.Inputs)
+            {
+                pending.Push(source);
+            }
+        }
+
+        return found.ToArray();
+    }
+
+    [Fact]
+    public void TheParseStepHoldsValuesSoAnUnrelatedEditIsComparedNotRetained()
+    {
+        // #395: the step used to cache the GeneratorSyntaxContext. A context has no value
+        // equality (and roots the compilation through its SemanticModel), so after any edit the
+        // step reported its outputs as Modified and everything below it had to run again, with the
+        // output steps only staying cached because a later comparison happened to absorb it.
+        SyntaxTree modelA = CSharpSyntaxTree.ParseText(ModelASource);
+        SyntaxTree modelB = CSharpSyntaxTree.ParseText(ModelBSource);
+        SyntaxTree unrelated = CSharpSyntaxTree.ParseText(UnrelatedSource);
+        CSharpCompilation initial = CreateCompilation(modelA, modelB, unrelated);
+
+        Run(CreateDriver(), initial, out GeneratorDriver driver);
+        CSharpCompilation edited = initial.ReplaceSyntaxTree(
+            unrelated,
+            CSharpSyntaxTree.ParseText(UnrelatedSource.Replace("Value = 1", "Value = 2"))
+        );
+
+        GeneratorRunResult second = Run(driver, edited, out _);
+
+        IncrementalGeneratorRunStep[] steps = ParseSteps(second);
+        steps.Length.ShouldBeGreaterThan(0);
+        steps
+            .SelectMany(step => step.Outputs)
+            .ShouldAllBe(
+                output =>
+                    output.Reason == IncrementalStepRunReason.Cached
+                    || output.Reason == IncrementalStepRunReason.Unchanged,
+                DescribeTrackedSteps(second)
+            );
+        steps
+            .SelectMany(step => step.Outputs)
+            .Select(output => output.Value)
+            .ShouldAllBe(value => value is TargetParseSet);
+    }
+
+    [Fact]
+    public void ReformattingAModelFileDoesNotRegenerateItsOutput()
+    {
+        // Shifting every member down a line is the commonest edit there is. The parse re-runs for
+        // the edited tree, but its result is equal, so neither output may be regenerated.
+        SyntaxTree modelA = CSharpSyntaxTree.ParseText(ModelASource);
+        SyntaxTree modelB = CSharpSyntaxTree.ParseText(ModelBSource);
+        SyntaxTree unrelated = CSharpSyntaxTree.ParseText(UnrelatedSource);
+        CSharpCompilation initial = CreateCompilation(modelA, modelB, unrelated);
+
+        GeneratorRunResult first = Run(CreateDriver(), initial, out GeneratorDriver driver);
+        CSharpCompilation edited = initial.ReplaceSyntaxTree(
+            modelA,
+            CSharpSyntaxTree.ParseText("// a leading comment\n\n" + ModelASource)
+        );
+
+        GeneratorRunResult second = Run(driver, edited, out _);
+
+        AllTrackedOutputSteps(second)
+            .SelectMany(step => step.Outputs)
+            .ShouldAllBe(
+                output =>
+                    output.Reason == IncrementalStepRunReason.Cached
+                    || output.Reason == IncrementalStepRunReason.Unchanged,
+                DescribeTrackedSteps(second)
+            );
+        ParseSteps(second)
+            .SelectMany(step => step.Outputs)
+            .ShouldContain(
+                output => output.Reason == IncrementalStepRunReason.Unchanged,
+                "the edited tree re-parses and its equal result is recognised"
             );
         second
             .GeneratedSources.Select(source => source.SourceText.ToString())
