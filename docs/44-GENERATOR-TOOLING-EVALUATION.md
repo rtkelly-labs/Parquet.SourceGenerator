@@ -131,7 +131,7 @@ retained symbols. RS1035/1036/1038/1041 are about banned APIs, references and ta
 
 This is worth recording because the repository had two instances of exactly that failure mode
 — #395 (`GeneratorSyntaxContext` as a cached pipeline value, since fixed: the transform now parses
-and caches value-equatable models) and #398 (`Location` inside `DiagnosticInfo`, still live) — and it
+and caches value-equatable models) and #398 (`Location` inside `DiagnosticInfo`, since fixed: the position is data) — and it
 would be easy to assume the #471 upgrade closes them. It does not. Both were found by review, and
 nothing automated will find the next one.
 

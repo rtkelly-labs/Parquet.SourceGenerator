@@ -1,52 +1,81 @@
 using System;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.Text;
 
 namespace Parquet.SourceGenerator.Models;
 
 /// <summary>
-/// Value-equatable model representing a Roslyn diagnostic for incremental pipeline caching.
+/// A source position held as plain data, so a diagnostic can sit in a cached pipeline value
+/// without holding a <see cref="Location"/> (and through it the <see cref="SyntaxTree"/>).
 /// </summary>
-internal readonly record struct DiagnosticInfo(
-    DiagnosticDescriptor Descriptor,
-    Location Location,
-    string[] MessageArgs
-) : IEquatable<DiagnosticInfo>
+internal readonly record struct SourcePosition(
+    string FilePath,
+    TextSpan Span,
+    LinePositionSpan LineSpan
+)
 {
     /// <summary>
-    /// Checks value equality against another <see cref="DiagnosticInfo"/>.
+    /// Captures a source location, or <c>null</c> for <see cref="Location.None"/> and for
+    /// locations that are not in source.
     /// </summary>
-    public bool Equals(DiagnosticInfo other)
+    public static SourcePosition? From(Location? location)
     {
-        if (Descriptor.Id != other.Descriptor.Id)
-            return false;
-        if (!Equals(Location, other.Location))
-            return false;
-        if (MessageArgs.Length != other.MessageArgs.Length)
-            return false;
-        for (int i = 0; i < MessageArgs.Length; i++)
+        if (location is null || !location.IsInSource)
         {
-            if (MessageArgs[i] != other.MessageArgs[i])
-                return false;
+            return null;
         }
-        return true;
+
+        // The mapped span, not the physical one: a #line directive makes the compiler, the IDE and
+        // the build output report the mapped file and line, and an external location carries only
+        // one file and span. Without #line the two are identical.
+        FileLinePositionSpan mapped = location.GetMappedLineSpan();
+        return new SourcePosition(mapped.Path, location.SourceSpan, mapped.Span);
     }
 
     /// <summary>
-    /// Computes hash code for value caching.
+    /// Rebuilds the Roslyn <see cref="Location"/> at report time.
     /// </summary>
-    public override int GetHashCode()
-    {
-        unchecked
-        {
-            int hash = StringComparer.Ordinal.GetHashCode(Descriptor.Id);
-            hash = (hash * 397) ^ (Location?.GetHashCode() ?? 0);
-            hash = (hash * 397) ^ MessageArgs.Length;
-            return hash;
-        }
-    }
+    public Location ToLocation() => Location.Create(FilePath, Span, LineSpan);
+}
+
+/// <summary>
+/// Value-equatable model representing a Roslyn diagnostic for incremental pipeline caching.
+/// </summary>
+/// <remarks>
+/// The position is data, not a <see cref="Location"/>: a source <c>Location</c> references its
+/// <c>SyntaxTree</c>, so every model that produced a diagnostic pinned a syntax tree in the
+/// generator cache for the lifetime of the driver (#398). The position still takes part in
+/// equality, so an edit that moves a diagnosed member re-reports the diagnostic at its new line
+/// instead of leaving a stale squiggle behind; models without a diagnostic are unaffected.
+/// </remarks>
+internal readonly record struct DiagnosticInfo(
+    DiagnosticDescriptor Descriptor,
+    SourcePosition? Position,
+    EquatableArray<string> MessageArgs
+)
+{
+    /// <summary>
+    /// Creates a diagnostic from a Roslyn <see cref="Location"/>, which is reduced to plain data
+    /// immediately and not retained.
+    /// </summary>
+    public DiagnosticInfo(DiagnosticDescriptor descriptor, Location? location, string[] messageArgs)
+        : this(
+            descriptor,
+            SourcePosition.From(location),
+            new EquatableArray<string>(messageArgs ?? Array.Empty<string>())
+        ) { }
 
     /// <summary>
     /// Creates a Roslyn <see cref="Diagnostic"/> instance for reporting.
     /// </summary>
-    public Diagnostic ToDiagnostic() => Diagnostic.Create(Descriptor, Location, MessageArgs);
+    public Diagnostic ToDiagnostic()
+    {
+        var args = new object?[MessageArgs.Length];
+        for (int i = 0; i < args.Length; i++)
+        {
+            args[i] = MessageArgs[i];
+        }
+
+        return Diagnostic.Create(Descriptor, Position?.ToLocation() ?? Location.None, args);
+    }
 }
