@@ -2176,6 +2176,17 @@ internal static class CodeEmitter
     )
     {
         string indent = "                    ";
+        if (!sourceIsArray)
+        {
+            // The loop below walks the source with Unsafe.Add and no bounds check, sized by the count
+            // read at method entry. A list mutated since then has a shorter span; compare once so that
+            // becomes an exception instead of a read past the backing array (#375). An array cannot
+            // change length, so its path needs no check.
+            builder.AppendLine(
+                $"{indent}if ({sourceExpr}.Length < count) throw new global::System.InvalidOperationException(\"Collection was modified during serialization.\");"
+            );
+        }
+
         string srcRefDecl = sourceIsArray
             ? $"ref var srcRef_ = ref global::System.Runtime.InteropServices.MemoryMarshal.GetArrayDataReference({sourceExpr});"
             : $"ref var srcRef_ = ref global::System.Runtime.InteropServices.MemoryMarshal.GetReference({sourceExpr});";
