@@ -104,6 +104,45 @@ void ArchiveSource(string path, string evidenceName)
     return (result.Output, result.ExitCode);
 }
 
+using JsonDocument fixtureManifest = JsonDocument.Parse(
+    File.ReadAllText(
+        Path.Combine(root, Option(args, "--fixture-manifest") ?? "test/data/fixture-manifest.json")
+    )
+);
+
+// Examined-N guard (#436): the verdict below is only meaningful if the fixtures it speaks for were
+// all examined. A fixture that cannot be found used to be skipped, so a moved directory or a
+// checkout without the files reported "OK" having verified nothing. The v1 fixtures are real files
+// in the repository (not LFS pointers), so a missing one is a path problem, never an expected skip.
+// This runs before any Java process is started, so the refusal does not depend on the toolchain.
+JsonElement[] manifestFixtures = fixtureManifest
+    .RootElement.GetProperty("fixtures")
+    .EnumerateArray()
+    .ToArray();
+if (manifestFixtures.Length == 0)
+{
+    Console.Error.WriteLine(
+        "Apache conformance FAILED: the fixture manifest lists no fixtures; refusing to report OK."
+    );
+    return 1;
+}
+
+string[] missingFixtures = manifestFixtures
+    .Select(f => f.GetProperty("path").GetString()!)
+    .Where(p => !File.Exists(Path.GetFullPath(p, root)))
+    .ToArray();
+if (missingFixtures.Length > 0)
+{
+    foreach (string missing in missingFixtures)
+    {
+        Console.Error.WriteLine($"MISSING fixture: {missing}");
+    }
+    Console.Error.WriteLine(
+        $"Apache conformance FAILED: {missingFixtures.Length} of {manifestFixtures.Length} manifest fixtures do not exist under {root}; refusing to report OK."
+    );
+    return 1;
+}
+
 // Version evidence: the exact launcher and the exact pinned artifacts that accepted or rejected
 // every file in this run.
 ProcessResult javaVersion = Run(java, ["-version"]);
@@ -114,26 +153,15 @@ WriteEvidence(
         + string.Join(Environment.NewLine, classpath.Split(Path.PathSeparator))
 );
 
-using JsonDocument fixtureManifest = JsonDocument.Parse(
-    File.ReadAllText(
-        Path.Combine(root, Option(args, "--fixture-manifest") ?? "test/data/fixture-manifest.json")
-    )
-);
-
 string corpusBase =
     Option(args, "--corpus-base") ?? "test/data/v1/01_small_flat_primitives.parquet";
 
-foreach (
-    JsonElement fixture in fixtureManifest.RootElement.GetProperty("fixtures").EnumerateArray()
-)
+int fixturesVerified = 0;
+foreach (JsonElement fixture in manifestFixtures)
 {
     string relativePath = fixture.GetProperty("path").GetString()!;
     string fullPath = Path.GetFullPath(relativePath, root);
-    if (!File.Exists(fullPath))
-    {
-        Console.WriteLine($"SKIP (missing file, e.g. LFS not hydrated): {relativePath}");
-        continue;
-    }
+    fixturesVerified++;
 
     string support = fixture.GetProperty("support").GetString()!;
     string evidencePrefix = Regex.Replace(relativePath, @"[\\/]", "_");
@@ -322,9 +350,14 @@ foreach (
     );
 }
 
+if (fixturesVerified != manifestFixtures.Length)
+{
+    failures.Add($"examined {fixturesVerified} of {manifestFixtures.Length} manifest fixtures");
+}
+
 Console.WriteLine(
     failures.Count == 0
-        ? $"Apache conformance OK: {checks} checks passed (evidence in {outputDir})"
+        ? $"Apache conformance OK: {fixturesVerified}/{manifestFixtures.Length} fixtures, {checks} checks passed (evidence in {outputDir})"
         : $"Apache conformance FAILED: {failures.Count} of {checks} checks failed (evidence in {outputDir})"
 );
 return failures.Count == 0 ? 0 : 1;
