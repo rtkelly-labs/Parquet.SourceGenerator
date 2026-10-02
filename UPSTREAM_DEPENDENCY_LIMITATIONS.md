@@ -46,6 +46,45 @@ The upstream change that would remove the allocation gap is a caller-buffer read
 actively developed. Revisit if a net472-capable Parquet.Net release ever adds one, or if 6.x
 regains a `netstandard2.0` target.
 
+## Parquet.Net 6.1.0 And 4.25.0 Size Allocations From Untrusted Footer Counts
+
+`ParquetSerializerOptions.MaxAllocationValues` is a per-column **count** of values (default
+10,000,000), not a memory budget (#361). The modern generated reader sizes its pooled buffers from `RowGroup.num_rows` (flat columns) and
+`ColumnChunk.num_values` (list and struct leaves) in the footer before it reads a page, so a file of
+about 1 KB whose footer declares ten million rows for the nine-column `OrderEvent` model asks for
+roughly 1 GB of nominal element storage (before `ArrayPool` rounding), and the parallel read path can
+rent that per worker. The legacy reader validates `ColumnChunk.num_values` and then delegates the
+whole-column allocation to Parquet.Net through `ReadColumnAsync`. The count is the same for a
+`bool` and a `Guid` and is applied per column, so wider models multiply it.
+
+**Why the file's own bytes cannot close it.** The issue proposes rejecting a column whose
+`num_values` could not be encoded in its `total_uncompressed_size`. No such bound exists in the
+format: RLE and dictionary-index encodings, all-null and constant columns, and delta encodings
+legitimately carry millions of values in a few bytes, so the check would reject valid files. The only
+sound bound is the one the caller chooses.
+
+**What is bounded here.** The decompression guard (#374) now refuses footer list counts and byte
+lengths larger than the footer itself, and a row group count above `MaxRowGroupCount`, before
+Parquet.Net allocates for the footer. The legacy read path bounds row counts and column value counts
+with `MaxAllocationValues` (#362). Neither relates the count to a byte size.
+
+**What remains, and why it is not in this change.** A byte budget (`MaxAllocationBytes`, computed
+per row group from the element sizes the emitter knows, divided across parallel workers, with a lower
+default than 10,000,000 values per column) needs a new public option in
+`ParquetSerializerOptions.cs` and a check at each rental site in `CodeEmitter.cs` and the columnar
+read components. Both were being rewritten by the read-API collapse and the unified batch work while
+this lane ran, and the option is public API (ledger and catalogue entries per docs/18). It is
+tracked in #361, which stays open. Until it lands, hosts that read untrusted files should lower
+`MaxAllocationValues` to the largest row group they expect: the allocation for a read is bounded by
+that count times the row width, per worker.
+
+**Upstream.** Parquet.Net sizes `List<T>` and `byte[]` from counts it has not checked against the
+bytes that remain (`ThriftCompactProtocolReader.ReadListHeader`, `ReadBinary`), and its `SkipField`
+for a struct reads field headers without skipping their values. A bounds check in those two readers
+would remove the footer-side amplification at its source and make the footer walk in the guard
+unnecessary; the walk follows declared compact types, so a footer that mis-declares the type of a field
+it does not know can still hide a count from it.
+
 ## Parquet.Net 6.1.0 Page Checksums Are Not Verified
 
 Parquet's `PageHeader.crc` is optional, and Parquet.Net neither writes nor verifies it. A single
