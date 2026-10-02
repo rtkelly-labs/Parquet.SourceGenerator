@@ -299,6 +299,11 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   walk was bounded by the stack, and a deep enough footer ended the process with a stack overflow (verified
   at 300,000 nested lists) before the limit could fire. The walk now carries the depth and throws
   `InvalidDataException` as soon as it passes the limit.
+- **The eager buffer return now has a test that pins the Parquet.Net behaviour it depends on** (#399). The
+  emitted writers return each column's pooled buffer as soon as its `WriteAsync` completes, which is only
+  safe if Parquet.Net has finished with the memory by then. `WriteCompletionContractTests` asserts that
+  (chunk bytes on the stream at completion, source overwritten afterwards leaves the file intact, and a
+  round trip under concurrent pool poisoning), and `docs/12` records the assumption and the fallback.
 - **A property or type named after a C# keyword no longer breaks the generated code** (#376). Roslyn drops
   the `@` from a member declared `@event`, so the model held the bare keyword and the emitters wrote
   `item.event`, `{ event = ... }` and `new class` into generated source (CS1001, CS1525). Every

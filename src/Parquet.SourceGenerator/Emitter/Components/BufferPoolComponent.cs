@@ -126,6 +126,11 @@ internal static class BufferPoolComponent
     /// <summary>
     /// Emits eager ArrayPool return and nulling for a single write property column buffer immediately after writing.
     /// </summary>
+    /// <remarks>
+    /// Returning the buffer while the row-group writer is still open assumes Parquet.Net has finished with the
+    /// caller's memory when <c>WriteAsync</c> / <c>WriteAllPartsAsync</c> completes. That is undocumented upstream
+    /// and is pinned by <c>WriteCompletionContractTests</c> (#399, docs/12).
+    /// </remarks>
     public static void EmitSingleWriteReturn(
         StringBuilder builder,
         PropertyModel prop,
