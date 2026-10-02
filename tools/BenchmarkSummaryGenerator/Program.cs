@@ -78,16 +78,8 @@ public static class Program
     /// <returns>0 when the run is acceptable, 1 when it regressed or examined nothing.</returns>
     private static int RunRegressionCheck(string resultsDir, string baselinePath, string[] args)
     {
-        IReadOnlyList<BenchmarkMeasurement> current = Array.Empty<BenchmarkMeasurement>();
-        try
+        if (!TryReadResults(resultsDir, out IReadOnlyList<BenchmarkMeasurement> current))
         {
-            current = RegressionCheck.ReadResults(resultsDir);
-        }
-        catch (InvalidOperationException ex)
-        {
-            Console.Error.WriteLine(
-                $"The benchmark results cannot be read unambiguously: {ex.Message}"
-            );
             return 1;
         }
 
@@ -118,14 +110,8 @@ public static class Program
             return 0;
         }
 
-        IReadOnlyList<BenchmarkMeasurement> baseline = Array.Empty<BenchmarkMeasurement>();
-        try
+        if (!TryReadBaseline(baselinePath, out IReadOnlyList<BenchmarkMeasurement> baseline))
         {
-            baseline = RegressionCheck.ReadBaseline(baselinePath);
-        }
-        catch (BaselineFormatException ex)
-        {
-            Console.Error.WriteLine($"Baseline '{baselinePath}' is unusable: {ex.Message}");
             return 1;
         }
 
@@ -227,6 +213,44 @@ public static class Program
         }
 
         return RegressionCheck.HasFailures(comparisons, failOnTime) ? 1 : 0;
+    }
+
+    private static bool TryReadResults(
+        string resultsDir,
+        out IReadOnlyList<BenchmarkMeasurement> results
+    )
+    {
+        try
+        {
+            results = RegressionCheck.ReadResults(resultsDir);
+            return true;
+        }
+        catch (InvalidOperationException ex)
+        {
+            Console.Error.WriteLine(
+                $"The benchmark results cannot be read unambiguously: {ex.Message}"
+            );
+            results = Array.Empty<BenchmarkMeasurement>();
+            return false;
+        }
+    }
+
+    private static bool TryReadBaseline(
+        string baselinePath,
+        out IReadOnlyList<BenchmarkMeasurement> baseline
+    )
+    {
+        try
+        {
+            baseline = RegressionCheck.ReadBaseline(baselinePath);
+            return true;
+        }
+        catch (BaselineFormatException ex)
+        {
+            Console.Error.WriteLine($"Baseline '{baselinePath}' is unusable: {ex.Message}");
+            baseline = Array.Empty<BenchmarkMeasurement>();
+            return false;
+        }
     }
 
     private static string OrUnknown(string value) =>
