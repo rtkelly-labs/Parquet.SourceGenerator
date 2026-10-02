@@ -20,9 +20,10 @@ on:
     - cron: '30 4 * * *'
   workflow_dispatch:
 
+# Read-only: the headline branch and PR are written with WORKFLOW_PR_TOKEN (see the refresh step),
+# because GITHUB_TOKEN pushes and pull requests start no workflows (#568).
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 concurrency:
   group: mutation-nightly
@@ -36,6 +37,11 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # Checkout would otherwise persist a GITHUB_TOKEN Authorization header that wins over the
+          # token in the pr-bot remote below, making the push a GITHUB_TOKEN push that starts no
+          # workflows (#568). Nothing else in this job needs git credentials.
+          persist-credentials: false
 
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
@@ -96,16 +102,43 @@ jobs:
             --out mutation-headline.md --append
           test -s mutation-headline.md
 
+      # The headline PR is opened and refreshed with WORKFLOW_PR_TOKEN, a fine-grained personal access
+      # token the owner creates (docs/51-CI-GATE-MATRIX.md, R11). A pull request opened with
+      # GITHUB_TOKEN starts no workflows, so it never receives the required checks and can never
+      # merge, and a later push to its branch with GITHUB_TOKEN starts none either (#568). Without
+      # the secret this step does nothing but say so; the score is in the job summary and the
+      # `mutation-headline` artifact.
       - name: Refresh the mutation headline PR
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_TOKEN: ${{ secrets.WORKFLOW_PR_TOKEN }}
           REPO: ${{ github.repository }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
+          cat mutation-headline.md >> "$GITHUB_STEP_SUMMARY"
+          if [ -z "${PR_TOKEN:-}" ]; then
+            msg="WORKFLOW_PR_TOKEN is not configured, so the mutation headline pull request was not refreshed. A pull request opened with GITHUB_TOKEN gets no required checks and cannot merge (#568). The score is in this run's summary and in the mutation-headline artifact. See docs/51-CI-GATE-MATRIX.md (R11) for the secret to create."
+            echo "::notice title=Mutation headline PR not refreshed::$msg"
+            echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           branch="mutation/headline"
+
+          git remote add pr-bot "https://x-access-token:${PR_TOKEN}@github.com/${REPO}.git"
+
+          # A push re-runs CI on the PR. When the score is the same as the one already on the branch
+          # there is nothing to report, so do not spend a CI run on a new run link.
+          git fetch --quiet pr-bot "$branch" 2>/dev/null || true
+          if git cat-file -e "pr-bot/$branch:docs/MUTATION-HEADLINE.md" 2>/dev/null \
+            && diff -q <(git show "pr-bot/$branch:docs/MUTATION-HEADLINE.md" | sed '1,/^_Updated nightly/d' | sed '/./,$!d') \
+              <(sed '/./,$!d' mutation-headline.md) >/dev/null; then
+            echo "::notice title=Mutation score unchanged::The score matches the one on $branch; not pushing, which would only re-run CI."
+            exit 0
+          fi
+
           mkdir -p docs
           {
             echo "# Mutation testing headline — latest nightly run"
@@ -120,7 +153,8 @@ jobs:
           git checkout -B "$branch"
           git add docs/MUTATION-HEADLINE.md
           git commit -m "chore(mutation): nightly mutation score refresh"
-          git push -f -u origin "$branch"
+          git push -f -u pr-bot "$branch"
+          export GH_TOKEN="$PR_TOKEN"
           existing=$(gh pr list --repo "$REPO" --head "$branch" --state open --json number --jq '.[0].number // empty')
           body="Nightly mutation score over the **behavioural suite only** — golden-file, API-baseline, metrics-baseline and IL-shape tests are deliberately excluded (they kill every mutation trivially; the score would be a flattering lie). Full reasoning: docs/26-MUTATION-TESTING.md. The floor is intentionally unset until this baseline is established (#261 AC); merge or close — this PR is a report, not a request."
           if [ -n "$existing" ]; then
@@ -130,6 +164,14 @@ jobs:
               --title "chore(mutation): nightly mutation testing baseline (#261)" \
               --body "$body"
           fi
+
+      - name: Upload the mutation headline
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: mutation-headline
+          path: mutation-headline.md
+          if-no-files-found: ignore
 
       - name: Upload raw Stryker reports
         if: always()

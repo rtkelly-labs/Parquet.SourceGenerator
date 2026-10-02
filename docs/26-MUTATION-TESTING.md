@@ -54,6 +54,12 @@ per project with the surviving-mutant inventory grouped by file. The first night
 **is** the baseline (#254's exact pattern for the oracle). Merging that PR is how the
 baseline gets recorded into `docs/MUTATION-HEADLINE.md`; the alternative is closing it.
 
+The PR is pushed and opened with the `WORKFLOW_PR_TOKEN` secret, not `GITHUB_TOKEN`: a PR opened
+with the default token starts no workflows, so it never gets the required checks and cannot merge
+(#568). Without the secret the step says so and does nothing (the score stays in the job summary
+and the `mutation-headline` artifact). It also does not push when the score is the one already on
+the branch, so an unchanged night costs no CI run. Setup: [docs/51](./51-CI-GATE-MATRIX.md), R11.
+
 ## What is deliberately NOT gated yet
 
 No threshold, no floor, no break-at. The issue's rule: *"Gate on a floor only once the

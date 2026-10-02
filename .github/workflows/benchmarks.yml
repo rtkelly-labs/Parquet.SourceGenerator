@@ -164,6 +164,10 @@ jobs:
           ref: ${{ steps.pr_info.outputs.branch }}
           fetch-depth: 0
           lfs: true
+          # Checkout would otherwise persist a GITHUB_TOKEN Authorization header that wins over any
+          # token in a remote URL, so a push meant to start workflows would be made by GITHUB_TOKEN
+          # and start none (#568). The push step authenticates explicitly instead.
+          persist-credentials: false
 
       - name: Setup .NET 8 SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
@@ -185,28 +189,58 @@ jobs:
           echo "Executing: dotnet run -c Release --no-build -- --filter '$FILTER' $JOB_FLAG $PARAMS_FLAG"
           dotnet run -c Release --project benchmarks/Parquet.SourceGenerator.Benchmarks/Parquet.SourceGenerator.Benchmarks.csproj --no-build -- --filter "$FILTER" $JOB_FLAG $PARAMS_FLAG
 
+      # The thresholds are the noise filter (#568): a scheduled run on a shared runner would otherwise
+      # rewrite the table, and open a pull request, every week from timing noise alone. The README is
+      # only rewritten when a row moves more than 10% in allocation or 30% in time, or a row appears,
+      # disappears or changes scale. Allocation is near-deterministic, so 10% is signal; timing
+      # moves tens of percent between identical runs, so only a large change is.
       - name: Generate Headline Benchmark Summary & Update READMEs
         run: |
-          dotnet run -c Release --project tools/BenchmarkSummaryGenerator/BenchmarkSummaryGenerator.csproj -- BenchmarkDotNet.Artifacts/results benchmark-summary.md --update-readme
+          dotnet run -c Release --project tools/BenchmarkSummaryGenerator/BenchmarkSummaryGenerator.csproj -- BenchmarkDotNet.Artifacts/results benchmark-summary.md --update-readme --alloc-threshold 0.10 --time-threshold 0.30
           cat benchmark-summary.md >> $GITHUB_STEP_SUMMARY
 
+      # A pull request opened with GITHUB_TOKEN starts no workflows, so it never receives the required
+      # `build` and `pr-title` checks and can never merge (#568; #474 sat that way for weeks), and a
+      # later push to its branch with GITHUB_TOKEN starts none either. This step therefore pushes and
+      # opens the PR with WORKFLOW_PR_TOKEN, a fine-grained personal access token the owner creates
+      # (docs/51-CI-GATE-MATRIX.md, R11). When it is absent the headline PR is NOT opened: the table
+      # is in the job summary and the results artifact, and the run says so.
       - name: Commit & Push Benchmark Updates to Branch
         if: steps.pr_info.outputs.commit_results == 'true'
         env:
           BRANCH: ${{ steps.pr_info.outputs.branch }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           RUN_ID: ${{ github.run_id }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_TOKEN: ${{ secrets.WORKFLOW_PR_TOKEN }}
+          DEFAULT_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add README.md PACKAGE_README.md
           if git diff --cached --quiet; then
-            echo "No changes detected in README benchmark tables."
+            echo "No benchmark moved past the noise thresholds; README benchmark tables left as committed."
+            echo "Headline table left as committed: no benchmark moved past the noise thresholds." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
+
+          if [ "$BRANCH" = "$DEFAULT_BRANCH" ] && [ -z "${PR_TOKEN:-}" ]; then
+            # Not a failure and not a PR without checks: say what was skipped and why.
+            msg="WORKFLOW_PR_TOKEN is not configured, so the headline table pull request was not opened. A pull request opened with GITHUB_TOKEN gets no required checks and cannot merge (#568). The refreshed table is in this run's summary and in the benchmark-results artifact. See docs/51-CI-GATE-MATRIX.md (R11) for the secret to create."
+            echo "::notice title=Headline PR not opened::$msg"
+            echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
           git commit -m "docs(perf): update benchmark headline performance table in README"
+
+          # Push and open the PR as the token's owner so the push and the PR start workflows. Checkout
+          # keeps no credentials (persist-credentials: false), so the remote carries the token: the
+          # PR token when there is one, otherwise the default token for a branch push only.
+          git remote add push-target "https://x-access-token:${PR_TOKEN:-$DEFAULT_TOKEN}@github.com/${REPO}.git"
+          push_remote=push-target
+
           if [ "$BRANCH" = "$DEFAULT_BRANCH" ]; then
             # Direct pushes to the default branch are blocked by branch protection
             # (AGENTS.md rule 4), which silently failed every scheduled headline
@@ -214,12 +248,15 @@ jobs:
             # claimed this workflow does.
             update_branch="perf/benchmark-headline-$RUN_ID"
             git checkout -b "$update_branch"
-            git push origin "$update_branch"
-            gh pr create --repo "$REPO" --base "$DEFAULT_BRANCH" --head "$update_branch" \
+            git push "$push_remote" "$update_branch"
+            GH_TOKEN="$PR_TOKEN" gh pr create --repo "$REPO" --base "$DEFAULT_BRANCH" --head "$update_branch" \
               --title "docs(perf): update benchmark headline performance table" \
-              --body "Automated headline refresh from [run $RUN_ID](https://github.com/$REPO/actions/runs/$RUN_ID). Per-class detailed reports are in the run's \`benchmark-results\` artifact."
+              --body "Automated headline refresh from [run $RUN_ID](https://github.com/$REPO/actions/runs/$RUN_ID). The table moved more than the noise thresholds (10% allocation, 30% time). Per-class detailed reports are in the run's \`benchmark-results\` artifact."
           else
-            git push origin "$BRANCH"
+            if [ -z "${PR_TOKEN:-}" ]; then
+              echo "::warning title=No checks on this push::WORKFLOW_PR_TOKEN is not configured, so this push to $BRANCH starts no workflows and the pull request will not get fresh checks (#568)."
+            fi
+            git push "$push_remote" "HEAD:refs/heads/$BRANCH"
           fi
 
       - name: Comment Benchmark Summary on PR
