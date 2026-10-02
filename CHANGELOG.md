@@ -14,7 +14,7 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
 - **CI gate: every `src/` analyzer runs on the emitted code, and any finding fails** (`analysis/`,
   `scripts/GeneratedCodeAnalysis.cs`, `docs/50-GENERATED-CODE-ANALYSIS.md`, #553). The golden
   models' emitted source is compiled bare (no implicit usings) against both backends with
-  NetAnalyzers, Meziantou, Sonar, Roslynator, the metric gates and the trim/AOT analyzers, with
+  NetAnalyzers, Meziantou, Roslynator, the metric gates and the trim/AOT analyzers, with
   generated-code classification switched off. The baseline is empty. The `generated-analysis` job
   names each rule and count on failure, and a seeded-violation positive control keeps the gate from
   passing without examining the emitted files.
@@ -90,6 +90,11 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   number is known is vacuous or permanently red.
 
 ### Changed
+- **Removed the SonarAnalyzer.CSharp analyzer (source-available license).** Its license grants use only for a
+  non-competitive purpose, which excludes AI tooling that ingests or interprets the analyzer's output,
+  and this repository has AI agents read and fix diagnostics. The remaining analyzers stay
+  (NetAnalyzers, Meziantou, Roslynator); the Sonar checks that had a counterpart are now enforced by
+  those, and `docs/55-SONAR-REMOVAL.md` maps every rule. No shipped package ever contained it.
 - **BREAKING: the emitted `{T}ColumnarBatch` is a `readonly struct` with get-only properties and a
   validating constructor (#550, part of #508 and #554).** It no longer exposes mutable public fields,
   so `RowCount` cannot drift from the column lanes. The constructor takes `rowCount` and one

@@ -24,7 +24,7 @@ Two items were not in the backlog and are now #471 and #472.
 | Scriban | Reject | Reintroduces the bundling problem this repo does not have |
 | `IndentedTextWriter` / an indentation abstraction | Adopt — **already #439** | This doc adds only: no package reference needed |
 | Microsoft.CodeAnalysis.Analyzers (upgrade) | Adopt — **filed as #471** | Pinned at 3.3.3; every generator-author rule postdates it |
-| Roslynator.Analyzers | Already adopted | Applied in `Directory.Build.props` to every project outside tests, benchmarks and samples, alongside Meziantou and Sonar (docs 50) |
+| Roslynator.Analyzers | Already adopted | Applied in `Directory.Build.props` to every project outside tests, benchmarks and samples, alongside Meziantou (docs 50; Sonar was dropped, see docs 55) |
 
 ---
 
@@ -136,7 +136,7 @@ would be easy to assume the #471 upgrade closes them. It does not. Both were fou
 nothing automated will find the next one.
 
 Roslynator.Analyzers needs no decision: `Directory.Build.props` already applies it, with
-`Meziantou.Analyzer` and `SonarAnalyzer.CSharp`, to every project outside tests,
+`Meziantou.Analyzer`, to every project outside tests,
 benchmarks and samples, and
 [50](./50-GENERATED-CODE-ANALYSIS.md) runs the same set over the emitted code.
 

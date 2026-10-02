@@ -1298,7 +1298,7 @@ internal static class CodeEmitter
         );
         builder.AppendLine("    /// </summary>");
         // Not an iterator: arguments are validated when this is called, not on the first
-        // MoveNextAsync (S4456). The iterator below owns [EnumeratorCancellation].
+        // MoveNextAsync (MA0050). The iterator below owns [EnumeratorCancellation].
         builder.AppendLine(
             $"    internal static global::System.Collections.Generic.IAsyncEnumerable<{model.ClassName}> ReadEnumerableCoreAsync("
         );
