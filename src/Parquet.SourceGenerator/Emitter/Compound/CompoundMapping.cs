@@ -540,6 +540,21 @@ internal static class CompoundMapping
         );
         foreach (LeafColumn g in group)
             builder.AppendLine($"{indent}int vc_{g.Slot} = 0;");
+        // Sibling leaves of one list element carry identical level streams, so their declared
+        // num_values must match the anchor's. Each is sized and validated on its own, and the walk
+        // below indexes every sibling's levels with the anchor's position; a shorter sibling would be
+        // read past what was written into its rented array, stale pooled levels included (#365).
+        foreach (LeafColumn g in group)
+        {
+            if (g.Slot == a)
+            {
+                continue;
+            }
+
+            builder.AppendLine(
+                $"{indent}if (entries_{g.Slot} != entries_{a}) throw new global::System.IO.InvalidDataException(\"Column '{g.Leaf.Name}' declares \" + entries_{g.Slot} + \" values but sibling column '{anchor.Leaf.Name}' declares \" + entries_{a} + \"; sibling leaves of one list element must carry identical level streams.\");"
+            );
+        }
         builder.AppendLine($"{indent}for (int p_{a} = 0; p_{a} < entries_{a}; p_{a}++)");
         builder.AppendLine($"{indent}{{");
         builder.AppendLine(
