@@ -745,7 +745,7 @@ public class HostileParquetTests
         );
     }
 
-    private static async Task<byte[]> RewriteColumnMetadataAsync(
+    internal static async Task<byte[]> RewriteColumnMetadataAsync(
         byte[] bytes,
         Action<FileMetaData, int> mutate
     )
