@@ -575,6 +575,15 @@ internal static class CodeEmitter
     /// </summary>
     internal static string EmitResolveFieldLine(LeafColumn col, string indent)
     {
+        if (col.IsCompound || col.IsListLeaf)
+        {
+            // Resolution reports an absent optional column through `missing` and returns the template
+            // field, which the file does not contain; the next thing a nested leaf does is ask the
+            // row group for that field's chunk metadata. Nested leaves are outside the missing-column
+            // envelope, so absence is an error here, raised by a helper to add no branch (#367).
+            return $"{indent}var field_{col.Slot} = ResolveSchemaField(fileFields, {col.Slot}, _field_{col.Slot}, ref fieldsByName, out bool missing_{col.Slot});\n{indent}RequireNestedLeafPresent(missing_{col.Slot}, \"{col.Leaf.Name}\");";
+        }
+
         string missingArg = SupportsMissingColumn(col) ? $"out bool missing_{col.Slot}" : "out _";
         return $"{indent}var field_{col.Slot} = ResolveSchemaField(fileFields, {col.Slot}, _field_{col.Slot}, ref fieldsByName, {missingArg});";
     }
