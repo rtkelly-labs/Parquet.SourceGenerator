@@ -2017,8 +2017,9 @@ internal static class TargetParser
     /// <c>GetMembers()</c> returns declared members only, so a type deriving from a base that
     /// carried columns silently lost every one of them — no diagnostic, just missing columns.
     /// <para>
-    /// Two deliberate choices. The walk stops at the first base type not declared in source, so a
-    /// model deriving from a framework type does not drag in <c>Exception.Data</c> and friends as
+    /// Two deliberate choices. The walk stops at the first base type that is neither declared in source
+    /// nor Parquet-aware (see <see cref="ContributesColumns"/>), so a model deriving from a
+    /// framework type does not drag in <c>Exception.Data</c> and friends as
     /// columns. And members are collected base-first, with a derived declaration replacing a
     /// shadowed base one *in the base's position* — so adding an <see langword="override"/> or <c>new</c>
     /// member changes which declaration is used without reordering the schema.
@@ -2036,7 +2037,7 @@ internal static class TargetParser
             chain.Add(current);
 
             INamedTypeSymbol? next = current.BaseType;
-            if (next is null || next.DeclaringSyntaxReferences.IsEmpty)
+            if (next is null || !ContributesColumns(next))
                 break;
         }
 
@@ -2066,6 +2067,46 @@ internal static class TargetParser
 
         return ordered;
     }
+
+    /// <summary>
+    /// Whether a base type's members join the derived model. A base declared in source always
+    /// does. One read from metadata (a shared contracts project) does only when it is Parquet-aware:
+    /// it carries <c>[ParquetSerializable]</c> or a member annotated with one of the Parquet
+    /// attributes (#420). The old test, <c>DeclaringSyntaxReferences.IsEmpty</c>, meant "came from
+    /// metadata", so moving a base into its own project silently dropped its columns; what it
+    /// was written to keep out is framework types (<c>Exception.Data</c> and friends), which carry
+    /// no Parquet attribute.
+    /// </summary>
+    private static bool ContributesColumns(INamedTypeSymbol baseType)
+    {
+        if (!baseType.DeclaringSyntaxReferences.IsEmpty)
+            return true;
+
+        if (baseType.GetAttributes().Any(IsParquetAttribute))
+            return true;
+
+        foreach (ISymbol member in baseType.GetMembers())
+        {
+            if (
+                (member is IPropertySymbol || member is IFieldSymbol)
+                && member.GetAttributes().Any(IsParquetAttribute)
+            )
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsParquetAttribute(AttributeData attribute) =>
+        attribute.AttributeClass?.ToDisplayString()
+            is AttributeFullName
+                or ColumnAttributeFullName
+                or IgnoreAttributeFullName
+                or DecimalAttributeFullName
+                or TimestampAttributeFullName
+                or SortKeyAttributeFullName;
 
     /// <summary>
     /// Types that pass straight through as a <see cref="PropertyKind.Primitive"/> <c>DataField</c>.
