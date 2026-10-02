@@ -108,9 +108,45 @@ public sealed class ReadmeCompileGateTests : IDisposable
         result.Stderr.ShouldContain("a code fence never closes");
     }
 
+    [Fact]
+    public async Task TwoReadmesWithTheSameFileNameAreBothCompiledAsync()
+    {
+        string good =
+            Model
+            + "```csharp compile\nusing var s = new MemoryStream();\nItem[] i = await ItemParquet.From(s).ToArrayAsync();\n```\n";
+        string broken =
+            Model
+            + "```csharp compile\nusing var s = new MemoryStream();\nList<Item> i = await ItemParquet.From(s).ToListAsync();\n```\n";
+
+        // The broken one is second: if its generated file replaced the first's, or the first's
+        // replaced it, one of the two would go uncompiled and this would pass.
+        (await RunAsync(good, broken)).ExitCode.ShouldBe(1);
+        (await RunAsync(broken, good)).ExitCode.ShouldBe(1);
+        (await RunAsync(good, good)).ExitCode.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task AFourBacktickFenceMayContainAThreeBacktickLineAsync()
+    {
+        // CommonMark: a longer opener closes only on an equally long fence, so a fence-like line
+        // inside it is content. The raw string literal puts such a line inside the C# block.
+        const string fourTicks = "````";
+        string readme =
+            Model
+            + fourTicks
+            + "csharp compile\nvar text = \"\"\"\n```\n\"\"\";\n"
+            + fourTicks
+            + "\n";
+
+        ScriptResult result = await RunAsync(readme);
+
+        result.ExitCode.ShouldBe(0, result.Describe());
+        result.Stdout.ShouldContain("2 compiled block(s)");
+    }
+
     [Theory]
-    [InlineData("README.md", 8)]
-    [InlineData("PACKAGE_README.md", 3)]
+    [InlineData("README.md", 9)]
+    [InlineData("PACKAGE_README.md", 4)]
     public void TheRealReadmesKeepTheirCompiledExamples(string readme, int atLeast)
     {
         // A README edit that drops the `compile` marker would silently stop gating the example.
@@ -121,10 +157,19 @@ public sealed class ReadmeCompileGateTests : IDisposable
         compiled.ShouldBeGreaterThanOrEqualTo(atLeast, $"{readme} compiled-example count");
     }
 
-    private async Task<ScriptResult> RunAsync(string readmeText)
+    private async Task<ScriptResult> RunAsync(params string[] readmeTexts)
     {
-        string readme = Path.Combine(_dir, "fixture.md");
-        await IOFile.WriteAllTextAsync(readme, readmeText);
+        // Each fixture gets its own directory but the same file name, as two READMEs in different
+        // folders would.
+        var readmes = new System.Collections.Generic.List<string>();
+        for (int i = 0; i < readmeTexts.Length; i++)
+        {
+            string directory = Path.Combine(_dir, "d" + i);
+            Directory.CreateDirectory(directory);
+            string readme = Path.Combine(directory, "fixture.md");
+            await IOFile.WriteAllTextAsync(readme, readmeTexts[i]);
+            readmes.Add(readme);
+        }
 
         var psi = new ProcessStartInfo
         {
@@ -135,11 +180,15 @@ public sealed class ReadmeCompileGateTests : IDisposable
             UseShellExecute = false,
             CreateNoWindow = true,
         };
-        foreach (
-            string argument in new[] { "run", "scripts/CheckReadme.cs", "--", "--readme", readme }
-        )
+        foreach (string argument in new[] { "run", "scripts/CheckReadme.cs", "--" })
         {
             psi.ArgumentList.Add(argument);
+        }
+
+        foreach (string readme in readmes)
+        {
+            psi.ArgumentList.Add("--readme");
+            psi.ArgumentList.Add(readme);
         }
 
         psi.Environment["MSBUILDDISABLENODEREUSE"] = "1";

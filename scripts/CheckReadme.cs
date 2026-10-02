@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 
 // -----------------------------------------------------------------------------
 // CheckReadme.cs
@@ -63,6 +64,7 @@ foreach (string stale in Directory.GetFiles(outputDir, "*.g.cs"))
 
 int totalBlocks = 0;
 int failures = 0;
+int readmeIndex = 0;
 foreach (string readme in readmes)
 {
     if (!File.Exists(readme))
@@ -93,11 +95,10 @@ foreach (string readme in readmes)
     }
 
     totalBlocks += compiled;
-    string name = Regex.Replace(
-        Path.GetFileNameWithoutExtension(readme),
-        "[^A-Za-z0-9]",
-        string.Empty
-    );
+    // The index keeps two inputs with the same file name from overwriting each other's output.
+    string name =
+        $"R{++readmeIndex}_"
+        + Regex.Replace(Path.GetFileNameWithoutExtension(readme), "[^A-Za-z0-9]", string.Empty);
     File.WriteAllText(
         Path.Combine(outputDir, name + ".g.cs"),
         Render(name, Path.GetFileName(readme), blocks)
@@ -150,16 +151,39 @@ Console.WriteLine(
 );
 return 0;
 
+static bool IsFenceCloser(string line, char fenceChar, int fenceLength)
+{
+    string trimmed = line.TrimEnd();
+    int indent = trimmed.Length - trimmed.TrimStart(' ').Length;
+    string body = trimmed.TrimStart(' ');
+    return indent <= 3 && body.Length >= fenceLength && body.All(c => c == fenceChar);
+}
+
 static List<Block> Extract(string[] lines, string file)
 {
     var blocks = new List<Block>();
     for (int i = 0; i < lines.Length; i++)
     {
         string line = lines[i].TrimEnd();
-        if (line.StartsWith("```", StringComparison.Ordinal))
+        Match opener = Regex.Match(
+            line,
+            "^ {0,3}(?<fence>`{3,}|~{3,})(?<info>[^`]*)$",
+            RegexOptions.CultureInvariant,
+            TimeSpan.FromSeconds(2)
+        );
+        if (opener.Success)
         {
-            string info = line.Substring(3).Trim();
-            int close = Array.FindIndex(lines, i + 1, l => l.TrimEnd() == "```");
+            // CommonMark: a fence closes on a line of the same character, at least as long as the
+            // opener, with nothing but whitespace after it. A longer opener (four backticks) is how
+            // a block shows a fence inside itself.
+            char fenceChar = opener.Groups["fence"].Value[0];
+            int fenceLength = opener.Groups["fence"].Length;
+            string info = opener.Groups["info"].Value.Trim();
+            int close = Array.FindIndex(
+                lines,
+                i + 1,
+                l => IsFenceCloser(l, fenceChar, fenceLength)
+            );
             if (close < 0)
             {
                 throw new FormatException($"{file}:{i + 1}: a code fence never closes.");
@@ -281,10 +305,15 @@ static (int ExitCode, string Output) Run(
     }
 
     using var process = Process.Start(start)!;
-    string stdout = process.StandardOutput.ReadToEnd();
-    string stderr = process.StandardError.ReadToEnd();
+    // Both pipes are drained at once: a build that fills the unread one would otherwise block
+    // forever while this waits on the other.
+    Task<string> stdout = process.StandardOutput.ReadToEndAsync();
+    Task<string> stderr = process.StandardError.ReadToEndAsync();
     process.WaitForExit();
-    return (process.ExitCode, stdout + "\n" + stderr);
+    return (
+        process.ExitCode,
+        stdout.GetAwaiter().GetResult() + "\n" + stderr.GetAwaiter().GetResult()
+    );
 }
 
 static string FindRepoRoot()
