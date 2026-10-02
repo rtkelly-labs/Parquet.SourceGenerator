@@ -47,7 +47,7 @@ jobs:
             10.0.x
 
       - name: Restore solution dependencies
-        run: dotnet restore Parquet.SourceGenerator.slnx
+        run: dotnet restore Parquet.SourceGenerator.slnx --locked-mode
 
       # The numbers under test: CodeMetrics.cs over this checkout, written outside the repo. It
       # runs before Metrics.exe so a failure here is classified as infrastructure, not as a

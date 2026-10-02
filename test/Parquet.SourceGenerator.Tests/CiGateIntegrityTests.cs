@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Xml.Linq;
 using Shouldly;
 using Xunit;
 using IOFile = System.IO.File;
@@ -289,6 +290,110 @@ public sealed class CiGateIntegrityTests
         // The 3.3.x line (the old override and the old central pin) predates these rules (#471).
         Version.Parse(version.Groups[1].Value).ShouldBeGreaterThanOrEqualTo(new Version(3, 11));
     }
+
+    // Native AOT projects restore a runtime-specific target (osx-arm64 on one machine, linux-x64 in
+    // CI), so their lock file would never be valid on a second platform (#394).
+    private static readonly string[] ProjectsWithoutLockFile =
+    [
+        "Parquet.SourceGenerator.AotTest",
+        "Parquet.SourceGenerator.SampleAot",
+    ];
+
+    [Fact]
+    public void EveryProjectInTheSolutionHasALockFileExceptTheNativeAotOnes()
+    {
+        string root = FindRepositoryRoot();
+        string[] projects = Regex
+            .Matches(
+                Read(root, "Parquet.SourceGenerator.slnx"),
+                @"Path=""(?<p>[^""]+\.csproj)""",
+                Options,
+                RegexTimeout
+            )
+            .Select(m => m.Groups["p"].Value)
+            .ToArray();
+
+        projects.Length.ShouldBeGreaterThan(8, "the solution scan examined too few projects");
+        foreach (string project in projects)
+        {
+            string name = Path.GetFileNameWithoutExtension(project);
+            bool expected = !ProjectsWithoutLockFile.Contains(name);
+            string lockFile = Path.Combine(
+                root,
+                Path.GetDirectoryName(project)!,
+                "packages.lock.json"
+            );
+            IOFile.Exists(lockFile).ShouldBe(expected, $"{name}: packages.lock.json");
+        }
+    }
+
+    [Fact]
+    public void EveryRestoreOfALockedProjectInTheWorkflowsRunsInLockedMode()
+    {
+        string root = FindRepositoryRoot();
+        Regex restore = new(
+            @"^\s*run:\s+dotnet restore (?<target>\S+)(?<rest>[^\n]*)$",
+            Options,
+            RegexTimeout
+        );
+        int examined = 0;
+        foreach (
+            string file in EnumerateYaml(
+                Path.Combine(root, ".github", "workflows"),
+                "*",
+                SearchOption.TopDirectoryOnly
+            )
+        )
+        {
+            foreach (Match m in restore.Matches(IOFile.ReadAllText(file).Replace("\r\n", "\n")))
+            {
+                examined++;
+                m.Groups["rest"]
+                    .Value.ShouldContain(
+                        "--locked-mode",
+                        customMessage: $"{Path.GetFileName(file)}: dotnet restore {m.Groups["target"].Value}"
+                    );
+            }
+        }
+
+        examined.ShouldBeGreaterThanOrEqualTo(8, "the workflow scan examined too few restores");
+    }
+
+    [Fact]
+    public void NuGetSourcesAreMappedAndThePackageConsumersPinOurIdsToTheLocalFeed()
+    {
+        string root = FindRepositoryRoot();
+        // Parsed, not matched as text: a mapping inside an XML comment is not applied by NuGet.
+        MappingsOf(Path.Combine(root, "NuGet.config"))
+            .ShouldContain(("nuget.org", "*"), "the root config must map every id to nuget.org");
+
+        foreach (string consumer in new[] { "PackageConsumption", "PackageConsumptionLegacy" })
+        {
+            var mappings = MappingsOf(Path.Combine(root, "test", consumer, "nuget.config"));
+            mappings.ShouldContain(
+                ("local-artifacts", "Parquet.SourceGenerator*"),
+                $"{consumer}: Parquet.SourceGenerator* must map to local-artifacts"
+            );
+            mappings.ShouldContain(
+                ("nuget.org", "*"),
+                $"{consumer}: the rest must come from nuget.org"
+            );
+        }
+    }
+
+    private static List<(string Source, string Pattern)> MappingsOf(string path) =>
+        XDocument
+            .Load(path)
+            .Descendants("packageSourceMapping")
+            .Descendants("packageSource")
+            .SelectMany(source =>
+                source
+                    .Elements("package")
+                    .Select(p =>
+                        ((string)source.Attribute("key")!, (string)p.Attribute("pattern")!)
+                    )
+            )
+            .ToList();
 
     [Fact]
     public void TheReadmeExamplesAreCompiledInTheTestJobAfterTheSolutionBuild()

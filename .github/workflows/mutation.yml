@@ -59,7 +59,7 @@ jobs:
         run: dotnet tool restore --disable-parallel || dotnet tool restore --disable-parallel
 
       - name: Restore solution dependencies
-        run: dotnet restore Parquet.SourceGenerator.slnx
+        run: dotnet restore Parquet.SourceGenerator.slnx --locked-mode
 
       - name: Build (Release, no generators-in-the-way of test discovery)
         run: dotnet build Parquet.SourceGenerator.slnx --configuration Release --no-restore

@@ -21,6 +21,18 @@
         <RollForward>LatestMajor</RollForward>
     </PropertyGroup>
 
+    <!--
+      Lock files (#394). A project that has a committed packages.lock.json restores against it, and
+      CI restores in locked mode so a changed dependency graph fails the build instead of
+      resolving silently. Opt-in by file, not by folder: the package-consumption and cross-version
+      projects restore the packages CI has just built, whose hashes change every run, so they must
+      not carry one. CiGateIntegrityTests requires a lock file beside every project in the solution.
+      To change a dependency: edit it, run `dotnet restore` with the force-evaluate switch, commit the lock files.
+    -->
+    <PropertyGroup Condition="Exists('$(MSBuildProjectDirectory)/packages.lock.json')">
+        <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    </PropertyGroup>
+
     <!-- Package Metadata & SourceLink -->
     <PropertyGroup>
         <Authors>Ryan Kelly</Authors>
