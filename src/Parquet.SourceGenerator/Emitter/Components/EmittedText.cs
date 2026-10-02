@@ -24,21 +24,23 @@ internal static class EmittedText
     {
         if (name.IndexOf('.') < 0)
         {
-            return IsKeyword(name) ? "@" + name : name;
+            return EscapeSegment(name);
         }
 
         string[] parts = name.Split('.');
         for (int i = 0; i < parts.Length; i++)
         {
-            parts[i] = Ident(parts[i]);
+            parts[i] = EscapeSegment(parts[i]);
         }
 
         return string.Join(".", parts);
     }
 
-    private static bool IsKeyword(string name) =>
-        SyntaxFacts.GetKeywordKind(name) != SyntaxKind.None
-        || SyntaxFacts.GetContextualKeywordKind(name) != SyntaxKind.None;
+    private static string EscapeSegment(string segment) =>
+        SyntaxFacts.GetKeywordKind(segment) != SyntaxKind.None
+        || SyntaxFacts.GetContextualKeywordKind(segment) != SyntaxKind.None
+            ? "@" + segment
+            : segment;
 
     /// <summary>
     /// The value as a quoted C# string literal, for use as an expression.
