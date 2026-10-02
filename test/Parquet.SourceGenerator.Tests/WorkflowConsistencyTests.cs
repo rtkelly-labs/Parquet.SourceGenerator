@@ -128,6 +128,10 @@ public sealed class WorkflowConsistencyTests
         1
     )]
     [InlineData(
+        "on:\n  issue_comment:\nhead_repo=$(gh pr view 1 --json headRepository)\nif [ \"$head_repo\" != \"$REPO\" ]; then echo fork; fi\nbranch=$(gh pr view 1 --json headRefName)\n",
+        1
+    )]
+    [InlineData(
         "on:\n  issue_comment:\n# head_repo=$(gh pr view 1 --json headRepository)\n# if [ \"$head_repo\" != \"$REPO\" ]; then exit 1; fi\nbranch=$(gh pr view 1 --json headRefName)\n",
         1
     )]
@@ -146,7 +150,18 @@ public sealed class WorkflowConsistencyTests
             workflow.Split('\n').Where(line => !line.TrimStart().StartsWith('#'))
         );
         int lookup = workflow.IndexOf("--json headRefName", StringComparison.Ordinal);
-        int refusal = workflow.IndexOf("\"$head_repo\" != \"$REPO\"", StringComparison.Ordinal);
+        // The comparison must lead to an exit: a branch that only echoes lets a fork PR continue.
+        Match refusalMatch = Regex.Match(
+            workflow,
+            @"\""\$head_repo\"" != \""\$REPO\"" \]; then(?<body>.*?)\bfi\b",
+            RegexOptions.Singleline | RegexOptions.CultureInvariant,
+            TimeSpan.FromSeconds(2)
+        );
+        int refusal =
+            refusalMatch.Success
+            && refusalMatch.Groups["body"].Value.Contains("exit 1", StringComparison.Ordinal)
+                ? refusalMatch.Index
+                : -1;
         if (lookup >= 0 && (refusal < 0 || refusal > lookup))
         {
             problems.Add("must refuse a fork PR (head_repo != REPO) before reading its head ref");
