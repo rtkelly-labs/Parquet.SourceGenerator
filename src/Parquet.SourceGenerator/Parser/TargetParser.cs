@@ -2034,23 +2034,40 @@ internal static class TargetParser
             current = current.BaseType
         )
         {
-            // An unannotated metadata base is skipped, not a stop: an annotated ancestor above it
-            // (a framework or third-party class in between) still contributes (#420).
-            if (ReferenceEquals(current, typeSymbol) || ContributesColumns(current))
-                chain.Add(current);
+            chain.Add(current);
         }
 
         chain.Reverse();
 
-        var ordered = new List<ISymbol>();
+        var ordered = new List<ISymbol?>();
         var positionByName = new Dictionary<string, int>(StringComparer.Ordinal);
 
         foreach (INamedTypeSymbol type in chain)
         {
+            // An unannotated metadata base is skipped, not a stop: an annotated ancestor above it
+            // still contributes (#420). A skipped base adds no columns, but a member it declares
+            // still hides a same-named member of an ancestor, as it would at the call site; an
+            // override does not hide, it re-declares the ancestor's member.
+            bool contributes = ReferenceEquals(type, typeSymbol) || ContributesColumns(type);
+
             foreach (ISymbol member in type.GetMembers())
             {
                 if (member is not IPropertySymbol && member is not IFieldSymbol)
                     continue;
+
+                if (!contributes)
+                {
+                    if (
+                        !member.IsOverride
+                        && positionByName.TryGetValue(member.Name, out int hidden)
+                    )
+                    {
+                        ordered[hidden] = null;
+                        positionByName.Remove(member.Name);
+                    }
+
+                    continue;
+                }
 
                 if (positionByName.TryGetValue(member.Name, out int existing))
                 {
@@ -2064,7 +2081,7 @@ internal static class TargetParser
             }
         }
 
-        return ordered;
+        return ordered.Where(member => member is not null).Select(member => member!).ToList();
     }
 
     /// <summary>
@@ -2266,8 +2283,16 @@ internal static class TargetParser
         // `init` accessors surface as a SetMethod with IsInitOnly, which an object initializer can
         // use, so no special case is needed for them.
         if (member is IPropertySymbol property)
-            return property.SetMethod is not null
-                && IsReachableFromGeneratedCode(property.SetMethod.DeclaredAccessibility);
+        {
+            if (property.SetMethod is null)
+                return false;
+
+            // A property read from metadata belongs to another assembly, where an internal setter
+            // is out of reach of generated code (#420); only a public one is usable.
+            return property.ContainingType.DeclaringSyntaxReferences.IsEmpty
+                ? property.SetMethod.DeclaredAccessibility == Accessibility.Public
+                : IsReachableFromGeneratedCode(property.SetMethod.DeclaredAccessibility);
+        }
 
         if (member is IFieldSymbol field)
             return !field.IsReadOnly && !field.IsConst;

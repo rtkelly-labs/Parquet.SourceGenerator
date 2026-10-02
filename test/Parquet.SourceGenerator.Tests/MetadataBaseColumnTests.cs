@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Parquet.SourceGenerator.Diagnostics;
 using Parquet.SourceGenerator.Parser;
 using Shouldly;
 using Xunit;
@@ -40,6 +41,17 @@ public sealed class MetadataBaseColumnTests
         public abstract class Unannotated
         {
             public int Hidden { get; set; }
+        }
+
+        public abstract class Hiding : Audited
+        {
+            public new int Id { get; set; }
+        }
+
+        public abstract class InternalSetter
+        {
+            [ParquetColumn("locked")]
+            public int Locked { get; internal set; }
         }
 
         public abstract class MiddleUnannotated : Audited
@@ -79,6 +91,18 @@ public sealed class MetadataBaseColumnTests
         }
 
         [ParquetSerializable]
+        public partial class HiddenByASkippedBase : Contracts.Hiding
+        {
+            public int Own { get; set; }
+        }
+
+        [ParquetSerializable]
+        public partial class FromInternalSetter : Contracts.InternalSetter
+        {
+            public int Own { get; set; }
+        }
+
+        [ParquetSerializable]
         public partial class FromUnannotated : Contracts.Unannotated
         {
             public int Own { get; set; }
@@ -96,6 +120,13 @@ public sealed class MetadataBaseColumnTests
         ];
 
     private static string[] Columns(string typeName)
+    {
+        TargetParserResult result = Parse(typeName);
+        result.Model.ShouldNotBeNull(typeName);
+        return result.Model.Properties.Select(p => p.ParquetColumnName).ToArray();
+    }
+
+    private static TargetParserResult Parse(string typeName)
     {
         // The contracts assembly is emitted and referenced as metadata, as a separate project's
         // output would be, so its types have no declaring syntax in the model compilation.
@@ -116,14 +147,7 @@ public sealed class MetadataBaseColumnTests
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
         );
         INamedTypeSymbol symbol = models.GetTypeByMetadataName("Demo." + typeName)!;
-        TargetParserResult result = TargetParser.GetTargetModel(
-            symbol,
-            ParquetApiLevel.V6,
-            allowCompoundTypes: false
-        );
-
-        result.Model.ShouldNotBeNull(typeName);
-        return result.Model.Properties.Select(p => p.ParquetColumnName).ToArray();
+        return TargetParser.GetTargetModel(symbol, ParquetApiLevel.V6, allowCompoundTypes: false);
     }
 
     [Fact]
@@ -137,6 +161,23 @@ public sealed class MetadataBaseColumnTests
     [Fact]
     public void AnAnnotatedAncestorAboveAnUnannotatedMetadataBaseStillContributes() =>
         Columns("ThroughAnUnannotatedMiddle").ShouldBe(["id", "created_by", "Own"]);
+
+    [Fact]
+    public void AMemberOfASkippedBaseStillHidesAnAncestorMember() =>
+        Columns("HiddenByASkippedBase").ShouldBe(["created_by", "Own"]);
+
+    [Fact]
+    public void AnInternalSetterOnAMetadataBaseIsRejectedNotEmitted()
+    {
+        // Generated code sits in another assembly, where the setter cannot be reached; PARQ007
+        // names the member instead of the build failing inside the generated file.
+        TargetParserResult result = Parse("FromInternalSetter");
+
+        result.Model.ShouldBeNull();
+        result.Diagnostics.ShouldContain(d =>
+            d.Descriptor.Id == DiagnosticDescriptors.MemberNotAssignable.Id
+        );
+    }
 
     [Fact]
     public void AFrameworkBaseStillContributesNothing() =>
