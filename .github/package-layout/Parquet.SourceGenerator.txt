@@ -1,0 +1,12 @@
+# Exact entry list of the Parquet.SourceGenerator package (#400); checked by scripts/VerifyPackageLayout.cs.
+# Any other entry fails CI. Add one deliberately, in the same pull request that packs it.
+# Content under build/, buildTransitive/ and tools/ runs on the consumer's machine: review it as code.
+@dependency Parquet.SourceGenerator.Attributes
+LICENSE
+PACKAGE_README.md
+Parquet.SourceGenerator.nuspec
+[Content_Types].xml
+_rels/.rels
+analyzers/dotnet/cs/Parquet.SourceGenerator.dll
+build/Parquet.SourceGenerator.props
+package/services/metadata/core-properties/*.psmdcp
