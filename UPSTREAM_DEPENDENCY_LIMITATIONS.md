@@ -49,10 +49,12 @@ regains a `netstandard2.0` target.
 ## Parquet.Net 6.1.0 And 4.25.0 Size Allocations From Untrusted Footer Counts
 
 `ParquetSerializerOptions.MaxAllocationValues` is a per-column **count** of values (default
-10,000,000), not a memory budget (#361). The generated reader sizes every pooled buffer from
-`RowGroup.num_rows` and `ColumnChunk.num_values` in the footer before it reads a page, so a file of
-about 1 KB whose footer declares ten million values for each of nine columns commits roughly 1 GB
-(`OrderEvent`), and the parallel read path rents that per worker. The count is the same for a
+10,000,000), not a memory budget (#361). The modern generated reader sizes its pooled buffers from `RowGroup.num_rows` (flat columns) and
+`ColumnChunk.num_values` (list and struct leaves) in the footer before it reads a page, so a file of
+about 1 KB whose footer declares ten million rows for the nine-column `OrderEvent` model asks for
+roughly 1 GB of nominal element storage (before `ArrayPool` rounding), and the parallel read path can
+rent that per worker. The legacy reader validates `ColumnChunk.num_values` and then delegates the
+whole-column allocation to Parquet.Net through `ReadColumnAsync`. The count is the same for a
 `bool` and a `Guid` and is applied per column, so wider models multiply it.
 
 **Why the file's own bytes cannot close it.** The issue proposes rejecting a column whose
