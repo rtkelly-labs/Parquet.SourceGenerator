@@ -92,7 +92,11 @@ public sealed class DecompressionGuardSequentialReadTests
         MemoryStream file
     )
     {
-        DecompressionGuardHarness.Guard guard = DecompressionGuardHarness.Create(flavour, file);
+        DecompressionGuardHarness.Guard guard = DecompressionGuardHarness.Create(
+            flavour,
+            file,
+            ownsInner: true
+        );
         guard.Activate();
         guard.Stream.Seek(HeaderOffset, SeekOrigin.Begin);
         return guard;
@@ -119,7 +123,6 @@ public sealed class DecompressionGuardSequentialReadTests
             HostileSecondHeader(),
             secondPayload: 100_000
         );
-        using MemoryStream owned = file;
         using DecompressionGuardHarness.Guard guard = ActivatedAtFirstPage(flavour, file);
 
         ReadToTheEndOfTheFirstPage(guard, payloadStart);
@@ -140,7 +143,6 @@ public sealed class DecompressionGuardSequentialReadTests
             Enumerable.Repeat((byte)0xFF, 24).ToArray(),
             secondPayload: 64
         );
-        using MemoryStream owned = file;
         using DecompressionGuardHarness.Guard guard = ActivatedAtFirstPage(flavour, file);
         ReadToTheEndOfTheFirstPage(guard, payloadStart);
 
@@ -155,7 +157,6 @@ public sealed class DecompressionGuardSequentialReadTests
             Canonical(FirstUncompressed, FirstCompressed),
             secondPayload: FirstCompressed
         );
-        using MemoryStream owned = file;
         using DecompressionGuardHarness.Guard guard = ActivatedAtFirstPage(flavour, file);
         ReadToTheEndOfTheFirstPage(guard, payloadStart);
 
@@ -170,7 +171,6 @@ public sealed class DecompressionGuardSequentialReadTests
             HostileSecondHeader(),
             secondPayload: 100_000
         );
-        using MemoryStream owned = file;
         using DecompressionGuardHarness.Guard guard = ActivatedAtFirstPage(flavour, file);
         guard.Stream.Position = payloadStart;
 
@@ -192,7 +192,6 @@ public sealed class DecompressionGuardSequentialReadTests
             Canonical(FirstUncompressed, FirstCompressed),
             secondPayload: FirstCompressed
         );
-        using MemoryStream owned = file;
         using DecompressionGuardHarness.Guard guard = ActivatedAtFirstPage(flavour, file);
 
         // Reading with a buffer larger than any page is shortened at each boundary and carries on.
@@ -217,10 +216,10 @@ public sealed class DecompressionGuardSequentialReadTests
     public void ReadsAreNotShortenedBeforeActivation(string flavour)
     {
         (MemoryStream file, _, _) = TwoPages(HostileSecondHeader(), secondPayload: 100_000);
-        using MemoryStream owned = file;
         using DecompressionGuardHarness.Guard guard = DecompressionGuardHarness.Create(
             flavour,
-            file
+            file,
+            ownsInner: true
         );
 
         var buffer = new byte[4096];
@@ -236,7 +235,6 @@ public sealed class DecompressionGuardSequentialReadTests
             Canonical(FirstUncompressed, FirstCompressed),
             secondPayload: FirstCompressed
         );
-        using MemoryStream owned = file;
         using DecompressionGuardHarness.Guard guard = ActivatedAtFirstPage(flavour, file);
         guard.Stream.Position = payloadStart;
 
