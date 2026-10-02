@@ -129,6 +129,37 @@ public sealed class DiagnosticInfoPipelineTests
     }
 
     [Fact]
+    public void ARebuiltDiagnosticKeepsALineDirectiveMapping()
+    {
+        // A diagnosed declaration after #line reports at the mapped file and line, which is what
+        // the IDE and the build output show. Keeping only the physical span would move it.
+        const string Mapped = """
+            using Parquet.SourceGenerator;
+
+            #line 100 "Mapped.cs"
+            [ParquetSerializable]
+            public class NotPartial
+            {
+                [ParquetColumn("id")]
+                public int Id { get; init; }
+            }
+            """;
+        SyntaxTree tree = CSharpSyntaxTree.ParseText(Mapped, path: "Physical.cs");
+        TypeDeclarationSyntaxHelper.Identifier(tree, out Location expected);
+        var info = new DiagnosticInfo(
+            DiagnosticDescriptors.MustBePartial,
+            expected,
+            ["NotPartial"]
+        );
+
+        FileLinePositionSpan rebuilt = info.ToDiagnostic().Location.GetMappedLineSpan();
+
+        rebuilt.Path.ShouldBe("Mapped.cs");
+        rebuilt.Span.ShouldBe(expected.GetMappedLineSpan().Span);
+        rebuilt.StartLinePosition.Line.ShouldBe(100);
+    }
+
+    [Fact]
     public void ADiagnosticMovesWithItsMemberAfterAnEditAboveIt()
     {
         SyntaxTree before = CSharpSyntaxTree.ParseText(NonPartialSource, path: "NotPartial.cs");

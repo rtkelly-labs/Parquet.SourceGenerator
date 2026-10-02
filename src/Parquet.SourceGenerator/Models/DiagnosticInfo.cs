@@ -25,11 +25,11 @@ internal readonly record struct SourcePosition(
             return null;
         }
 
-        return new SourcePosition(
-            location.SourceTree?.FilePath ?? string.Empty,
-            location.SourceSpan,
-            location.GetLineSpan().Span
-        );
+        // The mapped span, not the physical one: a #line directive makes the compiler, the IDE and
+        // the build output report the mapped file and line, and an external location carries only
+        // one file and span. Without #line the two are identical.
+        FileLinePositionSpan mapped = location.GetMappedLineSpan();
+        return new SourcePosition(mapped.Path, location.SourceSpan, mapped.Span);
     }
 
     /// <summary>
