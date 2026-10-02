@@ -120,7 +120,7 @@ jobs:
         run: dotnet run scripts/VerifyProvenance.cs
 
       - name: Restore dependencies
-        run: dotnet restore Parquet.SourceGenerator.slnx
+        run: dotnet restore Parquet.SourceGenerator.slnx --locked-mode
 
       - name: Build Solution (Release)
         run: |

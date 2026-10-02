@@ -91,7 +91,7 @@ jobs:
           version: "0.12.21"
 
       - name: Restore solution dependencies
-        run: dotnet restore Parquet.SourceGenerator.slnx
+        run: dotnet restore Parquet.SourceGenerator.slnx --locked-mode
 
       - name: Audit Package Security & Vulnerabilities
         run: |
@@ -457,7 +457,7 @@ jobs:
             10.0.x
 
       - name: Restore dependencies
-        run: dotnet restore Parquet.SourceGenerator.slnx
+        run: dotnet restore Parquet.SourceGenerator.slnx --locked-mode
 
       # Named first, so the PR summary (read from git) is there even when producing the head's
       # derived outputs fails.

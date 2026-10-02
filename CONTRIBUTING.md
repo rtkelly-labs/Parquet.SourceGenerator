@@ -25,6 +25,10 @@ cd Parquet.SourceGenerator
 dotnet build Parquet.SourceGenerator.slnx --configuration Release
 ```
 
+### Changing a dependency
+
+Every project in the solution except the two Native AOT ones carries a committed `packages.lock.json`, and CI restores in locked mode, so a changed dependency graph fails the build instead of resolving silently (#394). After editing `Directory.Packages.props` or a `PackageReference`, run `dotnet restore Parquet.SourceGenerator.slnx --force-evaluate` and commit the changed lock files with the change. A Dependabot update that bumps a version fails the locked restore (`NU1004`) until the lock files are regenerated the same way.
+
 ### 2. Run Test Suite
 ```bash
 dotnet test Parquet.SourceGenerator.slnx --configuration Release

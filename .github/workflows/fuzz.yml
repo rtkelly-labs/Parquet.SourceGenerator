@@ -62,7 +62,7 @@ jobs:
           echo "::notice::Fuzzing with PARQUET_FUZZ_SEED=$seed PARQUET_FUZZ_CASES=$cases"
 
       - name: Restore
-        run: dotnet restore Parquet.SourceGenerator.slnx
+        run: dotnet restore Parquet.SourceGenerator.slnx --locked-mode
 
       # DefaultSeedsAreDeterministicAndStable guards the per-push CI contract: with NO override the
       # suite runs one fixed seed set. This job overrides both variables by design, so that test

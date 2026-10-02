@@ -290,6 +290,92 @@ public sealed class CiGateIntegrityTests
         Version.Parse(version.Groups[1].Value).ShouldBeGreaterThanOrEqualTo(new Version(3, 11));
     }
 
+    // Native AOT projects restore a runtime-specific target (osx-arm64 on one machine, linux-x64 in
+    // CI), so their lock file would never be valid on a second platform (#394).
+    private static readonly string[] ProjectsWithoutLockFile =
+    [
+        "Parquet.SourceGenerator.AotTest",
+        "Parquet.SourceGenerator.SampleAot",
+    ];
+
+    [Fact]
+    public void EveryProjectInTheSolutionHasALockFileExceptTheNativeAotOnes()
+    {
+        string root = FindRepositoryRoot();
+        string[] projects = Regex
+            .Matches(
+                Read(root, "Parquet.SourceGenerator.slnx"),
+                @"Path=""(?<p>[^""]+\.csproj)""",
+                Options,
+                RegexTimeout
+            )
+            .Select(m => m.Groups["p"].Value)
+            .ToArray();
+
+        projects.Length.ShouldBeGreaterThan(8, "the solution scan examined too few projects");
+        foreach (string project in projects)
+        {
+            string name = Path.GetFileNameWithoutExtension(project);
+            bool expected = !ProjectsWithoutLockFile.Contains(name);
+            string lockFile = Path.Combine(
+                root,
+                Path.GetDirectoryName(project)!,
+                "packages.lock.json"
+            );
+            IOFile.Exists(lockFile).ShouldBe(expected, $"{name}: packages.lock.json");
+        }
+    }
+
+    [Fact]
+    public void EveryRestoreOfALockedProjectInTheWorkflowsRunsInLockedMode()
+    {
+        string root = FindRepositoryRoot();
+        Regex restore = new(
+            @"^\s*run:\s+dotnet restore (?<target>\S+)(?<rest>[^\n]*)$",
+            Options,
+            RegexTimeout
+        );
+        int examined = 0;
+        foreach (
+            string file in Directory.GetFiles(Path.Combine(root, ".github", "workflows"), "*.yml")
+        )
+        {
+            foreach (Match m in restore.Matches(IOFile.ReadAllText(file).Replace("\r\n", "\n")))
+            {
+                examined++;
+                m.Groups["rest"]
+                    .Value.ShouldContain(
+                        "--locked-mode",
+                        customMessage: $"{Path.GetFileName(file)}: dotnet restore {m.Groups["target"].Value}"
+                    );
+            }
+        }
+
+        examined.ShouldBeGreaterThanOrEqualTo(8, "the workflow scan examined too few restores");
+    }
+
+    [Fact]
+    public void NuGetSourcesAreMappedAndThePackageConsumersPinOurIdsToTheLocalFeed()
+    {
+        string root = FindRepositoryRoot();
+        string main = Read(root, "NuGet.config");
+        main.ShouldContain("<packageSourceMapping>");
+        main.ShouldContain("<package pattern=\"*\" />");
+
+        foreach (string consumer in new[] { "PackageConsumption", "PackageConsumptionLegacy" })
+        {
+            string config = Read(root, "test", consumer, "nuget.config");
+            Regex
+                .IsMatch(
+                    config,
+                    @"<packageSource key=""local-artifacts"">\s*<package pattern=""Parquet\.SourceGenerator\*"" />",
+                    Options,
+                    RegexTimeout
+                )
+                .ShouldBeTrue($"{consumer}: Parquet.SourceGenerator* must map to local-artifacts");
+        }
+    }
+
     [Fact]
     public void TheReadmeExamplesAreCompiledInTheTestJobAfterTheSolutionBuild()
     {
