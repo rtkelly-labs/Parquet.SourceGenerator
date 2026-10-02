@@ -150,7 +150,7 @@ dotnet_diagnostic.MA0004.severity = warning
 dotnet_diagnostic.CA1019.severity = none # Allow property setters for named attribute arguments
 dotnet_diagnostic.CA1008.severity = suggestion
 
-# Rules that replace the SonarAnalyzer checks removed in this change (docs/55-SONAR-REMOVAL.md). They share
+# Rules that replace the SonarAnalyzer checks removed by docs/55-SONAR-REMOVAL.md. They share
 # this section so the emitted code is held to them too.
 dotnet_diagnostic.RCS1003.severity = warning # Brace a multi-line if-else body (was S2681)
 dotnet_diagnostic.RCS1163.severity = warning # Unused parameter (was S1172)

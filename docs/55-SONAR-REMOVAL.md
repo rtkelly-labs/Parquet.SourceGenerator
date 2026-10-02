@@ -66,7 +66,7 @@ CI under `-warnaserror`. The new entries are in the `src/` and emitted-code sect
 
 | Rule | What it checked | Replacement | Note |
 |---|---|---|---|
-| S1186 | A method with an empty body and no comment saying why | dropped | No analyzer here has this check. Emitted `Flush()` and similar are covered by CA2215 and the `Stream` tests |
+| S1186 | A method with an empty body and no comment saying why | dropped | No analyzer here has this check. The emitted `DecompressionGuardStream` contract is covered by its `Stream` tests |
 | S1172 | A private method that never uses one of its parameters | RCS1163 (warning) | |
 | S4581 | `new Guid()` where `Guid.Empty` says the same thing | MA0067 (warning) | |
 | S2681 | A multi-line body under `if` or a loop with no braces, so only the first line is controlled | RCS1001, RCS1003 | RCS1001: warning for emitted code (0 findings), default `suggestion` in `src/` (34 findings, see below). RCS1003: warning in `src/` (1 fixed), `suggestion` for emitted code (22 findings) |
@@ -80,7 +80,7 @@ CI under `-warnaserror`. The new entries are in the `src/` and emitted-code sect
 | S1481 | A local variable that is never used | CS0219, IDE0059 | Compiler warning, already on |
 | S1104 | A public mutable field | CA1051 | Already a warning |
 | S3923 | Every branch of a conditional doing the same thing | dropped | No counterpart |
-| S108 | An empty block | MA0090, RCS1075 (already on) | Partial: empty `else`, `finally` and `catch` only; other empty blocks are no longer flagged |
+| S108 | An empty block | RCS1075 (warning, already on) | Partial: only an empty `catch` of `System.Exception` is a warning. MA0090 (empty `else` or `finally`) is `suggestion` by default; other empty blocks are no longer flagged |
 | S3267 | A `foreach` that could be a LINQ query | dropped | Was `none` (LINQ allocates; contradicts the generator's allocation rules). Nothing to carry |
 | S1643 | String concatenation in a loop | dropped | Was `suggestion`. MA0028 covers `StringBuilder` use and stays at its default |
 | S4136 | Overloads not adjacent | dropped | Was `none` |
