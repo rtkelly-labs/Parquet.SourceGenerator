@@ -171,12 +171,16 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   The read path decodes nullable value columns straight into that layout (`ReadRawAsync`), with no
   expansion pass.
 
-  Ownership (#369, partly): a batch from `AsBatches()` is borrowed, valid until the next
-  `MoveNextAsync` or disposal. It carries a lease the iterator expires before returning the pooled
-  buffers, so a kept batch now throws `ObjectDisposedException` from every lane property (and from
-  the fill methods and `WriteParquetAsync`) instead of reading recycled memory. A batch you
-  construct yourself never expires. A `ReadOnlyMemory<T>` already copied out of a live batch is a
-  plain view and is not protected.
+  Ownership (#369, closed by this change; owner decision, stable for 0.1): a batch from `AsBatches()` is
+  borrowed, valid until the next `MoveNextAsync` or disposal. It carries a lease the iterator expires
+  before returning the pooled buffers, so a kept batch throws `ObjectDisposedException` from every lane
+  property (and from the fill methods and `WriteParquetAsync`) instead of reading recycled memory. A
+  batch you construct yourself never expires. Using a batch, or a lane taken from it, after the
+  enumerator advances is invalid. A `ReadOnlyMemory<T>` lane already copied out of a live batch is not
+  checked yet (lane-level checking: #580), the lanes of a borrowed batch are not guaranteed to be
+  array-backed (do not rely on `MemoryMarshal.TryGetArray` or `Pin` outliving the batch), and batches
+  are not thread-safe. To keep data, copy each lane with `.ToArray()` into the public constructor.
+  There is no owned, callback or ref-counted variant in 0.1.
 
   | Before | After |
   |:---|:---|

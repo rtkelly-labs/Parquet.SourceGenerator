@@ -398,8 +398,12 @@ internal static class BatchReadComponent
             $"    /// Each yielded <see cref=\"{batchType}\"/> is borrowed: its lanes alias pooled buffers that are returned as"
         );
         builder.AppendLine(
-            "    /// soon as the enumerator advances or is disposed, after which the batch throws on use."
+            "    /// soon as the enumerator advances or is disposed, after which the batch throws on use. Use a batch, and"
         );
+        builder.AppendLine(
+            "    /// any lane taken from it, in the loop body only. Lanes of a borrowed batch are not guaranteed to be"
+        );
+        builder.AppendLine("    /// array-backed; a batch is not thread-safe.");
         builder.AppendLine("    /// </remarks>");
         // Not an iterator: arguments are validated when this is called, not on the first
         // MoveNextAsync (S4456). The iterator below owns [EnumeratorCancellation].

@@ -349,11 +349,27 @@ property checks the lease, so a kept batch throws `ObjectDisposedException` rath
 memory another renter now owns. The same check covers the fill methods and writing the batch. A
 batch built by a caller has no lease and never expires; `default` is a valid empty batch.
 
-What this does not cover: a `ReadOnlyMemory<T>` already copied out of a live batch is a plain view
-over the pooled array and is not protected, and the check assumes one consumer advancing the
-enumerator. #369 asks for a model in which the borrowed buffers cannot escape at all (owned
-batches, or callback-scoped borrowing); the lease turns the common mistake into an immediate
-exception without changing the `await foreach` shape, and the stronger models remain open.
+The owner chose this lease check as the stable `0.1` contract (decision recorded on #369, after
+evaluating five ownership options). There is no escape method and no owned, callback-scoped or
+ref-counted variant in `0.1`: the public constructor plus `.ToArray()` per lane already gives an
+owned copy, callback scoping would need the lease anyway, and reference counting adds the most
+surface with the same hole.
+
+**Contract.**
+
+- Using a batch, or any lane taken from it, after the enumerator advances or is disposed is invalid.
+- A kept batch is detected and throws `ObjectDisposedException` (lanes, fill methods, writing).
+- A `ReadOnlyMemory<T>` lane already copied out of a live batch is a plain view and is not checked
+  yet; using it after the loop is still invalid. Lane-level checking is
+  [#580](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/580).
+- Lanes of a borrowed batch are **not guaranteed to be array-backed**: do not rely on
+  `MemoryMarshal.TryGetArray`, or on a `Pin` outliving the batch. #580 backs the lanes with a
+  lease-checking `MemoryManager<T>`, which needs no public API change on this basis.
+- Batches are not thread-safe: one consumer advances the enumerator and uses its batches.
+- To keep data, copy it: construct a batch with the public constructor from `.ToArray()` of each lane.
+
+Evolutions that need no break: lane-level checking (#580), an owned-batch terminal, `ToOwned()`, and a
+callback form.
 
 ### 7.5 Not measured here
 

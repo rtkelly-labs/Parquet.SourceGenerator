@@ -42,10 +42,15 @@ The rule, the three surfaces and the author process are in
   [12](../12-BUFFER-REUSE-AND-EXTRACTION-STRATEGIES.md) §7.
 - **Ownership:** a batch from `AsBatches()` is borrowed (valid until the next `MoveNextAsync`) and
   carries a lease the iterator expires before returning the pooled buffers; a kept batch throws
-  `ObjectDisposedException` from every lane property. A batch a caller constructs never expires.
-  This is lease/token validation from #369's candidate list. It does not protect a
-  `ReadOnlyMemory<T>` already copied out of a live batch, and owned or callback-scoped batches
-  remain open under #369.
+  `ObjectDisposedException` from every lane property, the fill methods and `WriteParquetAsync`. A
+  batch a caller constructs never expires. This is lease/token validation from #369's candidate
+  list, and the owner chose it as the stable 0.1 contract: using a batch or a lane after the
+  enumerator advances is invalid; a `ReadOnlyMemory<T>` lane already copied out of a live batch is
+  not checked yet (lane-level checking is #580, additive, no API change); lanes of a borrowed batch
+  are not guaranteed to be array-backed; batches are not thread-safe; to keep data, copy each lane
+  with `.ToArray()` into the public constructor. No escape method and no owned, callback or
+  ref-counted variant in 0.1; an owned-batch terminal, `ToOwned()` and a callback form can be added
+  later without a break.
 - **Alternatives considered:** *`T?` spans for nullable columns (layout B)* — rejected: costs a
   transpose on write and doubles the width of small types. *A cached `T?` accessor (layout C)* —
   rejected: it allocated large arrays and was 2x slower under Server GC in the experiment; replaced
@@ -53,7 +58,8 @@ The rule, the three surfaces and the author process are in
   writer takes `ReadOnlyMemory<ReadOnlyMemory<char>?>` and packing costs 28-280 us per column.
   *Keep two types and add a converter* — rejected: that is the surface this entry removes.
   *Callback-scoped borrowing* (`Func<Batch, ValueTask>`) — not chosen: it gives up the `await
-  foreach` shape; left open under #369.
+  foreach` shape and needs the lease anyway; not in 0.1 (can be added later without a break).
+  *Reference counting* — rejected: the most surface for the same hole.
 - **Fixes folded in:** #384 part a (a derived `<Column>DefinitionLevels` member no longer collides
   with a property of that name; it becomes `<Column>DefinitionLevels_`) and #550/#562's
   readonly-struct shape carries over.

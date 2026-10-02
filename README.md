@@ -217,7 +217,10 @@ lanes when you can (a cached `T?` accessor measured 2x slower under Server GC, w
 **Lifetime.** A batch read from `AsBatches()` is *borrowed*: its lanes alias pooled buffers that are returned when the
 enumerator advances or is disposed. After that, every lane property of that batch (and writing it) throws
 `ObjectDisposedException` rather than reading recycled memory. A `ReadOnlyMemory<T>` you already copied out of a live
-batch is a plain view and is not protected, so use it inside the loop body and copy what has to outlive it.
+batch is a plain view and is not checked, but using it after the loop is still invalid, so use a batch and its lanes inside the
+loop body only. Lanes of a borrowed batch are not guaranteed to be array-backed (do not rely on `MemoryMarshal.TryGetArray`
+or a pin outliving the batch), and batches are not thread-safe. To keep data, copy each lane with `.ToArray()` into the
+`<Model>Batch` constructor.
 
 ### 5. Row-Group Pruning with Min/Max Statistics
 

@@ -569,6 +569,221 @@ public sealed class UnifiedBatchTests
         }
     }
 
+    [Fact]
+    public async Task BatchKeptPastTheLoopThrowsFromFillNullableAsync()
+    {
+        BatchFillModel[] rows = Enumerable
+            .Range(0, 4)
+            .Select(i => new BatchFillModel
+            {
+                Id = i,
+                Score = i % 2 == 0 ? null : i * 0.5,
+                Tag = i % 2 == 0 ? new Guid(i, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1) : null,
+                Day = new DateOnly(2024, 1, i + 1),
+                Kind = i < 2 ? null : TypeMatrixStatus.Closed,
+            })
+            .ToArray();
+        using var stream = new MemoryStream();
+        await rows.WriteParquetBatchedAsync(
+            stream,
+            new ParquetSerializerOptions { RowGroupSize = 4 }
+        );
+        stream.Position = 0;
+
+        BatchFillModelBatch kept = default;
+        await foreach (BatchFillModelBatch batch in BatchFillModelParquet.From(stream).AsBatches())
+        {
+            kept = batch;
+        }
+
+        kept.RowCount.ShouldBe(4);
+        double?[] score = new double?[kept.RowCount];
+        Guid?[] tag = new Guid?[kept.RowCount];
+        DateTime?[] day = new DateTime?[kept.RowCount];
+        int?[] kind = new int?[kept.RowCount];
+        Should.Throw<ObjectDisposedException>(() => kept.FillScoreNullable(score));
+        Should.Throw<ObjectDisposedException>(() => kept.FillTagNullable(tag));
+        Should.Throw<ObjectDisposedException>(() => kept.FillDayNullable(day));
+        Should.Throw<ObjectDisposedException>(() => kept.FillKindNullable(kind));
+    }
+
+    // The same lifetime rules on a ReadOnlyMemory<byte> source, which takes the parallel-capable
+    // buffered path rather than the stream path.
+
+    [Fact]
+    public async Task MemorySourceBatchIsUsableInsideTheLoopBodyAsync()
+    {
+        ReadOnlyMemory<byte> source = await WriteMetricsMemoryAsync(rows: 10, rowGroupSize: 5);
+
+        double total = 0;
+        await foreach (
+            ColumnBatchMetricBatch batch in ColumnBatchMetricParquet.From(source).AsBatches()
+        )
+        {
+            foreach (double value in batch.Value.Span)
+            {
+                total += value;
+            }
+
+            batch.RowCount.ShouldBe(5);
+        }
+
+        total.ShouldBe(Enumerable.Range(1, 10).Sum(i => i * 1.5));
+    }
+
+    [Fact]
+    public async Task MemorySourceBatchKeptPastTheLoopThrowsFromEveryLaneAsync()
+    {
+        ReadOnlyMemory<byte> source = await WriteMetricsMemoryAsync(rows: 10, rowGroupSize: 5);
+
+        ColumnBatchMetricBatch kept = default;
+        await foreach (
+            ColumnBatchMetricBatch batch in ColumnBatchMetricParquet.From(source).AsBatches()
+        )
+        {
+            kept = batch;
+        }
+
+        kept.RowCount.ShouldBe(5);
+        Should.Throw<ObjectDisposedException>(() => kept.Timestamp);
+        Should.Throw<ObjectDisposedException>(() => kept.Value);
+        Should.Throw<ObjectDisposedException>(() => kept.Weight);
+
+        using var output = new MemoryStream();
+        await Should.ThrowAsync<ObjectDisposedException>(() => kept.WriteParquetAsync(output));
+    }
+
+    [Fact]
+    public async Task MemorySourceEarlierBatchExpiresWhenTheEnumeratorAdvancesAsync()
+    {
+        ReadOnlyMemory<byte> source = await WriteMetricsMemoryAsync(rows: 12, rowGroupSize: 4);
+
+        var batches = new List<ColumnBatchMetricBatch>();
+        await foreach (
+            ColumnBatchMetricBatch batch in ColumnBatchMetricParquet.From(source).AsBatches()
+        )
+        {
+            batch.Value.Length.ShouldBe(4);
+            foreach (ColumnBatchMetricBatch earlier in batches)
+            {
+                Should.Throw<ObjectDisposedException>(() => earlier.Value);
+            }
+
+            batches.Add(batch);
+        }
+
+        batches.Count.ShouldBe(3);
+    }
+
+    [Fact]
+    public async Task MemorySourceBreakingOutOfTheLoopExpiresTheBatchAsync()
+    {
+        ReadOnlyMemory<byte> source = await WriteMetricsMemoryAsync(rows: 10, rowGroupSize: 5);
+
+        ColumnBatchMetricBatch kept = default;
+        await foreach (
+            ColumnBatchMetricBatch batch in ColumnBatchMetricParquet.From(source).AsBatches()
+        )
+        {
+            kept = batch;
+            kept.Value.Length.ShouldBe(5);
+            break;
+        }
+
+        Should.Throw<ObjectDisposedException>(() => kept.Value);
+    }
+
+    [Fact]
+    public async Task LaneCopiedOutInsideTheLoopIsNotCheckedAfterTheLoopAsync()
+    {
+        // CHARACTERIZATION, not a guarantee. A ReadOnlyMemory<T> lane taken from a live batch is a
+        // plain view, so using it after the enumerator advanced does not throw today. The contract
+        // (docs/47 section 5.1) still calls that use invalid. Lane-level lease checking
+        // (https://github.com/rtkelly13/Parquet.SourceGenerator/issues/580) will make it throw:
+        // when it lands, flip this test to expect ObjectDisposedException. The values read are
+        // deliberately not asserted: the pool may hand the array to another renter at any time.
+        using MemoryStream stream = await WriteMetricsAsync(rows: 8, rowGroupSize: 8);
+
+        ReadOnlyMemory<double> lane = default;
+        await foreach (
+            ColumnBatchMetricBatch batch in ColumnBatchMetricParquet.From(stream).AsBatches()
+        )
+        {
+            lane = batch.Value;
+        }
+
+        int length = 0;
+        Should.NotThrow(() => length = lane.Span.Length);
+        length.ShouldBe(8);
+    }
+
+    // ── Concurrency: batches are not thread-safe, enumerations are independent ────────
+
+    [Fact]
+    public async Task ParallelEnumerationsOfOneMemorySourceEachSeeEveryValueAsync()
+    {
+        const int Rows = 200;
+        const int RowGroupSize = 25;
+        ReadOnlyMemory<byte> source = await WriteMetricsMemoryAsync(Rows, RowGroupSize);
+
+        int[] rowGroupsSeen = await Task.WhenAll(
+            Enumerable
+                .Range(0, 8)
+                .Select(_ => Task.Run(() => ReadAndCheckAllRowsAsync(source, Rows)))
+        );
+
+        rowGroupsSeen.ShouldAllBe(count => count == Rows / RowGroupSize);
+    }
+
+    [Fact]
+    public async Task BatchKeptAndReadFromAnotherThreadAfterCompletionThrowsAsync()
+    {
+        ReadOnlyMemory<byte> source = await WriteMetricsMemoryAsync(rows: 10, rowGroupSize: 5);
+
+        ColumnBatchMetricBatch kept = default;
+        await foreach (
+            ColumnBatchMetricBatch batch in ColumnBatchMetricParquet.From(source).AsBatches()
+        )
+        {
+            kept = batch;
+        }
+
+        ColumnBatchMetricBatch captured = kept;
+        await Task.Run(() => Should.Throw<ObjectDisposedException>(() => captured.Value));
+    }
+
+    private static async Task<int> ReadAndCheckAllRowsAsync(ReadOnlyMemory<byte> source, int rows)
+    {
+        int row = 0;
+        int rowGroups = 0;
+        await foreach (
+            ColumnBatchMetricBatch batch in ColumnBatchMetricParquet.From(source).AsBatches()
+        )
+        {
+            rowGroups++;
+            row = CheckBatchRows(batch, row);
+        }
+
+        row.ShouldBe(rows);
+        return rowGroups;
+    }
+
+    private static int CheckBatchRows(ColumnBatchMetricBatch batch, int row)
+    {
+        ReadOnlySpan<long> timestamps = batch.Timestamp.Span;
+        ReadOnlySpan<double> values = batch.Value.Span;
+        ReadOnlySpan<double> weights = batch.Weight.Span;
+        for (int i = 0; i < batch.RowCount; i++)
+        {
+            row++;
+            timestamps[i].ShouldBe(row);
+            values[i].ShouldBe(row * 1.5);
+            weights[i].ShouldBe(row * 0.25);
+        }
+
+        return row;
+    }
+
     // ── Shape ─────────────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -673,6 +888,15 @@ public sealed class UnifiedBatchTests
             );
         stream.Position = 0;
         return stream;
+    }
+
+    private static async Task<ReadOnlyMemory<byte>> WriteMetricsMemoryAsync(
+        int rows,
+        int rowGroupSize
+    )
+    {
+        using MemoryStream stream = await WriteMetricsAsync(rows, rowGroupSize);
+        return stream.ToArray();
     }
 
     private static GeneratedTypeMatrixRecord[] RequiredRows() =>

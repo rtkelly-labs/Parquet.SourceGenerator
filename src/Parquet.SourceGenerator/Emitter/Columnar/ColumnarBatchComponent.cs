@@ -429,9 +429,17 @@ internal static class ColumnarBatchComponent
             "/// batch is a plain view over the pooled array and is not protected, so use it inside the loop body only."
         );
         builder.AppendLine(
-            "/// Copy anything that has to outlive the iteration. The check assumes one consumer advancing the"
+            "/// Copy anything that has to outlive the iteration. The lanes of a borrowed batch are not guaranteed to be"
         );
-        builder.AppendLine("/// enumerator; it is not a synchronisation point.</para>");
+        builder.AppendLine(
+            "/// array-backed, so do not rely on <c>MemoryMarshal.TryGetArray</c> or on a pin outliving the batch."
+        );
+        builder.AppendLine(
+            "/// A batch is not thread-safe: the check assumes one consumer advancing the enumerator."
+        );
+        builder.AppendLine(
+            "/// To keep data, copy each lane with <c>ToArray()</c> into the public constructor.</para>"
+        );
         builder.AppendLine("/// </remarks>");
         builder.AppendLine($"public readonly struct {batchType}");
         builder.AppendLine("{");
