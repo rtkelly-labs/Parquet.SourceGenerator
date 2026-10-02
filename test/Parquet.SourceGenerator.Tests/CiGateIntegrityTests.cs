@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Xml.Linq;
 using Shouldly;
 using Xunit;
 using IOFile = System.IO.File;
@@ -337,7 +338,11 @@ public sealed class CiGateIntegrityTests
         );
         int examined = 0;
         foreach (
-            string file in Directory.GetFiles(Path.Combine(root, ".github", "workflows"), "*.yml")
+            string file in EnumerateYaml(
+                Path.Combine(root, ".github", "workflows"),
+                "*",
+                SearchOption.TopDirectoryOnly
+            )
         )
         {
             foreach (Match m in restore.Matches(IOFile.ReadAllText(file).Replace("\r\n", "\n")))
@@ -358,23 +363,37 @@ public sealed class CiGateIntegrityTests
     public void NuGetSourcesAreMappedAndThePackageConsumersPinOurIdsToTheLocalFeed()
     {
         string root = FindRepositoryRoot();
-        string main = Read(root, "NuGet.config");
-        main.ShouldContain("<packageSourceMapping>");
-        main.ShouldContain("<package pattern=\"*\" />");
+        // Parsed, not matched as text: a mapping inside an XML comment is not applied by NuGet.
+        MappingsOf(Path.Combine(root, "NuGet.config"))
+            .ShouldContain(("nuget.org", "*"), "the root config must map every id to nuget.org");
 
         foreach (string consumer in new[] { "PackageConsumption", "PackageConsumptionLegacy" })
         {
-            string config = Read(root, "test", consumer, "nuget.config");
-            Regex
-                .IsMatch(
-                    config,
-                    @"<packageSource key=""local-artifacts"">\s*<package pattern=""Parquet\.SourceGenerator\*"" />",
-                    Options,
-                    RegexTimeout
-                )
-                .ShouldBeTrue($"{consumer}: Parquet.SourceGenerator* must map to local-artifacts");
+            var mappings = MappingsOf(Path.Combine(root, "test", consumer, "nuget.config"));
+            mappings.ShouldContain(
+                ("local-artifacts", "Parquet.SourceGenerator*"),
+                $"{consumer}: Parquet.SourceGenerator* must map to local-artifacts"
+            );
+            mappings.ShouldContain(
+                ("nuget.org", "*"),
+                $"{consumer}: the rest must come from nuget.org"
+            );
         }
     }
+
+    private static List<(string Source, string Pattern)> MappingsOf(string path) =>
+        XDocument
+            .Load(path)
+            .Descendants("packageSourceMapping")
+            .Descendants("packageSource")
+            .SelectMany(source =>
+                source
+                    .Elements("package")
+                    .Select(p =>
+                        ((string)source.Attribute("key")!, (string)p.Attribute("pattern")!)
+                    )
+            )
+            .ToList();
 
     [Fact]
     public void TheReadmeExamplesAreCompiledInTheTestJobAfterTheSolutionBuild()
