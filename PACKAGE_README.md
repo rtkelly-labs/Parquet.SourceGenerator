@@ -159,6 +159,8 @@ Fixed public datasets tracked under Git LFS with full cryptographic SHA-256 data
 | **`PARQ004`** | **Warning** | Non-public property decorated with `[ParquetColumn]` will be ignored. |
 | **`PARQ005`** | **Error** | Invalid `[ParquetDecimal]` precision or scale parameters. |
 
+The remaining rules (`PARQ006` to `PARQ016`: unsupported types, assignability, constructors, nested-type accessibility, generics, cyclic or too-deep compound types, sort keys, feature level and name collisions) are catalogued in the [Compiler Diagnostics Reference](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/13-COMPILER-DIAGNOSTICS.md).
+
 ## 🚀 Native AOT & Cold-Start Performance
 
 Under Native AOT, cold invocations (CLI tools, serverless Lambda functions, batch workers) run **7.2× faster** with **72% less memory**:

@@ -34,7 +34,7 @@ The default high-level API in `Parquet.Net` (`ParquetConvert.SerializeAsync<T>` 
 - **Ultra-High Throughput**: Directly copies primitive arrays between memory buffers and Parquet `DataColumn` instances.
 - **Minimal GC Allocations**: Eliminates object boxing and intermediate dynamic objects.
 - **Native AOT & Trimmer Safe**: Fully deterministic compile-time C# code with zero dynamic code emission (`Reflection.Emit`).
-- **Compile-Time Diagnostics**: Emits Roslyn compiler errors/warnings (`PARQ001` - `PARQ099`) if an unsupported type or invalid attribute configuration is used.
+- **Compile-Time Diagnostics**: Emits Roslyn compiler errors and warnings (`PARQ001` to `PARQ016`, catalogued in [13](13-COMPILER-DIAGNOSTICS.md)) if an unsupported type or invalid attribute configuration is used.
 
 ---
 

@@ -33,15 +33,13 @@
         <IncludeBuildOutput>false</IncludeBuildOutput>
         <NoWarn>$(NoWarn);NU5128</NoWarn>
         <!--
-      Two rules the 5.x Microsoft.CodeAnalysis.Analyzers adds, suppressed by name with a reason (#471),
-      not by the RS1xxx range, so the generator-author rules RS1035/RS1036/RS1038/RS1041 stay on:
-        RS2008  release tracking needs AnalyzerReleases.Shipped.md and .Unshipped.md; that file is
-                #593's deliverable (it removes this suppression).
-        RS1032  wants a trailing period on ten multi-sentence messageFormat strings in
-                DiagnosticDescriptors.cs; that changes user-visible diagnostic text and belongs to
-                the emitter owners, so it is left for a follow-up.
+      RS1032 (Microsoft.CodeAnalysis.Analyzers 5.x) wants a trailing period on ten multi-sentence
+      messageFormat strings in DiagnosticDescriptors.cs. Fixing it changes user-visible diagnostic
+      text and belongs to the emitter owners, so it is suppressed by name (#471), not by the RS1xxx
+      range, which keeps the generator-author rules RS1035/RS1036/RS1038/RS1041 on. RS2008 (release
+      tracking) is satisfied by the AnalyzerReleases files below (#593).
     -->
-        <NoWarn>$(NoWarn);RS2008;RS1032</NoWarn>
+        <NoWarn>$(NoWarn);RS1032</NoWarn>
         <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);PackBuildOutputs</TargetsForTfmSpecificContentInPackage>
     </PropertyGroup>
 
@@ -59,6 +57,12 @@
     reference this assembly — it ships only as an analyzer — so every type in it is internal and
     there is no package surface to govern. The Attributes project keeps RS0016.
   -->
+    <!-- Release tracking for the PARQ diagnostics (RS2000 series, #593); the shipped boundary is the v0.0.x tags. -->
+    <ItemGroup>
+        <AdditionalFiles Include="AnalyzerReleases.Shipped.md" />
+        <AdditionalFiles Include="AnalyzerReleases.Unshipped.md" />
+    </ItemGroup>
+
     <ItemGroup>
         <!-- CA1502 / CA1505 / CA1506 thresholds. See docs/21-CODE-METRICS.md. -->
         <AdditionalFiles Include="..\..\CodeMetricsConfig.txt" />

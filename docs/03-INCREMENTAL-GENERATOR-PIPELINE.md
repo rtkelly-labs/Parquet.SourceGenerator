@@ -91,24 +91,17 @@ public sealed record ClassToGenerate(
 
 ---
 
-## 3. Roslyn Diagnostics & Validations (`PARQ001` - `PARQ099`)
+## 3. Roslyn Diagnostics & Validations
 
-The source generator inspects target symbols and emits compile-time diagnostics for error conditions:
-
-| Diagnostic ID | Severity | Description | Remedy |
-| :--- | :--- | :--- | :--- |
-| `PARQ001` | Error | Target type must have a accessible parameterless or primary constructor. | Add a parameterless constructor or record positional parameters. |
-| `PARQ002` | Error | Property type is not supported by `Parquet.Net` schema. | Use a supported primitive type (`int`, `string`, `DateTime`, etc.) or custom converter. |
-| `PARQ003` | Warning | Duplicate `ParquetColumn` name detected within the same type. | Ensure unique column names across properties. |
-| `PARQ004` | Error | Invalid `ParquetDecimal` attribute precision/scale specification. | Ensure precision > scale and scale >= 0. |
+The source generator inspects target symbols and emits compile-time diagnostics for error conditions. The IDs are `PARQ001` to `PARQ016`; the authoritative catalogue (severity, cause, remediation) is [13 - Compiler Diagnostics](13-COMPILER-DIAGNOSTICS.md), and the IDs are tracked for release in `AnalyzerReleases.Shipped.md` and `AnalyzerReleases.Unshipped.md`. A table is not repeated here because this one had drifted (it listed four diagnostics and gave every one the wrong ID).
 
 ```csharp
 public static class Diagnostics
 {
-    public static readonly DiagnosticDescriptor MissingConstructor = new(
+    public static readonly DiagnosticDescriptor MustBePartial = new(
         id: "PARQ001",
-        title: "Missing accessible constructor",
-        messageFormat: "Type '{0}' decorated with [ParquetSerializable] must have an accessible parameterless constructor or primary constructor",
+        title: "Type decorated with [ParquetSerializable] must be partial",
+        messageFormat: "The type '{0}' is decorated with [ParquetSerializable] but is not declared as partial",
         category: "ParquetSourceGenerator",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
