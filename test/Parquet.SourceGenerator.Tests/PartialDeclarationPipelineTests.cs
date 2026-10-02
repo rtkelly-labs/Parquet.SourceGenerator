@@ -99,14 +99,8 @@ public sealed class PartialDeclarationPipelineTests
     private static GeneratorRunResult Run(string flavor, params string[] sources) =>
         Run(CreateDriver(flavor), Compile(sources), out _);
 
-    private static GeneratorDriver CreateDriver(string flavor) =>
-        CSharpGeneratorDriver.Create(
-            [Create(flavor).AsSourceGenerator()],
-            driverOptions: new GeneratorDriverOptions(
-                IncrementalGeneratorOutputKind.None,
-                trackIncrementalGeneratorSteps: true
-            )
-        );
+    private static CSharpGeneratorDriver CreateDriver(string flavor) =>
+        (CSharpGeneratorDriver)CSharpGeneratorDriver.Create(Create(flavor).AsSourceGenerator());
 
     private static GeneratorRunResult Run(
         GeneratorDriver driver,
