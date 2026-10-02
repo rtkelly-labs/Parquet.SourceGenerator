@@ -63,7 +63,7 @@ jobs:
       (github.event_name == 'workflow_dispatch' && !inputs.gate_only) ||
       (github.event_name == 'issue_comment' &&
        github.event.issue.pull_request != null &&
-       contains(fromJson('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association) &&
+       contains(fromJson('["OWNER", "MEMBER"]'), github.event.comment.author_association) &&
        startsWith(github.event.comment.body, '/benchmark'))
     runs-on: ubuntu-latest
 
@@ -90,6 +90,16 @@ jobs:
             echo "params_flag=" >> "$GITHUB_OUTPUT"
             echo "filter=*" >> "$GITHUB_OUTPUT"
           elif [ "$EVENT_NAME" = "issue_comment" ]; then
+            # A pull request from a fork is refused before its branch name is looked up (#386). The
+            # checkout below has no `repository:`, so it resolves the ref against THIS repository; that
+            # accident, not a check, is what kept fork code from running. Anyone who adds a
+            # `repository:` to "support" forks would make this a code-execution path under a write token.
+            head_repo=$(gh pr view "$ISSUE_NUMBER" --repo "$REPO" --json headRepository -q .headRepository.nameWithOwner)
+            if [ "$head_repo" != "$REPO" ]; then
+              echo "::error::Cannot run benchmarks on a pull request from a fork ($head_repo)."
+              exit 1
+            fi
+
             # Extract PR branch name via GitHub CLI
             branch=$(gh pr view "$ISSUE_NUMBER" --repo "$REPO" --json headRefName -q .headRefName)
             echo "branch=$branch" >> "$GITHUB_OUTPUT"

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using Parquet.SourceGenerator.Tools;
 using Shouldly;
 using Xunit;
@@ -93,6 +94,67 @@ public sealed class WorkflowConsistencyTests
                 .Exists(Path.Combine(root, ".github", "package-layout", id + ".txt"))
                 .ShouldBeTrue(id);
         }
+    }
+
+    [Fact]
+    public void EveryCommentTriggeredWorkflowThatChecksOutAPullRequestBranchRefusesForks()
+    {
+        // #386: an issue_comment workflow runs from the default branch with a write-scoped token.
+        // It resolves the PR's head ref against THIS repository, which is only safe while nobody
+        // adds `repository:` to the checkout; the refusal makes the safety explicit.
+        string workflows = Path.Combine(FindRepositoryRoot(), ".github", "workflows");
+        string[] commentTriggered = Directory
+            .EnumerateFiles(workflows, "*.yml")
+            .Concat(Directory.EnumerateFiles(workflows, "*.yaml"))
+            .Where(f => IOFile.ReadAllText(f).Contains("issue_comment", StringComparison.Ordinal))
+            .ToArray();
+
+        commentTriggered.ShouldNotBeEmpty("no comment-triggered workflow was examined");
+        foreach (string file in commentTriggered)
+        {
+            IssueCommentWorkflowProblems(IOFile.ReadAllText(file).Replace("\r\n", "\n"))
+                .ShouldBeEmpty(Path.GetFileName(file));
+        }
+    }
+
+    [Theory]
+    [InlineData("on:\n  issue_comment:\nx: gh pr view 1 --json headRefName\n", 1)]
+    [InlineData(
+        "on:\n  issue_comment:\nif: contains(fromJson('[\"OWNER\", \"COLLABORATOR\"]'), a)\nhead_repo=$(gh pr view 1 --json headRepository)\nif [ \"$head_repo\" != \"$REPO\" ]; then exit 1; fi\nbranch=$(gh pr view 1 --json headRefName)\n",
+        1
+    )]
+    [InlineData(
+        "on:\n  issue_comment:\nif: contains(fromJson('[\"OWNER\", \"MEMBER\"]'), a)\nbranch=$(gh pr view 1 --json headRefName)\nhead_repo=$(gh pr view 1 --json headRepository)\nif [ \"$head_repo\" != \"$REPO\" ]; then exit 1; fi\n",
+        1
+    )]
+    public void TheForkRefusalRuleRejectsWorkflowsThatSkipItOrOrderItAfterTheLookup(
+        string workflow,
+        int expectedProblems
+    ) => IssueCommentWorkflowProblems(workflow).Count.ShouldBe(expectedProblems);
+
+    private static List<string> IssueCommentWorkflowProblems(string workflow)
+    {
+        var problems = new List<string>();
+        int lookup = workflow.IndexOf("--json headRefName", StringComparison.Ordinal);
+        int refusal = workflow.IndexOf("\"$head_repo\" != \"$REPO\"", StringComparison.Ordinal);
+        if (lookup >= 0 && (refusal < 0 || refusal > lookup))
+        {
+            problems.Add("must refuse a fork PR (head_repo != REPO) before reading its head ref");
+        }
+
+        if (
+            Regex.IsMatch(
+                workflow,
+                @"fromJson\('\[[^\]]*""(COLLABORATOR|CONTRIBUTOR|NONE|FIRST_TIMER|FIRST_TIME_CONTRIBUTOR)""",
+                RegexOptions.CultureInvariant,
+                TimeSpan.FromSeconds(2)
+            )
+        )
+        {
+            problems.Add("the author_association list must not include read-level associations");
+        }
+
+        return problems;
     }
 
     [Fact]
