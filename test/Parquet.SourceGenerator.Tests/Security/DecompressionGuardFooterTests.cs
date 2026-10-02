@@ -243,7 +243,7 @@ public sealed class DecompressionGuardFooterTests
         ShouldRejectFooter(
             flavour,
             Footer(Concat(ListHeader(1, 5), I32(1))),
-            "whose elements are not structs"
+            "whose elements are not of compact type 12"
         );
 
     [Theory]
@@ -280,11 +280,27 @@ public sealed class DecompressionGuardFooterTests
 
     [Theory]
     [MemberData(nameof(Flavours))]
-    public void TheFooterIsNotWalkedForOtherSeeksFromTheEnd(string flavour)
+    public void ASchemaListWithMisdeclaredElementsCannotHideALaterCount(string flavour) =>
+        // Parquet.Net reads schema elements as structs whatever the list header declares. Declared
+        // as booleans they would be skipped a byte each, and the row group list after them read
+        // from the wrong place, so the declared element type itself is refused.
+        ShouldRejectFooter(
+            flavour,
+            Footer(
+                ListHeader(20_000_000, 12),
+                schemaList: Concat(ListHeader(2, 1), new byte[] { 1, 1 })
+            ),
+            "whose elements are not of compact type 12"
+        );
+
+    [Theory]
+    [MemberData(nameof(Flavours))]
+    public void OnlyTheSeekThatLocatesTheFooterWalksIt(string flavour)
     {
-        // Parquet.Net checks the trailing magic with a seek of -4 from the end, and finds the footer
-        // length with -8. Neither locates the footer, so neither is walked.
-        byte[] file = FileWithFooter(Footer(Concat(ListHeader(1, 12), EmptyStruct())));
+        // Parquet.Net checks the trailing magic with a seek of -4 from the end and reads the length
+        // after a seek of -8. Only the -8 seek locates the footer, so only it is walked: against
+        // a footer that would be refused, the other seeks return and the -8 seek throws.
+        byte[] file = LyingFooterFile();
         using var inner = new MemoryStream(file, writable: false);
         using DecompressionGuardHarness.Guard guard = DecompressionGuardHarness.Create(
             flavour,
@@ -294,8 +310,10 @@ public sealed class DecompressionGuardFooterTests
         Should.NotThrow(() =>
         {
             guard.Stream.Seek(-4, SeekOrigin.End);
-            guard.Stream.Seek(-8, SeekOrigin.End);
             guard.Stream.Seek(0, SeekOrigin.End);
         });
+        Should.Throw<InvalidDataException>(() => guard.Stream.Seek(-8, SeekOrigin.End));
     }
+
+    private static byte[] LyingFooterFile() => FileWithFooter(Footer(ListHeader(20_000_000, 12)));
 }

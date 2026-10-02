@@ -506,33 +506,53 @@ internal static class DecompressionGuardComponent
 
             private void ReadField(int kind, int id, int type, int depth)
             {
-                if (IsListField(kind, id) && type != 9)
-                {
-                    throw Malformed($"declares field {id} with compact type {type}, but it is a list");
-                }
                 int child = ChildKind(kind, id);
-                if (type == 9 && child >= 0)
+                int elementType = ListElementType(kind, id);
+                if (elementType >= 0)
                 {
-                    long count = ReadListHeader(out int elementType);
-                    if (kind == FileMetaData && id == 4 && count > _maxRowGroupCount)
-                    {
-                        throw new global::System.IO.InvalidDataException($"Row group count {count} is invalid or exceeds maximum allowed {_maxRowGroupCount}.");
-                    }
-                    if (elementType != 12) throw Malformed($"declares a list of field {id} whose elements are not structs");
-                    for (long i = 0; i < count; i++) ReadStruct(child, depth + 1);
+                    if (type != 9) throw Malformed($"declares field {id} with compact type {type}, but it is a list");
+                    ReadKnownList(kind, id, elementType, child, depth);
+                }
+                else if (kind == ColumnChunk && id == 3 && type != 12)
+                {
+                    throw Malformed($"declares field {id} with compact type {type}, but it is a struct");
                 }
                 else if (type == 12 && child >= 0) ReadStruct(child, depth + 1);
                 else SkipValue(type, depth + 1, false);
             }
 
-            private static bool IsListField(int kind, int id)
+            private void ReadKnownList(int kind, int id, int expectedElementType, int child, int depth)
+            {
+                long count = ReadListHeader(out int elementType);
+                if (kind == FileMetaData && id == 4 && count > _maxRowGroupCount)
+                {
+                    throw new global::System.IO.InvalidDataException($"Row group count {count} is invalid or exceeds maximum allowed {_maxRowGroupCount}.");
+                }
+                if (elementType != expectedElementType)
+                {
+                    throw Malformed($"declares a list in field {id} whose elements are not of compact type {expectedElementType}");
+                }
+                for (long i = 0; i < count; i++)
+                {
+                    if (child >= 0) ReadStruct(child, depth + 1);
+                    else SkipValue(elementType, depth + 1, true);
+                }
+            }
+
+            // The compact element type Parquet.Net reads a known list field's elements as, or -1 when
+            // the field is not a list this walk knows. Parquet.Net decodes the elements as that type
+            // whatever the list header declares, so a different declared type is refused.
+            private static int ListElementType(int kind, int id)
             {
                 switch (kind)
                 {
-                    case FileMetaData: return id == 2 || id == 4 || id == 5 || id == 7;
-                    case RowGroup: return id == 1 || id == 4;
-                    case ColumnMetaData: return id == 2 || id == 3 || id == 8 || id == 13;
-                    default: return false;
+                    case FileMetaData: return id == 2 || id == 4 || id == 5 || id == 7 ? 12 : -1;
+                    case RowGroup: return id == 1 || id == 4 ? 12 : -1;
+                    case ColumnMetaData:
+                        if (id == 2) return 5;
+                        if (id == 3) return 8;
+                        return id == 8 || id == 13 ? 12 : -1;
+                    default: return -1;
                 }
             }
 
