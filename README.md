@@ -181,11 +181,16 @@ await foreach (var e in UserEventParquet.From(buffer).AsAsyncEnumerable())
 }
 
 // Columnar batches — one per row group, no UserEvent ever constructed
+// Your own synchronous code. Keep spans in a helper like this one: a span local cannot live in
+// the same block as an await.
+static void Summarize(ReadOnlySpan<long> ids, ReadOnlySpan<double> amounts)
+{
+    // SIMD-friendly: the lanes alias pooled buffers, valid until the next iteration
+}
+
 int part = 0;
 await foreach (var batch in UserEventParquet.From(buffer).AsBatches())
 {
-    // SIMD-friendly: the lanes alias pooled buffers, valid until the next iteration. Keep spans in a
-    // synchronous helper: a span local cannot live in the same block as an await.
     Summarize(batch.UserId.Span, batch.Amount.Span);
 
     // A batch can be written straight back out. Each call writes a complete single-row-group
