@@ -37,6 +37,11 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # Checkout would otherwise persist a GITHUB_TOKEN Authorization header that wins over the
+          # token in the pr-bot remote below, making the push a GITHUB_TOKEN push that starts no
+          # workflows (#568). Nothing else in this job needs git credentials.
+          persist-credentials: false
 
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
@@ -122,11 +127,13 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           branch="mutation/headline"
 
+          git remote add pr-bot "https://x-access-token:${PR_TOKEN}@github.com/${REPO}.git"
+
           # A push re-runs CI on the PR. When the score is the same as the one already on the branch
           # there is nothing to report, so do not spend a CI run on a new run link.
-          git fetch --quiet origin "$branch" 2>/dev/null || true
-          if git cat-file -e "origin/$branch:docs/MUTATION-HEADLINE.md" 2>/dev/null \
-            && diff -q <(git show "origin/$branch:docs/MUTATION-HEADLINE.md" | sed '1,/^_Updated nightly/d' | sed '/./,$!d') \
+          git fetch --quiet pr-bot "$branch" 2>/dev/null || true
+          if git cat-file -e "pr-bot/$branch:docs/MUTATION-HEADLINE.md" 2>/dev/null \
+            && diff -q <(git show "pr-bot/$branch:docs/MUTATION-HEADLINE.md" | sed '1,/^_Updated nightly/d' | sed '/./,$!d') \
               <(sed '/./,$!d' mutation-headline.md) >/dev/null; then
             echo "::notice title=Mutation score unchanged::The score matches the one on $branch; not pushing, which would only re-run CI."
             exit 0
@@ -146,7 +153,6 @@ jobs:
           git checkout -B "$branch"
           git add docs/MUTATION-HEADLINE.md
           git commit -m "chore(mutation): nightly mutation score refresh"
-          git remote add pr-bot "https://x-access-token:${PR_TOKEN}@github.com/${REPO}.git"
           git push -f -u pr-bot "$branch"
           export GH_TOKEN="$PR_TOKEN"
           existing=$(gh pr list --repo "$REPO" --head "$branch" --state open --json number --jq '.[0].number // empty')

@@ -91,18 +91,37 @@ public static class Program
             return true;
         }
 
-        string committed = ReadmeTable("README.md");
-        bool significant = HeadlineNoiseFilter.IsSignificant(
-            committed,
-            freshTable,
-            ParseTolerance(
-                args,
-                "--alloc-threshold",
-                HeadlineNoiseFilter.DefaultAllocationThreshold
-            ),
-            ParseTolerance(args, "--time-threshold", HeadlineNoiseFilter.DefaultTimeThreshold),
-            out string reason
+        double allocationThreshold = ParseTolerance(
+            args,
+            "--alloc-threshold",
+            HeadlineNoiseFilter.DefaultAllocationThreshold
         );
+        double timeThreshold = ParseTolerance(
+            args,
+            "--time-threshold",
+            HeadlineNoiseFilter.DefaultTimeThreshold
+        );
+
+        // Both files carry the table and both are rewritten together, so either one being stale is
+        // reason enough. A file that does not exist is not compared: nothing would be written to it.
+        string reason = "Neither README carries a headline table.";
+        bool significant = false;
+        foreach (string path in new[] { "README.md", "PACKAGE_README.md" })
+        {
+            if (!File.Exists(path))
+                continue;
+
+            significant = HeadlineNoiseFilter.IsSignificant(
+                ReadmeTable(path),
+                freshTable,
+                allocationThreshold,
+                timeThreshold,
+                out string fileReason
+            );
+            reason = $"{path}: {fileReason}";
+            if (significant)
+                break;
+        }
 
         Console.WriteLine(
             significant

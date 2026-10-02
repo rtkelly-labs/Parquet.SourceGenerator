@@ -230,8 +230,9 @@ public sealed class WorkflowConsistencyTests
             if (stepEnd > 0)
                 step = step[..stepEnd];
 
-            step.ShouldNotContain("secrets.GITHUB_TOKEN", customMessage: name);
+            step.ShouldNotContain("GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}", customMessage: name);
             step.ShouldContain("PR_TOKEN: ${{ secrets.WORKFLOW_PR_TOKEN }}", customMessage: name);
+            step.ShouldContain("GH_TOKEN=\"$PR_TOKEN\"", customMessage: name);
         }
     }
 

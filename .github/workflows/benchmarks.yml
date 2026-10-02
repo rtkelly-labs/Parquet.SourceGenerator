@@ -164,6 +164,10 @@ jobs:
           ref: ${{ steps.pr_info.outputs.branch }}
           fetch-depth: 0
           lfs: true
+          # Checkout would otherwise persist a GITHUB_TOKEN Authorization header that wins over any
+          # token in a remote URL, so a push meant to start workflows would be made by GITHUB_TOKEN
+          # and start none (#568). The push step authenticates explicitly instead.
+          persist-credentials: false
 
       - name: Setup .NET 8 SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
@@ -208,6 +212,7 @@ jobs:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           RUN_ID: ${{ github.run_id }}
           PR_TOKEN: ${{ secrets.WORKFLOW_PR_TOKEN }}
+          DEFAULT_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
@@ -230,12 +235,11 @@ jobs:
 
           git commit -m "docs(perf): update benchmark headline performance table in README"
 
-          # Push and open the PR as the token's owner so the push and the PR start workflows.
-          push_remote=origin
-          if [ -n "${PR_TOKEN:-}" ]; then
-            git remote add pr-bot "https://x-access-token:${PR_TOKEN}@github.com/${REPO}.git"
-            push_remote=pr-bot
-          fi
+          # Push and open the PR as the token's owner so the push and the PR start workflows. Checkout
+          # keeps no credentials (persist-credentials: false), so the remote carries the token: the
+          # PR token when there is one, otherwise the default token for a branch push only.
+          git remote add push-target "https://x-access-token:${PR_TOKEN:-$DEFAULT_TOKEN}@github.com/${REPO}.git"
+          push_remote=push-target
 
           if [ "$BRANCH" = "$DEFAULT_BRANCH" ]; then
             # Direct pushes to the default branch are blocked by branch protection
