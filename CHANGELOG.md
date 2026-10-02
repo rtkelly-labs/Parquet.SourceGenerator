@@ -274,6 +274,10 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   emitted use of a model name as a standalone identifier now goes through `EmittedText.Ident`, which
   adds `@` to reserved and contextual keywords, and the batch parameter names use it in place of a
   hand-kept keyword list. Names glued into a longer identifier (`{Name}DefinitionLevels`) stay raw.
+- **A diagnostic in a cached model no longer pins its syntax tree.** `DiagnosticInfo` held a Roslyn `Location`, which
+  references the `SyntaxTree`, so every model with a diagnostic retained its tree for the driver's lifetime. It now
+  keeps path, span and line span as data, rebuilds the `Location` at report time, and holds its message arguments in
+  an `EquatableArray` (#398).
 - **The generator pipeline caches value-equatable models, not a syntax context.** The main generator cached
   the `GeneratorSyntaxContext` itself, which retains a `SemanticModel` (and the compilation behind it) per
   target and has no value equality, so nothing downstream could compare as unchanged. It now parses inside
