@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using Parquet.SourceGenerator.Emitter.Components;
 using Parquet.SourceGenerator.Emitter.Compound;
 using Parquet.SourceGenerator.Models;
 
@@ -398,7 +399,7 @@ internal static class RowGroupPruningComponent
         {
             builder.AppendLine();
             builder.AppendLine(
-                $"    /// <summary>Zone map for the <c>{col.Leaf.ParquetColumnName}</c> column.</summary>"
+                $"    /// <summary>Zone map for the <c>{EmittedText.XmlDoc(col.Leaf.ParquetColumnName)}</c> column.</summary>"
             );
             builder.AppendLine(
                 $"    public global::Parquet.SourceGenerator.ParquetColumnStatistics<{UnderlyingType(col.Leaf)}> {col.Leaf.Name} {{ get; }}"

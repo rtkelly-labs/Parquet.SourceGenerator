@@ -135,14 +135,8 @@ internal static class ArrowBridgeEmitter
         {
             PropertyModel prop = model.Properties[i];
             ArrowLeafMapping map = ArrowMappingComponent.TryMap(prop)!;
-            string name = Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(
-                prop.ParquetColumnName,
-                quote: true
-            );
-            string label = Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(
-                prop.ParquetColumnName + ": ",
-                quote: true
-            );
+            string name = EmittedText.Literal(prop.ParquetColumnName);
+            string label = EmittedText.Literal(prop.ParquetColumnName + ": ");
 
             builder.AppendLine();
             builder.AppendLine("        {");
@@ -264,10 +258,7 @@ internal static class ArrowBridgeEmitter
         builder.AppendLine("        if (errors.Count > 0)");
         builder.AppendLine("        {");
         builder.AppendLine("            throw new global::System.IO.InvalidDataException(");
-        string typeLabel = Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(
-            model.ClassName,
-            quote: true
-        );
+        string typeLabel = EmittedText.Literal(model.ClassName);
         builder.AppendLine(
             $"                \"Arrow RecordBatch does not match the generated Parquet schema for \" + {typeLabel} + \": \""
         );
@@ -510,13 +501,12 @@ internal static class ArrowBridgeEmitter
     private static void EmitColumn(StringBuilder builder, PropertyModel prop, int slot)
     {
         ArrowLeafMapping map = ArrowMappingComponent.TryMap(prop)!;
-        string name = Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(
-            prop.ParquetColumnName,
-            quote: true
-        );
+        string name = EmittedText.Literal(prop.ParquetColumnName);
         string arr = $"arrow_{slot}";
         builder.AppendLine();
-        builder.AppendLine($"            // column {slot}: {prop.ParquetColumnName}");
+        builder.AppendLine(
+            $"            // column {slot}: {EmittedText.Comment(prop.ParquetColumnName)}"
+        );
         builder.AppendLine($"                var {arr} = ({map.ArrowArrayType})batch.Column(");
         builder.AppendLine(
             $"                    batch.Schema.GetFieldIndex({name}, global::System.StringComparer.Ordinal));"

@@ -267,6 +267,12 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   the `GeneratorSyntaxContext` itself, which retains a `SemanticModel` (and the compilation behind it) per
   target and has no value equality, so nothing downstream could compare as unchanged. It now parses inside
   the syntax transform, as the legacy generator already did (#395).
+- **A column name is escaped for wherever the emitter writes it** (#363, #364, #372). A
+  `[ParquetColumn]` name reached the `ColumnEncodingHints` string literal, an Arrow `// column`
+  comment and the zone-map XML doc comment unescaped, so a quote or newline in it broke the generated
+  file or, in the first two, injected statements into it. Every such site now goes through one
+  helper (`EmittedText.Literal`, `Comment`, `XmlDoc`). The columnar batch doc comment for a nullable
+  text column also wrote an unescaped `<char>`, a CS1570 warning wherever documentation is generated.
 - **`AsBatches()` now enforces the decompression limits** (#358). The columnar batch reader was the
   one read path that handed the caller's raw stream to `ParquetReader`, so `MaxDecompressedPageSize`
   and `MaxDecompressionExpansionRatio` were silently ignored for it. It now reads through the same
