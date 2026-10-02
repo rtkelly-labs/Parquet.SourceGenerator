@@ -26,6 +26,9 @@ This document details all diagnostic codes, their severity, rationale, and remed
 | **[`PARQ014`](#parq014-member-cannot-be-a-sort-key)** | **Error** | Member cannot be a sort key | `[ParquetSortKey]` is on a member that cannot drive row-group pruning. |
 | **[`PARQ015`](#parq015-invalid-generator-feature-level)** | **Error** | Invalid generator feature level | `ParquetGeneratorFeatureLevel` is present but is not a defined level. |
 | **[`PARQ016`](#parq016-generated-type-names-collide)** | **Error** | Generated type names collide | Two targets whose containing-type paths flatten to the same name, such as `A.BC` and `AB.C`. |
+| **[`PARQ020`](#parq020-abstract-type-not-supported)** | **Error** | Abstract type not supported | Target type is abstract. |
+| **[`PARQ021`](#parq021-ref-struct-not-supported)** | **Error** | Ref struct not supported | Target type is a `ref struct`. |
+| **[`PARQ022`](#parq022-file-local-type-not-supported)** | **Error** | File-local type not supported | Target type is declared with the `file` modifier, or nested in one. |
 
 ---
 
@@ -230,6 +233,30 @@ This document details all diagnostic codes, their severity, rationale, and remed
   generated files that named neither declaration.
 - **Remediation**: Rename one of the types (or one of their containing types), or move one to
   another namespace.
+
+---
+
+### PARQ020: Abstract Type Not Supported
+- **Severity**: Error
+- **Cause**: `[ParquetSerializable]` is declared on an abstract class.
+- **Why**: The read path builds each row with `new T { ... }`, which an abstract type cannot satisfy; before this rule the build failed with `CS0144` inside the generated file. A static class is reported by PARQ008 instead.
+- **Remediation**: Put the attribute on a concrete derived type. Members inherited from an abstract base are included in the derived type's columns.
+
+---
+
+### PARQ021: Ref Struct Not Supported
+- **Severity**: Error
+- **Cause**: `[ParquetSerializable]` is declared on a `ref struct`.
+- **Why**: Generated code stores rows in `List<T>`, arrays and `Task<List<T>>`, none of which can hold a ref struct; before this rule the build failed with `CS0306` and `CS8345` across the generated file.
+- **Remediation**: Declare an ordinary `struct` or `class`.
+
+---
+
+### PARQ022: File-Local Type Not Supported
+- **Severity**: Error
+- **Cause**: `[ParquetSerializable]` is declared on a type with the `file` modifier, or on a type nested inside one.
+- **Why**: Generated code is emitted into a different file and names the target in public signatures, which a file-local type cannot be (`CS9051`). Two file-local targets of the same name in one namespace also used to share a generated hint name.
+- **Remediation**: Remove the `file` modifier.
 
 ---
 
