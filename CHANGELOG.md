@@ -285,8 +285,9 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   an `EquatableArray` (#398).
 - **A list that shrinks during a write throws instead of being read past its end** (#375). The write fast
   path walks the list's span with unchecked `Unsafe.Add`, sized by the count read at method entry. If
-  the list lost elements in between, the walk read beyond the backing array. The emitted code now
-  compares the span length with the count once, before the loop, and throws `InvalidOperationException`.
+  the list lost elements in between, the walk passed the end of the span it had taken (into slots of
+  removed items, or past the array when the list was cleared). The emitted code now detects a span
+  shorter than the captured count once, before the loop, and throws `InvalidOperationException`.
 - **The generator pipeline caches value-equatable models, not a syntax context.** The main generator cached
   the `GeneratorSyntaxContext` itself, which retains a `SemanticModel` (and the compilation behind it) per
   target and has no value equality, so nothing downstream could compare as unchanged. It now parses inside
