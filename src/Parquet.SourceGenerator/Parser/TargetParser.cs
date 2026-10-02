@@ -205,7 +205,7 @@ internal static class TargetParser
 
         TargetParserResult compound = GetTargetModelCore(
             typeSymbol!,
-            declaration!,
+            declaration,
             apiLevel,
             compoundKinds
         );
@@ -217,7 +217,7 @@ internal static class TargetParser
             compoundKinds != CompoundKinds.None
             && (compound.Model is null || HasCompoundMember(compound.Model));
         TargetParserResult flat = needsFlat
-            ? GetTargetModelCore(typeSymbol!, declaration!, apiLevel, CompoundKinds.None)
+            ? GetTargetModelCore(typeSymbol!, declaration, apiLevel, CompoundKinds.None)
             : compound;
         return new TargetParseSet(compound, flat);
     }
