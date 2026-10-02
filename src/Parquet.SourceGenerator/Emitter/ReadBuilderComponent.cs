@@ -1,5 +1,6 @@
 using System.Text;
 using Parquet.SourceGenerator.Emitter.Columnar;
+using Parquet.SourceGenerator.Emitter.Components;
 using Parquet.SourceGenerator.Models;
 
 namespace Parquet.SourceGenerator.Emitter;
@@ -174,7 +175,7 @@ internal static class ReadBuilderComponent
             "    /// <summary>Materializes every surviving row into an array.</summary>"
         );
         builder.AppendLine(
-            $"    public global::System.Threading.Tasks.Task<{model.ClassName}[]> ToArrayAsync({Ct} cancellationToken = default)"
+            $"    public global::System.Threading.Tasks.Task<{EmittedText.Ident(model.ClassName)}[]> ToArrayAsync({Ct} cancellationToken = default)"
         );
         builder.AppendLine("    {");
         builder.AppendLine("        if (_parallel)");
@@ -206,7 +207,7 @@ internal static class ReadBuilderComponent
             "    /// <exception cref=\"System.NotSupportedException\">The reader is <c>Parallel()</c>: streaming is sequential by definition.</exception>"
         );
         builder.AppendLine(
-            $"    public global::System.Collections.Generic.IAsyncEnumerable<{model.ClassName}> AsAsyncEnumerable({Ct} cancellationToken = default)"
+            $"    public global::System.Collections.Generic.IAsyncEnumerable<{EmittedText.Ident(model.ClassName)}> AsAsyncEnumerable({Ct} cancellationToken = default)"
         );
         builder.AppendLine("    {");
         builder.AppendLine("        if (_parallel)");
@@ -359,11 +360,11 @@ internal static class ReadBuilderComponent
     )
     {
         builder.AppendLine(
-            $"    private static async global::System.Threading.Tasks.Task<{model.ClassName}[]> CollectFilteredBufferAsync({Memory} bytes, {Options}? options, {pred} predicate, {Ct} cancellationToken)"
+            $"    private static async global::System.Threading.Tasks.Task<{EmittedText.Ident(model.ClassName)}[]> CollectFilteredBufferAsync({Memory} bytes, {Options}? options, {pred} predicate, {Ct} cancellationToken)"
         );
         builder.AppendLine("    {");
         builder.AppendLine(
-            $"        var results = new global::System.Collections.Generic.List<{model.ClassName}>();"
+            $"        var results = new global::System.Collections.Generic.List<{EmittedText.Ident(model.ClassName)}>();"
         );
         // The IAsyncEnumerable ConfigureAwait overload is an extension in System.Threading.Tasks and
         // the emitted file carries no usings, so it is called as a static method. Skipping it would

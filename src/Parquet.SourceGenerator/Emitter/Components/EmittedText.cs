@@ -13,6 +13,34 @@ namespace Parquet.SourceGenerator.Emitter.Components;
 internal static class EmittedText
 {
     /// <summary>
+    /// A name taken from the model, made safe to use as a C# identifier: a reserved or contextual
+    /// keyword gets the verbatim <c>@</c> prefix (#376). Roslyn's <c>ISymbol.Name</c> drops the
+    /// <c>@</c> of a member declared <c>@event</c>, so the model holds the bare keyword. A dotted
+    /// name (a nested type path) is escaped segment by segment. Use it wherever the name stands alone
+    /// as an identifier; a name glued into a longer identifier (<c>{name}DefinitionLevels</c>) stays
+    /// raw, because <c>@</c> is only legal at the start of one.
+    /// </summary>
+    public static string Ident(string name)
+    {
+        if (name.IndexOf('.') < 0)
+        {
+            return IsKeyword(name) ? "@" + name : name;
+        }
+
+        string[] parts = name.Split('.');
+        for (int i = 0; i < parts.Length; i++)
+        {
+            parts[i] = Ident(parts[i]);
+        }
+
+        return string.Join(".", parts);
+    }
+
+    private static bool IsKeyword(string name) =>
+        SyntaxFacts.GetKeywordKind(name) != SyntaxKind.None
+        || SyntaxFacts.GetContextualKeywordKind(name) != SyntaxKind.None;
+
+    /// <summary>
     /// The value as a quoted C# string literal, for use as an expression.
     /// </summary>
     public static string Literal(string value) => SymbolDisplay.FormatLiteral(value, quote: true);

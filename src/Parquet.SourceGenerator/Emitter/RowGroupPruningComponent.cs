@@ -374,7 +374,7 @@ internal static class RowGroupPruningComponent
         builder.AppendLine("        HasStatistics = hasStatistics;");
         foreach (LeafColumn col in columns)
         {
-            builder.AppendLine($"        {col.Leaf.Name} = column_{col.Slot};");
+            builder.AppendLine($"        {EmittedText.Ident(col.Leaf.Name)} = column_{col.Slot};");
         }
 
         builder.AppendLine("    }");
@@ -402,7 +402,7 @@ internal static class RowGroupPruningComponent
                 $"    /// <summary>Zone map for the <c>{EmittedText.XmlDoc(col.Leaf.ParquetColumnName)}</c> column.</summary>"
             );
             builder.AppendLine(
-                $"    public global::Parquet.SourceGenerator.ParquetColumnStatistics<{UnderlyingType(col.Leaf)}> {col.Leaf.Name} {{ get; }}"
+                $"    public global::Parquet.SourceGenerator.ParquetColumnStatistics<{UnderlyingType(col.Leaf)}> {EmittedText.Ident(col.Leaf.Name)} {{ get; }}"
             );
         }
 

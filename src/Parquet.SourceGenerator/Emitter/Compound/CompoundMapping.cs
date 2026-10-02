@@ -87,7 +87,9 @@ internal static class CompoundMapping
         model.IsValueType ? $"in {itemExpr}" : itemExpr;
 
     private static string ItemParameter(TargetClassModel model) =>
-        model.IsValueType ? $"in {model.ClassName} item" : $"{model.ClassName} item";
+        model.IsValueType
+            ? $"in {EmittedText.Ident(model.ClassName)} item"
+            : $"{EmittedText.Ident(model.ClassName)} item";
 
     /// <summary>
     /// Emits one <c>ExtractCompound_N</c> / <c>ExtractList_N</c> helper per compound or list leaf
@@ -206,7 +208,7 @@ internal static class CompoundMapping
     {
         int n = col.Slot;
         string cv = $"cv_{n}";
-        builder.AppendLine($"{p}var {cv} = el_{n}.{col.Leaf.Name};");
+        builder.AppendLine($"{p}var {cv} = el_{n}.{EmittedText.Ident(col.Leaf.Name)};");
         string conv = GetCompoundLeafWriteExpression(col.Leaf, cv);
         if (col.Leaf.IsNullable)
         {
@@ -569,7 +571,7 @@ internal static class CompoundMapping
             string read = GetCompoundLeafReadExpression(g.Leaf, $"buffer_{g.Slot}[vc_{g.Slot}++]");
             string absent = g.Leaf.IsNullable ? "null!" : NonNullAbsentLiteral(g.Leaf);
             builder.AppendLine(
-                $"{indent}                {g.Leaf.Name} = defLevels_{g.Slot}[p_{a}] >= {g.MaxDef} ? {read} : {absent},"
+                $"{indent}                {EmittedText.Ident(g.Leaf.Name)} = defLevels_{g.Slot}[p_{a}] >= {g.MaxDef} ? {read} : {absent},"
             );
         }
         builder.AppendLine($"{indent}            }});");
@@ -747,7 +749,7 @@ internal static class CompoundMapping
                 || leafCol.Leaf.Kind == PropertyKind.ByteArray;
             string absent = nullableish ? "null!" : NonNullAbsentLiteral(leafCol.Leaf);
             builder.AppendLine(
-                $"{p}    {leafCol.Leaf.Name} = defLevels_{leafCol.Slot}[ri_{node.Id}] >= {leafCol.MaxDef} ? {expr} : {absent},"
+                $"{p}    {EmittedText.Ident(leafCol.Leaf.Name)} = defLevels_{leafCol.Slot}[ri_{node.Id}] >= {leafCol.MaxDef} ? {expr} : {absent},"
             );
         }
         builder.AppendLine($"{p}}};");
@@ -783,7 +785,9 @@ internal static class CompoundMapping
                 string tail = listCol.ListMemberIsArray
                     ? $" is {{ }} ln_{listCol.Slot} ? ln_{listCol.Slot}.ToArray() : null{lb}"
                     : lb;
-                builder.AppendLine($"{prefix}{prop.Name} = lane_{listCol.Slot}[{indexVar}]{tail},");
+                builder.AppendLine(
+                    $"{prefix}{EmittedText.Ident(prop.Name)} = lane_{listCol.Slot}[{indexVar}]{tail},"
+                );
                 continue;
             }
             int nodeId = plan.RootNodeByProperty[p];
@@ -795,12 +799,14 @@ internal static class CompoundMapping
                 {
                     LeafColumn pp = node.PresenceLeaf!;
                     builder.AppendLine(
-                        $"{prefix}{prop.Name} = defLevels_{pp.Slot}[{indexVar}] >= {node.PresenceThreshold} ? {node.ArrayVar}[{indexVar}] : null,"
+                        $"{prefix}{EmittedText.Ident(prop.Name)} = defLevels_{pp.Slot}[{indexVar}] >= {node.PresenceThreshold} ? {node.ArrayVar}[{indexVar}] : null,"
                     );
                 }
                 else
                 {
-                    builder.AppendLine($"{prefix}{prop.Name} = {node.ArrayVar}[{indexVar}]{bang},");
+                    builder.AppendLine(
+                        $"{prefix}{EmittedText.Ident(prop.Name)} = {node.ArrayVar}[{indexVar}]{bang},"
+                    );
                 }
                 continue;
             }
@@ -810,7 +816,7 @@ internal static class CompoundMapping
                 prop,
                 $"{bufferPrefix}{slot}[{indexVar}]"
             );
-            builder.AppendLine($"{prefix}{prop.Name} = {readExpr},");
+            builder.AppendLine($"{prefix}{EmittedText.Ident(prop.Name)} = {readExpr},");
         }
     }
 
@@ -838,7 +844,7 @@ internal static class CompoundMapping
         string targetSlot = string.IsNullOrEmpty(startOffsetVar)
             ? $"{targetArrayVar}[{indexVar}]"
             : $"{targetArrayVar}[{startOffsetVar} + {indexVar}]";
-        builder.AppendLine($"{indent}    {targetSlot} = new {model.ClassName}");
+        builder.AppendLine($"{indent}    {targetSlot} = new {EmittedText.Ident(model.ClassName)}");
         builder.AppendLine($"{indent}    {{");
         EmitRootMemberAssignments(builder, model, indexVar, indent + "        ", bufferPrefix);
         builder.AppendLine($"{indent}    }};");
