@@ -48,25 +48,32 @@ internal static class DecompressionGuardHarness
     {
         private readonly Stream _stream;
         private readonly MethodInfo _activate;
+        private readonly Stream? _ownedInner;
 
-        public Guard(Stream stream, MethodInfo activate)
+        public Guard(Stream stream, MethodInfo activate, Stream? ownedInner)
         {
             _stream = stream;
             _activate = activate;
+            _ownedInner = ownedInner;
         }
 
         public Stream Stream => _stream;
 
         public void Activate() => _activate.Invoke(_stream, null);
 
-        public void Dispose() => _stream.Dispose();
+        public void Dispose()
+        {
+            _stream.Dispose();
+            _ownedInner?.Dispose();
+        }
     }
 
     public static Guard Create(
         string flavour,
         Stream inner,
         int maxPageSize = 67_108_864,
-        int maxExpansionRatio = 1000
+        int maxExpansionRatio = 1000,
+        bool ownsInner = false
     )
     {
         Type type = GuardType(flavour);
@@ -82,7 +89,7 @@ internal static class DecompressionGuardHarness
             "Activate",
             BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance
         )!;
-        return new Guard(stream, activate);
+        return new Guard(stream, activate, ownsInner ? inner : null);
     }
 
     private static Type GuardType(string flavour)

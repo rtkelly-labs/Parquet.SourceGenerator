@@ -82,12 +82,16 @@ internal static class DecompressionGuardComponent
             }
 
             public override void Flush() { /* Read-only stream: there is nothing buffered to flush. */ }
-            public override int Read(byte[] buffer, int offset, int count) => _inner.Read(buffer, offset, count);
-            public override int ReadByte() => _inner.ReadByte();
-            public override global::System.Threading.Tasks.Task<int> ReadAsync(byte[] buffer, int offset, int count, global::System.Threading.CancellationToken cancellationToken) => _inner.ReadAsync(buffer, offset, count, cancellationToken);
+            public override int Read(byte[] buffer, int offset, int count) => _inner.Read(buffer, offset, ReachNextHeader(count));
+            public override int ReadByte()
+            {
+                ReachNextHeader(1);
+                return _inner.ReadByte();
+            }
+            public override global::System.Threading.Tasks.Task<int> ReadAsync(byte[] buffer, int offset, int count, global::System.Threading.CancellationToken cancellationToken) => _inner.ReadAsync(buffer, offset, ReachNextHeader(count), cancellationToken);
         #if NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER
-            public override int Read(global::System.Span<byte> buffer) => _inner.Read(buffer);
-            public override global::System.Threading.Tasks.ValueTask<int> ReadAsync(global::System.Memory<byte> buffer, global::System.Threading.CancellationToken cancellationToken = default) => _inner.ReadAsync(buffer, cancellationToken);
+            public override int Read(global::System.Span<byte> buffer) => _inner.Read(buffer.Slice(0, ReachNextHeader(buffer.Length)));
+            public override global::System.Threading.Tasks.ValueTask<int> ReadAsync(global::System.Memory<byte> buffer, global::System.Threading.CancellationToken cancellationToken = default) => _inner.ReadAsync(buffer.Slice(0, ReachNextHeader(buffer.Length)), cancellationToken);
         #endif
             public override long Seek(long offset, global::System.IO.SeekOrigin origin)
             {
@@ -102,6 +106,23 @@ internal static class DecompressionGuardComponent
                 // The inner stream is owned by the caller and is deliberately not disposed.
                 _active = false;
                 base.Dispose(disposing);
+            }
+
+            // Runs before every read. Parquet.Net 4.x seeks once to the start of a column chunk and then
+            // reads its pages one after another, so a page header can be reached with no seek at all.
+            // A read that starts where the last validated page ends is about to consume the next
+            // header, so that header is validated first. A read that would run across that point is
+            // shortened to stop at it (a short read is always legal), so the next read starts on it.
+            private int ReachNextHeader(int count)
+            {
+                if (!_active || count <= 0 || _knownEnd < 0) return count;
+                long position = _inner.Position;
+                if (position == _knownEnd) ValidatePageAt(position);
+                if (position >= _knownStart && position < _knownEnd && count > _knownEnd - position)
+                {
+                    return (int)(_knownEnd - position);
+                }
+                return count;
             }
 
             private void ValidatePageAt(long offset)
