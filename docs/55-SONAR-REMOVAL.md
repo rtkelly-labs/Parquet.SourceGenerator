@@ -57,8 +57,9 @@ changelog, `docs/api/LEDGER.md`, the first-run table in 50) keep the `S` ids the
 Sonar's default rule set runs when the package is present, which is several hundred checks. The
 map covers every rule the repository configured, every rule that fired or was fixed in its
 history (docs 50, the git log and the changelog), and the rules named in the removal brief.
-For every other default rule the build was clean (CI ran `-warnaserror`), so removal opens no
-backlog; their checks are simply no longer made.
+For every other default rule, `main` was green under `-warnaserror` with the package still present
+(the commit this branch started from, `8eb8dd5`, built clean in CI), so there were no open findings
+and removal opens no backlog. Their checks are simply no longer made.
 
 Replacement severity is the one the removed rule had in practice: a warning, so a finding fails
 CI under `-warnaserror`. The new entries are in the `src/` and emitted-code section of
