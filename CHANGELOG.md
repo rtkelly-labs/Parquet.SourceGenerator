@@ -286,6 +286,11 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   corrupt column chunk with no error. The writer now counts the present rows in the levels it is about
   to write (it passes over them anyway), slices a longer lane to that count and rejects a shorter lane or
   a bad level with an `InvalidOperationException` naming the column.
+- **A column chunk shorter than its row group is rejected instead of being read into stale pool data** (#382).
+  The read buffers are rented for the footer's `num_rows` and Parquet.Net fills only the chunk's own
+  `num_values`, so a file declaring more rows than a chunk holds left the buffer tail unwritten, and
+  pooled value-type buffers are returned uncleared. The emitted reader now compares each unrepeated
+  column chunk's `num_values` with the row count and throws `InvalidDataException` naming the column.
 - **A property or type named after a C# keyword no longer breaks the generated code** (#376). Roslyn drops
   the `@` from a member declared `@event`, so the model held the bare keyword and the emitters wrote
   `item.event`, `{ event = ... }` and `new class` into generated source (CS1001, CS1525). Every

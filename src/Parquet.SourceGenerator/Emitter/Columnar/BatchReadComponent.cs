@@ -134,6 +134,9 @@ internal static class BatchReadComponent
                     $"{indent}ValidateDictionaryEntryLimit(groupReader, stream, field_{slot}, \"{col.Leaf.Name}\", options, missing_{slot});"
                 );
                 builder.AppendLine(
+                    $"{indent}ValidateChunkValueCount(groupReader, field_{slot}, rowCount, \"{col.Leaf.Name}\", missing_{slot});"
+                );
+                builder.AppendLine(
                     $"{indent}int packed_{slot} = await ReadPackedColumnAsync<{LaneType(col)}>(groupReader, field_{slot}, missing_{slot}, buffer_{slot}, defLevels_{slot}, rowCount, cancellationToken).ConfigureAwait(false);"
                 );
                 break;

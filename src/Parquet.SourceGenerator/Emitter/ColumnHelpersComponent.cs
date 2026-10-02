@@ -82,6 +82,8 @@ internal static class ColumnHelpersComponent
 
         builder.AppendLine();
         EmitValidateDictionaryEntryLimit(builder);
+        builder.AppendLine();
+        EmitValidateChunkValueCount(builder);
 
         if (AnyNullable(columns, NullableReadShape.Struct))
         {
@@ -140,6 +142,34 @@ internal static class ColumnHelpersComponent
         foreach (string line in lines)
             builder.AppendLine(line);
     }
+
+    /// <summary>
+    /// Rejects a column chunk whose value count differs from the row group's declared row count. The
+    /// read buffers are rented for <c>rowCount</c> and Parquet.Net fills only the chunk's own
+    /// <c>num_values</c>, so a footer that declares more rows would leave the tail of a pooled buffer
+    /// unwritten and, for value types, uncleared (#382). Repeated columns are excluded by the caller.
+    /// </summary>
+    private static void EmitValidateChunkValueCount(StringBuilder builder) =>
+        AppendLines(
+            builder,
+            "    private static void ValidateChunkValueCount(",
+            "        global::Parquet.ParquetRowGroupReader groupReader,",
+            "        global::Parquet.Schema.DataField field,",
+            "        int rowCount,",
+            "        string columnName,",
+            "        bool missing = false)",
+            "    {",
+            "        if (missing)",
+            "        {",
+            "            return;",
+            "        }",
+            "        long numValues = groupReader.GetMetadata(field).MetaData.NumValues;",
+            "        if (numValues != rowCount)",
+            "        {",
+            "            throw new global::System.IO.InvalidDataException($\"Column '{columnName}' holds {numValues} values but its row group declares {rowCount} rows.\");",
+            "        }",
+            "    }"
+        );
 
     private static void EmitValidateDictionaryEntryLimit(StringBuilder builder) =>
         AppendLines(

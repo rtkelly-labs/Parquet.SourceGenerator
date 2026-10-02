@@ -602,6 +602,14 @@ internal static class CodeEmitter
         builder.AppendLine(
             $"{indent}ValidateDictionaryEntryLimit(groupReader, stream, {fieldAccess}, \"{col.Leaf.Name}\", options{missingArg});"
         );
+        if (!col.IsListLeaf)
+        {
+            // Entries equal rowCount for every column that is not repeated. A footer declaring more rows
+            // than the chunk holds would leave the tail of the rented buffer unwritten (#382).
+            builder.AppendLine(
+                $"{indent}ValidateChunkValueCount(groupReader, {fieldAccess}, rowCount, \"{col.Leaf.Name}\"{missingArg});"
+            );
+        }
 
         if (col.IsListLeaf)
         {
