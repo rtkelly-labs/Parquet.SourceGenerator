@@ -35,10 +35,6 @@
             VersionOverride="4.0.1"
             PrivateAssets="all"
         />
-        <PackageReference
-            Include="Microsoft.CodeAnalysis.Analyzers"
-            VersionOverride="3.3.3"
-            PrivateAssets="all"
-        />
+        <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" PrivateAssets="all" />
     </ItemGroup>
 </Project>

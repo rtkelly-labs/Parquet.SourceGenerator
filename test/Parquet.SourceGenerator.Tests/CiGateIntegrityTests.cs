@@ -238,6 +238,58 @@ public sealed class CiGateIntegrityTests
             .ShouldBeFalse();
     }
 
+    [Theory]
+    [InlineData("src/Parquet.SourceGenerator/Parquet.SourceGenerator.csproj")]
+    [InlineData("src/Parquet.SourceGenerator.Legacy/Parquet.SourceGenerator.Legacy.csproj")]
+    public void TheShippingGeneratorsRunTheGeneratorAuthorAnalyzerRules(string project)
+    {
+        // #471: Microsoft.CodeAnalysis.Analyzers 3.3.3 carried none of RS1035/RS1036/RS1038/RS1041,
+        // and the property that switches them on was set on an internal tool instead of the
+        // assemblies that load into every consumer's compiler. Both halves are asserted, plus the
+        // inverse: no override may pin the analyzer package back to an old version.
+        string csproj = Read(FindRepositoryRoot(), project.Split('/'));
+
+        csproj.ShouldContain("<EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>");
+
+        Match reference = Regex.Match(
+            csproj,
+            @"<PackageReference\s+Include=""Microsoft\.CodeAnalysis\.Analyzers""[^>]*/>",
+            RegexOptions.Singleline | RegexOptions.CultureInvariant,
+            RegexTimeout
+        );
+        reference.Success.ShouldBeTrue(
+            $"{project} must reference Microsoft.CodeAnalysis.Analyzers"
+        );
+        reference.Value.ShouldNotContain("VersionOverride");
+
+        // The Roslyn floor is a different pin and must stay where it is (#432).
+        csproj.ShouldContain("Include=\"Microsoft.CodeAnalysis.CSharp\"");
+        csproj.ShouldContain("VersionOverride=\"4.0.1\"");
+
+        // A suppression may name RS2008 and RS1032 and nothing broader.
+        foreach (Match noWarn in Regex.Matches(csproj, @"<NoWarn>([^<]*)</NoWarn>"))
+        {
+            noWarn.Groups[1].Value.ShouldNotMatch(@"RS1(?!032)\d{3}");
+            noWarn.Groups[1].Value.ShouldNotContain("RS1035");
+        }
+    }
+
+    [Fact]
+    public void TheCentralAnalyzersVersionIsPastTheRulesGeneratorAuthorsNeed()
+    {
+        string props = Read(FindRepositoryRoot(), "Directory.Packages.props");
+        Match version = Regex.Match(
+            props,
+            @"Include=""Microsoft\.CodeAnalysis\.Analyzers""\s+Version=""(\d+\.\d+)[^""]*""",
+            RegexOptions.CultureInvariant,
+            RegexTimeout
+        );
+
+        version.Success.ShouldBeTrue();
+        // The 3.3.x line (the old override and the old central pin) predates these rules (#471).
+        Version.Parse(version.Groups[1].Value).ShouldBeGreaterThanOrEqualTo(new Version(3, 11));
+    }
+
     [Fact]
     public void TheNet472ConsumerIsExecutedOnWindowsNotJustCompiled()
     {

@@ -11,6 +11,14 @@
         <DevelopmentDependency>true</DevelopmentDependency>
 
         <!--
+      Turns on RS1035 (banned APIs in a compiler extension), RS1036, RS1038 (Workspaces reference)
+      and RS1041 (target framework) for the assembly that ships in analyzers/dotnet/cs and loads
+      into every consumer compiler (#471). Microsoft.CodeAnalysis.Analyzers supplies the rules;
+      this property is what switches the generator-author subset on.
+    -->
+        <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+
+        <!--
       The generator ships ONLY as an analyzer, never as a library.
 
       Without this, the default (true) puts Parquet.SourceGenerator.dll in lib/netstandard2.0/ as
@@ -24,6 +32,16 @@
     -->
         <IncludeBuildOutput>false</IncludeBuildOutput>
         <NoWarn>$(NoWarn);NU5128</NoWarn>
+        <!--
+      Two rules the 5.x Microsoft.CodeAnalysis.Analyzers adds, suppressed by name with a reason (#471),
+      not by the RS1xxx range, so the generator-author rules RS1035/RS1036/RS1038/RS1041 stay on:
+        RS2008  release tracking needs AnalyzerReleases.Shipped.md and .Unshipped.md; that file is
+                #593's deliverable (it removes this suppression).
+        RS1032  wants a trailing period on ten multi-sentence messageFormat strings in
+                DiagnosticDescriptors.cs; that changes user-visible diagnostic text and belongs to
+                the emitter owners, so it is left for a follow-up.
+    -->
+        <NoWarn>$(NoWarn);RS2008;RS1032</NoWarn>
         <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);PackBuildOutputs</TargetsForTfmSpecificContentInPackage>
     </PropertyGroup>
 
@@ -33,11 +51,7 @@
             VersionOverride="4.0.1"
             PrivateAssets="all"
         />
-        <PackageReference
-            Include="Microsoft.CodeAnalysis.Analyzers"
-            VersionOverride="3.3.3"
-            PrivateAssets="all"
-        />
+        <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" PrivateAssets="all" />
     </ItemGroup>
 
     <!--
