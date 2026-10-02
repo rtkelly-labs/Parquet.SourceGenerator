@@ -70,7 +70,7 @@ CI under `-warnaserror`. The new entries are in the `src/` and emitted-code sect
 | S1172 | A private method that never uses one of its parameters | RCS1163 (warning) | |
 | S4581 | `new Guid()` where `Guid.Empty` says the same thing | MA0067 (warning) | |
 | S2681 | A multi-line body under `if` or a loop with no braces, so only the first line is controlled | RCS1001, RCS1003 | RCS1001: warning for emitted code (0 findings), default `suggestion` in `src/` (34 findings, see below). RCS1003: warning in `src/` (1 fixed), `suggestion` for emitted code (22 findings) |
-| S8969 | A null-forgiving `!` on a value the compiler already knows is non-null | RCS1249 | Warning in `src/` (3 fixed); `suggestion` for emitted code (1 finding, see below) |
+| S8969 | A null-forgiving `!` on a value the compiler already knows is non-null | RCS1249 (warning) | 4 findings fixed, see below |
 | S6966 | A synchronous call (`Cancel`) where an awaitable form exists inside an async method | CA1849 (warning) | A probe confirmed it reports `CancellationTokenSource.Cancel()` in an async method. MA0042 also does, but it reports 62 emitted `using` statements that could be `await using`, so it stays at its default |
 | S4456 | Argument checks inside an iterator, which run on the first `MoveNext` instead of the call | MA0050 (warning) | |
 | S3626 | A `return` or `continue` that is the last statement and does nothing | RCS1134 (warning) | |
@@ -97,7 +97,7 @@ cheap findings, otherwise leave it below `warning` and file it.
 | Replacement | `src/` | Emitted code | Outcome |
 |---|---:|---:|---|
 | RCS1163, RCS1134, RCS1132, MA0050, MA0067, CA1849, IDE0059 | 0 | 0 | Warning everywhere they apply |
-| RCS1249 | 3 (`TargetParser.cs`, a redundant `!` on an `out` variable; two arrived from `main` while this change was open) | 1 (`null!` appended to a `List<string?>`) | `src/`: fixed, warning. Emitted: `suggestion`. The emitter writes `null!` for every element type, and it is redundant only for a nullable one, so the fix depends on the type |
+| RCS1249 | 3 (`TargetParser.cs`, a redundant `!` on an `out` variable; two arrived from `main` while this change was open) | 1 (`null!` appended to a `List<string?>`) | Fixed in both, warning everywhere. The emitter now writes a plain `null` when the list element type is annotated, and keeps `null!` for a nullable array element (its list is unannotated) |
 | RCS1003 | 1 (`TargetParser.cs`, an unbraced `if` arm of a braced `else`) | 22 | `src/`: fixed, warning. Emitted: `suggestion` (the emitter writes one-line `if` arms) |
 | RCS1001 | 34 (`Attributes/VectorizedColumnTransforms.cs`, `NullableColumnExtractor.cs`, `TargetParser.cs` and four more files) | 0 | Emitted: warning. `src/`: left at its default `suggestion`, over the ten-finding limit |
 | MA0042 | not run | 62 | Not adopted. Its extra reports (`using` that could be `await using`) are a different check from S6966 |

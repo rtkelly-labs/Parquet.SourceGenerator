@@ -214,7 +214,7 @@ The [artifact-backed baseline approval proposal](./ARTIFACT-BACKED-BASELINES.md)
      - Every analyzer `src/` runs (NetAnalyzers, Meziantou, Roslynator, code style, metric and
        AOT rules), run over the golden models' emitted source through `analysis/`.
      - Why none of them saw emitted code before: the `src/` scope, `NoWarn` in consumer projects,
-       and generated-code classification (three switches undo it).
+       and generated-code classification (two switches undo it).
      - Gate: any finding fails the `generated-analysis` CI job; the baseline is empty and stays so.
 
 29. **[51 - CI Gate Matrix](./51-CI-GATE-MATRIX.md)**

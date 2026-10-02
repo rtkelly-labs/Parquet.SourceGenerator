@@ -171,13 +171,11 @@ dotnet_diagnostic.IDE0059.severity = warning # Unnecessary assignment (was S1854
 [analysis/*/obj/golden/**.cs]
 generated_code = false
 
-# The replacements that fire in the emitted code today stay out of the gate (docs/55-SONAR-REMOVAL.md):
-# RCS1003 reports 22 emitted if-else statements and RCS1249 one `null!` that is only redundant for a
-# reference-type element. RCS1001 (S2681, the rule that fired in emitted code, #551) reports none, so it
+# RCS1003 reports 22 emitted if-else statements, so it stays out of the gate (docs/55-SONAR-REMOVAL.md).
+# RCS1001 (S2681, the rule that fired in emitted code, #551) reports none, so it
 # gates here; in src/ it reports 34 and stays at its default.
 dotnet_diagnostic.RCS1001.severity = warning
 dotnet_diagnostic.RCS1003.severity = suggestion
-dotnet_diagnostic.RCS1249.severity = suggestion
 
 # The model declarations the emitted code extends are scaffolding the analysis compiles with it,
 # not output. They are not marked generated_code (that would also drop their nullable context).

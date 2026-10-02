@@ -496,8 +496,15 @@ internal static class CompoundMapping
         builder.AppendLine(
             $"{indent}        if (dv_{n} == {col.MaxDef}) {{ if (vc_{n} >= entries_{n}) {{ throw new global::System.IO.InvalidDataException(\"Definition levels in column '{col.Leaf.Name}' exceeded values count (\" + entries_{n} + \").\"); }} bk_{n}.Add({GetCompoundLeafReadExpression(col.Leaf, $"buffer_{n}[vc_{n}++]")}); }}"
         );
+        // A nullable array element keeps an unannotated List<T[]>, where only `null!` compiles cleanly;
+        // every other nullable element has an annotated list and takes a plain `null`.
         if (col.Leaf.IsNullable)
-            builder.AppendLine($"{indent}        else bk_{n}.Add(null!);");
+        {
+            string nullLiteral = listType.EndsWith("?>", StringComparison.Ordinal)
+                ? "null"
+                : "null!";
+            builder.AppendLine($"{indent}        else bk_{n}.Add({nullLiteral});");
+        }
         builder.AppendLine($"{indent}    }}");
         builder.AppendLine($"{indent}}}");
         builder.AppendLine(
