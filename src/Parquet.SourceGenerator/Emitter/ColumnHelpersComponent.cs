@@ -101,6 +101,12 @@ internal static class ColumnHelpersComponent
             EmitReadNullableByteArrayColumn(builder);
         }
 
+        if (columns.Any(c => c.IsListLeaf || c.IsCompound))
+        {
+            builder.AppendLine();
+            EmitRequireNestedLeafPresent(builder);
+        }
+
         if (columns.Any(c => c.IsListLeaf))
         {
             builder.AppendLine();
@@ -135,6 +141,23 @@ internal static class ColumnHelpersComponent
             "        }",
             "    }",
             "#endif"
+        );
+
+    /// <summary>
+    /// Fails a read whose file lacks an optional column under a list or struct: schema resolution
+    /// reports it as missing and hands back the generator's own template field, which the row group
+    /// has no chunk for (#367).
+    /// </summary>
+    private static void EmitRequireNestedLeafPresent(StringBuilder builder) =>
+        AppendLines(
+            builder,
+            "    private static void RequireNestedLeafPresent(bool missing, string columnName)",
+            "    {",
+            "        if (missing)",
+            "        {",
+            "            throw new global::System.IO.InvalidDataException($\"Column '{columnName}' is missing from the Parquet file; a column under a list or struct must be present.\");",
+            "        }",
+            "    }"
         );
 
     private static void AppendLines(StringBuilder builder, params string[] lines)

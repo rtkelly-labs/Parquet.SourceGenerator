@@ -331,6 +331,11 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   every sibling's definition levels. Each column sizes and validates its own `num_values`, so a shorter
   sibling was read past what was written, including stale levels left in its pooled array. The emitted
   reader now compares each sibling's count with the anchor's and throws `InvalidDataException`.
+- **A file that omits an optional column under a list now fails with `InvalidDataException`** (#367). Schema
+  resolution reported the absent column as missing and returned the generator's own template field, and
+  the next statement of a list or struct leaf read that field's chunk metadata, which surfaced as a
+  `NullReferenceException`. Nested leaves are outside the missing-column envelope, so the emitted reader
+  now rejects the absence by name.
 - **The generator pipeline caches value-equatable models, not a syntax context.** The main generator cached
   the `GeneratorSyntaxContext` itself, which retains a `SemanticModel` (and the compilation behind it) per
   target and has no value equality, so nothing downstream could compare as unchanged. It now parses inside
