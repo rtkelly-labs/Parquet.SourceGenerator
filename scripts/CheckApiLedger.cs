@@ -24,7 +24,8 @@ using System.Text;
 //      to merge an unreviewed surface, and it fails.
 //
 // Usage:
-//   dotnet run scripts/CheckApiLedger.cs                 # base ref from GITHUB_BASE_REF
+//   dotnet run scripts/CheckApiLedger.cs                 # base ref from GITHUB_BASE_REF; on a push
+//                                                        # GITHUB_EVENT_BEFORE, else the first parent
 //   dotnet run scripts/CheckApiLedger.cs -- --base main
 // -----------------------------------------------------------------------------
 
@@ -95,14 +96,19 @@ if (File.Exists(LedgerPath))
 // ---------------------------------------------------------------------------
 // Rule 1: catalogue additions require ledger additions.
 // ---------------------------------------------------------------------------
-string? range = ResolveBaseRange(args);
+// A pull request supplies a base ref. A push to main does not (`github.base_ref` is empty), so the
+// range falls back to the pushed commits: `GITHUB_EVENT_BEFORE..HEAD` when the workflow passes it,
+// else the first parent. Skipping the rule when no range exists let a direct push to main change a
+// catalogue with a green run (#430), so the absence of any range is now a failure, not a pass.
+string? range = ResolveBaseRange(args) ?? ResolvePushRange();
 if (range is null)
 {
-    Console.WriteLine(
-        "No base ref available (not a pull request, and no --base given): skipping the "
-            + "catalogue-vs-ledger diff check."
+    Console.Error.WriteLine(
+        "::error::No base ref (not a pull request, and no --base given) and no pushed range "
+            + "(GITHUB_EVENT_BEFORE is unavailable, or HEAD has no parent): the catalogue-vs-ledger check "
+            + "cannot run, and it fails rather than passing having compared nothing."
     );
-    return failures == 0 ? 0 : 1;
+    return 1;
 }
 
 Console.WriteLine($"Comparing catalogues against {range}");
@@ -298,6 +304,56 @@ static string? ResolveBaseRange(string[] args)
         Environment.Exit(1);
         return reference;
     }
+}
+
+static string? ResolvePushRange()
+{
+    string? before = Environment.GetEnvironmentVariable("GITHUB_EVENT_BEFORE");
+    if (!string.IsNullOrWhiteSpace(before) && before.Any(character => character != '0'))
+    {
+        before = before.Trim();
+        if (CanResolve(before))
+        {
+            Console.WriteLine($"Push event: comparing against the previous tip {before}.");
+            return $"{before} HEAD";
+        }
+
+        // A two-argument diff compares the two trees, so the previous tip alone is enough; no
+        // history between the two commits is needed.
+        Run("git", $"fetch --no-tags --depth=1 origin {before}");
+        if (CanResolve(before))
+        {
+            Console.WriteLine($"Push event: comparing against the previous tip {before}.");
+            return $"{before} HEAD";
+        }
+
+        // The push named a previous tip that cannot be obtained. `HEAD~1` would cover only the last
+        // commit of a multi-commit push and let an earlier one change a catalogue unchecked, so there
+        // is no trustworthy boundary: fail closed rather than guess.
+        Console.WriteLine(
+            $"Previous tip {before} is not available; refusing to fall back to the first parent."
+        );
+        return null;
+    }
+
+    // No pushed range was supplied (a local run, or an all-zero `before` for a new branch): the first
+    // parent is the best available boundary.
+    if (!CanResolve("HEAD~1"))
+    {
+        // A shallow checkout has only the pushed commit.
+        Run("git", "fetch --no-tags --deepen=1 origin");
+    }
+
+    if (CanResolve("HEAD~1"))
+    {
+        Console.WriteLine("No base ref: comparing HEAD against its first parent.");
+        return "HEAD~1 HEAD";
+    }
+
+    return null;
+
+    static bool CanResolve(string reference) =>
+        Run("git", $"rev-parse --verify --quiet {reference}^{{commit}}").ExitCode == 0;
 }
 
 static string Git(string arguments)
