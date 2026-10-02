@@ -73,6 +73,7 @@ internal static class DecompressionGuardHarness
         Stream inner,
         int maxPageSize = 67_108_864,
         int maxExpansionRatio = 1000,
+        int maxRowGroupCount = int.MaxValue,
         bool ownsInner = false
     )
     {
@@ -82,7 +83,7 @@ internal static class DecompressionGuardHarness
                 type,
                 BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
                 binder: null,
-                args: new object[] { inner, maxPageSize, maxExpansionRatio },
+                args: new object[] { inner, maxPageSize, maxExpansionRatio, maxRowGroupCount },
                 culture: null
             )!;
         MethodInfo activate = type.GetMethod(
