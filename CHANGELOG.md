@@ -284,6 +284,11 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   file or, in the first two, injected statements into it. Every such site now goes through one
   helper (`EmittedText.Literal`, `Comment`, `XmlDoc`). The columnar batch doc comment for a nullable
   text column also wrote an unescaped `<char>`, a CS1570 warning wherever documentation is generated.
+- **The compiler diagnostics reference matches the code** (#428, #593). `docs/13` documents `PARQ012`
+  to `PARQ014`, lists all four conditions of `PARQ005` and describes `PARQ009` as the private-nested-type
+  rule it now is; the `PARQ001` - `PARQ099` range cited in `docs/01` and `docs/03` is gone. Both
+  generator projects now carry `AnalyzerReleases.Shipped.md` and `.Unshipped.md`, so a diagnostic id
+  added or removed without a release-tracking entry fails the build (RS2000 series).
 - **`AsBatches()` now enforces the decompression limits** (#358). The columnar batch reader was the
   one read path that handed the caller's raw stream to `ParquetReader`, so `MaxDecompressedPageSize`
   and `MaxDecompressionExpansionRatio` were silently ignored for it. It now reads through the same

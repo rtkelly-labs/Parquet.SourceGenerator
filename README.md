@@ -351,13 +351,15 @@ The Roslyn analyzer enforces correct usage at compile time, catching errors befo
 public record Metric(int Id); 
 ```
 
-Full details on all 11 diagnostic rules, examples, and fixes are documented in **[`docs/13-COMPILER-DIAGNOSTICS.md`](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/13-COMPILER-DIAGNOSTICS.md)**:
+Full details on every diagnostic rule (`PARQ001` to `PARQ016`), with examples and fixes, are documented in **[`docs/13-COMPILER-DIAGNOSTICS.md`](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/13-COMPILER-DIAGNOSTICS.md)**:
 - `PARQ001`: Type must be declared `partial`
 - `PARQ002`: Duplicate `[ParquetColumn]` column names detected
 - `PARQ005`: Invalid `[ParquetDecimal]` precision or scale
 - `PARQ006`: Unsupported property type (mirrors Parquet.Net supported types)
-- `PARQ007`–`PARQ010`: Assignability, constructors, nested, and generic type constraints
+- `PARQ007`–`PARQ010`: Assignability, constructors, nested-type accessibility, and generic type constraints
 - `PARQ011`: Classic API version compatibility
+- `PARQ012`–`PARQ014`: Cyclic or too-deep compound types, and an ineligible `[ParquetSortKey]`
+- `PARQ015`–`PARQ016`: Invalid generator feature level, and colliding generated type names
 
 ---
 
@@ -460,7 +462,7 @@ OrderEventParquetExtensions.WriteParquetRowGroupAsync(writer, recordBatch);
 | 🚀 **[10 - Native AOT & Trimming Guide](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/10-NATIVE-AOT-GUIDE.md)** | ILCompiler analysis, CoreCLR runtime directives, and AOT compilation. |
 | 🔬 **[11 - Performance & Zero-Boxing Findings](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/11-PERFORMANCE-OPTIMIZATION-FINDINGS.md)** | IL interrogation, zero-boxing string serialization, and L1 cache deduplication. |
 | 🧠 **[12 - Buffer Reuse & Extraction Strategies](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/12-BUFFER-REUSE-AND-EXTRACTION-STRATEGIES.md)** | CPU cache spatial locality vs multi-pass traversal empirical analysis. |
-| 🛡️ **[13 - Compiler Diagnostics Reference](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/13-COMPILER-DIAGNOSTICS.md)** | Full catalog of `PARQ001`–`PARQ011` diagnostic rules, causes, and fixes. |
+| 🛡️ **[13 - Compiler Diagnostics Reference](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/13-COMPILER-DIAGNOSTICS.md)** | Full catalog of `PARQ001`–`PARQ016` diagnostic rules, causes, and fixes. |
 | 🧪 **[14 - Parquet Compatibility Matrix](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/14-COMPATIBILITY-MATRIX.md)** | Supported format envelope, producer/consumer boundaries, and compatibility definitions. |
 | 📊 **[Full Benchmarks Report](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/BENCHMARKS.md)** | Multi-scale sweeps (1k, 10k, 100k, 1M rows) and real-world datasets. |
 
