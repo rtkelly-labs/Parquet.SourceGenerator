@@ -577,7 +577,7 @@ internal static class CompoundMapping
 
     /// <summary>
     /// The value a non-nullable leaf takes when its definition level says the value is absent.
-    /// A Guid spells it <c>Guid.Empty</c> (S4581); every other type keeps <c>default</c>.
+    /// A Guid spells it <c>Guid.Empty</c> (MA0067); every other type keeps <c>default</c>.
     /// </summary>
     private static string NonNullAbsentLiteral(PropertyModel leaf) =>
         leaf.Kind == PropertyKind.Guid ? "global::System.Guid.Empty" : "default";

@@ -82,15 +82,6 @@ dotnet_diagnostic.MA0026.severity = none # To-do comments
 dotnet_diagnostic.MA0048.severity = none # File name must match type name
 dotnet_diagnostic.MA0051.severity = none # Method is too long
 
-# SonarAnalyzer.CSharp configuration
-# Silence rules that contradict zero-allocation source generator patterns
-dotnet_diagnostic.S3267.severity = none # Prefer LINQ methods over foreach loops (allocates delegates/enumerators)
-dotnet_diagnostic.S1643.severity = suggestion # Use StringBuilder instead of concatenation in loops
-dotnet_diagnostic.S4136.severity = none # Group overloads together
-dotnet_diagnostic.S2094.severity = none # Classes should not be empty (marker types)
-dotnet_diagnostic.S6608.severity = suggestion # Indexing preference
-dotnet_diagnostic.S125.severity = none # Commented out code (explanatory code comments)
-
 # Test projects analyzer configuration
 [test/**.cs]
 # xUnit quality analyzers
@@ -159,6 +150,18 @@ dotnet_diagnostic.MA0004.severity = warning
 dotnet_diagnostic.CA1019.severity = none # Allow property setters for named attribute arguments
 dotnet_diagnostic.CA1008.severity = suggestion
 
+# Rules that replace the SonarAnalyzer checks removed in this change (docs/55-SONAR-REMOVAL.md). They share
+# this section so the emitted code is held to them too.
+dotnet_diagnostic.RCS1003.severity = warning # Brace a multi-line if-else body (was S2681)
+dotnet_diagnostic.RCS1163.severity = warning # Unused parameter (was S1172)
+dotnet_diagnostic.RCS1134.severity = warning # Redundant statement, e.g. a trailing return (was S3626)
+dotnet_diagnostic.RCS1132.severity = warning # Override that only calls base (was S1185)
+dotnet_diagnostic.RCS1249.severity = warning # Unnecessary null-forgiving operator (was S8969)
+dotnet_diagnostic.MA0050.severity = warning # Validate arguments before the iterator (was S4456)
+dotnet_diagnostic.MA0067.severity = warning # Guid.Empty over new Guid() (was S4581)
+dotnet_diagnostic.CA1849.severity = warning # Async overload exists (was S6966)
+dotnet_diagnostic.IDE0059.severity = warning # Unnecessary assignment (was S1854)
+
 # --------------------------------------------------------------------------------------------
 # Generated-code analysis (docs/50-GENERATED-CODE-ANALYSIS.md). analysis/*/obj/golden/ holds the
 # golden models' emitted source, copied there by analysis/Directory.Build.targets, and shares the
@@ -167,6 +170,14 @@ dotnet_diagnostic.CA1008.severity = suggestion
 # --------------------------------------------------------------------------------------------
 [analysis/*/obj/golden/**.cs]
 generated_code = false
+
+# The replacements that fire in the emitted code today stay out of the gate (docs/55-SONAR-REMOVAL.md):
+# RCS1003 reports 22 emitted if-else statements and RCS1249 one `null!` that is only redundant for a
+# reference-type element. RCS1001 (S2681, the rule that fired in emitted code, #551) reports none, so it
+# gates here; in src/ it reports 34 and stays at its default.
+dotnet_diagnostic.RCS1001.severity = warning
+dotnet_diagnostic.RCS1003.severity = suggestion
+dotnet_diagnostic.RCS1249.severity = suggestion
 
 # The model declarations the emitted code extends are scaffolding the analysis compiles with it,
 # not output. They are not marked generated_code (that would also drop their nullable context).

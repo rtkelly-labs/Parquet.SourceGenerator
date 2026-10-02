@@ -12,8 +12,8 @@ using Xunit;
 namespace Parquet.SourceGenerator.Tests;
 
 /// <summary>
-/// Emitted async iterators validate arguments when called, not on the first MoveNextAsync (S4456),
-/// and the parallel readers cancel their linked source with CancelAsync (S6966) (#548).
+/// Emitted async iterators validate arguments when called, not on the first MoveNextAsync (MA0050),
+/// and the parallel readers cancel their linked source with CancelAsync (MA0042, CA1849) (#548).
 /// </summary>
 public sealed class AsyncIteratorContractTests
 {

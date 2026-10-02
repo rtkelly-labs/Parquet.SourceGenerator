@@ -90,6 +90,11 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   number is known is vacuous or permanently red.
 
 ### Changed
+- **Removed the SonarAnalyzer.CSharp analyzer (source-available license).** Its license grants use only for a
+  non-competitive purpose, which excludes AI tooling that ingests or interprets the analyzer's output,
+  and this repository has AI agents read and fix diagnostics. The remaining analyzers stay
+  (NetAnalyzers, Meziantou, Roslynator); the Sonar checks that had a counterpart are now enforced by
+  those, and `docs/55-SONAR-REMOVAL.md` maps every rule. No shipped package ever contained it.
 - **BREAKING: the emitted `{T}ColumnarBatch` is a `readonly struct` with get-only properties and a
   validating constructor (#550, part of #508 and #554).** It no longer exposes mutable public fields,
   so `RowCount` cannot drift from the column lanes. The constructor takes `rowCount` and one

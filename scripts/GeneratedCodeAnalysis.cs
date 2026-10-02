@@ -11,7 +11,7 @@ using System.Text.Json;
 // -----------------------------------------------------------------------------
 // GeneratedCodeAnalysis.cs
 //
-// Runs every analyzer the shipped src/ projects run — NetAnalyzers, Meziantou, Sonar, Roslynator,
+// Runs every analyzer the shipped src/ projects run — NetAnalyzers, Meziantou, Roslynator,
 // the IDE code-style rules, the CA1502/CA1505/CA1506 metric gates and the trim/AOT analyzers —
 // over the golden models' emitted source, and FAILS on any finding. See
 // docs/50-GENERATED-CODE-ANALYSIS.md.

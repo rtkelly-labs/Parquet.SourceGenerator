@@ -170,7 +170,7 @@ internal static class TargetParser
             out INamedTypeSymbol? typeSymbol,
             out TypeDeclarationSyntax? declaration
         )
-            ? GetTargetModelCore(typeSymbol!, declaration!, apiLevel, compoundKinds)
+            ? GetTargetModelCore(typeSymbol!, declaration, apiLevel, compoundKinds)
             : null;
 
     /// <summary>
@@ -1920,7 +1920,9 @@ internal static class TargetParser
                     continue;
 
                 if (positionByName.TryGetValue(member.Name, out int existing))
+                {
                     ordered[existing] = member;
+                }
                 else
                 {
                     positionByName[member.Name] = ordered.Count;

@@ -211,7 +211,7 @@ The [artifact-backed baseline approval proposal](./ARTIFACT-BACKED-BASELINES.md)
        one-package end state.
 
 28. **[50 - Generated Code Analysis](./50-GENERATED-CODE-ANALYSIS.md)**
-     - Every analyzer `src/` runs (NetAnalyzers, Meziantou, Sonar, Roslynator, code style, metric and
+     - Every analyzer `src/` runs (NetAnalyzers, Meziantou, Roslynator, code style, metric and
        AOT rules), run over the golden models' emitted source through `analysis/`.
      - Why none of them saw emitted code before: the `src/` scope, `NoWarn` in consumer projects,
        and generated-code classification (three switches undo it).
@@ -225,6 +225,11 @@ The [artifact-backed baseline approval proposal](./ARTIFACT-BACKED-BASELINES.md)
 30. **[44 - Roslyn Generator Tooling Evaluation](./44-GENERATOR-TOOLING-EVALUATION.md)**
      - Verdicts on polyfills, dependency bundling, generator test frameworks, syntax builders, and author analyzers against what this repository already does.
      - Why none of it should be adopted as a package, and where the parts that survive evaluation already live in the backlog (#439, #471, #472).
+
+31. **[55 - SonarAnalyzer removal](./55-SONAR-REMOVAL.md)**
+     - Why the Sonar analyzer left (source-available license, AI-use exclusion) and the rule-by-rule map to the
+       NetAnalyzers, Meziantou and Roslynator replacements.
+     - What each replacement found in `src/` and the emitted code, and which are left below warning (#635).
 
 ---
 
