@@ -648,7 +648,7 @@ internal static class DecompressionGuardComponent
                 throw Malformed("has an overlong integer");
             }
 
-            private global::System.IO.InvalidDataException Malformed(string reason) =>
+            private static global::System.IO.InvalidDataException Malformed(string reason) =>
                 new global::System.IO.InvalidDataException($"Parquet footer {reason}.");
         }
         """;
