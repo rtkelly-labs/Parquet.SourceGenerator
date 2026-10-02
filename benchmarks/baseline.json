@@ -1,0 +1,25 @@
+{
+  "schema": 2,
+  "note": "Regenerate with the benchmarks workflow's update_baseline input or the command in docs/BENCHMARKS.md. Allocated bytes are the gate; times are indicative and are not compared.",
+  "environment": ".NET 8.0.22 (8.0.2225.52707), Arm64, Apple M1",
+  "recordedOn": "2026-10-02, Apple M1 laptop (macOS 15.7.7), .NET 8.0.22 via DOTNET_ROLL_FORWARD=Minor. Not a quiet machine: 1-min load average 2.98 at start (5-min 6.46) and 5.28 at end, other sessions' builds intermittently running. Only allocated bytes are gated; a second identical run agreed within 0.9% on every benchmark (largest drift +9,943 B on GuidInterchangeBenchmark.SourceGeneratorGuidWriteAsync Count=10000).",
+  "measurements": [
+    { "type": "ColumnBatchAggregationBenchmark", "method": "ColumnBatchScalarAggregate", "parameters": "Count=1000", "meanNanoseconds": 25548.3, "allocatedBytes": 53793 },
+    { "type": "ColumnBatchAggregationBenchmark", "method": "ColumnBatchScalarAggregate", "parameters": "Count=10000", "meanNanoseconds": 173669.3, "allocatedBytes": 345398 },
+    { "type": "ColumnarHandoffBenchmark", "method": "ColumnarWriteEndToEnd", "parameters": "Count=1000", "meanNanoseconds": 431830.2, "allocatedBytes": 370767 },
+    { "type": "ColumnarHandoffBenchmark", "method": "ColumnarWriteEndToEnd", "parameters": "Count=10000", "meanNanoseconds": 3970935.9, "allocatedBytes": 2425900 },
+    { "type": "ColumnarHandoffBenchmark", "method": "TransposeOnly", "parameters": "Count=1000", "meanNanoseconds": 23328.2, "allocatedBytes": 2 },
+    { "type": "ColumnarHandoffBenchmark", "method": "TransposeOnly", "parameters": "Count=10000", "meanNanoseconds": 233023.1, "allocatedBytes": 241 },
+    { "type": "GuidInterchangeBenchmark", "method": "SourceGeneratorGuidWriteAsync", "parameters": "Count=1000", "meanNanoseconds": 54163.2, "allocatedBytes": 126009 },
+    { "type": "GuidInterchangeBenchmark", "method": "SourceGeneratorGuidWriteAsync", "parameters": "Count=10000", "meanNanoseconds": 669046.3, "allocatedBytes": 1187893 },
+    { "type": "ScalingDeserializationBenchmark", "method": "SourceGeneratorReadArrayAsync", "parameters": "Count=1000", "meanNanoseconds": 33502.9, "allocatedBytes": 101619 },
+    { "type": "ScalingDeserializationBenchmark", "method": "SourceGeneratorReadArrayAsync", "parameters": "Count=10000", "meanNanoseconds": 263159.7, "allocatedBytes": 825558 },
+    { "type": "ScalingDeserializationBenchmark", "method": "SourceGeneratorReadAsync", "parameters": "Count=1000", "meanNanoseconds": 29051.1, "allocatedBytes": 101650 },
+    { "type": "ScalingDeserializationBenchmark", "method": "SourceGeneratorReadAsync", "parameters": "Count=10000", "meanNanoseconds": 223068.5, "allocatedBytes": 825902 },
+    { "type": "ScalingSerializationBenchmark", "method": "SourceGeneratorWriteAsync", "parameters": "Count=1000", "meanNanoseconds": 37132.9, "allocatedBytes": 44789 },
+    { "type": "ScalingSerializationBenchmark", "method": "SourceGeneratorWriteAsync", "parameters": "Count=10000", "meanNanoseconds": 415823.9, "allocatedBytes": 661293 },
+    { "type": "ScalingSerializationBenchmark", "method": "SourceGeneratorWriteBatchedAsync", "parameters": "Count=1000", "meanNanoseconds": 37563.0, "allocatedBytes": 44790 },
+    { "type": "ScalingSerializationBenchmark", "method": "SourceGeneratorWriteBatchedAsync", "parameters": "Count=10000", "meanNanoseconds": 408890.2, "allocatedBytes": 661804 },
+    { "type": "StringDeduplicationRoutineBenchmark", "method": "SpanKeyedDeduplication", "parameters": "", "meanNanoseconds": 336966.9, "allocatedBytes": 396 }
+  ]
+}

@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using Parquet.SourceGenerator.Tools;
 using Shouldly;
@@ -19,99 +21,106 @@ namespace Parquet.SourceGenerator.Tests;
 public sealed class BenchmarkRegressionTests
 {
     // ──────────────────────────────────────────────────────────
-    //  UNIT NORMALISATION
+    //  READING BENCHMARKDOTNET JSON
     // ──────────────────────────────────────────────────────────
 
-    [Theory]
-    [InlineData("1234 ns", 1234d)]
-    [InlineData("1.5 us", 1_500d)]
-    [InlineData("1.5 μs", 1_500d)]
-    [InlineData("1,234.5 μs", 1_234_500d)]
-    [InlineData("2 ms", 2_000_000d)]
-    [InlineData("0.5 s", 500_000_000d)]
-    public void DurationsNormaliseToNanoseconds(string value, double expected)
+    private const string ExportWithOneFailedCase = """
+        {
+          "Title": "Parquet.SourceGenerator.Benchmarks.Demo-20261002-000000",
+          "HostEnvironmentInfo": {
+            "RuntimeVersion": ".NET 8.0.22 (8.0.2225.52707)",
+            "Architecture": "Arm64",
+            "ProcessorName": "Apple M1"
+          },
+          "Benchmarks": [
+            {
+              "Type": "ReadBench", "Method": "Read", "Parameters": "Count=1000",
+              "Statistics": { "Mean": 2500 },
+              "Memory": { "BytesAllocatedPerOperation": 262144 }
+            },
+            {
+              "Type": "ReadBench", "Method": "Read", "Parameters": "Count=1000",
+              "Statistics": null,
+              "Memory": null
+            },
+            {
+              "Type": "ReadBench", "Method": "NoDiagnoser", "Parameters": "Count=1000",
+              "Statistics": { "Mean": 10 },
+              "Memory": null
+            }
+          ]
+        }
+        """;
+
+    /// <summary>
+    /// A case that failed (null statistics) or was run without the memory diagnoser has no
+    /// measurement. Reading it as zero would make it the best result in the suite.
+    /// </summary>
+    [Fact]
+    public void CasesWithoutAMeasurementAreLeftOutRatherThanReadAsZero()
     {
-        RegressionCheck.ParseTimeToNanoseconds(value).ShouldBe(expected);
+        BenchmarkMeasurement measurement = RegressionCheck
+            .ParseResults(ExportWithOneFailedCase)
+            .ShouldHaveSingleItem();
+
+        measurement.Type.ShouldBe("ReadBench");
+        measurement.Method.ShouldBe("Read");
+        measurement.Parameters.ShouldBe("Count=1000");
+        measurement.MeanNanoseconds.ShouldBe(2500d);
+        measurement.AllocatedBytes.ShouldBe(262_144L);
     }
 
     /// <summary>
-    /// The failure this exists to prevent: BenchmarkDotNet picks whichever unit reads best, so a
-    /// method that slows from 900 μs to 1.2 ms is printed with two different units. Comparing the
-    /// printed numbers would read 1.2 as an improvement on 900.
+    /// BenchmarkDotNet writes <c>null</c> for an allocation figure it could not measure. That case
+    /// is left out like any other unmeasured one: it must not abort the whole read.
     /// </summary>
     [Fact]
-    public void ASlowdownThatChangesUnitsIsStillASlowdown()
+    public void ANullOrNonNumericFigureIsLeftOutNotThrown()
     {
-        double? before = RegressionCheck.ParseTimeToNanoseconds("900.0 μs");
-        double? after = RegressionCheck.ParseTimeToNanoseconds("1.2 ms");
+        const string json = """
+            { "Benchmarks": [
+              { "Type": "B", "Method": "NullBytes", "Parameters": "",
+                "Statistics": { "Mean": 5 }, "Memory": { "BytesAllocatedPerOperation": null } },
+              { "Type": "B", "Method": "TextBytes", "Parameters": "",
+                "Statistics": { "Mean": 5 }, "Memory": { "BytesAllocatedPerOperation": "n/a" } },
+              { "Type": "B", "Method": "NullMean", "Parameters": "",
+                "Statistics": { "Mean": null }, "Memory": { "BytesAllocatedPerOperation": 10 } },
+              { "Type": "B", "Method": "FractionalBytes", "Parameters": "",
+                "Statistics": { "Mean": 5 }, "Memory": { "BytesAllocatedPerOperation": 10.5 } },
+              { "Type": "B", "Method": "Measured", "Parameters": "",
+                "Statistics": { "Mean": 5 }, "Memory": { "BytesAllocatedPerOperation": 10 } }
+            ] }
+            """;
 
-        before.ShouldNotBeNull();
-        after.ShouldNotBeNull();
-        (after > before).ShouldBeTrue(
-            $"1.2 ms ({after} ns) must compare as slower than 900 μs ({before} ns)"
-        );
-    }
-
-    [Theory]
-    [InlineData("512 B", 512L)]
-    [InlineData("1.5 KB", 1536L)]
-    [InlineData("2 MB", 2_097_152L)]
-    [InlineData("1,024 KB", 1_048_576L)]
-    public void AllocationsNormaliseToBytes(string value, long expected)
-    {
-        RegressionCheck.ParseMemoryToBytes(value).ShouldBe(expected);
-    }
-
-    /// <summary>
-    /// "-", "NA" and "?" mean "no measurement", not zero. Parsing them as zero would make a
-    /// benchmark that failed to report allocations look like the best result in the suite, and
-    /// would then bake that into the baseline.
-    /// </summary>
-    [Theory]
-    [InlineData("-")]
-    [InlineData("NA")]
-    [InlineData("?")]
-    [InlineData("")]
-    public void AbsentMeasurementsDoNotParseAsZero(string value)
-    {
-        RegressionCheck.ParseMemoryToBytes(value).ShouldBeNull();
-        RegressionCheck.ParseTimeToNanoseconds(value).ShouldBeNull();
+        RegressionCheck.ParseResults(json).ShouldHaveSingleItem().Method.ShouldBe("Measured");
     }
 
     [Fact]
-    public void UnitInTheHeaderIsHonouredWhenTheValueHasNone()
+    public void AnExportWithNoBenchmarksYieldsNothing()
     {
-        string[] csv =
-        {
-            "Method,Count,Mean [ms],Allocated [KB]",
-            "SourceGeneratorReadAsync,1000,2.5,1.5",
-        };
-
-        BenchmarkMeasurement measurement = RegressionCheck.ParseCsv(csv).ShouldHaveSingleItem();
-
-        measurement.MeanNanoseconds.ShouldBe(2_500_000d);
-        measurement.AllocatedBytes.ShouldBe(1536L);
+        RegressionCheck.ParseResults("""{ "Benchmarks": [] }""").ShouldBeEmpty();
+        RegressionCheck.ParseResults("{}").ShouldBeEmpty();
     }
 
     [Fact]
-    public void CsvRowsParseIntoMeasurements()
+    public void TheEnvironmentOfARunIsReadFromItsExport()
     {
-        string[] csv =
+        DirectoryInfo directory = Directory.CreateTempSubdirectory("bench-env-");
+        try
         {
-            "Method,Count,Mean,Error,Allocated",
-            "SourceGeneratorReadAsync,100000,\"1,234.5 μs\",1.0 μs,\"2.5 MB\"",
-            "ReflectionParquetSerializerV6Read,100000,\"3,000.0 μs\",2.0 μs,\"9.0 MB\"",
-        };
+            System.IO.File.WriteAllText(
+                Path.Combine(directory.FullName, "Demo-report-full-compressed.json"),
+                ExportWithOneFailedCase
+            );
 
-        IReadOnlyList<BenchmarkMeasurement> measurements = RegressionCheck.ParseCsv(csv);
-
-        measurements.Count.ShouldBe(2);
-        BenchmarkMeasurement generated = measurements.Single(m =>
-            m.Method == "SourceGeneratorReadAsync"
-        );
-        generated.Count.ShouldBe(100_000);
-        generated.MeanNanoseconds.ShouldBe(1_234_500d);
-        generated.AllocatedBytes.ShouldBe(2_621_440L);
+            RegressionCheck
+                .ReadEnvironment(directory.FullName)
+                .ShouldBe(".NET 8.0.22 (8.0.2225.52707), Arm64, Apple M1");
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
     }
 
     // ──────────────────────────────────────────────────────────
@@ -122,8 +131,9 @@ public sealed class BenchmarkRegressionTests
         double meanNs,
         long allocated,
         string method = "Read",
-        int count = 1000
-    ) => new(method, count, meanNs, allocated);
+        int count = 1000,
+        string type = "ReadBench"
+    ) => new(type, method, $"Count={count}", meanNs, allocated);
 
     [Fact]
     public void AllocationGrowthBeyondToleranceIsARegression()
@@ -241,7 +251,7 @@ public sealed class BenchmarkRegressionTests
         BenchmarkComparison missing = comparisons
             .Where(c => c.Kind == RegressionKind.NotRun)
             .ShouldHaveSingleItem();
-        missing.Method.ShouldBe("Write");
+        missing.Key.ShouldBe("ReadBench.Write(Count=1000)");
     }
 
     [Fact]
@@ -255,7 +265,7 @@ public sealed class BenchmarkRegressionTests
         BenchmarkComparison added = comparisons
             .Where(c => c.Kind == RegressionKind.New)
             .ShouldHaveSingleItem();
-        added.Method.ShouldBe("ReadParallel");
+        added.Key.ShouldBe("ReadBench.ReadParallel(Count=1000)");
         RegressionCheck.HasFailures(comparisons, failOnTime: false).ShouldBeFalse();
     }
 
@@ -271,8 +281,72 @@ public sealed class BenchmarkRegressionTests
             new[] { Measurement(1000, 1_000_000, "Read", 100_000) }
         );
 
-        comparisons.ShouldContain(c => c.Kind == RegressionKind.New && c.Count == 100_000);
-        comparisons.ShouldContain(c => c.Kind == RegressionKind.NotRun && c.Count == 1_000);
+        comparisons.ShouldContain(c =>
+            c.Kind == RegressionKind.New
+            && c.Key.EndsWith("(Count=100000)", StringComparison.Ordinal)
+        );
+        comparisons.ShouldContain(c =>
+            c.Kind == RegressionKind.NotRun
+            && c.Key.EndsWith("(Count=1000)", StringComparison.Ordinal)
+        );
+    }
+
+    /// <summary>
+    /// <c>WriteSnappyAsync</c> is declared in two benchmark classes. Keyed by method and count
+    /// they were one benchmark, and whichever was read last silently replaced the other.
+    /// </summary>
+    [Fact]
+    public void ASharedMethodNameInTwoClassesIsTwoBenchmarks()
+    {
+        BenchmarkMeasurement tpch = Measurement(1000, 1_000_000, "WriteSnappyAsync", type: "Tpch");
+        BenchmarkMeasurement census = Measurement(
+            1000,
+            9_000_000,
+            "WriteSnappyAsync",
+            type: "Census"
+        );
+
+        IReadOnlyList<BenchmarkComparison> comparisons = RegressionCheck.Compare(
+            new[] { tpch, census },
+            new[] { tpch, census with { AllocatedBytes = 50_000_000 } }
+        );
+
+        comparisons.Count.ShouldBe(2);
+        comparisons
+            .Single(c => c.Kind == RegressionKind.AllocationRegression)
+            .Key.ShouldStartWith("Census.");
+        comparisons.Single(c => c.Kind == RegressionKind.Unchanged).Key.ShouldStartWith("Tpch.");
+    }
+
+    /// <summary>
+    /// A benchmark parameterised by something other than <c>Count</c> is one benchmark per
+    /// parameter set.
+    /// </summary>
+    [Fact]
+    public void ParametersOtherThanCountAreAPartOfTheIdentity()
+    {
+        var sixtyFour = new BenchmarkMeasurement("Pruning", "Open", "RowGroups=64", 1, 322_257);
+        var thousand = new BenchmarkMeasurement("Pruning", "Open", "RowGroups=1024", 1, 5_107_009);
+
+        sixtyFour.Key.ShouldNotBe(thousand.Key);
+
+        IReadOnlyList<BenchmarkComparison> comparisons = RegressionCheck.Compare(
+            new[] { sixtyFour, thousand },
+            new[] { sixtyFour, thousand }
+        );
+
+        comparisons.ShouldAllBe(c => c.Kind == RegressionKind.Unchanged);
+        comparisons.Count.ShouldBe(2);
+    }
+
+    [Fact]
+    public void TwoMeasurementsWithOneIdentityAreRefusedRatherThanOneDropped()
+    {
+        BenchmarkMeasurement one = Measurement(1, 100);
+
+        Should.Throw<InvalidOperationException>(() =>
+            RegressionCheck.Compare(new[] { one, one }, new[] { one })
+        );
     }
 
     // ──────────────────────────────────────────────────────────
@@ -294,7 +368,8 @@ public sealed class BenchmarkRegressionTests
 
         restored.Count.ShouldBe(2);
         BenchmarkMeasurement read = restored.Single(m => m.Method == "SourceGeneratorReadAsync");
-        read.Count.ShouldBe(100_000);
+        read.Type.ShouldBe("ReadBench");
+        read.Parameters.ShouldBe("Count=100000");
         read.AllocatedBytes.ShouldBe(2_621_440L);
         read.MeanNanoseconds.ShouldBe(1_234_500d);
     }
@@ -314,6 +389,56 @@ public sealed class BenchmarkRegressionTests
             .Compare(restored, measurements)
             .ShouldHaveSingleItem()
             .Kind.ShouldBe(RegressionKind.Unchanged);
+    }
+
+    [Fact]
+    public void ABaselineRecordsWhereItWasTaken()
+    {
+        string json = RegressionCheck.WriteBaseline(
+            new[] { Measurement(1, 100) },
+            ".NET 8.0.22, Arm64, Apple M1",
+            "quiet laptop, load 1.2"
+        );
+
+        DirectoryInfo directory = Directory.CreateTempSubdirectory("bench-baseline-");
+        try
+        {
+            string path = Path.Combine(directory.FullName, "baseline.json");
+            System.IO.File.WriteAllText(path, json);
+
+            RegressionCheck
+                .ReadBaselineEnvironment(path)
+                .ShouldBe(".NET 8.0.22, Arm64, Apple M1; quiet laptop, load 1.2");
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// A schema 1 baseline keyed measurements by method and count only. Comparing it against
+    /// current results would mismatch silently, so it is refused until it is re-recorded.
+    /// </summary>
+    [Fact]
+    public void ASchemaOneBaselineIsRefusedRatherThanMismatchedSilently()
+    {
+        const string schemaOne = """
+            { "schema": 1, "measurements": [
+              { "method": "Read", "count": 1000, "meanNanoseconds": 1.0, "allocatedBytes": 100 } ] }
+            """;
+
+        Should.Throw<BaselineFormatException>(() => RegressionCheck.ParseBaseline(schemaOne));
+    }
+
+    [Fact]
+    public void ABaselineWithTwoMeasurementsOfOneIdentityIsRefused()
+    {
+        string json = RegressionCheck.WriteBaseline(
+            new[] { Measurement(1, 100), Measurement(1, 5) }
+        );
+
+        Should.Throw<BaselineFormatException>(() => RegressionCheck.ParseBaseline(json));
     }
 
     [Fact]

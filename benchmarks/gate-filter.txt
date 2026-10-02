@@ -1,0 +1,18 @@
+# The benchmarks the regression gate runs and holds a baseline for (benchmarks/baseline.json).
+# One BenchmarkDotNet glob per line, matched against Namespace.Class.Method. Blank lines and
+# lines starting with # are ignored.
+#
+# The set is small and allocation-focused on purpose. Allocated bytes are the same on any machine
+# running the same runtime, so they can gate on a shared CI runner; wall-clock cannot, and is not
+# compared. Every entry is in-memory (no network, no dataset download) and fast enough at
+# Count=1000,10000 for a weekly run. Adding a line here without re-recording the baseline fails
+# the gate (--fail-on-new); removing one fails it too (--fail-on-not-run).
+*ScalingSerializationBenchmark.SourceGeneratorWriteAsync
+*ScalingSerializationBenchmark.SourceGeneratorWriteBatchedAsync
+*ScalingDeserializationBenchmark.SourceGeneratorReadAsync
+*ScalingDeserializationBenchmark.SourceGeneratorReadArrayAsync
+*GuidInterchangeBenchmark.SourceGeneratorGuidWriteAsync
+*ColumnarHandoffBenchmark.ColumnarWriteEndToEnd
+*ColumnarHandoffBenchmark.TransposeOnly
+*ColumnBatchAggregationBenchmark.ColumnBatchScalarAggregate
+*StringDeduplicationRoutineBenchmark.SpanKeyedDeduplication

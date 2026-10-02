@@ -5,6 +5,8 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using BenchmarkDotNet.Attributes;
+using BenchmarkDotNet.Configs;
+using BenchmarkDotNet.Exporters.Json;
 using BenchmarkDotNet.Jobs;
 using BenchmarkDotNet.Running;
 using Parquet.Serialization;
@@ -338,6 +340,13 @@ internal static class Program
             benchmarkArgs.Add(args[i]);
         }
 
-        BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(benchmarkArgs.ToArray());
+        // The regression gate (tools/BenchmarkSummaryGenerator --baseline) reads the compressed JSON
+        // export: it carries the benchmark type and the full parameter set, and exact allocated
+        // bytes, none of which the CSV column order or its rounded units can give it reliably.
+        IConfig config = DefaultConfig.Instance.AddExporter(JsonExporter.FullCompressed);
+
+        BenchmarkSwitcher
+            .FromAssembly(typeof(Program).Assembly)
+            .Run(benchmarkArgs.ToArray(), config);
     }
 }

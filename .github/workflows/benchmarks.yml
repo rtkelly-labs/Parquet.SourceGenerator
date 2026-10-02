@@ -32,21 +32,35 @@ on:
         description: 'Branch to benchmark and commit updates to (defaults to current)'
         required: false
         default: ''
+      gate_only:
+        description: 'Run only the regression gate (skip the full headline suite and its README refresh)'
+        required: false
+        default: false
+        type: boolean
+      update_baseline:
+        description: 'Gate job: record this run as a candidate baseline (uploaded as an artifact) instead of checking against benchmarks/baseline.json'
+        required: false
+        default: false
+        type: boolean
   issue_comment:
     types: [created]
 
+# Read-only by default. Each job widens only what it uses, and `issues: write` is held by the
+# notification job alone, which runs no repository code (same shape as mutation.yml and fuzz.yml).
 permissions:
-  contents: write
-  pull-requests: write
-  issues: write
+  contents: read
 
 jobs:
   run-benchmarks:
     name: Run BenchmarkDotNet Performance Suite
-    # Run on scheduled cron, manual dispatch, OR when an authorized user comments /benchmark on a PR
+    permissions:
+      contents: write
+      pull-requests: write
+    # Run on scheduled cron, manual dispatch (unless gate_only), OR when an authorized user
+    # comments /benchmark on a PR
     if: |
       github.event_name == 'schedule' ||
-      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_dispatch' && !inputs.gate_only) ||
       (github.event_name == 'issue_comment' &&
        github.event.issue.pull_request != null &&
        contains(fromJson('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association) &&
@@ -218,6 +232,7 @@ jobs:
           gh pr comment "$PR_NUMBER" --repo "$REPO" --body-file benchmark-summary.md
 
       - name: Upload Benchmark Results Artifacts
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: benchmark-results
@@ -226,3 +241,170 @@ jobs:
             BenchmarkDotNet.Artifacts/results/*.html
             BenchmarkDotNet.Artifacts/results/*.md
             BenchmarkDotNet.Artifacts/results/*.json
+
+  # The regression gate (#404, #412, #408, #469). It is its own job, with its own small run, for
+  # three reasons. The headline suite above is the whole library at several scales and takes far
+  # too long to gate on. Gating a curated set means the baseline can hold only what is stable on a
+  # shared runner: allocated bytes, not wall-clock. And a gate that shares a job with a PR-opening
+  # step fails or passes with it; this one only reads.
+  #
+  # The set lives in benchmarks/gate-filter.txt, the reference in benchmarks/baseline.json (keyed
+  # by class + method + parameters). The runtime is pinned to .NET 8 with DOTNET_ROLL_FORWARD
+  # because the benchmark project rolls forward to the latest installed major, and allocations
+  # differ between runtimes.
+  regression-gate:
+    name: Allocation regression gate
+    if: |
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    env:
+      BENCHMARK_BASELINE: benchmarks/baseline.json
+      BENCHMARK_GATE_FILTER: benchmarks/gate-filter.txt
+      # The gated run only ever uses these two scales; the baseline holds exactly them.
+      GATE_COUNTS: 'Count=1000,10000'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.inputs.target_branch || github.ref_name }}
+          lfs: true
+
+      - name: Setup .NET 8 SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore dependencies
+        run: dotnet restore benchmarks/Parquet.SourceGenerator.Benchmarks/Parquet.SourceGenerator.Benchmarks.csproj
+
+      - name: Build benchmarks (Release)
+        run: dotnet build benchmarks/Parquet.SourceGenerator.Benchmarks/Parquet.SourceGenerator.Benchmarks.csproj --configuration Release --no-restore
+
+      - name: Execute the gated benchmarks
+        env:
+          DOTNET_ROLL_FORWARD: Minor
+        run: |
+          set -euo pipefail
+          mapfile -t filters < <(grep -v -e '^[[:space:]]*#' -e '^[[:space:]]*$' "$BENCHMARK_GATE_FILTER")
+          if [ "${#filters[@]}" -eq 0 ]; then
+            echo "::error::$BENCHMARK_GATE_FILTER lists no benchmarks. A gate that runs nothing passes vacuously."
+            exit 1
+          fi
+          echo "Gated benchmarks (${#filters[@]}):"
+          printf '  %s\n' "${filters[@]}"
+          dotnet run -c Release --project benchmarks/Parquet.SourceGenerator.Benchmarks/Parquet.SourceGenerator.Benchmarks.csproj --no-build -- \
+            --filter "${filters[@]}" --params "$GATE_COUNTS" --artifacts BenchmarkDotNet.Artifacts/gate
+
+      - name: Record a candidate baseline
+        if: github.event_name == 'workflow_dispatch' && inputs.update_baseline
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          # Never written back to the repository from here: a recording made on a shared runner is
+          # proposed as an artifact, and a person commits it after reading the diff (#412).
+          dotnet run -c Release --project tools/BenchmarkSummaryGenerator/BenchmarkSummaryGenerator.csproj -- \
+            BenchmarkDotNet.Artifacts/gate/results --baseline candidate-baseline.json --update-baseline \
+            --recorded-on "GitHub Actions ubuntu-latest, $RUN_URL"
+          echo "Candidate baseline recorded: download the \`benchmark-baseline-candidate\` artifact, review the diff against $BENCHMARK_BASELINE, and commit it in a pull request." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the candidate baseline
+        if: github.event_name == 'workflow_dispatch' && inputs.update_baseline
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: benchmark-baseline-candidate
+          path: candidate-baseline.json
+          if-no-files-found: error
+
+      # The point of the whole regression-check machinery: without this step
+      # RegressionCheck.cs, HasFailures and the allocation tolerance gate nothing (#404).
+      - name: Benchmark Regression Gate
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.update_baseline) }}
+        run: |
+          set -euo pipefail
+
+          # A missing or empty baseline must fail rather than bootstrap itself green: the tool
+          # cannot tell "first ever run" from "somebody deleted the reference" (#412), and a run
+          # that records its own regressed numbers as the new truth hides them forever after.
+          if [ ! -f "$BENCHMARK_BASELINE" ]; then
+            echo "::error::No benchmark baseline at '$BENCHMARK_BASELINE'. Record one (docs/BENCHMARKS.md) and commit it."
+            exit 1
+          fi
+
+          measurements=$(jq '(.measurements // []) | length' "$BENCHMARK_BASELINE")
+          if [ -z "$measurements" ] || [ "$measurements" = "null" ] || [ "$measurements" -eq 0 ]; then
+            echo "::error::Baseline '$BENCHMARK_BASELINE' contains no measurements. Re-record it."
+            exit 1
+          fi
+          echo "Checking against $measurements baseline measurement(s)."
+
+          before=$(sha256sum "$BENCHMARK_BASELINE" | cut -d' ' -f1)
+
+          # --fail-on-not-run: every baseline benchmark must have executed, or one vanished.
+          # --fail-on-new: every executed benchmark must be in the baseline, or it is ungated.
+          # --no-time: the baseline was recorded on other hardware, so wall-clock is not compared.
+          set +e
+          dotnet run -c Release --project tools/BenchmarkSummaryGenerator/BenchmarkSummaryGenerator.csproj \
+            -- BenchmarkDotNet.Artifacts/gate/results --baseline "$BENCHMARK_BASELINE" --report benchmark-regression.md \
+            --fail-on-not-run --fail-on-new --no-time
+          status=$?
+          set -e
+
+          if [ -f benchmark-regression.md ]; then
+            cat benchmark-regression.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          after=$(sha256sum "$BENCHMARK_BASELINE" | cut -d' ' -f1)
+          if [ "$before" != "$after" ]; then
+            echo "::error::The regression check rewrote its own baseline. A check run must never modify '$BENCHMARK_BASELINE'."
+            exit 1
+          fi
+
+          exit $status
+
+      - name: Upload gate results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: benchmark-gate-results
+          path: |
+            BenchmarkDotNet.Artifacts/gate/results/*.json
+            BenchmarkDotNet.Artifacts/gate/results/*.csv
+            benchmark-regression.md
+          if-no-files-found: warn
+
+  # A scheduled gate that only turns red is muted by its own history (#564). When a job above
+  # fails on the Sunday schedule, open one `area:ci` issue, or comment on the open one. A separate
+  # job so the jobs that run repository code never hold `issues: write`; it needs no checkout.
+  # Same pattern as mutation.yml, fuzz.yml and metrics-oracle.yml.
+  notify-failure:
+    name: Report scheduled failure
+    needs: [run-benchmarks, regression-gate]
+    if: ${{ always() && github.event_name == 'schedule' && (needs.run-benchmarks.result == 'failure' || needs.regression-gate.result == 'failure') }}
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Open or update the failure issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          HEADLINE_RESULT: ${{ needs.run-benchmarks.result }}
+          GATE_RESULT: ${{ needs.regression-gate.result }}
+        run: |
+          set -euo pipefail
+          title="[CI] scheduled benchmarks failed"
+          body="The scheduled benchmarks workflow failed: [run]($RUN_URL). Headline suite: $HEADLINE_RESULT. Regression gate: $GATE_RESULT. Open the run for the failing step; the gate's report is in the job summary. This issue is updated with a comment on each further failure; close it once the workflow is green again."
+          gh label create "area:ci" --color B60205 --description "CI and workflow gates" >/dev/null 2>&1 || true
+          existing=$(gh issue list --state open --label "area:ci" --search "\"$title\" in:title" \
+            --json number,title --jq "[.[] | select(.title == \"$title\")][0].number // empty")
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "Failed again: [run]($RUN_URL). Headline suite: $HEADLINE_RESULT. Regression gate: $GATE_RESULT."
+          else
+            gh issue create --title "$title" --body "$body" --label "area:ci"
+          fi

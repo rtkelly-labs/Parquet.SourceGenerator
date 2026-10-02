@@ -12,24 +12,42 @@ namespace Parquet.SourceGenerator.Tools;
 /// One benchmark result reduced to canonical units.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Canonical units are the whole point of this type. BenchmarkDotNet writes whichever unit reads
-/// best — "1,234.5 μs" in one run and "1.23 ms" in the next as a method gets slower — so comparing
-/// the printed numbers directly would report a 1000x improvement for a genuine slowdown. Everything
-/// is normalised to nanoseconds and bytes before any comparison happens.
+/// best in its tables, so comparing printed numbers directly would report a 1000x improvement for a
+/// genuine slowdown. Everything is nanoseconds and bytes, read from the JSON export where both are
+/// exact numbers.
+/// </para>
+/// <para>
+/// A measurement is identified by the declaring class, the method and the full parameter set
+/// (<see cref="Key"/>). Keying on method and <c>Count</c> alone collided where one method name is
+/// declared in two classes (<c>WriteSnappyAsync</c>) and where a benchmark is parameterised by
+/// something other than <c>Count</c>.
+/// </para>
 /// </remarks>
+/// <param name="Type">The benchmark class, without its namespace.</param>
+/// <param name="Method">The benchmark method.</param>
+/// <param name="Parameters">Every <c>[Params]</c> value of the case, as BenchmarkDotNet prints them (<c>Count=1000</c>); empty when unparameterised.</param>
+/// <param name="MeanNanoseconds">Mean wall-clock per operation. Indicative only.</param>
+/// <param name="AllocatedBytes">Managed bytes allocated per operation.</param>
 public sealed record BenchmarkMeasurement(
+    string Type,
     string Method,
-    int Count,
+    string Parameters,
     double MeanNanoseconds,
     long AllocatedBytes
-);
+)
+{
+    /// <summary>The identity two measurements must share to be compared.</summary>
+    public string Key =>
+        string.IsNullOrEmpty(Parameters) ? $"{Type}.{Method}" : $"{Type}.{Method}({Parameters})";
+}
 
 /// <summary>
 /// How one benchmark compares against its recorded baseline.
 /// </summary>
 public sealed record BenchmarkComparison(
-    string Method,
-    int Count,
+    string Key,
     BenchmarkMeasurement? Baseline,
     BenchmarkMeasurement? Current,
     RegressionKind Kind,
@@ -61,6 +79,20 @@ public enum RegressionKind
 }
 
 /// <summary>
+/// A baseline file this tool cannot trust: wrong schema, or a measurement without an identity.
+/// </summary>
+public sealed class BaselineFormatException : Exception
+{
+    public BaselineFormatException() { }
+
+    public BaselineFormatException(string message)
+        : base(message) { }
+
+    public BaselineFormatException(string message, Exception innerException)
+        : base(message, innerException) { }
+}
+
+/// <summary>
 /// Compares a BenchmarkDotNet run against a committed baseline.
 /// </summary>
 /// <remarks>
@@ -75,11 +107,15 @@ public enum RegressionKind
 /// </para>
 /// <para>
 /// Use <c>--fail-on-time</c> when running on a quiet machine where the wall-clock number means
-/// something.
+/// something, and <c>--no-time</c> when the baseline was recorded on different hardware than the
+/// run, where a time comparison means nothing at all.
 /// </para>
 /// </remarks>
 public static class RegressionCheck
 {
+    /// <summary>The baseline file schema this tool reads and writes.</summary>
+    public const int BaselineSchema = 2;
+
     /// <summary>Default allowance for an allocation increase before it counts as a regression.</summary>
     public const double DefaultAllocationTolerance = 0.05;
 
@@ -106,27 +142,18 @@ public static class RegressionCheck
         ArgumentNullException.ThrowIfNull(baseline);
         ArgumentNullException.ThrowIfNull(current);
 
-        Dictionary<(string, int), BenchmarkMeasurement> baselineByKey = baseline.ToDictionary(m =>
-            (m.Method, m.Count)
-        );
-        Dictionary<(string, int), BenchmarkMeasurement> currentByKey = current.ToDictionary(m =>
-            (m.Method, m.Count)
-        );
+        Dictionary<string, BenchmarkMeasurement> baselineByKey = ByKey(baseline);
+        Dictionary<string, BenchmarkMeasurement> currentByKey = ByKey(current);
 
         var results = new List<BenchmarkComparison>();
 
-        foreach (
-            BenchmarkMeasurement now in current
-                .OrderBy(m => m.Method, StringComparer.Ordinal)
-                .ThenBy(m => m.Count)
-        )
+        foreach (BenchmarkMeasurement now in current.OrderBy(m => m.Key, StringComparer.Ordinal))
         {
-            if (!baselineByKey.TryGetValue((now.Method, now.Count), out BenchmarkMeasurement? was))
+            if (!baselineByKey.TryGetValue(now.Key, out BenchmarkMeasurement? was))
             {
                 results.Add(
                     new BenchmarkComparison(
-                        now.Method,
-                        now.Count,
+                        now.Key,
                         null,
                         now,
                         RegressionKind.New,
@@ -141,18 +168,13 @@ public static class RegressionCheck
 
         // A benchmark that vanished is reported rather than ignored. Silence here would let a
         // filter that skips half the suite read as "everything passed".
-        foreach (
-            BenchmarkMeasurement was in baseline
-                .OrderBy(m => m.Method, StringComparer.Ordinal)
-                .ThenBy(m => m.Count)
-        )
+        foreach (BenchmarkMeasurement was in baseline.OrderBy(m => m.Key, StringComparer.Ordinal))
         {
-            if (!currentByKey.ContainsKey((was.Method, was.Count)))
+            if (!currentByKey.ContainsKey(was.Key))
             {
                 results.Add(
                     new BenchmarkComparison(
-                        was.Method,
-                        was.Count,
+                        was.Key,
                         was,
                         null,
                         RegressionKind.NotRun,
@@ -163,6 +185,26 @@ public static class RegressionCheck
         }
 
         return results;
+    }
+
+    private static Dictionary<string, BenchmarkMeasurement> ByKey(
+        IReadOnlyList<BenchmarkMeasurement> measurements
+    )
+    {
+        var byKey = new Dictionary<string, BenchmarkMeasurement>(StringComparer.Ordinal);
+        foreach (BenchmarkMeasurement measurement in measurements)
+        {
+            // Two entries with one identity would make one of them unreachable: whichever was
+            // read second would silently replace the first.
+            if (!byKey.TryAdd(measurement.Key, measurement))
+            {
+                throw new InvalidOperationException(
+                    $"Two measurements share the identity '{measurement.Key}'."
+                );
+            }
+        }
+
+        return byKey;
     }
 
     private static BenchmarkComparison CompareOne(
@@ -183,8 +225,7 @@ public static class RegressionCheck
                     : double.PositiveInfinity;
 
             return new BenchmarkComparison(
-                now.Method,
-                now.Count,
+                now.Key,
                 was,
                 now,
                 RegressionKind.AllocationRegression,
@@ -201,8 +242,7 @@ public static class RegressionCheck
             double percent =
                 (now.MeanNanoseconds - was.MeanNanoseconds) * 100.0 / was.MeanNanoseconds;
             return new BenchmarkComparison(
-                now.Method,
-                now.Count,
+                now.Key,
                 was,
                 now,
                 RegressionKind.TimeRegression,
@@ -223,8 +263,7 @@ public static class RegressionCheck
         {
             double percent = (was.AllocatedBytes - now.AllocatedBytes) * 100.0 / was.AllocatedBytes;
             return new BenchmarkComparison(
-                now.Method,
-                now.Count,
+                now.Key,
                 was,
                 now,
                 RegressionKind.Improved,
@@ -236,8 +275,7 @@ public static class RegressionCheck
         }
 
         return new BenchmarkComparison(
-            now.Method,
-            now.Count,
+            now.Key,
             was,
             now,
             RegressionKind.Unchanged,
@@ -246,212 +284,133 @@ public static class RegressionCheck
     }
 
     // ──────────────────────────────────────────────────────────
-    //  PARSING BENCHMARKDOTNET OUTPUT
+    //  READING BENCHMARKDOTNET OUTPUT
     // ──────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Reads every <c>*-report.csv</c> in a BenchmarkDotNet results directory.
+    /// Reads every <c>*-report-full-compressed.json</c> in a BenchmarkDotNet results directory.
     /// </summary>
+    /// <remarks>
+    /// Cases that did not produce a measurement (a failed job reports a null statistics block) and
+    /// cases run without the memory diagnoser are left out rather than read as zero: a benchmark
+    /// that failed to report must not look like the best result in the suite, and must surface as
+    /// "not run" when a baseline expects it.
+    /// </remarks>
     public static IReadOnlyList<BenchmarkMeasurement> ReadResults(string resultsDirectory)
     {
         if (!Directory.Exists(resultsDirectory))
             return Array.Empty<BenchmarkMeasurement>();
 
-        var measurements = new Dictionary<(string, int), BenchmarkMeasurement>();
-
-        foreach (string csvFile in Directory.GetFiles(resultsDirectory, "*-report.csv"))
+        var measurements = new List<BenchmarkMeasurement>();
+        foreach (
+            string file in Directory
+                .GetFiles(resultsDirectory, "*-report-full-compressed.json")
+                .OrderBy(f => f, StringComparer.Ordinal)
+        )
         {
-            foreach (BenchmarkMeasurement measurement in ParseCsv(File.ReadAllLines(csvFile)))
-            {
-                measurements[(measurement.Method, measurement.Count)] = measurement;
-            }
+            measurements.AddRange(ParseResults(File.ReadAllText(file)));
         }
 
-        return measurements
-            .Values.OrderBy(m => m.Method, StringComparer.Ordinal)
-            .ThenBy(m => m.Count)
-            .ToList();
+        _ = ByKey(measurements);
+        return measurements.OrderBy(m => m.Key, StringComparer.Ordinal).ToList();
     }
 
     /// <summary>
-    /// Parses the rows of one BenchmarkDotNet CSV report.
+    /// Parses the content of one BenchmarkDotNet JSON export.
     /// </summary>
-    public static IReadOnlyList<BenchmarkMeasurement> ParseCsv(IReadOnlyList<string> lines)
+    public static IReadOnlyList<BenchmarkMeasurement> ParseResults(string json)
     {
-        ArgumentNullException.ThrowIfNull(lines);
-        if (lines.Count <= 1)
-            return Array.Empty<BenchmarkMeasurement>();
+        ArgumentNullException.ThrowIfNull(json);
 
-        string[] headers = Program.ParseCsvLine(lines[0]);
-        int methodIndex = IndexOfHeader(headers, "Method");
-        int countIndex = IndexOfHeader(headers, "Count");
-        int meanIndex = IndexOfHeader(headers, "Mean");
-        int allocatedIndex = IndexOfHeader(headers, "Allocated");
-
-        if (methodIndex < 0 || meanIndex < 0)
-            return Array.Empty<BenchmarkMeasurement>();
-
-        // BenchmarkDotNet puts the unit either in the value ("1,234.5 μs") or in the header
-        // ("Mean [ns]"), depending on the exporter's configuration. Both have to be understood, or
-        // the numbers silently become unitless and comparisons are nonsense.
-        string? meanHeaderUnit = UnitFromHeader(headers[meanIndex]);
-        string? allocatedHeaderUnit =
-            allocatedIndex >= 0 ? UnitFromHeader(headers[allocatedIndex]) : null;
-
+        using var document = JsonDocument.Parse(json);
         var results = new List<BenchmarkMeasurement>();
 
-        for (int i = 1; i < lines.Count; i++)
+        if (
+            !document.RootElement.TryGetProperty("Benchmarks", out JsonElement benchmarks)
+            || benchmarks.ValueKind != JsonValueKind.Array
+        )
         {
-            string[] parts = Program.ParseCsvLine(lines[i]);
-            if (parts.Length <= methodIndex || parts.Length <= meanIndex)
-                continue;
+            return results;
+        }
 
-            string method = parts[methodIndex].Trim();
-            if (string.IsNullOrEmpty(method))
-                continue;
-
-            double? mean = ParseTimeToNanoseconds(parts[meanIndex], meanHeaderUnit);
-            if (mean is null)
-                continue;
-
-            long allocated = 0;
-            if (allocatedIndex >= 0 && allocatedIndex < parts.Length)
+        foreach (JsonElement benchmark in benchmarks.EnumerateArray())
+        {
+            if (
+                !benchmark.TryGetProperty("Statistics", out JsonElement statistics)
+                || statistics.ValueKind != JsonValueKind.Object
+                || !statistics.TryGetProperty("Mean", out JsonElement mean)
+                || mean.ValueKind != JsonValueKind.Number
+                || !benchmark.TryGetProperty("Memory", out JsonElement memory)
+                || memory.ValueKind != JsonValueKind.Object
+                || !memory.TryGetProperty("BytesAllocatedPerOperation", out JsonElement bytes)
+                || bytes.ValueKind != JsonValueKind.Number
+                || !bytes.TryGetInt64(out long allocated)
+                || allocated < 0
+            )
             {
-                allocated = ParseMemoryToBytes(parts[allocatedIndex], allocatedHeaderUnit) ?? 0;
+                continue;
             }
 
-            int count = 0;
-            if (countIndex >= 0 && countIndex < parts.Length)
-            {
-                _ = int.TryParse(
-                    parts[countIndex].Replace(",", "", StringComparison.Ordinal).Trim(),
-                    NumberStyles.Any,
-                    CultureInfo.InvariantCulture,
-                    out count
-                );
-            }
+            string type = StringProperty(benchmark, "Type");
+            string method = StringProperty(benchmark, "Method");
+            if (type.Length == 0 || method.Length == 0)
+                continue;
 
-            results.Add(new BenchmarkMeasurement(method, count, mean.Value, allocated));
+            results.Add(
+                new BenchmarkMeasurement(
+                    type,
+                    method,
+                    StringProperty(benchmark, "Parameters"),
+                    mean.GetDouble(),
+                    allocated
+                )
+            );
         }
 
         return results;
     }
 
     /// <summary>
-    /// Converts a BenchmarkDotNet duration to nanoseconds.
+    /// Describes the runtime and hardware a results directory was produced on.
     /// </summary>
-    public static double? ParseTimeToNanoseconds(string value, string? headerUnit = null)
+    /// <returns>For example <c>.NET 8.0.22, Arm64, Apple M1</c>, or an empty string when unknown.</returns>
+    public static string ReadEnvironment(string resultsDirectory)
     {
-        string cleaned = Clean(value);
-        if (cleaned.Length == 0)
-            return null;
-
-        string unit = ExtractUnit(ref cleaned) ?? headerUnit ?? "ns";
-        if (
-            !double.TryParse(
-                cleaned,
-                NumberStyles.Any,
-                CultureInfo.InvariantCulture,
-                out double number
-            )
-        )
-            return null;
-
-        // "us" and "μs" both appear depending on the console encoding the run happened under.
-        return unit switch
-        {
-            "ns" => number,
-            "us" or "μs" or "µs" => number * 1_000d,
-            "ms" => number * 1_000_000d,
-            "s" => number * 1_000_000_000d,
-            _ => null,
-        };
-    }
-
-    /// <summary>
-    /// Converts a BenchmarkDotNet allocation figure to bytes.
-    /// </summary>
-    public static long? ParseMemoryToBytes(string value, string? headerUnit = null)
-    {
-        string cleaned = Clean(value);
-        if (cleaned.Length == 0)
-            return null;
-
-        string unit = ExtractUnit(ref cleaned) ?? headerUnit ?? "B";
-        if (
-            !double.TryParse(
-                cleaned,
-                NumberStyles.Any,
-                CultureInfo.InvariantCulture,
-                out double number
-            )
-        )
-            return null;
-
-        double bytes = unit.ToUpperInvariant() switch
-        {
-            "B" => number,
-            "KB" => number * 1024d,
-            "MB" => number * 1024d * 1024d,
-            "GB" => number * 1024d * 1024d * 1024d,
-            _ => double.NaN,
-        };
-
-        return double.IsNaN(bytes) ? null : (long)Math.Round(bytes);
-    }
-
-    private static string Clean(string value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
+        if (!Directory.Exists(resultsDirectory))
             return string.Empty;
 
-        string cleaned = value.Replace(",", "", StringComparison.Ordinal).Trim();
-
-        // BenchmarkDotNet writes "-" for a column that does not apply and "NA"/"?" where a run
-        // produced nothing. None of them are zero, so they must not parse as zero.
-        return cleaned is "-" or "NA" or "?" or "N/A" ? string.Empty : cleaned;
-    }
-
-    private static string? ExtractUnit(ref string cleaned)
-    {
-        int split = cleaned.Length;
-        while (split > 0 && !char.IsDigit(cleaned[split - 1]) && cleaned[split - 1] != '.')
+        foreach (
+            string file in Directory
+                .GetFiles(resultsDirectory, "*-report-full-compressed.json")
+                .OrderBy(f => f, StringComparer.Ordinal)
+        )
         {
-            split--;
+            using var document = JsonDocument.Parse(File.ReadAllText(file));
+            if (
+                document.RootElement.TryGetProperty("HostEnvironmentInfo", out JsonElement host)
+                && host.ValueKind == JsonValueKind.Object
+            )
+            {
+                return string.Join(
+                    ", ",
+                    new[]
+                    {
+                        StringProperty(host, "RuntimeVersion"),
+                        StringProperty(host, "Architecture"),
+                        StringProperty(host, "ProcessorName"),
+                    }.Where(part => part.Length > 0)
+                );
+            }
         }
 
-        if (split == cleaned.Length)
-            return null;
-
-        string unit = cleaned.Substring(split).Trim();
-        cleaned = cleaned.Substring(0, split).Trim();
-        return unit.Length == 0 ? null : unit;
+        return string.Empty;
     }
 
-    private static string? UnitFromHeader(string header)
-    {
-        int open = header.IndexOf('[', StringComparison.Ordinal);
-        int close = header.IndexOf(']', StringComparison.Ordinal);
-        return open >= 0 && close > open
-            ? header.Substring(open + 1, close - open - 1).Trim()
-            : null;
-    }
-
-    private static int IndexOfHeader(string[] headers, string name)
-    {
-        for (int i = 0; i < headers.Length; i++)
-        {
-            string header = headers[i].Trim();
-            int bracket = header.IndexOf('[', StringComparison.Ordinal);
-            if (bracket >= 0)
-                header = header.Substring(0, bracket).Trim();
-
-            if (string.Equals(header, name, StringComparison.OrdinalIgnoreCase))
-                return i;
-        }
-
-        return -1;
-    }
+    private static string StringProperty(JsonElement element, string name) =>
+        element.TryGetProperty(name, out JsonElement value)
+        && value.ValueKind == JsonValueKind.String
+            ? value.GetString() ?? string.Empty
+            : string.Empty;
 
     // ──────────────────────────────────────────────────────────
     //  BASELINE FILE
@@ -469,8 +428,26 @@ public static class RegressionCheck
     }
 
     /// <summary>
+    /// Reads the free-text description of where a baseline was recorded, or an empty string.
+    /// </summary>
+    public static string ReadBaselineEnvironment(string path)
+    {
+        if (!File.Exists(path))
+            return string.Empty;
+
+        using var document = JsonDocument.Parse(File.ReadAllText(path));
+        string environment = StringProperty(document.RootElement, "environment");
+        string recordedOn = StringProperty(document.RootElement, "recordedOn");
+        return string.Join("; ", new[] { environment, recordedOn }.Where(s => s.Length > 0));
+    }
+
+    /// <summary>
     /// Parses baseline JSON.
     /// </summary>
+    /// <exception cref="BaselineFormatException">
+    /// The file is a schema this tool does not read. A schema 1 baseline keyed measurements by
+    /// method and count only, and comparing one against current results would silently mismatch.
+    /// </exception>
     public static IReadOnlyList<BenchmarkMeasurement> ParseBaseline(string json)
     {
         // JsonDocument rather than JsonSerializer: no reflection, so nothing here trips the trim
@@ -482,17 +459,48 @@ public static class RegressionCheck
             return Array.Empty<BenchmarkMeasurement>();
         }
 
+        int schema =
+            document.RootElement.TryGetProperty("schema", out JsonElement schemaElement)
+            && schemaElement.ValueKind == JsonValueKind.Number
+                ? schemaElement.GetInt32()
+                : 0;
+        if (schema != BaselineSchema)
+        {
+            throw new BaselineFormatException(
+                $"Baseline schema {schema} is not readable; this tool reads schema {BaselineSchema}. Re-record it with --update-baseline."
+            );
+        }
+
         var results = new List<BenchmarkMeasurement>();
         foreach (JsonElement element in measurements.EnumerateArray())
         {
+            string type = StringProperty(element, "type");
+            string method = StringProperty(element, "method");
+            if (type.Length == 0 || method.Length == 0)
+            {
+                throw new BaselineFormatException(
+                    "A baseline measurement has no type or method; it cannot be identified."
+                );
+            }
+
             results.Add(
                 new BenchmarkMeasurement(
-                    element.GetProperty("method").GetString() ?? string.Empty,
-                    element.TryGetProperty("count", out JsonElement count) ? count.GetInt32() : 0,
+                    type,
+                    method,
+                    StringProperty(element, "parameters"),
                     element.GetProperty("meanNanoseconds").GetDouble(),
                     element.GetProperty("allocatedBytes").GetInt64()
                 )
             );
+        }
+
+        try
+        {
+            _ = ByKey(results);
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new BaselineFormatException(ex.Message, ex);
         }
 
         return results;
@@ -501,21 +509,37 @@ public static class RegressionCheck
     /// <summary>
     /// Renders a baseline file.
     /// </summary>
-    public static string WriteBaseline(IReadOnlyList<BenchmarkMeasurement> measurements)
+    /// <param name="measurements">What to record.</param>
+    /// <param name="environment">The runtime and hardware of the run, from <see cref="ReadEnvironment"/>.</param>
+    /// <param name="recordedOn">Free text about the machine and conditions, supplied by whoever records it.</param>
+    public static string WriteBaseline(
+        IReadOnlyList<BenchmarkMeasurement> measurements,
+        string environment = "",
+        string recordedOn = ""
+    )
     {
         ArgumentNullException.ThrowIfNull(measurements);
 
         var builder = new StringBuilder();
         builder.AppendLine("{");
-        builder.AppendLine("  \"schema\": 1,");
         builder.AppendLine(
-            "  \"note\": \"Regenerate with the benchmarks workflow's update_baseline input. Times are indicative; allocations are the gate.\","
+            string.Create(CultureInfo.InvariantCulture, $"  \"schema\": {BaselineSchema},")
+        );
+        builder.AppendLine(
+            "  \"note\": \"Regenerate with the benchmarks workflow's update_baseline input or the command in docs/BENCHMARKS.md. Allocated bytes are the gate; times are indicative and are not compared.\","
+        );
+        builder.AppendLine(
+            CultureInfo.InvariantCulture,
+            $"  \"environment\": {JsonString(environment)},"
+        );
+        builder.AppendLine(
+            CultureInfo.InvariantCulture,
+            $"  \"recordedOn\": {JsonString(recordedOn)},"
         );
         builder.AppendLine("  \"measurements\": [");
 
         List<BenchmarkMeasurement> ordered = measurements
-            .OrderBy(m => m.Method, StringComparer.Ordinal)
-            .ThenBy(m => m.Count)
+            .OrderBy(m => m.Key, StringComparer.Ordinal)
             .ToList();
 
         for (int i = 0; i < ordered.Count; i++)
@@ -525,7 +549,7 @@ public static class RegressionCheck
             builder.AppendLine(
                 string.Create(
                     CultureInfo.InvariantCulture,
-                    $"    {{ \"method\": \"{m.Method}\", \"count\": {m.Count}, \"meanNanoseconds\": {m.MeanNanoseconds:F1}, \"allocatedBytes\": {m.AllocatedBytes} }}{comma}"
+                    $"    {{ \"type\": {JsonString(m.Type)}, \"method\": {JsonString(m.Method)}, \"parameters\": {JsonString(m.Parameters)}, \"meanNanoseconds\": {m.MeanNanoseconds:F1}, \"allocatedBytes\": {m.AllocatedBytes} }}{comma}"
                 )
             );
         }
@@ -534,6 +558,15 @@ public static class RegressionCheck
         builder.AppendLine("}");
         return builder.ToString();
     }
+
+    private static readonly JsonSerializerOptions StringOptions = new()
+    {
+        // Keep apostrophes and non-ASCII readable in a file people review by eye.
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    };
+
+    private static string JsonString(string value) =>
+        JsonSerializer.Serialize(value, StringOptions);
 
     // ──────────────────────────────────────────────────────────
     //  REPORTING
@@ -577,8 +610,8 @@ public static class RegressionCheck
         }
 
         builder.AppendLine();
-        builder.AppendLine("| Benchmark | Count | Verdict | Detail |");
-        builder.AppendLine("|:--- |---:|:---:|:--- |");
+        builder.AppendLine("| Benchmark | Verdict | Detail |");
+        builder.AppendLine("|:--- |:---:|:--- |");
 
         foreach (
             BenchmarkComparison c in comparisons.Where(c => c.Kind != RegressionKind.Unchanged)
@@ -596,13 +629,13 @@ public static class RegressionCheck
 
             builder.AppendLine(
                 CultureInfo.InvariantCulture,
-                $"| `{c.Method}` | {c.Count} | {icon} | {c.Detail} |"
+                $"| `{c.Key}` | {icon} | {c.Detail} |"
             );
         }
 
         if (comparisons.All(c => c.Kind == RegressionKind.Unchanged))
         {
-            builder.AppendLine("| _all benchmarks_ | | ✅ | Within tolerance of the baseline. |");
+            builder.AppendLine("| _all benchmarks_ | ✅ | Within tolerance of the baseline. |");
         }
 
         builder.AppendLine();
@@ -633,6 +666,16 @@ public static class RegressionCheck
             c.Kind == RegressionKind.AllocationRegression
             || (failOnTime && c.Kind == RegressionKind.TimeRegression)
         );
+    }
+
+    /// <summary>
+    /// How many benchmarks were present in both the baseline and the run.
+    /// </summary>
+    public static int CountCompared(IReadOnlyList<BenchmarkComparison> comparisons)
+    {
+        ArgumentNullException.ThrowIfNull(comparisons);
+
+        return comparisons.Count(c => c.Baseline is not null && c.Current is not null);
     }
 
     private static string FormatBytes(long bytes)
