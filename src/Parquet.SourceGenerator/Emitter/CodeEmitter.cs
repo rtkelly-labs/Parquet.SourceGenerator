@@ -405,17 +405,11 @@ internal static class CodeEmitter
             "        long footerStart = await GetFooterStartAsync(stream, cancellationToken).ConfigureAwait(false);"
         );
         builder.AppendLine("        ValidateColumnChunkBounds(reader, footerStart, 1_000_000);");
-        builder.AppendLine("        int maxDepth = 0;");
+        // The limit is enforced during the walk: a depth computed to the end and compared afterwards
+        // is bounded only by the stack, which a hostile footer can exhaust first (#366).
         builder.AppendLine("        foreach (var field in reader.Schema.Fields)");
         builder.AppendLine("        {");
-        builder.AppendLine("            int d = GetFieldDepth(field);");
-        builder.AppendLine("            if (d > maxDepth) maxDepth = d;");
-        builder.AppendLine("        }");
-        builder.AppendLine("        if (maxDepth > options.MaxNestingDepth)");
-        builder.AppendLine("        {");
-        builder.AppendLine(
-            "            throw new global::System.IO.InvalidDataException($\"Schema nesting depth {maxDepth} exceeds maximum allowed {options.MaxNestingDepth}.\");"
-        );
+        builder.AppendLine("            CheckFieldDepth(field, 1, options.MaxNestingDepth);");
         builder.AppendLine("        }");
         if (model.Properties.Length > 0)
         {
@@ -433,32 +427,32 @@ internal static class CodeEmitter
         builder.AppendLine("    }");
         builder.AppendLine();
         builder.AppendLine(
-            "    private static int GetFieldDepth(global::Parquet.Schema.Field field)"
+            "    private static void CheckFieldDepth(global::Parquet.Schema.Field field, int depth, int maxDepth)"
         );
         builder.AppendLine("    {");
-        builder.AppendLine("        if (field is global::Parquet.Schema.StructField sf)");
+        builder.AppendLine("        if (depth > maxDepth)");
         builder.AppendLine("        {");
-        builder.AppendLine("            int max = 0;");
-        builder.AppendLine("            foreach (var child in sf.Fields)");
-        builder.AppendLine("            {");
-        builder.AppendLine("                int d = GetFieldDepth(child);");
-        builder.AppendLine("                if (d > max) max = d;");
-        builder.AppendLine("            }");
-        builder.AppendLine("            return 1 + max;");
-        builder.AppendLine("        }");
-        builder.AppendLine("        if (field is global::Parquet.Schema.ListField lf)");
-        builder.AppendLine("        {");
-        builder.AppendLine("            return 1 + GetFieldDepth(lf.Item);");
-        builder.AppendLine("        }");
-        builder.AppendLine("        if (field is global::Parquet.Schema.MapField mf)");
-        builder.AppendLine("        {");
-        builder.AppendLine("            int keyDepth = GetFieldDepth(mf.Key);");
-        builder.AppendLine("            int valueDepth = GetFieldDepth(mf.Value);");
         builder.AppendLine(
-            "            return 1 + (keyDepth > valueDepth ? keyDepth : valueDepth);"
+            "            throw new global::System.IO.InvalidDataException($\"Schema nesting depth {depth} exceeds maximum allowed {maxDepth}.\");"
         );
         builder.AppendLine("        }");
-        builder.AppendLine("        return 1;");
+        builder.AppendLine();
+        builder.AppendLine("        if (field is global::Parquet.Schema.StructField sf)");
+        builder.AppendLine("        {");
+        builder.AppendLine("            foreach (var child in sf.Fields)");
+        builder.AppendLine("            {");
+        builder.AppendLine("                CheckFieldDepth(child, depth + 1, maxDepth);");
+        builder.AppendLine("            }");
+        builder.AppendLine("        }");
+        builder.AppendLine("        else if (field is global::Parquet.Schema.ListField lf)");
+        builder.AppendLine("        {");
+        builder.AppendLine("            CheckFieldDepth(lf.Item, depth + 1, maxDepth);");
+        builder.AppendLine("        }");
+        builder.AppendLine("        else if (field is global::Parquet.Schema.MapField mf)");
+        builder.AppendLine("        {");
+        builder.AppendLine("            CheckFieldDepth(mf.Key, depth + 1, maxDepth);");
+        builder.AppendLine("            CheckFieldDepth(mf.Value, depth + 1, maxDepth);");
+        builder.AppendLine("        }");
         builder.AppendLine("    }");
     }
 

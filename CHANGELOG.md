@@ -294,6 +294,11 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
 - **The sorted range reader enforces `MaxAllocationValues` across row groups** (#387). It capped each row group
   but not their sum, the one read path that did not. The emitted reader now accumulates the rows it scans
   and throws `InvalidDataException` when the total exceeds the cap, as the other paths do.
+- **The nesting-depth limit is enforced during the schema walk, not after it** (#366). The emitted validation
+  computed a schema's full depth recursively and only then compared it with `MaxNestingDepth`, so the
+  walk was bounded by the stack, and a deep enough footer ended the process with a stack overflow (verified
+  at 300,000 nested lists) before the limit could fire. The walk now carries the depth and throws
+  `InvalidDataException` as soon as it passes the limit.
 - **A property or type named after a C# keyword no longer breaks the generated code** (#376). Roslyn drops
   the `@` from a member declared `@event`, so the model held the bare keyword and the emitters wrote
   `item.event`, `{ event = ... }` and `new class` into generated source (CS1001, CS1525). Every
