@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <!--
+      Compiles the C# examples in README.md and PACKAGE_README.md against the generator exactly as a
+      consumer references it (#596). scripts/CheckReadme.cs extracts the tagged snippets into
+      obj/readme/*.g.cs (derived, gitignored with obj/) and builds this project; a snippet that uses
+      a removed or renamed member fails the build with the README line number.
+
+      It is deliberately not in Parquet.SourceGenerator.slnx: without the extracted files it has
+      nothing to compile, and the script is what runs it.
+    -->
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <OutputType>Library</OutputType>
+        <IsPackable>false</IsPackable>
+        <RootNamespace>ReadmeSnippets</RootNamespace>
+        <!-- The snippets are illustrative statements, not production code. -->
+        <NoWarn>$(NoWarn);CS1998;CS8321;CS0219;CS0168;IDE0059;CA1822</NoWarn>
+        <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+        <!-- #line maps errors to README lines; those files are not source files to embed in a PDB. -->
+        <DebugType>none</DebugType>
+        <DebugSymbols>false</DebugSymbols>
+        <EmbedUntrackedSources>false</EmbedUntrackedSources>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <Compile Include="obj\readme\*.g.cs" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Parquet.Net" />
+        <!-- Switches on the Arrow bridge the README documents. -->
+        <PackageReference Include="Apache.Arrow" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\src\Parquet.SourceGenerator.Attributes\Parquet.SourceGenerator.Attributes.csproj" />
+        <ProjectReference
+            Include="..\..\src\Parquet.SourceGenerator\Parquet.SourceGenerator.csproj"
+            OutputItemType="Analyzer"
+            ReferenceOutputAssembly="false"
+        />
+    </ItemGroup>
+</Project>

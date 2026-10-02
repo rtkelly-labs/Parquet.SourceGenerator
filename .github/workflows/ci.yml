@@ -138,6 +138,13 @@ jobs:
       - name: Build solution (Release)
         run: dotnet build Parquet.SourceGenerator.slnx --configuration Release --no-restore -warnaserror
 
+      # README.md and PACKAGE_README.md examples are compiled against the generator as a consumer
+      # references it (#596, 47 section 8: README examples use only the stable surface). The
+      # generator is already built above; this builds a snippet project from the tagged blocks and
+      # fails with the README line of any example that uses a removed or renamed member.
+      - name: Verify README Examples Compile
+        run: dotnet run scripts/CheckReadme.cs
+
       # #259: accepted property kinds and nesting shapes are derived from the parser and backend
       # dials, then checked against the committed evidence map. A source change cannot silently
       # widen the coverage envelope without adding evidence and reviewing its risk.
