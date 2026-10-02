@@ -21,6 +21,7 @@ public sealed class WorkflowConsistencyTests
         "- name: Generate Python Test Datasets (PyArrow v1 & v2)";
     private const string CSharpGenerationStep = "- name: Generate C# Test Datasets (Parquet.Net)";
     private const string BaselineRelativePath = "benchmarks/baseline.json";
+    private const string GateFilterRelativePath = "benchmarks/gate-filter.txt";
 
     [Fact]
     public void CiAndReleaseDelegateTheTestDataSequenceToOneSharedAction()
@@ -123,12 +124,21 @@ public sealed class WorkflowConsistencyTests
         string workflow = Read(root, ".github", "workflows", "benchmarks.yml");
 
         workflow.ShouldContain($"BENCHMARK_BASELINE: {BaselineRelativePath}");
+        workflow.ShouldContain($"BENCHMARK_GATE_FILTER: {GateFilterRelativePath}");
         workflow.ShouldContain("- name: Benchmark Regression Gate");
         Count(workflow, "--baseline \"$BENCHMARK_BASELINE\" --report")
             .ShouldBe(
                 1,
                 "The gate must invoke the generator with --baseline and capture a report."
             );
+
+        // The gate fails when a baseline benchmark did not run, when a run benchmark is not in the
+        // baseline, and never compares wall-clock against a baseline from other hardware.
+        workflow.ShouldContain("--fail-on-not-run --fail-on-new --no-time");
+
+        // The runtime is pinned: the benchmark project rolls forward to the newest installed major
+        // and allocations differ between runtimes.
+        workflow.ShouldContain("DOTNET_ROLL_FORWARD: Minor");
 
         // A baseline that is absent, or present but empty, must stop the job rather than being
         // bootstrapped from the very run under test.
@@ -139,53 +149,93 @@ public sealed class WorkflowConsistencyTests
         // And a check run must not be able to rewrite the reference it is checking against.
         workflow.ShouldContain("The regression check rewrote its own baseline");
 
-        // Recording a new baseline stays an explicit, separate dispatch.
+        // Recording stays an explicit dispatch, and what it records is an artifact for a person to
+        // commit, never a push or a pull request from the workflow.
         Count(workflow, "--update-baseline")
-            .ShouldBe(1, "Only the explicit update_baseline dispatch may rewrite the baseline.");
-        workflow.ShouldContain("if: steps.pr_info.outputs.update_baseline == 'true'");
-        workflow.ShouldContain("if: steps.pr_info.outputs.update_baseline != 'true'");
+            .ShouldBe(1, "Only the explicit update_baseline dispatch may record a baseline.");
+        workflow.ShouldContain("name: benchmark-baseline-candidate");
+        workflow.ShouldNotContain("git add \"$BENCHMARK_BASELINE\"");
 
-        int refreshIndex = workflow.IndexOf(
-            "- name: Record This Run As The New Regression Baseline",
+        int recordIndex = workflow.IndexOf(
+            "- name: Record a candidate baseline",
             StringComparison.Ordinal
         );
         int gateIndex = workflow.IndexOf(
             "- name: Benchmark Regression Gate",
             StringComparison.Ordinal
         );
-        refreshIndex.ShouldBeGreaterThanOrEqualTo(0);
-        gateIndex.ShouldBeGreaterThan(refreshIndex);
+        recordIndex.ShouldBeGreaterThanOrEqualTo(0);
+        gateIndex.ShouldBeGreaterThan(recordIndex);
     }
 
     /// <summary>
-    /// A committed baseline must carry measurements, because an empty one reads as "first run"
-    /// and lets the gate pass having compared nothing.
+    /// A failing Sunday run must reach a person (#564), through a job that holds
+    /// <c>issues: write</c> and runs no repository code.
     /// </summary>
     [Fact]
-    public void CommittedBaselineIfPresentCarriesMeasurements()
+    public void BenchmarksWorkflowNotifiesOnScheduledFailureWithoutWidePermissions()
     {
         string root = FindRepositoryRoot();
-        string path = Path.Combine(
-            root,
-            BaselineRelativePath.Replace('/', Path.DirectorySeparatorChar)
-        );
+        string workflow = Read(root, ".github", "workflows", "benchmarks.yml");
 
-        if (!IOFile.Exists(path))
-        {
-            // Not yet recorded: the workflow guard fails the job in that state, which is the
-            // behaviour under test in BenchmarksWorkflowRunsTheGeneratorAsARegressionGate.
-            return;
-        }
+        string workflowHeader = workflow[..workflow.IndexOf("\njobs:\n", StringComparison.Ordinal)];
+        workflowHeader.ShouldNotContain("\n  issues: write");
+
+        string notify = workflow[
+            workflow.IndexOf("\n  notify-failure:", StringComparison.Ordinal)..
+        ];
+        notify.ShouldContain("needs: [run-benchmarks, regression-gate]");
+        notify.ShouldContain("github.event_name == 'schedule'");
+        notify.ShouldContain("\n      issues: write\n");
+        notify.ShouldNotContain("actions/checkout");
+        notify.ShouldContain("title=\"[CI] scheduled benchmarks failed\"");
+        Count(workflow, "\n      issues: write\n")
+            .ShouldBe(1, "Only the notification job may hold issues: write.");
+    }
+
+    /// <summary>
+    /// The gated list, the baseline and the examined-N rule have to agree: every listed benchmark
+    /// has a baseline, and every baseline entry is listed. Otherwise the gate either fails on
+    /// day one or silently stops covering something.
+    /// </summary>
+    [Fact]
+    public void GatedBenchmarkListAndBaselineDescribeTheSameBenchmarks()
+    {
+        string root = FindRepositoryRoot();
+        string[] globs = Read(root, "benchmarks", "gate-filter.txt")
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(line => !line.StartsWith('#'))
+            .ToArray();
+
+        globs.ShouldNotBeEmpty("An empty gate list is a gate that runs nothing.");
+        globs.ShouldAllBe(glob => glob != "*", "The gated set is curated, not the whole suite.");
 
         IReadOnlyList<BenchmarkMeasurement> baseline = RegressionCheck.ParseBaseline(
-            IOFile.ReadAllText(path)
+            Read(root, "benchmarks", "baseline.json")
         );
-
         baseline.Count.ShouldBeGreaterThan(
             0,
-            $"'{BaselineRelativePath}' exists but records no measurements; the gate would pass vacuously."
+            $"'{BaselineRelativePath}' records no measurements; the gate would pass vacuously."
         );
         baseline.ShouldAllBe(m => m.AllocatedBytes >= 0);
+
+        // "*Class.Method" -> (Class, Method)
+        var listed = globs
+            .Select(glob => glob.TrimStart('*').Split('.'))
+            .Select(parts => (Type: parts[0], Method: parts[1]))
+            .ToHashSet();
+        var recorded = baseline.Select(m => (m.Type, m.Method)).ToHashSet();
+
+        listed.Except(recorded).ShouldBeEmpty("Listed in gate-filter.txt but not in the baseline.");
+        recorded.Except(listed).ShouldBeEmpty("In the baseline but not listed in gate-filter.txt.");
+
+        // Class + method + parameters: no two baseline entries may share an identity, and the
+        // method name alone is not unique across the suite.
+        baseline
+            .Select(m => m.Key)
+            .Distinct(StringComparer.Ordinal)
+            .Count()
+            .ShouldBe(baseline.Count);
     }
 
     private static void AssertWorkflowDelegatesOnce(string workflow)

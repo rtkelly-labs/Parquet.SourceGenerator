@@ -19,8 +19,6 @@ namespace Parquet.SourceGenerator.Tests;
 /// </remarks>
 public sealed class BenchmarkGateEntryPointTests : IDisposable
 {
-    private const string ReportHeader = "Method,Count,Mean,Allocated";
-
     private readonly DirectoryInfo _root = Directory.CreateTempSubdirectory("bench-gate-");
 
     private string ResultsDirectory => Path.Combine(_root.FullName, "results");
@@ -122,6 +120,60 @@ public sealed class BenchmarkGateEntryPointTests : IDisposable
     }
 
     [Fact]
+    public void ABenchmarkTheBaselineDoesNotHoldFailsOnlyWhenRequired()
+    {
+        // A benchmark added to the gated list without refreshing the baseline is silently
+        // ungated unless the gate says so.
+        WriteBaseline(Measured("Read", 1_000_000));
+        WriteResults("Read", 1000, 1_000_000);
+        WriteResults("Added", 1000, 1_000_000, type: "OtherBench");
+
+        Run().ShouldBe(0);
+        Run("--fail-on-new").ShouldBe(1);
+    }
+
+    [Fact]
+    public void AMethodNameSharedByTwoClassesIsGatedPerClass()
+    {
+        // WriteSnappyAsync is declared in two benchmark classes. Both are in the run; only one of
+        // them regressed, and the gate has to say which.
+        WriteBaseline(
+            new BenchmarkMeasurement("Tpch", "WriteSnappyAsync", "Count=1000", 1d, 1_000_000),
+            new BenchmarkMeasurement("Census", "WriteSnappyAsync", "Count=1000", 1d, 9_000_000)
+        );
+        WriteResults("WriteSnappyAsync", 1000, 1_000_000, type: "Tpch");
+        WriteResults("WriteSnappyAsync", 1000, 40_000_000, type: "Census");
+
+        Run("--fail-on-not-run", "--fail-on-new").ShouldBe(1);
+    }
+
+    [Fact]
+    public void ASchemaOneBaselineFailsTheGate()
+    {
+        System.IO.File.WriteAllText(
+            BaselinePath,
+            """
+            { "schema": 1, "measurements": [
+              { "method": "Read", "count": 1000, "meanNanoseconds": 1.0, "allocatedBytes": 1000000 } ] }
+            """
+        );
+        WriteResults("Read", 1000, 1_000_000);
+
+        Run().ShouldBe(1);
+    }
+
+    [Fact]
+    public void WallClockIsIgnoredWhenTheBaselineWasRecordedElsewhere()
+    {
+        // Same allocation, thirty times slower: a different machine, not a regression.
+        WriteBaseline(new BenchmarkMeasurement("GateBench", "Read", "Count=1000", 1d, 1_000_000));
+        WriteResults("Read", 1000, 1_000_000);
+
+        Run("--no-time", "--fail-on-time").ShouldBe(0);
+        Run("--fail-on-time").ShouldBe(1);
+    }
+
+    [Fact]
     public void ACheckRunNeverModifiesTheBaseline()
     {
         WriteBaseline(Measured("Read", 1_000_000));
@@ -143,14 +195,24 @@ public sealed class BenchmarkGateEntryPointTests : IDisposable
         System.IO.File.WriteAllText(BaselinePath, RegressionCheck.WriteBaseline(measurements));
 
     private static BenchmarkMeasurement Measured(string method, long allocated) =>
-        new(method, 1000, 1000d, allocated);
+        new("GateBench", method, "Count=1000", 1000d, allocated);
 
-    private void WriteResults(string method, int count, long allocated)
+    private void WriteResults(string method, int count, long allocated, string type = "GateBench")
     {
         Directory.CreateDirectory(ResultsDirectory);
         System.IO.File.WriteAllText(
-            Path.Combine(ResultsDirectory, "Gate-report.csv"),
-            $"{ReportHeader}\n{method},{count},1000 ns,{allocated} B\n"
+            Path.Combine(ResultsDirectory, $"{type}-report-full-compressed.json"),
+            $$"""
+            {
+              "Benchmarks": [
+                {
+                  "Type": "{{type}}", "Method": "{{method}}", "Parameters": "Count={{count}}",
+                  "Statistics": { "Mean": 1000 },
+                  "Memory": { "BytesAllocatedPerOperation": {{allocated}} }
+                }
+              ]
+            }
+            """
         );
     }
 }

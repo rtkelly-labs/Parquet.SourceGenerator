@@ -75,10 +75,21 @@ public static class Program
     /// <summary>
     /// Compares a benchmark run against the committed baseline, or refreshes that baseline.
     /// </summary>
-    /// <returns>0 when the run is acceptable, 1 when it regressed.</returns>
+    /// <returns>0 when the run is acceptable, 1 when it regressed or examined nothing.</returns>
     private static int RunRegressionCheck(string resultsDir, string baselinePath, string[] args)
     {
-        IReadOnlyList<BenchmarkMeasurement> current = RegressionCheck.ReadResults(resultsDir);
+        IReadOnlyList<BenchmarkMeasurement> current;
+        try
+        {
+            current = RegressionCheck.ReadResults(resultsDir);
+        }
+        catch (InvalidOperationException ex)
+        {
+            Console.Error.WriteLine(
+                $"The benchmark results cannot be read unambiguously: {ex.Message}"
+            );
+            return 1;
+        }
 
         if (current.Count == 0)
         {
@@ -91,16 +102,32 @@ public static class Program
             return 1;
         }
 
+        string environment = RegressionCheck.ReadEnvironment(resultsDir);
+
         if (args.Contains("--update-baseline", StringComparer.Ordinal))
         {
-            WriteBaselineFile(baselinePath, current);
+            WriteBaselineFile(
+                baselinePath,
+                current,
+                environment,
+                OptionValue(args, "--recorded-on") ?? string.Empty
+            );
             Console.WriteLine(
                 $"Baseline updated with {current.Count} measurement(s): {baselinePath}"
             );
             return 0;
         }
 
-        IReadOnlyList<BenchmarkMeasurement> baseline = RegressionCheck.ReadBaseline(baselinePath);
+        IReadOnlyList<BenchmarkMeasurement> baseline;
+        try
+        {
+            baseline = RegressionCheck.ReadBaseline(baselinePath);
+        }
+        catch (BaselineFormatException ex)
+        {
+            Console.Error.WriteLine($"Baseline '{baselinePath}' is unusable: {ex.Message}");
+            return 1;
+        }
 
         if (baseline.Count == 0)
         {
@@ -116,7 +143,12 @@ public static class Program
                 return 1;
             }
 
-            WriteBaselineFile(baselinePath, current);
+            WriteBaselineFile(
+                baselinePath,
+                current,
+                environment,
+                OptionValue(args, "--recorded-on") ?? string.Empty
+            );
             Console.WriteLine(
                 $"Bootstrapped baseline '{baselinePath}' with {current.Count} measurement(s). Commit it, and subsequent runs will be compared against it."
             );
@@ -128,11 +160,12 @@ public static class Program
             "--alloc-tolerance",
             RegressionCheck.DefaultAllocationTolerance
         );
-        double timeTolerance = ParseTolerance(
-            args,
-            "--time-tolerance",
-            RegressionCheck.DefaultTimeTolerance
-        );
+
+        // --no-time: the baseline was recorded on other hardware than this run, so a wall-clock
+        // comparison is noise by construction. An infinite tolerance never reports one.
+        double timeTolerance = args.Contains("--no-time", StringComparer.Ordinal)
+            ? double.PositiveInfinity
+            : ParseTolerance(args, "--time-tolerance", RegressionCheck.DefaultTimeTolerance);
         bool failOnTime = args.Contains("--fail-on-time", StringComparer.Ordinal);
 
         IReadOnlyList<BenchmarkComparison> comparisons = RegressionCheck.Compare(
@@ -144,6 +177,16 @@ public static class Program
 
         string report = RegressionCheck.BuildReport(comparisons);
         Console.WriteLine(report);
+
+        string baselineEnvironment = RegressionCheck.ReadBaselineEnvironment(baselinePath);
+        Console.WriteLine($"Baseline recorded on: {OrUnknown(baselineEnvironment)}");
+        Console.WriteLine($"This run on: {OrUnknown(environment)}");
+
+        string? reportPath = OptionValue(args, "--report");
+        if (reportPath is not null)
+        {
+            File.WriteAllText(reportPath, report, Encoding.UTF8);
+        }
 
         // Examined-N: a run that shares no benchmark with the baseline (every method renamed, or
         // a filter that skipped them all) compared nothing, and every row is New or NotRun,
@@ -172,18 +215,28 @@ public static class Program
             return 1;
         }
 
-        string? reportPath = OptionValue(args, "--report");
-        if (reportPath is not null)
+        if (
+            args.Contains("--fail-on-new", StringComparer.Ordinal)
+            && comparisons.Any(c => c.Kind == RegressionKind.New)
+        )
         {
-            File.WriteAllText(reportPath, report, Encoding.UTF8);
+            Console.Error.WriteLine(
+                "This run executed benchmarks the baseline does not hold, so they are not gated (--fail-on-new). Record them with --update-baseline."
+            );
+            return 1;
         }
 
         return RegressionCheck.HasFailures(comparisons, failOnTime) ? 1 : 0;
     }
 
+    private static string OrUnknown(string value) =>
+        string.IsNullOrEmpty(value) ? "unknown" : value;
+
     private static void WriteBaselineFile(
         string path,
-        IReadOnlyList<BenchmarkMeasurement> measurements
+        IReadOnlyList<BenchmarkMeasurement> measurements,
+        string environment,
+        string recordedOn
     )
     {
         string? directory = Path.GetDirectoryName(path);
@@ -192,7 +245,11 @@ public static class Program
             Directory.CreateDirectory(directory);
         }
 
-        File.WriteAllText(path, RegressionCheck.WriteBaseline(measurements), Encoding.UTF8);
+        File.WriteAllText(
+            path,
+            RegressionCheck.WriteBaseline(measurements, environment, recordedOn),
+            Utf8NoBom
+        );
     }
 
     /// <summary>

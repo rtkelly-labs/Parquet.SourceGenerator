@@ -67,9 +67,10 @@ attributed to *this* repo's assemblies, that is a real regression worth chasing.
 
 ## 📊 Running Benchmarks
 
-Benchmarks are not run in CI (BenchmarkDotNet on shared runners is too noisy to gate merges on)
-and no baseline results have been committed, so there is nothing to compare against yet. Run them
-locally when working on performance:
+Wall-clock benchmarks are not gated in CI (BenchmarkDotNet timings on shared runners are too noisy
+to gate merges on). A small, allocation-only set is: the weekly `benchmarks.yml` regression gate
+compares allocated bytes against `benchmarks/baseline.json` (see [docs/BENCHMARKS.md](docs/BENCHMARKS.md)).
+It is not a PR check. Run the suite locally when working on performance:
 
 ```bash
 dotnet run -c Release --project benchmarks/Parquet.SourceGenerator.Benchmarks/Parquet.SourceGenerator.Benchmarks.csproj -- --filter "*"

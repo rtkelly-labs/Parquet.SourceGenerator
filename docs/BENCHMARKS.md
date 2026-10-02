@@ -114,37 +114,62 @@ The GitHub Actions performance workflow (`.github/workflows/benchmarks.yml`) aut
 1. Runs BenchmarkDotNet across `ScalingSerializationBenchmark`, `ScalingDeserializationBenchmark`, and `GuidInterchangeBenchmark`.
 2. Executes the native .NET tool `tools/BenchmarkSummaryGenerator` to format a clean 4-row executive summary table.
 3. Automatically opens a Pull Request updating `README.md` and `PACKAGE_README.md` whenever performance baseline numbers change.
-4. Runs the same tool a second time as a **regression gate**, comparing the run against the committed baseline at `benchmarks/baseline.json` and failing the job on an allocation regression.
+4. Runs a separate **regression gate** job: a small curated set of benchmarks, compared on allocated bytes against the committed `benchmarks/baseline.json`. It fails the job on an allocation regression, and a failing Sunday run opens (or comments on) one `area:ci` issue.
 
-### 📏 The regression baseline
+### 📏 The regression gate
 
-Allocated bytes is the gate; wall-clock is reported but does not fail the job. The reasoning is in
-the remarks on `RegressionCheck` — allocation counts on a fixed input are near-deterministic, CI
-wall-clock is not.
+Allocated bytes is the gate; wall-clock is not compared. Allocation counts on a fixed input are
+identical on any machine running the same runtime, so they can gate on a shared runner. Wall-clock
+cannot: the baseline is recorded on a different machine than the runner, and a shared runner moves
+tens of percent between runs of identical code. The reasoning is in the remarks on `RegressionCheck`.
+
+**What is gated.** Only the benchmarks listed in `benchmarks/gate-filter.txt`: in-memory, no dataset
+download, small `Count` (`1000,10000`). The baseline holds exactly those. A benchmark is identified
+by **class, method and every parameter** (`ScalingSerializationBenchmark.SourceGeneratorWriteAsync(Count=1000)`),
+so a method name declared in two classes, or a benchmark parameterised by something other than
+`Count`, does not collide. The gate reads BenchmarkDotNet's compressed JSON export (exact bytes,
+exact identity), which the benchmark project's `Program` adds to the default exporters.
+
+**Runtime.** The benchmark project rolls forward to the newest installed .NET major, and allocations
+differ between runtimes, so the gate sets `DOTNET_ROLL_FORWARD=Minor` and runs on .NET 8. Do the same
+when recording locally. The baseline file records the runtime and hardware it came from, and the gate
+prints them next to the current run's.
 
 ```bash
-# What the gate runs (exits 1 on an allocation regression):
-dotnet run -c Release --project tools/BenchmarkSummaryGenerator/BenchmarkSummaryGenerator.csproj \
-  -- BenchmarkDotNet.Artifacts/results --baseline benchmarks/baseline.json --report benchmark-regression.md
+# Run the gated set (from the repository root):
+mapfile -t filters < <(grep -v -e '^[[:space:]]*#' -e '^[[:space:]]*$' benchmarks/gate-filter.txt)
+DOTNET_ROLL_FORWARD=Minor dotnet run -c Release --project benchmarks/Parquet.SourceGenerator.Benchmarks/Parquet.SourceGenerator.Benchmarks.csproj -- \
+  --filter "${filters[@]}" --params Count=1000,10000 --artifacts BenchmarkDotNet.Artifacts/gate
+
+# Check it (exits 1 on an allocation regression, on a benchmark that did not run, or one the baseline lacks):
+dotnet run -c Release --project tools/BenchmarkSummaryGenerator/BenchmarkSummaryGenerator.csproj -- \
+  BenchmarkDotNet.Artifacts/gate/results --baseline benchmarks/baseline.json --report benchmark-regression.md \
+  --fail-on-not-run --fail-on-new --no-time
+
+# Record a baseline (after reading the diff of what changed and why):
+dotnet run -c Release --project tools/BenchmarkSummaryGenerator/BenchmarkSummaryGenerator.csproj -- \
+  BenchmarkDotNet.Artifacts/gate/results --baseline benchmarks/baseline.json --update-baseline \
+  --recorded-on "<machine, runtime, load average when recorded>"
 ```
 
-The baseline is **only** recorded by dispatching the workflow with the `update_baseline` input set
-to true, which runs the tool with `--update-baseline` and commits the result. It is deliberately not
-a side effect of a check run: a gate that rewrites its own reference cannot tell a first run from a
-deleted one, and would silently enshrine the very regression it was meant to catch.
+**Recording.** The baseline is recorded by hand on a quiet machine (check `uptime` first), or by
+dispatching the workflow with `gate_only` and `update_baseline` set, which uploads a candidate as the
+`benchmark-baseline-candidate` artifact for a person to review and commit. The workflow never commits
+or opens a pull request for it. A check run never writes its own reference: a gate that rewrites its
+baseline cannot tell a first run from a deleted one, and would enshrine the regression it was meant to
+catch (#412). For the same reason the gate refuses to run when `benchmarks/baseline.json` is missing
+or empty, and refuses a baseline in an older schema.
 
-For the same reason the gate refuses to run at all when `benchmarks/baseline.json` is missing or has
-no measurements — it fails the job and tells you to dispatch `update_baseline` rather than
-bootstrapping itself green.
+The tool fails (exit 1) when the results directory is missing or empty, when the baseline is missing,
+empty or unreadable (unless `--bootstrap` or `--update-baseline` asks for a recording), when no
+benchmark in the run matches the baseline, and, with the flags the workflow passes, when a baseline
+benchmark did not run (`--fail-on-not-run`) or a run benchmark is not in the baseline (`--fail-on-new`).
+`BenchmarkGateEntryPointTests` drives each of those cases and a seeded allocation regression.
 
-The tool fails (exit 1) when the results directory is missing or empty, when the baseline is missing
-or empty (unless `--bootstrap` or `--update-baseline` asks for a recording), and when no benchmark in
-the run matches the baseline. A full-suite run in the workflow also passes `--fail-on-not-run`, so a
-benchmark that vanished from the run fails it.
-
-Optional flags: `--alloc-tolerance <fraction>` (default `0.05`), `--time-tolerance <fraction>`
-(default `0.50`) and `--fail-on-time`, which promotes wall-clock regressions to failures and is only
-meaningful on a quiet machine.
+Optional flags: `--alloc-tolerance <fraction>` (default `0.05`, with a 4 KB absolute floor),
+`--time-tolerance <fraction>` (default `0.50`), `--fail-on-time`, which promotes wall-clock
+regressions to failures and is only meaningful on a quiet machine with a baseline from that machine,
+and `--no-time`, which never reports a wall-clock difference.
 
 ---
 
