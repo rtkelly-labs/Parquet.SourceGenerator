@@ -226,6 +226,10 @@ The [artifact-backed baseline approval proposal](./ARTIFACT-BACKED-BASELINES.md)
      - Verdicts on polyfills, dependency bundling, generator test frameworks, syntax builders, and author analyzers against what this repository already does.
      - Why none of it should be adopted as a package, and where the parts that survive evaluation already live in the backlog (#439, #471, #472).
 
+31. **[54 - 0.1 Gap Analysis and Gate Tracking (#477)](./54-0.1-GAP-ANALYSIS.md)**
+     - Gate-by-gate table for the eight items of doc 47 section 8, legacy parity and release mechanics: what is done, in flight and missing, with the 40 issues created to close the gaps.
+     - Critical path, parallel lanes, remaining effort by size and gate, open owner decisions, and the project views the owner must create.
+
 ---
 
 ## ⚡ Quick Summary of Intent
