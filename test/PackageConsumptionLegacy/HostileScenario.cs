@@ -20,12 +20,30 @@ namespace PackageConsumptionLegacy;
 /// </summary>
 internal static class HostileScenario
 {
-    private sealed record Case(
-        string Name,
-        Action<FileMetaData> Mutate,
-        ParquetSerializerOptions? Options,
-        string ExpectedMessage
-    );
+    // A plain class rather than a record: net472 has no IsExternalInit.
+    private sealed class Case
+    {
+        public Case(
+            string name,
+            Action<FileMetaData> mutate,
+            ParquetSerializerOptions? options,
+            string expectedMessage
+        )
+        {
+            Name = name;
+            Mutate = mutate;
+            Options = options;
+            ExpectedMessage = expectedMessage;
+        }
+
+        public string Name { get; }
+
+        public Action<FileMetaData> Mutate { get; }
+
+        public ParquetSerializerOptions? Options { get; }
+
+        public string ExpectedMessage { get; }
+    }
 
     public static async Task<bool> RunAsync()
     {
