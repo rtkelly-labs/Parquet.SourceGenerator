@@ -263,6 +263,10 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   only for code that referenced the Attributes helpers directly.
 
 ### Fixed
+- **The generator pipeline caches value-equatable models, not a syntax context.** The main generator cached
+  the `GeneratorSyntaxContext` itself, which retains a `SemanticModel` (and the compilation behind it) per
+  target and has no value equality, so nothing downstream could compare as unchanged. It now parses inside
+  the syntax transform, as the legacy generator already did (#395).
 - **`AsBatches()` now enforces the decompression limits** (#358). The columnar batch reader was the
   one read path that handed the caller's raw stream to `ParquetReader`, so `MaxDecompressedPageSize`
   and `MaxDecompressionExpansionRatio` were silently ignored for it. It now reads through the same
