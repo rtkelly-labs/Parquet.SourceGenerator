@@ -13,7 +13,7 @@ dotnet add package Parquet.Net
 
 ## 📖 Quick Start Example
 
-```csharp
+```csharp compile-file
 using System;
 using Parquet.SourceGenerator;
 
@@ -35,9 +35,16 @@ public partial record UserEvent
 }
 ```
 
+<!-- readme-compile-members
+static List<UserEvent> events = new();
+static Stream stream = Stream.Null;
+static List<UserEvent> GetEvents() => events;
+static async IAsyncEnumerable<UserEvent> GetAsyncEventStream() { await Task.CompletedTask; yield break; }
+-->
+
 ### Writing Parquet Files
 
-```csharp
+```csharp compile
 List<UserEvent> events = GetEvents();
 using var stream = File.Create("events.parquet");
 
@@ -58,7 +65,7 @@ await eventStream.WriteParquetAsync(
 
 ### Reading Parquet Files (Sequential & Parallel)
 
-```csharp
+```csharp compile
 using var stream = File.OpenRead("events.parquet");
 
 // Sequential read
@@ -83,7 +90,7 @@ UserEvent[] parallelEvents = await UserEventParquet
 
 ### Custom Configuration (`ParquetSerializerOptions`)
 
-```csharp
+```csharp compile
 var options = new ParquetSerializerOptions
 {
     RowGroupSize = 25_000,

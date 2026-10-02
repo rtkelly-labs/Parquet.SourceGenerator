@@ -84,7 +84,7 @@ dotnet add package Parquet.Net
 
 Decorate your model with `[ParquetSerializable]` and declare it as `partial`:
 
-```csharp
+```csharp compile-file
 using System;
 using Parquet.SourceGenerator;
 
@@ -106,9 +106,16 @@ public partial record UserEvent
 }
 ```
 
+<!-- readme-compile-members
+static List<UserEvent> events = new();
+static Stream stream = Stream.Null;
+static List<UserEvent> GetEvents() => events;
+static async IAsyncEnumerable<UserEvent> GetAsyncEventStream() { await Task.CompletedTask; yield break; }
+-->
+
 ### 3. Writing Parquet Files
 
-```csharp
+```csharp compile
 List<UserEvent> events = GetEvents();
 using var stream = File.Create("events.parquet");
 
@@ -134,14 +141,44 @@ vectors, pre-split `ReadOnlyMemory<T>` — there is no reason to materialise POC
 also get one generated `readonly struct`, `<Model>Batch`, built through a validating constructor, whose buffers go straight to Parquet.Net with no pooled rental and
 no copy. It is the same type `AsBatches()` yields when reading (see below), so a batch read from one file can be written to another:
 
-```csharp
+The examples in this section use a second flat model, `Measurement`:
+
+```csharp compile-file
+[ParquetSerializable]
+public partial record Measurement
+{
+    [ParquetColumn("id", Order = 1)]
+    public long Id { get; init; }
+
+    [ParquetColumn("name", Order = 2)]
+    public string? Name { get; init; }
+
+    [ParquetColumn("score", Order = 3)]
+    public int? Score { get; init; }
+
+    [ParquetColumn("amount", Order = 4)]
+    public double Amount { get; init; }
+}
+```
+
+<!-- readme-compile-members
+static int rowCount;
+static ReadOnlyMemory<long> idBuffer;
+static ReadOnlyMemory<ReadOnlyMemory<char>?> nameBuffer;
+static ReadOnlyMemory<int> packedScores;
+static ReadOnlyMemory<int> scoreDefinitionLevels;
+static ReadOnlyMemory<double> amountBuffer;
+-->
+
+```csharp compile
 // Validates every column against rowCount and throws ArgumentException if one is short.
-var batch = new UserEventBatch(
+var batch = new MeasurementBatch(
     rowCount: rowCount,
-    id: idBuffer,                                  // ReadOnlyMemory<int>
+    id: idBuffer,                                  // ReadOnlyMemory<long>
     name: nameBuffer,                              // ReadOnlyMemory<ReadOnlyMemory<char>?>
     score: packedScores,                           // packed non-nulls only
-    scoreDefinitionLevels: scoreDefinitionLevels   // 1 = present, 0 = null, one per row
+    scoreDefinitionLevels: scoreDefinitionLevels,  // 1 = present, 0 = null, one per row
+    amount: amountBuffer
 );
 
 await batch.WriteParquetAsync(stream);
@@ -157,7 +194,7 @@ Models with struct, list or map members keep the row-oriented API only.
 
 ### 4. Reading Parquet Files (Sequential & Multi-Core Parallel)
 
-```csharp
+```csharp compile
 using var stream = File.OpenRead("events.parquet");
 
 // Sequential read
@@ -179,8 +216,13 @@ await foreach (var e in UserEventParquet.From(buffer).AsAsyncEnumerable())
 {
     // Process item by item with O(1) memory
 }
+```
 
-// Columnar batches — one per row group, no UserEvent ever constructed
+Columnar batches arrive one per row group, with no `Measurement` ever constructed:
+
+```csharp compile
+ReadOnlyMemory<byte> buffer = File.ReadAllBytes("measurements.parquet");
+
 // Your own synchronous code. Keep spans in a helper like this one: a span local cannot live in
 // the same block as an await.
 static void Summarize(ReadOnlySpan<long> ids, ReadOnlySpan<double> amounts)
@@ -189,9 +231,9 @@ static void Summarize(ReadOnlySpan<long> ids, ReadOnlySpan<double> amounts)
 }
 
 int part = 0;
-await foreach (var batch in UserEventParquet.From(buffer).AsBatches())
+await foreach (var batch in MeasurementParquet.From(buffer).AsBatches())
 {
-    Summarize(batch.UserId.Span, batch.Amount.Span);
+    Summarize(batch.Id.Span, batch.Amount.Span);
 
     // A batch can be written straight back out. Each call writes a complete single-row-group
     // file, so give every batch its own stream.
@@ -235,7 +277,19 @@ or a pin outliving the batch), and batches are not thread-safe. To keep data, co
 footer, from either source and for every materializing or streaming shape. A row group the zone map rules out is never opened: no page read, no decompression,
 no buffer rental.
 
-```csharp
+<!-- readme-compile-file
+[ParquetSerializable]
+public partial record OrderEvent
+{
+    [ParquetColumn("order_key", Order = 1)]
+    public long OrderKey { get; init; }
+
+    [ParquetColumn("region", Order = 2)]
+    public string Region { get; init; } = string.Empty;
+}
+-->
+
+```csharp compile
 // Only the row groups whose [min, max] range can still hold a key >= 1000 are read.
 OrderEvent[] recent = await OrderEventParquet
     .From(stream)
@@ -258,7 +312,7 @@ whose statistics are incomplete is always read.
 
 ### 6. Custom Configuration (`ParquetSerializerOptions`)
 
-```csharp
+```csharp compile
 var options = new ParquetSerializerOptions
 {
     RowGroupSize = 25_000,
@@ -352,7 +406,11 @@ contiguous buffers Parquet.Net wants. Add the package and the generator emits th
 <PackageReference Include="Apache.Arrow" Version="23.0.0" />
 ```
 
-```csharp
+<!-- readme-compile-members
+static Apache.Arrow.RecordBatch recordBatch = null!;
+-->
+
+```csharp compile
 await using var writer = await ParquetWriter.CreateAsync(OrderEventParquetExtensions.Schema, stream);
 OrderEventParquetExtensions.WriteParquetRowGroupAsync(writer, recordBatch);
 ```
@@ -380,7 +438,7 @@ OrderEventParquetExtensions.WriteParquetRowGroupAsync(writer, recordBatch);
 | **Nested Collections** | ❌ Unsupported | `List<T>` or `Dictionary<K, V>` reported at compile time as `PARQ006`. |
 | **`DateTimeOffset`** | ❌ Unsupported | Parquet has no direct representation; use `DateTime` + offset column. |
 | **Positional Records** | ❌ Unsupported | Constructor with parameters reported as `PARQ008`. Use nominal records with `{ get; init; }`. |
-| **.NET Framework (net472)** | ✅ Supported via V5 | Use `Parquet.SourceGenerator.V5` for Parquet.Net 4.x/5.x support. |
+| **.NET Framework (net472)** | ✅ Supported via V5 | Use `Parquet.SourceGenerator.Legacy` for Parquet.Net 4.x/5.x support. |
 | **Apache Arrow ingestion** | 🧪 Experimental (v6 only) | Emitted only when the consumer references Apache.Arrow. Flat models only; Native AOT exercised by the repository's published AOT harness. |
 | **Generator feature level** | ✅ Configurable | Defaults to `Level2CompoundPreview`; pin `Level1Flat` or opt into `Level3ModernCSharp` with `ParquetGeneratorFeatureLevel`. |
 | **V5 generated API** | ✅ Declared core subset | V5 intentionally exposes flat read/write, batched write, row-group write, and schema; modern builder, filtering, parallel, streaming, column-batch, and Arrow members are v6-only. |

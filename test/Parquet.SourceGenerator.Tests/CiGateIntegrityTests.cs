@@ -291,6 +291,34 @@ public sealed class CiGateIntegrityTests
     }
 
     [Fact]
+    public void TheReadmeExamplesAreCompiledInTheTestJobAfterTheSolutionBuild()
+    {
+        // #596: the README gate is a step of the `test` job, so it reaches `build` through the
+        // aggregate; it must come after the build that produces the generator it references.
+        string ci = Read(FindRepositoryRoot(), ".github", "workflows", "ci.yml");
+        string testJob = JobBlock(ci, "test");
+
+        int build = testJob.IndexOf(
+            "dotnet build Parquet.SourceGenerator.slnx",
+            StringComparison.Ordinal
+        );
+        int readme = testJob.IndexOf("dotnet run scripts/CheckReadme.cs", StringComparison.Ordinal);
+
+        build.ShouldBeGreaterThanOrEqualTo(0);
+        readme.ShouldBeGreaterThan(build);
+        IOFile
+            .Exists(
+                Path.Combine(
+                    FindRepositoryRoot(),
+                    "test",
+                    "Parquet.SourceGenerator.ReadmeSnippets",
+                    "Parquet.SourceGenerator.ReadmeSnippets.csproj"
+                )
+            )
+            .ShouldBeTrue();
+    }
+
+    [Fact]
     public void TheNet472ConsumerIsExecutedOnWindowsNotJustCompiled()
     {
         string root = FindRepositoryRoot();
