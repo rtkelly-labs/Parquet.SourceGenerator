@@ -181,6 +181,7 @@ await foreach (var e in UserEventParquet.From(buffer).AsAsyncEnumerable())
 }
 
 // Columnar batches — one per row group, no UserEvent ever constructed
+int part = 0;
 await foreach (var batch in UserEventParquet.From(buffer).AsBatches())
 {
     ReadOnlySpan<long> ids = batch.UserId.Span;
@@ -189,7 +190,8 @@ await foreach (var batch in UserEventParquet.From(buffer).AsBatches())
 
     // A batch can be written straight back out. Each call writes a complete single-row-group
     // file, so give every batch its own stream.
-    await batch.WriteParquetAsync(File.Create($"part-{n++}.parquet"));
+    await using FileStream output = File.Create($"part-{part++}.parquet");
+    await batch.WriteParquetAsync(output);
 }
 ```
 

@@ -901,7 +901,7 @@ internal static class ColumnarBatchComponent
         var members = new MemberNames(model);
         builder.AppendLine("    /// <summary>");
         builder.AppendLine(
-            $"    /// Writes one row group directly from caller-owned column buffers, with no row traversal and no pooled rentals."
+            "    /// Writes one row group directly from caller-owned column buffers, with no row traversal and no pooled rentals."
         );
         builder.AppendLine("    /// </summary>");
         builder.AppendLine(
