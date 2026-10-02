@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <!--
+      A project that is WRONG on purpose (#615). It is built by GateFixtureBuildTests under
+      -warnaserror and must fail with RS0016, PARQAPI002 and CA1502, each wired the way the shipping
+      projects wire it. If an analyzer stops loading, or a build stops promoting its warnings, the
+      matching diagnostic disappears from the output and that test fails. Not in the solution: it
+      must never be part of a green build.
+    -->
+    <PropertyGroup>
+        <TargetFramework>netstandard2.0</TargetFramework>
+        <IsPackable>false</IsPackable>
+        <RootNamespace>GateFixture</RootNamespace>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <!-- RS0016: the Attributes project's public API gate. -->
+        <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" PrivateAssets="All" />
+        <AdditionalFiles Include="PublicAPI.Shipped.txt" />
+        <AdditionalFiles Include="PublicAPI.Unshipped.txt" />
+
+        <!-- CA1502: the complexity ratchet, with a threshold of 1 so the fixture method exceeds it. -->
+        <AdditionalFiles Include="CodeMetricsConfig.txt" />
+
+        <!-- PARQAPI002: the internal seam gate, handed an empty seams.txt as in the src projects. -->
+        <ProjectReference
+            Include="..\..\tools\Parquet.SourceGenerator.ApiGates\Parquet.SourceGenerator.ApiGates.csproj"
+            OutputItemType="Analyzer"
+            ReferenceOutputAssembly="false"
+            PrivateAssets="all"
+        />
+        <AdditionalFiles Include="seams.txt" />
+        <AdditionalFiles Include="LEDGER.md" />
+    </ItemGroup>
+</Project>

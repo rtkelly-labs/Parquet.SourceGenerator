@@ -1,0 +1,1 @@
+# Deliberately empty: every internal member of the fixture is an uncatalogued seam.
