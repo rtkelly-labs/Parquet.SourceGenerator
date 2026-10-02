@@ -127,6 +127,10 @@ public sealed class WorkflowConsistencyTests
         "on:\n  issue_comment:\nif: contains(fromJson('[\"OWNER\", \"MEMBER\"]'), a)\nbranch=$(gh pr view 1 --json headRefName)\nhead_repo=$(gh pr view 1 --json headRepository)\nif [ \"$head_repo\" != \"$REPO\" ]; then exit 1; fi\n",
         1
     )]
+    [InlineData(
+        "on:\n  issue_comment:\n# head_repo=$(gh pr view 1 --json headRepository)\n# if [ \"$head_repo\" != \"$REPO\" ]; then exit 1; fi\nbranch=$(gh pr view 1 --json headRefName)\n",
+        1
+    )]
     public void TheForkRefusalRuleRejectsWorkflowsThatSkipItOrOrderItAfterTheLookup(
         string workflow,
         int expectedProblems
@@ -135,6 +139,12 @@ public sealed class WorkflowConsistencyTests
     private static List<string> IssueCommentWorkflowProblems(string workflow)
     {
         var problems = new List<string>();
+
+        // Comment lines are not code: a commented-out refusal must not satisfy the rule.
+        workflow = string.Join(
+            '\n',
+            workflow.Split('\n').Where(line => !line.TrimStart().StartsWith('#'))
+        );
         int lookup = workflow.IndexOf("--json headRefName", StringComparison.Ordinal);
         int refusal = workflow.IndexOf("\"$head_repo\" != \"$REPO\"", StringComparison.Ordinal);
         if (lookup >= 0 && (refusal < 0 || refusal > lookup))
