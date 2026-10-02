@@ -515,6 +515,7 @@ the flat methods are not yet marked
 - IronCompress ships no `win-x86` native binary, so 32-bit .NET Framework applications fail at
   runtime on any compressed write.
 - See [docs/07-KNOWN-LIMITATIONS.md](docs/07-KNOWN-LIMITATIONS.md) for the full audit.
+- **The decompression guard checks the footer before Parquet.Net parses it** (#374). Parquet.Net sizes the lists and byte arrays it allocates for the footer from counts and lengths inside it before it reads an element, so a footer a few bytes long that claimed twenty million row groups cost 160 MB before any generated limit ran, and a stored footer length near `int.MaxValue` wrapped in Parquet.Net's 32-bit arithmetic. When Parquet.Net seeks to the footer length the guard now checks the stored length (it must be positive and fit in the stream, otherwise `InvalidDataException` rather than an `IOException` or `OverflowException`) and walks the footer once without building anything, refusing any list count or byte length larger than the bytes that remain, and a row group count above `MaxRowGroupCount`. A footer that mis-declares the compact type of some other field can still hide a count from the walk; closing that needs the bounds inside Parquet.Net's own reader (see `UPSTREAM_DEPENDENCY_LIMITATIONS.md`).
 
 ---
 
