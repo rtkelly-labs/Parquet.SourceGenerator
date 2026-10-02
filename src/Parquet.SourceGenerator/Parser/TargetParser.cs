@@ -1446,13 +1446,22 @@ internal static class TargetParser
         {
             string definition = generic.ConstructedFrom.ToDisplayString().Split('<')[0];
 
-            if (Array.IndexOf(SupportedCollectionDefinitions, definition) >= 0)
+            // The name match is by display string, so a user type declared into the framework
+            // namespace with another arity (a Dictionary<T>) would otherwise classify here and
+            // throw on TypeArguments[1] in BuildCompoundModel. Arity is part of the match (#417).
+            if (
+                generic.TypeArguments.Length == 1
+                && Array.IndexOf(SupportedCollectionDefinitions, definition) >= 0
+            )
             {
                 kind = PropertyKind.List;
                 return true;
             }
 
-            if (Array.IndexOf(SupportedDictionaryDefinitions, definition) >= 0)
+            if (
+                generic.TypeArguments.Length == 2
+                && Array.IndexOf(SupportedDictionaryDefinitions, definition) >= 0
+            )
             {
                 kind = PropertyKind.Map;
                 return true;
