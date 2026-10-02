@@ -78,7 +78,7 @@ public static class Program
     /// <returns>0 when the run is acceptable, 1 when it regressed or examined nothing.</returns>
     private static int RunRegressionCheck(string resultsDir, string baselinePath, string[] args)
     {
-        IReadOnlyList<BenchmarkMeasurement> current;
+        IReadOnlyList<BenchmarkMeasurement> current = Array.Empty<BenchmarkMeasurement>();
         try
         {
             current = RegressionCheck.ReadResults(resultsDir);
@@ -118,7 +118,7 @@ public static class Program
             return 0;
         }
 
-        IReadOnlyList<BenchmarkMeasurement> baseline;
+        IReadOnlyList<BenchmarkMeasurement> baseline = Array.Empty<BenchmarkMeasurement>();
         try
         {
             baseline = RegressionCheck.ReadBaseline(baselinePath);

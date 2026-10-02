@@ -339,10 +339,13 @@ public static class RegressionCheck
                 !benchmark.TryGetProperty("Statistics", out JsonElement statistics)
                 || statistics.ValueKind != JsonValueKind.Object
                 || !statistics.TryGetProperty("Mean", out JsonElement mean)
+                || mean.ValueKind != JsonValueKind.Number
                 || !benchmark.TryGetProperty("Memory", out JsonElement memory)
                 || memory.ValueKind != JsonValueKind.Object
                 || !memory.TryGetProperty("BytesAllocatedPerOperation", out JsonElement bytes)
-                || bytes.GetInt64() < 0
+                || bytes.ValueKind != JsonValueKind.Number
+                || !bytes.TryGetInt64(out long allocated)
+                || allocated < 0
             )
             {
                 continue;
@@ -359,7 +362,7 @@ public static class RegressionCheck
                     method,
                     StringProperty(benchmark, "Parameters"),
                     mean.GetDouble(),
-                    bytes.GetInt64()
+                    allocated
                 )
             );
         }

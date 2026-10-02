@@ -35,8 +35,8 @@ public sealed class BenchmarkRegressionTests
           "Benchmarks": [
             {
               "Type": "ReadBench", "Method": "Read", "Parameters": "Count=1000",
-              "Statistics": { "Mean": 1234567.5 },
-              "Memory": { "BytesAllocatedPerOperation": 2621440 }
+              "Statistics": { "Mean": 2500 },
+              "Memory": { "BytesAllocatedPerOperation": 262144 }
             },
             {
               "Type": "ReadBench", "Method": "Read", "Parameters": "Count=1000",
@@ -66,8 +66,33 @@ public sealed class BenchmarkRegressionTests
         measurement.Type.ShouldBe("ReadBench");
         measurement.Method.ShouldBe("Read");
         measurement.Parameters.ShouldBe("Count=1000");
-        measurement.MeanNanoseconds.ShouldBe(1_234_567.5d);
-        measurement.AllocatedBytes.ShouldBe(2_621_440L);
+        measurement.MeanNanoseconds.ShouldBe(2500d);
+        measurement.AllocatedBytes.ShouldBe(262_144L);
+    }
+
+    /// <summary>
+    /// BenchmarkDotNet writes <c>null</c> for an allocation figure it could not measure. That case
+    /// is left out like any other unmeasured one: it must not abort the whole read.
+    /// </summary>
+    [Fact]
+    public void ANullOrNonNumericFigureIsLeftOutNotThrown()
+    {
+        const string json = """
+            { "Benchmarks": [
+              { "Type": "B", "Method": "NullBytes", "Parameters": "",
+                "Statistics": { "Mean": 5 }, "Memory": { "BytesAllocatedPerOperation": null } },
+              { "Type": "B", "Method": "TextBytes", "Parameters": "",
+                "Statistics": { "Mean": 5 }, "Memory": { "BytesAllocatedPerOperation": "n/a" } },
+              { "Type": "B", "Method": "NullMean", "Parameters": "",
+                "Statistics": { "Mean": null }, "Memory": { "BytesAllocatedPerOperation": 10 } },
+              { "Type": "B", "Method": "FractionalBytes", "Parameters": "",
+                "Statistics": { "Mean": 5 }, "Memory": { "BytesAllocatedPerOperation": 10.5 } },
+              { "Type": "B", "Method": "Measured", "Parameters": "",
+                "Statistics": { "Mean": 5 }, "Memory": { "BytesAllocatedPerOperation": 10 } }
+            ] }
+            """;
+
+        RegressionCheck.ParseResults(json).ShouldHaveSingleItem().Method.ShouldBe("Measured");
     }
 
     [Fact]
