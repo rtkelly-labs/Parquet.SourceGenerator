@@ -184,9 +184,9 @@ await foreach (var e in UserEventParquet.From(buffer).AsAsyncEnumerable())
 int part = 0;
 await foreach (var batch in UserEventParquet.From(buffer).AsBatches())
 {
-    ReadOnlySpan<long> ids = batch.UserId.Span;
-    ReadOnlySpan<double> amounts = batch.Amount.Span;
-    // SIMD-friendly: the lanes alias pooled buffers, valid until the next iteration
+    // SIMD-friendly: the lanes alias pooled buffers, valid until the next iteration. Keep spans in a
+    // synchronous helper: a span local cannot live in the same block as an await.
+    Summarize(batch.UserId.Span, batch.Amount.Span);
 
     // A batch can be written straight back out. Each call writes a complete single-row-group
     // file, so give every batch its own stream.
