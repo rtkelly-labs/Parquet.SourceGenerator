@@ -186,9 +186,20 @@ public static partial class HeadlineNoiseFilter
             {
                 string text = Strip(cell);
                 foreach (Match time in TimePattern().Matches(text))
-                    row.Times.Add(ToNanoseconds(time));
+                {
+                    if (!TryNanoseconds(time, out double nanoseconds))
+                        return null;
+
+                    row.Times.Add(nanoseconds);
+                }
+
                 foreach (Match memory in MemoryPattern().Matches(text))
-                    row.Allocations.Add(ToBytes(memory));
+                {
+                    if (!TryBytes(memory, out double bytes))
+                        return null;
+
+                    row.Allocations.Add(bytes);
+                }
             }
         }
 
@@ -198,35 +209,48 @@ public static partial class HeadlineNoiseFilter
     private static string Strip(string cell) =>
         cell.Replace("*", string.Empty, StringComparison.Ordinal).Trim();
 
-    private static double ToNanoseconds(Match match)
+    private static bool TryNanoseconds(Match match, out double nanoseconds)
     {
-        double value = Number(match);
-        return match.Groups["unit"].Value switch
+        if (!TryNumber(match, out double value))
+        {
+            nanoseconds = 0;
+            return false;
+        }
+
+        nanoseconds = match.Groups["unit"].Value switch
         {
             "ns" => value,
-            "ms" => value * 1_000_000d,
-            "s" => value * 1_000_000_000d,
-            _ => value * 1_000d,
+            "ms" => value * 1e6,
+            "s" => value * 1e9,
+            _ => value * 1e3,
         };
+        return true;
     }
 
-    private static double ToBytes(Match match)
+    private static bool TryBytes(Match match, out double bytes)
     {
-        double value = Number(match);
-        return match.Groups["unit"].Value switch
+        if (!TryNumber(match, out double value))
+        {
+            bytes = 0;
+            return false;
+        }
+
+        bytes = match.Groups["unit"].Value switch
         {
             "KB" => value * 1024d,
             "MB" => value * 1024d * 1024d,
             "GB" => value * 1024d * 1024d * 1024d,
             _ => value,
         };
+        return true;
     }
 
-    private static double Number(Match match) =>
-        double.Parse(
+    private static bool TryNumber(Match match, out double value) =>
+        double.TryParse(
             match.Groups["value"].Value.Replace(",", string.Empty, StringComparison.Ordinal),
             NumberStyles.Float,
-            CultureInfo.InvariantCulture
+            CultureInfo.InvariantCulture,
+            out value
         );
 
     private sealed class Row(string scale)
