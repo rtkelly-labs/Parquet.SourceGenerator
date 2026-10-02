@@ -226,6 +226,11 @@ The [artifact-backed baseline approval proposal](./ARTIFACT-BACKED-BASELINES.md)
      - Verdicts on polyfills, dependency bundling, generator test frameworks, syntax builders, and author analyzers against what this repository already does.
      - Why none of it should be adopted as a package, and where the parts that survive evaluation already live in the backlog (#439, #471, #472).
 
+31. **[52 - API Surface Map and 0.1 Readiness](./52-API-SURFACE-AND-0.1-READINESS.md)**
+     - Every shipped and emitted public member by purpose, with counts before and after #489 and #576.
+     - Complexity of the surface and the implementation, judged against the docs/47 principle.
+     - The docs/47 section 8 gate item by item, a verdict, and a stability table for review.
+
 ---
 
 ## ⚡ Quick Summary of Intent
