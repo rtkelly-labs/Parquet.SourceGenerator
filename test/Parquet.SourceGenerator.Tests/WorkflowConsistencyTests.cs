@@ -64,8 +64,8 @@ public sealed class WorkflowConsistencyTests
         string ci = Read(root, ".github", "workflows", "ci.yml");
         string release = Read(root, ".github", "workflows", "release.yml");
 
-        Count(ci, $"uses: {layoutAction}").ShouldBe(1);
-        Count(release, $"uses: {layoutAction}").ShouldBe(1);
+        CountActiveUses(ci, layoutAction).ShouldBe(1);
+        CountActiveUses(release, layoutAction).ShouldBe(1);
 
         // The spot-check form (name the entries we expect, one prefix we do not) must not come
         // back beside the shared action: it passes any new packed path (#400).
@@ -328,6 +328,19 @@ public sealed class WorkflowConsistencyTests
             .Count()
             .ShouldBe(baseline.Count);
     }
+
+    // Active entries only: a commented-out `uses:` line must not satisfy the test while Actions skips it.
+    private static int CountActiveUses(string workflow, string action) =>
+        workflow
+            .Split('\n')
+            .Select(line => line.Trim())
+            .Select(line =>
+                line.StartsWith("- ", StringComparison.Ordinal) ? line[2..].TrimStart() : line
+            )
+            .Count(line =>
+                line.Equals($"uses: {action}", StringComparison.Ordinal)
+                || line.StartsWith($"uses: {action} #", StringComparison.Ordinal)
+            );
 
     private static void AssertWorkflowDelegatesOnce(string workflow)
     {
