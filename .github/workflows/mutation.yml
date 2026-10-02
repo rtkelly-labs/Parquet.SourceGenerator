@@ -67,24 +67,36 @@ jobs:
       - name: Stryker — the generator (parser + emitters)
         run: |
           set -euo pipefail
-          before=$(ls -1d StrykerOutput/*/ 2>/dev/null | sort)
+          # A fresh runner has no StrykerOutput/: ls then exits non-zero and pipefail would carry that into
+          # the assignment and kill the step before Stryker starts (#575). An empty list is correct.
+          before=$(ls -1d StrykerOutput/*/ 2>/dev/null | sort || true)
           dotnet tool run dotnet-stryker -- \
             -p Parquet.SourceGenerator.csproj \
             --log-to-file
-          after=$(ls -1d StrykerOutput/*/ | sort)
+          after=$(ls -1d StrykerOutput/*/ 2>/dev/null | sort || true)
           newdir=$(comm -13 <(printf '%s\n' "$before") <(printf '%s\n' "$after") | head -1)
+          if [ -z "$newdir" ]; then
+            echo "::error::Stryker finished without creating a new StrykerOutput directory"
+            exit 1
+          fi
           echo "GENERATOR_REPORT=$newdir/reports/mutation-report.json" >> "$GITHUB_ENV"
         timeout-minutes: 100
 
       - name: Stryker — shipped runtime helpers (Attributes)
         run: |
           set -euo pipefail
-          before=$(ls -1d StrykerOutput/*/ 2>/dev/null | sort)
+          # A fresh runner has no StrykerOutput/: ls then exits non-zero and pipefail would carry that into
+          # the assignment and kill the step before Stryker starts (#575). An empty list is correct.
+          before=$(ls -1d StrykerOutput/*/ 2>/dev/null | sort || true)
           dotnet tool run dotnet-stryker -- \
             -p Parquet.SourceGenerator.Attributes.csproj \
             --log-to-file
-          after=$(ls -1d StrykerOutput/*/ | sort)
+          after=$(ls -1d StrykerOutput/*/ 2>/dev/null | sort || true)
           newdir=$(comm -13 <(printf '%s\n' "$before") <(printf '%s\n' "$after") | head -1)
+          if [ -z "$newdir" ]; then
+            echo "::error::Stryker finished without creating a new StrykerOutput directory"
+            exit 1
+          fi
           echo "ATTRIBUTES_REPORT=$newdir/reports/mutation-report.json" >> "$GITHUB_ENV"
         timeout-minutes: 45
 
