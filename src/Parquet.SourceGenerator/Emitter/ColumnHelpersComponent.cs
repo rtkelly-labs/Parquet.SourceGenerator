@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Text;
+using Parquet.SourceGenerator.Emitter.Components;
 using Parquet.SourceGenerator.Emitter.Compound;
 using Parquet.SourceGenerator.Models;
 
@@ -69,6 +70,12 @@ internal static class ColumnHelpersComponent
         CompoundMapping.EmitReadHelpers(builder, model);
         CompoundMapping.EmitWriteHelpers(builder, model);
 
+        if (!PropertyMappingComponent.IsSingleFieldBlittableStruct(model))
+        {
+            builder.AppendLine();
+            EmitThrowIfSourceShorter(builder);
+        }
+
         LeafColumn[] columns = EmissionPlan.For(model).Columns;
         if (columns.Length == 0)
             return;
@@ -107,6 +114,26 @@ internal static class ColumnHelpersComponent
         builder.AppendLine();
         EmitReturnPooledArray(builder);
     }
+
+    /// <summary>
+    /// The list fast path of the row-group writer walks a span without bounds checks, sized by the
+    /// count read at method entry. This is the one comparison that makes a shrunken list an
+    /// exception instead of a read past its backing array (#375). It is a helper so the unchecked
+    /// loop function carries no branch of its own, and it exists only where that loop does.
+    /// </summary>
+    private static void EmitThrowIfSourceShorter(StringBuilder builder) =>
+        AppendLines(
+            builder,
+            "#if NET6_0_OR_GREATER",
+            "    private static void ThrowIfSourceShorter(int length, int count)",
+            "    {",
+            "        if (length < count)",
+            "        {",
+            "            throw new global::System.InvalidOperationException(\"Collection was modified during serialization.\");",
+            "        }",
+            "    }",
+            "#endif"
+        );
 
     private static void AppendLines(StringBuilder builder, params string[] lines)
     {
