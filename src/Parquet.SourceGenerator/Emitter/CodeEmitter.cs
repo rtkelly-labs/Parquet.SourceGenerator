@@ -113,13 +113,12 @@ internal static class CodeEmitter
         // Zero-copy ReadOnlyMemory overloads
         EmitReadMemoryOverloads(builder, model);
 
-        // Struct-of-arrays columnar batch API (#147) — flat models only
-        if (ColumnBatchComponent.Supports(model))
+        // Columnar batch read (#147, #508) — flat models only. The batch type is the one the columnar
+        // writer above takes, emitted once at namespace scope below.
+        if (emitColumnar)
         {
             builder.AppendLine();
-            ColumnBatchComponent.EmitBatchStruct(builder, model);
-            builder.AppendLine();
-            ColumnBatchComponent.EmitReadBatchesAsync(
+            BatchReadComponent.EmitReadBatchesAsync(
                 builder,
                 model,
                 static (b, col, field, buf) => EmitReadWithNullBypass(b, col, field, buf)
@@ -749,13 +748,13 @@ internal static class CodeEmitter
     {
         builder.AppendLine("    /// <summary>");
         builder.AppendLine(
-            $"    /// Writes a single row group chunk using Parquet.Net low-level primitives for maximum speed and Native AOT compatibility."
+            "    /// Writes a single row group chunk using Parquet.Net low-level primitives for maximum speed and Native AOT compatibility."
         );
         builder.AppendLine("    /// </summary>");
         builder.AppendLine(
-            $"    internal static async global::System.Threading.Tasks.Task WriteParquetRowGroupAsync("
+            "    internal static async global::System.Threading.Tasks.Task WriteParquetRowGroupAsync("
         );
-        builder.AppendLine($"        this global::Parquet.ParquetWriter writer,");
+        builder.AppendLine("        this global::Parquet.ParquetWriter writer,");
         builder.AppendLine(
             $"        global::System.Collections.Generic.IReadOnlyCollection<{model.ClassName}> chunk,"
         );
@@ -807,7 +806,7 @@ internal static class CodeEmitter
             builder.AppendLine("#else");
             builder.AppendLine("                for (int i = 0; i < count; i++)");
             builder.AppendLine("                {");
-            builder.AppendLine($"                    var item = listItems[i];");
+            builder.AppendLine("                    var item = listItems[i];");
             EmitPropertyAssignments(builder, model, "buffer_", prefix: "                    ");
             builder.AppendLine("                }");
             builder.AppendLine("#endif");
@@ -872,7 +871,7 @@ internal static class CodeEmitter
             builder.AppendLine("#else");
             builder.AppendLine("                for (int i = 0; i < count; i++)");
             builder.AppendLine("                {");
-            builder.AppendLine($"                    var item = listItems[i];");
+            builder.AppendLine("                    var item = listItems[i];");
             EmitPropertyAssignments(builder, model, "buffer_", prefix: "                    ");
             builder.AppendLine("                }");
             builder.AppendLine("#endif");
@@ -890,7 +889,7 @@ internal static class CodeEmitter
             builder.AppendLine("#else");
             builder.AppendLine("                for (int i = 0; i < count; i++)");
             builder.AppendLine("                {");
-            builder.AppendLine($"                    var item = arrayItems[i];");
+            builder.AppendLine("                    var item = arrayItems[i];");
             EmitPropertyAssignments(builder, model, "buffer_", prefix: "                    ");
             builder.AppendLine("                }");
             builder.AppendLine("#endif");
@@ -962,14 +961,14 @@ internal static class CodeEmitter
         );
         builder.AppendLine("    /// </summary>");
         builder.AppendLine(
-            $"    public static async global::System.Threading.Tasks.Task WriteParquetAsync("
+            "    public static async global::System.Threading.Tasks.Task WriteParquetAsync("
         );
         builder.AppendLine(
             $"        this global::System.Collections.Generic.IReadOnlyCollection<{model.ClassName}> items,"
         );
-        builder.AppendLine($"        global::System.IO.Stream stream,");
+        builder.AppendLine("        global::System.IO.Stream stream,");
         builder.AppendLine(
-            $"        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,"
+            "        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,"
         );
         builder.AppendLine(
             "        global::System.Threading.CancellationToken cancellationToken = default)"
@@ -1012,14 +1011,14 @@ internal static class CodeEmitter
         );
         builder.AppendLine("    /// </summary>");
         builder.AppendLine(
-            $"    public static async global::System.Threading.Tasks.Task WriteParquetBatchedAsync("
+            "    public static async global::System.Threading.Tasks.Task WriteParquetBatchedAsync("
         );
         builder.AppendLine(
             $"        this global::System.Collections.Generic.IEnumerable<{model.ClassName}> items,"
         );
-        builder.AppendLine($"        global::System.IO.Stream stream,");
+        builder.AppendLine("        global::System.IO.Stream stream,");
         builder.AppendLine(
-            $"        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,"
+            "        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,"
         );
         builder.AppendLine(
             "        global::System.Threading.CancellationToken cancellationToken = default)"
@@ -1103,14 +1102,14 @@ internal static class CodeEmitter
         );
         builder.AppendLine("    /// </summary>");
         builder.AppendLine(
-            $"    public static async global::System.Threading.Tasks.Task WriteParquetAsync("
+            "    public static async global::System.Threading.Tasks.Task WriteParquetAsync("
         );
         builder.AppendLine(
             $"        this global::System.Collections.Generic.IAsyncEnumerable<{model.ClassName}> items,"
         );
-        builder.AppendLine($"        global::System.IO.Stream stream,");
+        builder.AppendLine("        global::System.IO.Stream stream,");
         builder.AppendLine(
-            $"        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,"
+            "        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,"
         );
         builder.AppendLine(
             "        global::System.Threading.CancellationToken cancellationToken = default)"
@@ -1181,9 +1180,9 @@ internal static class CodeEmitter
         builder.AppendLine(
             $"    internal static async global::System.Threading.Tasks.Task<{model.ClassName}[]> ReadArrayCoreAsync("
         );
-        builder.AppendLine($"        global::System.IO.Stream stream,");
+        builder.AppendLine("        global::System.IO.Stream stream,");
         builder.AppendLine(
-            $"        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,"
+            "        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,"
         );
         builder.Append(RowGroupPruningComponent.PredicateParameterLine(model));
         builder.AppendLine(
@@ -1303,9 +1302,9 @@ internal static class CodeEmitter
         builder.AppendLine(
             $"    internal static global::System.Collections.Generic.IAsyncEnumerable<{model.ClassName}> ReadEnumerableCoreAsync("
         );
-        builder.AppendLine($"        global::System.IO.Stream stream,");
+        builder.AppendLine("        global::System.IO.Stream stream,");
         builder.AppendLine(
-            $"        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,"
+            "        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,"
         );
         builder.Append(RowGroupPruningComponent.PredicateParameterLine(model));
         builder.AppendLine(
@@ -1440,9 +1439,9 @@ internal static class CodeEmitter
         builder.AppendLine(
             $"    internal static async global::System.Threading.Tasks.Task<{model.ClassName}[]> ReadArrayCoreAsync("
         );
-        builder.AppendLine($"        global::System.ReadOnlyMemory<byte> parquetBytes,");
+        builder.AppendLine("        global::System.ReadOnlyMemory<byte> parquetBytes,");
         builder.AppendLine(
-            $"        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,"
+            "        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,"
         );
         builder.AppendLine(
             "        global::System.Threading.CancellationToken cancellationToken = default)"
@@ -1468,9 +1467,9 @@ internal static class CodeEmitter
         builder.AppendLine(
             $"    internal static async global::System.Collections.Generic.IAsyncEnumerable<{model.ClassName}> ReadEnumerableCoreAsync("
         );
-        builder.AppendLine($"        global::System.ReadOnlyMemory<byte> parquetBytes,");
+        builder.AppendLine("        global::System.ReadOnlyMemory<byte> parquetBytes,");
         builder.AppendLine(
-            $"        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,"
+            "        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,"
         );
         builder.Append(RowGroupPruningComponent.PredicateParameterLine(model));
         builder.AppendLine(
@@ -1711,15 +1710,15 @@ internal static class CodeEmitter
     {
         builder.AppendLine("    /// <summary>");
         builder.AppendLine(
-            $"    /// Dedicated sequential reader over an in-memory buffer without threadpool hops or stream wrapping overhead."
+            "    /// Dedicated sequential reader over an in-memory buffer without threadpool hops or stream wrapping overhead."
         );
         builder.AppendLine("    /// </summary>");
         builder.AppendLine(
             $"    private static async global::System.Threading.Tasks.Task<{model.ClassName}[]> ReadBufferSequentialArrayAsync("
         );
-        builder.AppendLine($"        global::System.ReadOnlyMemory<byte> parquetBytes,");
+        builder.AppendLine("        global::System.ReadOnlyMemory<byte> parquetBytes,");
         builder.AppendLine(
-            $"        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,"
+            "        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,"
         );
         builder.AppendLine(
             "        global::System.Threading.CancellationToken cancellationToken = default)"
@@ -1845,9 +1844,9 @@ internal static class CodeEmitter
         builder.AppendLine(
             $"    internal static async global::System.Threading.Tasks.Task<{model.ClassName}[]> ReadParallelArrayCoreAsync("
         );
-        builder.AppendLine($"        global::System.ReadOnlyMemory<byte> parquetBytes,");
+        builder.AppendLine("        global::System.ReadOnlyMemory<byte> parquetBytes,");
         builder.AppendLine(
-            $"        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,"
+            "        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,"
         );
         builder.AppendLine(
             "        global::System.Threading.CancellationToken cancellationToken = default)"

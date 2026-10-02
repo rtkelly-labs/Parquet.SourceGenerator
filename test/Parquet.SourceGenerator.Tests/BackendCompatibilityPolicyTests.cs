@@ -85,7 +85,7 @@ public sealed class BackendCompatibilityPolicyTests
 
         lines.ShouldContain(line => line.Contains("Where(", StringComparison.Ordinal));
         lines.ShouldContain(line => line.Contains("Parallel()", StringComparison.Ordinal));
-        lines.ShouldContain(line => line.Contains("ColumnBatch", StringComparison.Ordinal));
+        lines.ShouldContain(line => line.Contains("AsBatches(", StringComparison.Ordinal));
         lines.ShouldContain(line => line.Contains("AsAsyncEnumerable(", StringComparison.Ordinal));
     }
 

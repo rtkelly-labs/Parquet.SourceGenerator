@@ -76,7 +76,7 @@ public sealed class AsyncIteratorContractTests
     }
 
     [Fact]
-    public async Task BatchesStillObserveWithCancellationTokenAsync()
+    public async Task AsBatchesStillObserveWithCancellationTokenAsync()
     {
         using MemoryStream stream = await WriteSampleAsync();
         using var cts = new CancellationTokenSource();
@@ -85,7 +85,7 @@ public sealed class AsyncIteratorContractTests
         await Should.ThrowAsync<OperationCanceledException>(async () =>
         {
             await foreach (
-                ColumnBatchOrderParquetExtensions.ColumnBatch _ in ColumnBatchOrderParquetExtensions
+                ColumnBatchOrderBatch _ in ColumnBatchOrderParquetExtensions
                     .ReadBatchesCoreAsync(stream)
                     .WithCancellation(cts.Token)
             )

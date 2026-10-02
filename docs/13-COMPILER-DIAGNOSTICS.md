@@ -183,7 +183,7 @@ This document details all diagnostic codes, their severity, rationale, and remed
 - **Cause**: Two `[ParquetSerializable]` types in the same namespace have containing-type paths that
   become the same identifier once the dots are removed: `A.BC` and `AB.C`, or a nested `A.BC` and
   a top-level `ABC`.
-- **Why**: Generated types (`…ParquetExtensions`, `…RowGroupMetadata`, `…ColumnarBatch`, the read
+- **Why**: Generated types (`…ParquetExtensions`, `…RowGroupMetadata`, `…Batch`, the read
   sources) are emitted at namespace scope under that flattened name, so both targets would declare
   the same types. Before this rule the build failed with a cascade of `CS0101` errors inside
   generated files that named neither declaration.

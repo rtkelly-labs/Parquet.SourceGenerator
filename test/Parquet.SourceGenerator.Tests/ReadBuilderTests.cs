@@ -60,7 +60,7 @@ public sealed class ReadBuilderTests
 
         using var forBatches = new MemoryStream(bytes);
         int batchedRows = 0;
-        await foreach (var batch in BuilderOrderParquet.From(forBatches).Batches())
+        await foreach (var batch in BuilderOrderParquet.From(forBatches).AsBatches())
         {
             batchedRows += batch.RowCount;
         }
@@ -268,7 +268,7 @@ public sealed class ReadBuilderTests
         reader
             .GetMethod("AsAsyncEnumerable")!
             .ReturnType.ShouldBe(typeof(IAsyncEnumerable<BuilderOrder>));
-        reader.GetMethod("Batches").ShouldNotBeNull();
+        reader.GetMethod("AsBatches").ShouldNotBeNull();
     }
 
     [Fact]
@@ -347,14 +347,14 @@ public sealed class ReadBuilderTests
     }
 
     [Fact]
-    public async Task ParallelThenBatchesThrowsAsync()
+    public async Task ParallelThenAsBatchesThrowsAsync()
     {
         byte[] bytes = await WriteAsync(10);
         BuilderOrderParquetReader reader = BuilderOrderParquet
             .From(new ReadOnlyMemory<byte>(bytes))
             .Parallel();
 
-        var ex = Should.Throw<NotSupportedException>(() => reader.Batches());
+        var ex = Should.Throw<NotSupportedException>(() => reader.AsBatches());
         ex.Message.ShouldContain("Parallel()");
     }
 
@@ -383,22 +383,22 @@ public sealed class ReadBuilderTests
     }
 
     [Fact]
-    public async Task WhereThenBatchesThrowsRatherThanIgnoringThePredicateAsync()
+    public async Task WhereThenAsBatchesThrowsRatherThanIgnoringThePredicateAsync()
     {
-        // The #217 filtered source had no Batches(); the column-batch reader takes no predicate,
+        // The #217 filtered source had no AsBatches(); the column-batch reader takes no predicate,
         // so running it would silently return unpruned row groups.
         byte[] bytes = await WriteAsync(10);
         using var stream = new MemoryStream(bytes);
 
         var ex = Should.Throw<NotSupportedException>(() =>
-            BuilderOrderParquet.From(stream).Where(m => m.Id.Min >= 100).Batches()
+            BuilderOrderParquet.From(stream).Where(m => m.Id.Min >= 100).AsBatches()
         );
         ex.Message.ShouldContain("Where()");
         Should.Throw<NotSupportedException>(() =>
             BuilderOrderParquet
                 .From(new ReadOnlyMemory<byte>(bytes))
                 .Where(m => m.Id.Min >= 100)
-                .Batches()
+                .AsBatches()
         );
     }
 

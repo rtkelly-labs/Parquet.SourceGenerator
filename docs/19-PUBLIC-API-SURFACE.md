@@ -186,7 +186,7 @@ A generated entry point returning a builder struct:
 ```csharp
 await PersonParquet.From(stream).Parallel(4).ToArrayAsync(ct);
 await PersonParquet.From(bytes).Where(m => m.OrderKey.Min >= 1000).ToArrayAsync(ct);
-await foreach (var batch in PersonParquet.From(path).Batches(ct)) { /* ... */ }
+await foreach (var batch in PersonParquet.From(path).AsBatches(ct)) { /* ... */ }
 ```
 
 Three sources + three executions + four shapes + pushdown is **eleven members**, not 45 names, and
@@ -209,9 +209,14 @@ are now one `readonly struct <Model>ParquetReader`: both `From` overloads return
 still allocates nothing. Combinations the separate types made unrepresentable throw
 `NotSupportedException` from the call that completes them — `Parallel()` on a stream source or a
 filtered reader, `Where()` on a parallel or already-filtered reader, and `AsAsyncEnumerable()` /
-`Batches()` on a parallel reader or `Batches()` on a filtered one. The terminal set is
-`ToArrayAsync` and `AsAsyncEnumerable` (plus `Batches`, whose shape #369 owns); `ToListAsync` was
+`AsBatches()` on a parallel reader or `AsBatches()` on a filtered one. The terminal set is
+`ToArrayAsync` and `AsAsyncEnumerable` (plus `AsBatches`, whose ownership shape #369 settled); `ToListAsync` was
 removed because `List<T>` versus `T[]` is a collection preference, not a read capability (#479).
+
+> **Amended (#507, #508).** The two batch types above are now one top-level `{T}Batch` (`ReadOnlyMemory<T>`
+> lanes, packed values plus `…DefinitionLevels` for nullable value columns, inline-nullable text and
+> binary), `Batches()` is `AsBatches()`, and the batch the reader yields is the batch the columnar
+> `WriteParquetAsync` takes. Layout reasoning and ownership: [12](12-BUFFER-REUSE-AND-EXTRACTION-STRATEGIES.md) §7.
 
 ### D3 — Fate of the existing flat methods
 

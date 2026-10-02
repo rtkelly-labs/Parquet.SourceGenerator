@@ -16,6 +16,94 @@ The rule, the three surfaces and the author process are in
 
 <!-- Add new entries directly below this line, newest first. -->
 
+### 2026-10-02 — `{T}ColumnarBatch` and the nested `ColumnBatch` become one top-level `{T}Batch` (#508)
+
+- **Surface:** emitted
+- **Semver:** breaking-major
+- **Issue:** [#508](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/508), part of tracker
+  [#505](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/505); ownership model
+  [#369](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/369) (partly)
+- **Change:** for each flat model, `public readonly struct {T}ColumnarBatch` (write input) and
+  `{T}ParquetExtensions.ColumnBatch` (read item type, `ReadOnlySpan<T>` accessors named
+  `<Column>Span`, plus `RowGroupIndex`) are removed. `public readonly struct {T}Batch` replaces both,
+  at namespace scope. It keeps the write-side shape: a validating public constructor `{T}Batch(int
+  rowCount, <one ReadOnlyMemory<…> per column, plus a ReadOnlyMemory<int> definition-levels lane after
+  each nullable value column>)`, a get-only `RowCount` and one get-only `ReadOnlyMemory<…>` property
+  per column (`<Column>DefinitionLevels` for the levels). The columnar `WriteParquetAsync(this
+  {T}Batch batch, Stream, ParquetSerializerOptions?, CancellationToken)` now takes it, and the reader's
+  `AsBatches()` yields it. Read-side consumers move from `ReadOnlySpan<T> x = batch.AmountSpan` to
+  `batch.Amount.Span`; a nullable value column reads as packed values plus levels instead of
+  `ReadOnlySpan<T?>`; text and binary columns read as inline-nullable `ReadOnlyMemory<char>` /
+  `ReadOnlyMemory<byte>` per row instead of `string` / `byte[]`; `RowGroupIndex` is gone.
+- **Rationale:** one name had meant two unrelated types, so what a reader yielded could not be handed
+  to the columnar writer, and the near-identical names hid it. Layout A (packed values plus
+  definition levels, inline-nullable text and binary) was chosen from the #561 experiment: cheapest
+  to write, read and store for numerics, and storing strings packed cost 28-280 us per column. See
+  [12](../12-BUFFER-REUSE-AND-EXTRACTION-STRATEGIES.md) §7.
+- **Ownership:** a batch from `AsBatches()` is borrowed (valid until the next `MoveNextAsync`) and
+  carries a lease the iterator expires before returning the pooled buffers; a kept batch throws
+  `ObjectDisposedException` from every lane property, the fill methods and `WriteParquetAsync`. A
+  batch a caller constructs never expires. This is lease/token validation from #369's candidate
+  list, and the owner chose it as the stable 0.1 contract: using a batch or a lane after the
+  enumerator advances is invalid; a `ReadOnlyMemory<T>` lane already copied out of a live batch is
+  not checked yet (lane-level checking is #580, additive, no API change); lanes of a borrowed batch
+  are not guaranteed to be array-backed; batches are not thread-safe; to keep data, copy each lane
+  with `.ToArray()` into the public constructor. No escape method and no owned, callback or
+  ref-counted variant in 0.1; an owned-batch terminal, `ToOwned()` and a callback form can be added
+  later without a break.
+- **Alternatives considered:** *`T?` spans for nullable columns (layout B)* — rejected: costs a
+  transpose on write and doubles the width of small types. *A cached `T?` accessor (layout C)* —
+  rejected: it allocated large arrays and was 2x slower under Server GC in the experiment; replaced
+  by the explicit `Fill<Column>Nullable` method below. *Packed storage for strings* — rejected: the
+  writer takes `ReadOnlyMemory<ReadOnlyMemory<char>?>` and packing costs 28-280 us per column.
+  *Keep two types and add a converter* — rejected: that is the surface this entry removes.
+  *Callback-scoped borrowing* (`Func<Batch, ValueTask>`) — not chosen: it gives up the `await
+  foreach` shape and needs the lease anyway; not in 0.1 (can be added later without a break).
+  *Reference counting* — rejected: the most surface for the same hole.
+- **Fixes folded in:** #384 part a (a derived `<Column>DefinitionLevels` member no longer collides
+  with a property of that name; it becomes `<Column>DefinitionLevels_`) and #550/#562's
+  readonly-struct shape carries over.
+- **Note:** pre-1.0 break; `0.0.x` permits it without a major bump.
+
+### 2026-10-02 — added `{T}Batch.Fill<Column>Nullable(Span<T?> destination)` for each nullable value column (#508)
+
+- **Surface:** emitted
+- **Semver:** additive-minor
+- **Issue:** [#508](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/508)
+- **Change:** one `public void Fill<Column>Nullable(System.Span<T?> destination)` per nullable
+  value column of a flat model, where `T` is the column's wire element type (the one its packed lane
+  uses). It expands the packed values and definition levels into the caller's buffer, null where the
+  row is null. It throws `ArgumentException` if the buffer is shorter than the row count and
+  `InvalidOperationException` if the levels mark more rows present than the packed lane holds.
+- **Rationale:** the packed layout is the cheapest to produce and consume, but a caller sometimes
+  wants a row-aligned `T?` view. An explicit method makes the cost visible (an O(rows) pass and a
+  buffer the caller owns); no existing member can express that without a cached property.
+- **Alternatives considered:** *a cached `T?` property per column* — rejected: per-batch large
+  allocations, 2x slower under Server GC (#561). *A `T?` span returned from a rented buffer* —
+  rejected: it would hand the caller a second borrowed buffer to track. *Nothing, let callers write
+  the loop* — rejected: the loop is easy to get wrong (the packed index only advances on present
+  rows) and every consumer would carry a copy.
+- **Open:** classification of this member and of `AsBatches()` under #482 (stable / optional /
+  preview) is the owner's call.
+
+### 2026-10-02 — renamed `{T}ParquetReader.Batches(CancellationToken)` to `AsBatches(CancellationToken)` (#507)
+
+- **Surface:** emitted
+- **Semver:** breaking-major
+- **Issue:** [#507](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/507), part of tracker
+  [#505](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/505)
+- **Change:** `Batches(CancellationToken cancellationToken = default) ->
+  IAsyncEnumerable<{T}ParquetExtensions.ColumnBatch>` is now `AsBatches(CancellationToken
+  cancellationToken = default) -> IAsyncEnumerable<{T}Batch>`. The `NotSupportedException` rules
+  (after `Parallel()`, after `Where(...)`) are unchanged, with the method name in the message updated.
+- **Rationale:** "batch" is the columnar industry term (Arrow `RecordBatch`, Spark `ColumnarBatch`,
+  pyarrow `iter_batches`), and `As…` marks a view or stream where `To…` marks an owned result
+  (`ToArrayAsync`); a batch is a borrowed view, so `As` is the accurate prefix.
+- **Alternatives considered:** `…Iterator`, `AsColumnBatches`, `AsColumns`, `AsRecordBatches`
+  (reserved for real Arrow `RecordBatch` output); reasons in #507.
+- **Note:** pre-1.0 break; `0.0.x` permits it without a major bump. Landed with the #508 entry above
+  as the single breaking change #505 asks for.
+
 ### 2026-10-01 — `{T}ColumnarBatch` becomes a `readonly struct` with get-only properties and a validating constructor (#550)
 
 - **Surface:** emitted

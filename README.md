@@ -131,12 +131,12 @@ await eventStream.WriteParquetAsync(
 
 If the caller already holds contiguous column buffers — Arrow arrays, a query engine's column
 vectors, pre-split `ReadOnlyMemory<T>` — there is no reason to materialise POCOs first. Flat models
-also get a generated `readonly struct` batch, built through a validating constructor, whose buffers go straight to Parquet.Net with no pooled rental and
-no copy:
+also get one generated `readonly struct`, `<Model>Batch`, built through a validating constructor, whose buffers go straight to Parquet.Net with no pooled rental and
+no copy. It is the same type `AsBatches()` yields when reading (see below), so a batch read from one file can be written to another:
 
 ```csharp
 // Validates every column against rowCount and throws ArgumentException if one is short.
-var batch = new UserEventColumnarBatch(
+var batch = new UserEventBatch(
     rowCount: rowCount,
     id: idBuffer,                                  // ReadOnlyMemory<int>
     name: nameBuffer,                              // ReadOnlyMemory<ReadOnlyMemory<char>?>
@@ -180,31 +180,54 @@ await foreach (var e in UserEventParquet.From(buffer).AsAsyncEnumerable())
     // Process item by item with O(1) memory
 }
 
-// Columnar (struct-of-arrays) batches — one per row group, no UserEvent ever constructed
-await foreach (var batch in UserEventParquet.From(buffer).Batches())
+// Columnar batches — one per row group, no UserEvent ever constructed
+// Your own synchronous code. Keep spans in a helper like this one: a span local cannot live in
+// the same block as an await.
+static void Summarize(ReadOnlySpan<long> ids, ReadOnlySpan<double> amounts)
 {
-    ReadOnlySpan<long> ids = batch.UserIdSpan;
-    ReadOnlySpan<double> amounts = batch.AmountSpan;
-    // SIMD-friendly: the spans alias pooled buffers, valid until the next iteration
+    // SIMD-friendly: the lanes alias pooled buffers, valid until the next iteration
+}
+
+int part = 0;
+await foreach (var batch in UserEventParquet.From(buffer).AsBatches())
+{
+    Summarize(batch.UserId.Span, batch.Amount.Span);
+
+    // A batch can be written straight back out. Each call writes a complete single-row-group
+    // file, so give every batch its own stream.
+    await using FileStream output = File.Create($"part-{part++}.parquet");
+    await batch.WriteParquetAsync(output);
 }
 ```
 
 `<Model>Parquet.From(...)` is the only generated read entry point, and both overloads return the
 same `readonly struct <Model>ParquetReader`: the source (`Stream` or `ReadOnlyMemory<byte>`), the
 execution (`.Parallel()`), pushdown (`.Where(...)`) and options (`.WithOptions(...)`) are reader
-state, and the terminal (`ToArrayAsync`, `AsAsyncEnumerable`, `Batches`) picks the shape. A
+state, and the terminal (`ToArrayAsync`, `AsAsyncEnumerable`, `AsBatches`) picks the shape. A
 `List<T>` is a conversion of the array (`.ToList()` or `new List<T>(array)`), not a separate read.
 Combinations no backend can execute throw `NotSupportedException` from the call that completes them
 rather than being silently degraded: `.Parallel()` on a `Stream` source (buffer the file and use
 `From(ReadOnlyMemory<byte>)`); `.Parallel()` together with `.Where(...)`; `AsAsyncEnumerable()` or
-`Batches()` after `.Parallel()` (streaming is sequential); and `Batches()` after `.Where(...)`. The
+`AsBatches()` after `.Parallel()` (streaming is sequential); and `AsBatches()` after `.Where(...)`. The
 flat `ReadParquet*Async` methods were removed before `0.1.0`; the mapping is in [CHANGELOG.md](CHANGELOG.md) and the decision in
 [docs/48](docs/48-FLAT-READ-REMOVAL-480.md). The `Parquet.SourceGenerator.Legacy` package has no
 builder and keeps its flat `ReadParquetAsync` / `ReadParquetArrayAsync`.
 
-`Batches()` is emitted for flat models only (no nested structs, lists or maps) and
-allocates no domain objects; the pooled column buffers are returned when the enumerator advances
-or is disposed, so nothing in a batch may outlive the loop body.
+`AsBatches()` is emitted for flat models only (no nested structs, lists or maps) and allocates no domain objects.
+
+**Layout.** A nullable value column is a packed lane of its non-null values plus a definition-level lane (one entry per
+row, 1 = present, 0 = null), exactly what the columnar write takes. String and byte-array columns hold one
+inline-nullable `ReadOnlyMemory` per row. If you want a `T?` per row, call the explicit
+`batch.Fill<Column>Nullable(Span<T?> destination)`: it needs a buffer you own and an O(rows) pass, so prefer the packed
+lanes when you can (a cached `T?` accessor measured 2x slower under Server GC, which is why there is not one).
+
+**Lifetime.** A batch read from `AsBatches()` is *borrowed*: its lanes alias pooled buffers that are returned when the
+enumerator advances or is disposed. After that, every lane property of that batch (and writing it) throws
+`ObjectDisposedException` rather than reading recycled memory. A `ReadOnlyMemory<T>` you already copied out of a live
+batch is a plain view and is not checked, but using it after the loop is still invalid, so use a batch and its lanes inside the
+loop body only. Lanes of a borrowed batch are not guaranteed to be array-backed (do not rely on `MemoryMarshal.TryGetArray`
+or a pin outliving the batch), and batches are not thread-safe. To keep data, copy each lane with `.ToArray()` into the
+`<Model>Batch` constructor.
 
 ### 5. Row-Group Pruning with Min/Max Statistics
 

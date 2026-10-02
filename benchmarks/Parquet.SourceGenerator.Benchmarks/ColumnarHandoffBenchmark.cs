@@ -43,7 +43,7 @@ namespace Parquet.SourceGenerator.Benchmarks;
 public class ColumnarHandoffBenchmark
 {
     private List<BenchmarkTpchLineItem> _rows = null!;
-    private BenchmarkTpchLineItemColumnarBatch _batch;
+    private BenchmarkTpchLineItemBatch _batch;
 
     [ParamsSource(nameof(Counts))]
     public int Count { get; set; }
@@ -228,7 +228,7 @@ public class ColumnarHandoffBenchmark
     /// already owns buffers like these; building them is the premise of the API, not part of any
     /// measured path.
     /// </summary>
-    private static BenchmarkTpchLineItemColumnarBatch Transpose(List<BenchmarkTpchLineItem> rows)
+    private static BenchmarkTpchLineItemBatch Transpose(List<BenchmarkTpchLineItem> rows)
     {
         int count = rows.Count;
 
@@ -295,7 +295,7 @@ public class ColumnarHandoffBenchmark
             comment[i] = AsMemory(row.Comment);
         }
 
-        return new BenchmarkTpchLineItemColumnarBatch(
+        return new BenchmarkTpchLineItemBatch(
             rowCount: count,
             orderKey: orderKey.AsMemory(0, nOrderKey),
             orderKeyDefinitionLevels: orderKeyDef.AsMemory(0, count),

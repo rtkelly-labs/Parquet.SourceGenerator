@@ -158,6 +158,45 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   byte-identical.
 
 ### Removed
+- **BREAKING: one `<Model>Batch` for columnar read and write, and `Batches()` becomes `AsBatches()`
+  (#508, #507; tracker #505).** The write-side `<Model>ColumnarBatch` and the read-side nested
+  `<Model>ParquetExtensions.ColumnBatch` are replaced by one top-level `readonly struct
+  <Model>Batch` with get-only properties and a validating constructor. `<Model>ParquetReader.AsBatches(ct)`
+  returns `IAsyncEnumerable<<Model>Batch>`, and the columnar `<Model>Batch.WriteParquetAsync(stream, options, ct)`
+  takes the same type, so `await foreach (var batch in reader.AsBatches()) await batch.WriteParquetAsync(output);`
+  round-trips with no conversion. Layout (decided in #508, measured in #561): a nullable value
+  column is a packed lane of its non-null values (`ReadOnlyMemory<T>`) plus a definition-level lane
+  (`ReadOnlyMemory<int>`, one per row), the shape the writer consumes; string and byte-array
+  columns stay inline-nullable `ReadOnlyMemory<ReadOnlyMemory<char>?>` / `ReadOnlyMemory<ReadOnlyMemory<byte>?>`.
+  The read path decodes nullable value columns straight into that layout (`ReadRawAsync`), with no
+  expansion pass.
+
+  Ownership (#369, closed by this change; owner decision, stable for 0.1): a batch from `AsBatches()` is
+  borrowed, valid until the next `MoveNextAsync` or disposal. It carries a lease the iterator expires
+  before returning the pooled buffers, so a kept batch throws `ObjectDisposedException` from every lane
+  property (and from the fill methods and `WriteParquetAsync`) instead of reading recycled memory. A
+  batch you construct yourself never expires. Using a batch, or a lane taken from it, after the
+  enumerator advances is invalid. A `ReadOnlyMemory<T>` lane already copied out of a live batch is not
+  checked yet (lane-level checking: #580), the lanes of a borrowed batch are not guaranteed to be
+  array-backed (do not rely on `MemoryMarshal.TryGetArray` or `Pin` outliving the batch), and batches
+  are not thread-safe. To keep data, copy each lane with `.ToArray()` into the public constructor.
+  There is no owned, callback or ref-counted variant in 0.1.
+
+  | Before | After |
+  |:---|:---|
+  | `XParquet.From(s).Batches()` | `XParquet.From(s).AsBatches()` |
+  | `XParquetExtensions.ColumnBatch` (read item type) | `XBatch` |
+  | `XColumnarBatch` (write input type) | `XBatch` (same constructor and lanes) |
+  | `batch.AmountSpan` (`ReadOnlySpan<T>`) | `batch.Amount.Span` (`ReadOnlyMemory<T>` lane) |
+  | `batch.DiscountSpan` (`ReadOnlySpan<double?>` on a nullable column) | `batch.Discount` + `batch.DiscountDefinitionLevels` (packed + levels), or `batch.FillDiscountNullable(Span<double?>)` into a buffer you own |
+  | `batch.RegionSpan` (`ReadOnlySpan<string>`) | `batch.Region.Span` (`ReadOnlyMemory<char>` per row, `?` for nullable columns; `.ToString()` to materialise) |
+  | `batch.RowGroupIndex` | removed: count the batches |
+  | a model's `RowCount` column next to the batch row count | unchanged: the row count is `BatchRowCount` when a column is named `RowCount` |
+
+  `Fill<Column>Nullable` is an explicit, opt-in convenience (O(rows), caller-supplied buffer) and
+  not a cached `T?` property: the cached form allocated row-count-sized arrays per batch and was 2x
+  slower under Server GC in the #561 experiment. Rationale and the layout measurements:
+  `docs/12-BUFFER-REUSE-AND-EXTRACTION-STRATEGIES.md` section 7.
 - **BREAKING: the four public read state types collapse into one reader, and `ToListAsync` is
   gone (#478, #479).** `<Model>Parquet.From(Stream)` and `From(ReadOnlyMemory<byte>)` now both
   return a single `readonly struct <Model>ParquetReader`; `WithOptions`, `Where` and `Parallel`
@@ -224,6 +263,15 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   only for code that referenced the Attributes helpers directly.
 
 ### Fixed
+- **`AsBatches()` now enforces the decompression limits** (#358). The columnar batch reader was the
+  one read path that handed the caller's raw stream to `ParquetReader`, so `MaxDecompressedPageSize`
+  and `MaxDecompressionExpansionRatio` were silently ignored for it. It now reads through the same
+  guarded stream as every other path.
+- **A nullable value column next to a property named `<Column>DefinitionLevels` no longer emits a
+  duplicate batch member** (#384, part a). Every derived batch member name (row count, definition
+  levels, fill method, private plumbing) is now claimed against the model's own property names and
+  moved aside on a clash (`ValueDefinitionLevels` becomes `ValueDefinitionLevels_`). Part b (the
+  parameter list) was already handled.
 - **Emitted read and write methods are bounded by column shape, not column count.** The per-column dictionary guard, all-null bypass, list-leaf sizing, list lanes, struct reconstruction, compound extraction and pooled-buffer returns are now shared or per-column `private static` helpers called once per column, clearing CA1502 and CA1505 in the generated output with no public API change (#552, part of #554).
 - **Emitted code braces multi-statement blocks under `if`** in the compound list readers, clearing S2681
   in the generated output (#551, part of #554).

@@ -1,4 +1,5 @@
 using System.Text;
+using Parquet.SourceGenerator.Emitter.Columnar;
 using Parquet.SourceGenerator.Models;
 
 namespace Parquet.SourceGenerator.Emitter;
@@ -24,7 +25,7 @@ namespace Parquet.SourceGenerator.Emitter;
 /// unsupported combination throws <c>NotSupportedException</c></b>. <c>Parallel()</c> on a stream
 /// source or a filtered reader throws in <c>Parallel()</c>; <c>Where()</c> on a parallel reader
 /// throws in <c>Where()</c>; a streaming or batch terminal on a parallel reader, and
-/// <c>Batches()</c> on a filtered reader, throw at that terminal. A reader value therefore never
+/// <c>AsBatches()</c> on a filtered reader, throw at that terminal. A reader value therefore never
 /// holds a state that no terminal can execute.
 /// </para>
 /// <para>
@@ -53,7 +54,7 @@ internal static class ReadBuilderComponent
     public static void Emit(StringBuilder builder, TargetClassModel model)
     {
         bool pruning = RowGroupPruningComponent.IsEnabled(model);
-        bool batches = ColumnBatchComponent.Supports(model);
+        bool batches = ColumnarBatchComponent.IsSupported(model);
 
         EmitEntryPoint(builder, model, pruning);
         builder.AppendLine();
@@ -224,7 +225,7 @@ internal static class ReadBuilderComponent
 
         if (batches)
         {
-            EmitBatches(builder, ext, pruning);
+            EmitBatches(builder, model, ext, pruning);
         }
 
         if (pruning)
@@ -305,27 +306,33 @@ internal static class ReadBuilderComponent
         builder.AppendLine();
     }
 
-    private static void EmitBatches(StringBuilder builder, string ext, bool pruning)
+    private static void EmitBatches(
+        StringBuilder builder,
+        TargetClassModel model,
+        string ext,
+        bool pruning
+    )
     {
+        string batchType = ColumnarBatchComponent.BatchTypeName(model);
         builder.AppendLine(
-            "    /// <summary>Streams struct-of-arrays column batches, one per row group (#147).</summary>"
+            "    /// <summary>Streams columnar batches, one per row group (#147, #508). Each batch is borrowed: it is valid until the next <c>MoveNextAsync</c> and throws after that.</summary>"
         );
         builder.AppendLine(
             $"    /// <exception cref=\"System.NotSupportedException\">The reader is <c>Parallel()</c>{(pruning ? ", or has a <c>Where()</c> predicate" : string.Empty)}.</exception>"
         );
         builder.AppendLine(
-            $"    public global::System.Collections.Generic.IAsyncEnumerable<{ext}.ColumnBatch> Batches({Ct} cancellationToken = default)"
+            $"    public global::System.Collections.Generic.IAsyncEnumerable<{batchType}> AsBatches({Ct} cancellationToken = default)"
         );
         builder.AppendLine("    {");
         builder.AppendLine("        if (_parallel)");
         builder.AppendLine(
-            $"            throw new {NotSupported}(\"Batches() cannot follow Parallel(): there is no parallel column-batch reader and batch streaming is sequential by definition. Drop Parallel().\");"
+            $"            throw new {NotSupported}(\"AsBatches() cannot follow Parallel(): there is no parallel column-batch reader and batch streaming is sequential by definition. Drop Parallel().\");"
         );
         if (pruning)
         {
             builder.AppendLine("        if (_predicate is not null)");
             builder.AppendLine(
-                $"            throw new {NotSupported}(\"Batches() cannot follow Where(): the column-batch reader does not accept a row-group predicate. Use AsAsyncEnumerable() or ToArrayAsync() to filter.\");"
+                $"            throw new {NotSupported}(\"AsBatches() cannot follow Where(): the column-batch reader does not accept a row-group predicate. Use AsAsyncEnumerable() or ToArrayAsync() to filter.\");"
             );
         }
         builder.AppendLine("        return _stream is not null");

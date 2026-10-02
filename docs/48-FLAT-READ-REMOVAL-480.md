@@ -23,7 +23,7 @@ Removed from every modern model, in both the `Stream` and the `ReadOnlyMemory<by
 | `ReadParquetAsync` | `.ToArrayAsync()` (then `.ToList()` for a `List<T>`) |
 | `ReadParquetArrayAsync` | `.ToArrayAsync()` |
 | `ReadParquetStreamAsync` | `.AsAsyncEnumerable()` |
-| `ReadParquetBatchesAsync` | `.Batches()` |
+| `ReadParquetBatchesAsync` | `.AsBatches()` (named `.Batches()` when this landed; renamed in #507) |
 | `ReadParquetParallelAsync` | `.Parallel().ToArrayAsync()` (buffer source only) |
 | `ReadParquetParallelArrayAsync` | `.Parallel().ToArrayAsync()` (buffer source only) |
 | the `predicate` parameter on four of them | `.Where(predicate)` |
@@ -79,7 +79,7 @@ The contract narrowed; the implementation breadth did not.
   already expresses the same fact as the absence of `Parallel()` on the stream source. Their only
   distinguishing behaviour — materialising into a pre-sized array — is what the stream
   `ToArrayAsync()` path already does.
-- `.Batches()` is unchanged. Ownership of the batch read shape sits with #369; this change only stops
+- `.Batches()` was unchanged here (renamed `.AsBatches()` by #507). Ownership of the batch read shape sits with #369; this change only stops
   exposing the flat `ReadParquetBatchesAsync` that `.Batches()` forwarded to.
 - The sorted-key lookups (`ReadParquetBy{Key}Async`, `ReadParquet{Key}RangeAsync`, #151) are not flat
   read-grid cells and are outside #480's scope; they are unchanged.
