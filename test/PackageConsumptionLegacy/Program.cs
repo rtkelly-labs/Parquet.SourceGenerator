@@ -129,6 +129,7 @@ internal static class Program
             || !await SchemaEvolutionRoundTripsAsync()
             || !await DecompressionLimitIsAppliedAsync()
             || !await DecompressionGuardScenario.RunAsync()
+            || !await HostileScenario.RunAsync()
             || !SynchronizationContextScenario.Run()
         )
         {

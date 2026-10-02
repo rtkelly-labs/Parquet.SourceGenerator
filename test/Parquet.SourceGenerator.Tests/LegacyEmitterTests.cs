@@ -221,7 +221,7 @@ public class LegacyEmitterTests
             .ShouldBe(1);
 
         // Row counts come from row-group metadata, so the file is not walked twice just to total them.
-        code.ShouldContain("totalRows += (int)reader.RowGroups[r].RowCount;");
+        code.ShouldContain("long rowCount = reader.RowGroups[r].RowCount;");
     }
 
     /// <summary>
@@ -299,6 +299,30 @@ public class LegacyEmitterTests
         code.ShouldContain("guardedStream.Activate()");
         code.ShouldContain("MaxDecompressedPageSize");
         code.ShouldContain("MaxDecompressionExpansionRatio");
+    }
+
+    [Fact]
+    public void LegacyReadBoundsFileDeclaredCountsBeforeNarrowingOrAllocating()
+    {
+        string code = Emit(
+            Prop("Id", "id", "int", LegacyModels::PropertyKind.Primitive, isNullable: false),
+            Prop("Name", "name", "string", LegacyModels::PropertyKind.Primitive, isNullable: true)
+        );
+
+        // Row counts are summed in 64 bits and checked against MaxAllocationValues first.
+        code.ShouldContain("int totalRows = CountRows(reader, options);");
+        code.ShouldContain("long rowCount = reader.RowGroups[r].RowCount;");
+        code.ShouldContain("if (rowCount < 0 || rowCount > options.MaxAllocationValues)");
+        code.ShouldContain("int groupRows = checked((int)rgReader.RowCount);");
+        code.ShouldNotContain("totalRows += (int)");
+
+        // A column's declared value count is checked before Parquet.Net reads it, and its length
+        // before it is indexed. The behaviour is pinned by test/PackageConsumptionLegacy.
+        code.ShouldContain("ValidateColumnValueCount(rgReader, field_0, options);");
+        code.ShouldContain("ValidateColumnLength(data_0.Length, field_0.Name, groupRows);");
+        code.ShouldContain(
+            "if (!missing_1) ValidateColumnLength(data_1.Length, field_1.Name, groupRows);"
+        );
     }
 
     [Fact]
