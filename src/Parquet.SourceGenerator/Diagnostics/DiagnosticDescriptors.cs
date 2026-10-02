@@ -156,6 +156,55 @@ internal static class DiagnosticDescriptors
     );
 
     /// <summary>
+    /// PARQ020: Abstract target types are not supported.
+    /// </summary>
+    /// <remarks>
+    /// The read path constructs rows with <c>new T { ... }</c>, which an abstract class cannot
+    /// satisfy (CS0144 inside generated code). An abstract base is still a valid source of
+    /// inherited columns for a concrete target.
+    /// </remarks>
+    public static readonly DiagnosticDescriptor AbstractTypeNotSupported = new(
+        id: "PARQ020",
+        title: "Abstract type cannot be Parquet-serializable",
+        messageFormat: "The type '{0}' is abstract. [ParquetSerializable] needs a concrete type because generated code constructs rows with 'new'; put the attribute on a derived type, whose inherited members are included",
+        category: "ParquetSourceGenerator",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
+
+    /// <summary>
+    /// PARQ021: Ref struct target types are not supported.
+    /// </summary>
+    /// <remarks>
+    /// Generated code stores rows in <c>List&lt;T&gt;</c>, arrays and tasks, none of which can hold
+    /// a ref struct (CS0306 and CS8345 across the generated file).
+    /// </remarks>
+    public static readonly DiagnosticDescriptor RefStructNotSupported = new(
+        id: "PARQ021",
+        title: "Ref struct cannot be Parquet-serializable",
+        messageFormat: "The type '{0}' is a ref struct. [ParquetSerializable] supports types that can be stored in lists and arrays; declare an ordinary struct or class instead",
+        category: "ParquetSourceGenerator",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
+
+    /// <summary>
+    /// PARQ022: File-local target types are not supported.
+    /// </summary>
+    /// <remarks>
+    /// Generated code lives in another file and names the target in public signatures; a
+    /// <c>file</c> type is visible only in its own file (CS9051 in generated code).
+    /// </remarks>
+    public static readonly DiagnosticDescriptor FileLocalTypeNotSupported = new(
+        id: "PARQ022",
+        title: "File-local type cannot be Parquet-serializable",
+        messageFormat: "The type '{0}' is file-local. [ParquetSerializable] types are named from generated code in another file; remove the 'file' modifier",
+        category: "ParquetSourceGenerator",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
+
+    /// <summary>
     /// PARQ011: The member's type is supported by Parquet.Net 6 but not by the 4.x/5.x API.
     /// </summary>
     /// <remarks>

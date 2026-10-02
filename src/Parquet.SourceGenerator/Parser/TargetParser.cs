@@ -310,6 +310,8 @@ internal static class TargetParser
             diagnostics
         );
 
+        bool unsupportedShape = ReportUnsupportedShape(typeSymbol, typeDeclaration, diagnostics);
+
         string namespaceName = typeSymbol.ContainingNamespace.IsGlobalNamespace
             ? string.Empty
             : typeSymbol.ContainingNamespace.ToDisplayString();
@@ -381,6 +383,7 @@ internal static class TargetParser
         // neither collides nor causes another target to be suppressed.
         bool nameCollides =
             !isGeneric
+            && !unsupportedShape
             && !nestedUnreachable
             && ReportGeneratedNameCollision(
                 typeSymbol,
@@ -396,6 +399,7 @@ internal static class TargetParser
             && !rejectedAnyMember
             && !nestedUnreachable
             && !isGeneric
+            && !unsupportedShape
             && !nameCollides;
 
         bool hasSingleInstanceField = ComputeHasSingleInstanceField(typeSymbol, orderedProperties);
@@ -567,6 +571,81 @@ internal static class TargetParser
         }
 
         return (isPartial, nestedUnreachable, isGeneric);
+    }
+
+    /// <summary>
+    /// Rules PARQ020 (abstract), PARQ021 (ref struct) and PARQ022 (file-local): declaration shapes
+    /// the emitted code cannot express, each of which used to pass every check and then fail to
+    /// compile inside the generated file (#402). Returns whether any applied, which suppresses
+    /// emission like the other declaration rules.
+    /// </summary>
+    private static bool ReportUnsupportedShape(
+        INamedTypeSymbol typeSymbol,
+        TypeDeclarationSyntax? typeDeclaration,
+        List<DiagnosticInfo> diagnostics
+    )
+    {
+        Location location = typeDeclaration?.Identifier.GetLocation() ?? Location.None;
+        var arguments = new[] { typeSymbol.Name };
+        bool unsupported = false;
+
+        // A static class is also IsAbstract; it has no instance constructor and PARQ008 names it.
+        if (typeSymbol.IsAbstract && !typeSymbol.IsStatic)
+        {
+            diagnostics.Add(
+                new DiagnosticInfo(
+                    DiagnosticDescriptors.AbstractTypeNotSupported,
+                    location,
+                    arguments
+                )
+            );
+            unsupported = true;
+        }
+
+        if (typeSymbol.IsRefLikeType)
+        {
+            diagnostics.Add(
+                new DiagnosticInfo(DiagnosticDescriptors.RefStructNotSupported, location, arguments)
+            );
+            unsupported = true;
+        }
+
+        if (IsFileLocal(typeSymbol))
+        {
+            diagnostics.Add(
+                new DiagnosticInfo(
+                    DiagnosticDescriptors.FileLocalTypeNotSupported,
+                    location,
+                    arguments
+                )
+            );
+            unsupported = true;
+        }
+
+        return unsupported;
+    }
+
+    /// <summary>
+    /// Whether the type is declared <c>file</c>, or inside a type that is. <c>ISymbol.IsFileLocal</c>
+    /// needs Roslyn 4.4 and the generator keeps its 4.0.1 floor; the compiler gives a file-local
+    /// type the metadata name <c>&lt;FileName&gt;F{n}__Name</c>, which no source identifier can.
+    /// </summary>
+    private static bool IsFileLocal(INamedTypeSymbol typeSymbol)
+    {
+        for (
+            INamedTypeSymbol? current = typeSymbol;
+            current is not null;
+            current = current.ContainingType
+        )
+        {
+            if (
+                current.MetadataName.StartsWith("<", StringComparison.Ordinal)
+                && current.MetadataName.Contains(">F")
+            )
+                return true;
+        }
+
+        return false;
     }
 
     /// <summary>

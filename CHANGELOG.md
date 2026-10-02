@@ -11,6 +11,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 Changes since `0.0.4`; this section becomes the next release entry when one is cut.
 
 ### Added
+- **Diagnostics for abstract, `ref struct` and file-local targets (PARQ020, PARQ021, PARQ022).** Each shape passed every
+  declaration check and then failed to compile inside the generated file (`CS0144`, `CS0306`/`CS8345`, `CS9051`). Each
+  now reports one diagnostic at the declaration and emits nothing for the type; other targets are unaffected (#402).
 - **CI gate: every `src/` analyzer runs on the emitted code, and any finding fails** (`analysis/`,
   `scripts/GeneratedCodeAnalysis.cs`, `docs/50-GENERATED-CODE-ANALYSIS.md`, #553). The golden
   models' emitted source is compiled bare (no implicit usings) against both backends with
