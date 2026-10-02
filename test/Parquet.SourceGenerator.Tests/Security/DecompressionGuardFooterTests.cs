@@ -36,7 +36,7 @@ public sealed class DecompressionGuardFooterTests
 
     internal static byte[] ListHeader(long count, int elementType) =>
         count < 15
-            ? new[] { (byte)((count << 4) | elementType) }
+            ? new[] { (byte)(((int)count << 4) | elementType) }
             : Concat(new[] { (byte)(0xF0 | elementType) }, Varint(count));
 
     internal static byte[] EmptyStruct() => Stop;
