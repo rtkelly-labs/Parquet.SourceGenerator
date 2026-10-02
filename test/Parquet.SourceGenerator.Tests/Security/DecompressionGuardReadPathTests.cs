@@ -120,4 +120,82 @@ public sealed class DecompressionGuardReadPathTests
         );
         ex.Message.ShouldContain("Parquet page header at offset");
     }
+
+    /// <summary>
+    /// A dictionary-encoded column is two pages: the dictionary page is reached by a seek, the data
+    /// page by reading on from it (Parquet.Net 4.x) or by a second seek (Parquet.Net 6.x).
+    /// </summary>
+    private static async Task<byte[]> WriteDictionaryEncodedRowsAsync()
+    {
+        string[] names = ["alpha", "beta", "gamma"];
+        var items = Enumerable
+            .Range(0, 300)
+            .Select(i => new MultiRowGroupModel { Id = i, Name = names[i % names.Length] })
+            .ToList();
+        using var ms = new MemoryStream();
+        await items.WriteParquetAsync(
+            ms,
+            new ParquetSerializerOptions
+            {
+                ColumnEncodingHints = { ["name"] = ParquetColumnEncoding.Dictionary },
+            }
+        );
+        return ms.ToArray();
+    }
+
+    private static byte[] SecondPage(PageHeader header, int uncompressedSize) =>
+        Concat(
+            Short(1, 5, I32((int)header.Type)),
+            Short(1, 5, I32(uncompressedSize)),
+            Short(1, 5, I32(header.CompressedPageSize)),
+            Short(2, 12, DataPageHeaderStruct(header)),
+            Stop
+        );
+
+    [Fact]
+    public async Task SecondPageWithHonestSizesStillReadsAsync()
+    {
+        byte[] file = await PageHeaderSplicer.ReplaceSecondPageHeaderAsync(
+            await WriteDictionaryEncodedRowsAsync(),
+            columnIndex: 1,
+            header => SecondPage(header, header.UncompressedPageSize)
+        );
+
+        MultiRowGroupModel[] rows = await MultiRowGroupModelParquet
+            .From(new MemoryStream(file, writable: false))
+            .ToArrayAsync();
+
+        rows.Length.ShouldBe(300);
+        rows[4].Name.ShouldBe("beta");
+    }
+
+    [Fact]
+    public async Task OversizePageAfterTheFirstIsRejectedOnEveryReadPathAsync()
+    {
+        byte[] file = await PageHeaderSplicer.ReplaceSecondPageHeaderAsync(
+            await WriteDictionaryEncodedRowsAsync(),
+            columnIndex: 1,
+            header => SecondPage(header, Oversize)
+        );
+
+        var viaStream = await Should.ThrowAsync<InvalidDataException>(() =>
+            MultiRowGroupModelParquet.From(new MemoryStream(file, writable: false)).ToArrayAsync()
+        );
+        viaStream.Message.ShouldContain("exceeding maximum allowed");
+
+        var viaParallel = await Should.ThrowAsync<InvalidDataException>(() =>
+            MultiRowGroupModelParquet.From(new ReadOnlyMemory<byte>(file)).Parallel().ToArrayAsync()
+        );
+        viaParallel.Message.ShouldContain("exceeding maximum allowed");
+
+        var viaStreaming = await Should.ThrowAsync<InvalidDataException>(async () =>
+        {
+            await foreach (
+                var _ in MultiRowGroupModelParquet
+                    .From(new MemoryStream(file, writable: false))
+                    .AsAsyncEnumerable()
+            ) { }
+        });
+        viaStreaming.Message.ShouldContain("exceeding maximum allowed");
+    }
 }
