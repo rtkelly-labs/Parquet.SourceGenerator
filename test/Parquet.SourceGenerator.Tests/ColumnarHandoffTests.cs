@@ -309,7 +309,7 @@ public sealed class ColumnarHandoffTests
     }
 
     [Fact]
-    public async Task EmptyBatchWritesNoRowGroup()
+    public async Task EmptyBatchWritesNoRowGroupAsync()
     {
         var batch = new ColumnarHandoffModelBatch(
             rowCount: 0,
@@ -505,7 +505,7 @@ public sealed class ColumnarHandoffTests
     private static readonly double[] DenseB = [1.5, 2.5, 3.5];
 
     [Fact]
-    public async Task DenseModelWithoutNullableColumnsExposesNoDefinitionLevelParameters()
+    public async Task DenseModelWithoutNullableColumnsExposesNoDefinitionLevelParametersAsync()
     {
         var batch = new ColumnarDenseModelBatch(rowCount: 3, a: DenseA, b: DenseB);
 
@@ -519,7 +519,7 @@ public sealed class ColumnarHandoffTests
     }
 
     [Fact]
-    public async Task MultipleBatchesAppendAsSeparateRowGroups()
+    public async Task MultipleBatchesAppendAsSeparateRowGroupsAsync()
     {
         List<ColumnarHandoffModel> rows = BuildRows(RowCount);
         ColumnarHandoffModelBatch batch = Transpose(rows);

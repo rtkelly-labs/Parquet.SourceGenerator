@@ -210,6 +210,7 @@ internal static class BatchReadComponent
                     nullableBinary |= IsNullable(col);
                     break;
                 default:
+                    // Direct columns decode in place and need no helper.
                     break;
             }
         }
