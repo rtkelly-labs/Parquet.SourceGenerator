@@ -398,7 +398,7 @@ internal static class TargetParser
             && !isGeneric
             && !nameCollides;
 
-        bool hasSingleInstanceField = ComputeHasSingleInstanceField(typeSymbol);
+        bool hasSingleInstanceField = ComputeHasSingleInstanceField(typeSymbol, orderedProperties);
 
         TargetClassModel? model = canEmit
             ? new TargetClassModel(
@@ -582,9 +582,14 @@ internal static class TargetParser
     /// <summary>
     /// Whether an unmanaged struct is a single-instance-field wrapper — the shape the emitter
     /// can copy field-for-field. Explicit layout or a custom Size alters the memory picture and
-    /// disqualifies it.
+    /// disqualifies it. The single field must also back
+    /// the single serialized member (#389), or the reinterpreting cast would write the field's value
+    /// where the member's was meant.
     /// </summary>
-    private static bool ComputeHasSingleInstanceField(INamedTypeSymbol typeSymbol)
+    private static bool ComputeHasSingleInstanceField(
+        INamedTypeSymbol typeSymbol,
+        List<PropertyModel> serialized
+    )
     {
         if (!typeSymbol.IsValueType || !typeSymbol.IsUnmanagedType)
             return false;
@@ -615,8 +620,40 @@ internal static class TargetParser
                 );
             });
 
-        return instanceFields.Count == 1 && !hasExplicitOrCustomSizeLayout;
+        if (instanceFields.Count != 1 || hasExplicitOrCustomSizeLayout || serialized.Count != 1)
+            return false;
+
+        // The cast reinterprets the struct's bytes as the field's, so the one serialized member
+        // must BE that field: either the field itself, or the auto-property whose compiler
+        // backing field it is (AssociatedSymbol is non-null exactly for those). A computed
+        // property over a differently-meaning field has no associated symbol and is rejected, as
+        // is a property whose type differs from the field's.
+        IFieldSymbol field = instanceFields[0];
+        ISymbol member = field.AssociatedSymbol ?? field;
+        // C# 14 'field' lets a property keep a synthesized backing field and still compute through
+        // it, so the accessors must be automatically implemented too.
+        if (member is IPropertySymbol property && !IsAutoImplemented(property))
+            return false;
+
+        return string.Equals(member.Name, serialized[0].Name, StringComparison.Ordinal)
+            && SymbolEqualityComparer.Default.Equals(
+                field.Type,
+                (member as IPropertySymbol)?.Type ?? field.Type
+            );
     }
+
+    private static bool IsAutoImplemented(IPropertySymbol property) =>
+        IsBodyless(property.GetMethod) && IsBodyless(property.SetMethod);
+
+    // A positional record's accessors are synthesized (their syntax is the parameter); written ones
+    // are bodiless only for `get;` / `set;` / `init;`.
+    private static bool IsBodyless(IMethodSymbol? accessor) =>
+        accessor is null
+        || accessor.DeclaringSyntaxReferences.All(reference =>
+            reference.GetSyntax()
+                is not AccessorDeclarationSyntax { Body: not null }
+                    and not AccessorDeclarationSyntax { ExpressionBody: not null }
+        );
 
     /// <summary>
     /// The per-target context <see cref="CollectMembers"/> reads: identical for every member of

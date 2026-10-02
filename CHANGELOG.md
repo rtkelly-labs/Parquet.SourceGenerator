@@ -268,6 +268,11 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   only for code that referenced the Attributes helpers directly.
 
 ### Fixed
+- **The blittable zero-copy fast path requires the single field to back the single serialized member.** A one-field
+  struct whose property computed its value from a differently-meaning field (a unit-converting wrapper) took the
+  `MemoryMarshal.Cast` path for `List<T>` and `T[]` and wrote the field's bytes, while `IEnumerable<T>` wrote the
+  property value. Eligibility now needs the field to be the member itself or its auto-property backing field, with
+  the same type; anything else uses the per-element loop (#389).
 - **A property or type named after a C# keyword no longer breaks the generated code** (#376). Roslyn drops
   the `@` from a member declared `@event`, so the model held the bare keyword and the emitters wrote
   `item.event`, `{ event = ... }` and `new class` into generated source (CS1001, CS1525). Every
