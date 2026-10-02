@@ -34,7 +34,7 @@ public class HostileParquetTests
         }.WriteParquetAsync(written);
 
         using var stream = new FooterSyncReadForbiddenStream(written.ToArray());
-        List<MultiRowGroupModel> rows = await MultiRowGroupModelParquet.From(stream).ToListAsync();
+        MultiRowGroupModel[] rows = await MultiRowGroupModelParquet.From(stream).ToArrayAsync();
 
         rows.ShouldHaveSingleItem();
         rows[0].Id.ShouldBe(1);
@@ -107,10 +107,9 @@ public class HostileParquetTests
             MaxRowGroupCount = 2, // File has 3 row groups, which exceeds the limit of 2
         };
 
-        // 1. ToListAsync (List)
-        ms.Position = 0;
+        // 1. From(buffer).ToArrayAsync (sequential buffer array; the List path went with #479)
         var exList = await Should.ThrowAsync<InvalidDataException>(() =>
-            MultiRowGroupModelParquet.From(ms).WithOptions(hostileOptions).ToListAsync()
+            MultiRowGroupModelParquet.From(ms.ToArray()).WithOptions(hostileOptions).ToArrayAsync()
         );
         exList.Message.ShouldContain("Row group count");
         exList.Message.ShouldContain("exceeds maximum allowed");
@@ -164,10 +163,9 @@ public class HostileParquetTests
             MaxAllocationValues = 5, // File has 10 rows, which exceeds limit of 5
         };
 
-        // 1. ToListAsync
-        ms.Position = 0;
+        // 1. From(buffer).ToArrayAsync (sequential buffer array; the List path went with #479)
         var exList = await Should.ThrowAsync<InvalidDataException>(() =>
-            MultiRowGroupModelParquet.From(ms).WithOptions(hostileOptions).ToListAsync()
+            MultiRowGroupModelParquet.From(ms.ToArray()).WithOptions(hostileOptions).ToArrayAsync()
         );
         exList.Message.ShouldContain("exceeds maximum allowed");
 
@@ -227,7 +225,7 @@ public class HostileParquetTests
 
         ms.Position = 0;
         var ex = await Should.ThrowAsync<InvalidDataException>(() =>
-            NestedOrderParquet.From(ms).WithOptions(hostileOptions).ToListAsync()
+            NestedOrderParquet.From(ms).WithOptions(hostileOptions).ToArrayAsync()
         );
         ex.Message.ShouldContain("Schema nesting depth");
         ex.Message.ShouldContain("exceeds maximum allowed 1");
@@ -256,7 +254,7 @@ public class HostileParquetTests
 
         ms.Position = 0;
         var ex = await Should.ThrowAsync<InvalidDataException>(() =>
-            ListRowParquet.From(ms).WithOptions(hostileOptions).ToListAsync()
+            ListRowParquet.From(ms).WithOptions(hostileOptions).ToArrayAsync()
         );
         ex.Message.ShouldContain("exceeds maximum allowed 3");
     }
@@ -280,7 +278,7 @@ public class HostileParquetTests
 
         ms.Position = 0;
         var listException = await Should.ThrowAsync<InvalidDataException>(() =>
-            DictionaryEncodedRecordParquet.From(ms).WithOptions(hostileOptions).ToListAsync()
+            DictionaryEncodedRecordParquet.From(ms).WithOptions(hostileOptions).ToArrayAsync()
         );
         listException.Message.ShouldBe(
             "Dictionary column 'Category' entry count 2 exceeds maximum allowed 1."
@@ -329,12 +327,12 @@ public class HostileParquetTests
         await items.WriteParquetAsync(ms);
         ms.Position = 0;
 
-        List<DictionaryEncodedRecord> actual = await DictionaryEncodedRecordParquet
+        DictionaryEncodedRecord[] actual = await DictionaryEncodedRecordParquet
             .From(ms)
             .WithOptions(new ParquetSerializerOptions { MaxDictionaryEntries = 2 })
-            .ToListAsync();
+            .ToArrayAsync();
 
-        actual.Count.ShouldBe(items.Count);
+        actual.Length.ShouldBe(items.Count);
         actual[0].Category.ShouldBe("first");
         actual[^1].Category.ShouldBe("second");
     }
@@ -355,7 +353,7 @@ public class HostileParquetTests
 
         ms.Position = 0;
         var listException = await Should.ThrowAsync<InvalidDataException>(() =>
-            CompressibleRecordParquet.From(ms).WithOptions(hostileOptions).ToListAsync()
+            CompressibleRecordParquet.From(ms).WithOptions(hostileOptions).ToArrayAsync()
         );
         listException.Message.ShouldBe(
             "String column 'payload' value at index 0 UTF-8 length 4 exceeds maximum allowed 3."
@@ -404,7 +402,7 @@ public class HostileParquetTests
             ListRowParquet
                 .From(ms)
                 .WithOptions(new ParquetSerializerOptions { MaxStringLengthBytes = 1 })
-                .ToListAsync()
+                .ToArrayAsync()
         );
 
         ex.Message.ShouldBe(
@@ -449,7 +447,7 @@ public class HostileParquetTests
 
         using var corruptedMs = new MemoryStream(bytes);
         var ex = await Should.ThrowAsync<InvalidDataException>(() =>
-            ListRowParquet.From(corruptedMs).ToListAsync()
+            ListRowParquet.From(corruptedMs).ToArrayAsync()
         );
         ex.Message.ShouldContain("produced more rows than row group capacity");
     }
@@ -488,7 +486,7 @@ public class HostileParquetTests
 
         ms.Position = 0;
         var ex = await Should.ThrowAsync<InvalidDataException>(() =>
-            ListRowParquet.From(ms).ToListAsync()
+            ListRowParquet.From(ms).ToArrayAsync()
         );
         ex.Message.ShouldContain("Illegal definition level 99");
     }
@@ -527,7 +525,7 @@ public class HostileParquetTests
 
         ms.Position = 0;
         var ex = await Should.ThrowAsync<InvalidDataException>(() =>
-            ListRowParquet.From(ms).ToListAsync()
+            ListRowParquet.From(ms).ToArrayAsync()
         );
         ex.Message.ShouldContain("Illegal definition level");
     }
@@ -567,7 +565,7 @@ public class HostileParquetTests
         {
             ms.Position = 0;
             await Should.ThrowAsync<InvalidDataException>(() =>
-                ListRowParquet.From(ms).ToListAsync()
+                ListRowParquet.From(ms).ToArrayAsync()
             );
         }
 
@@ -585,7 +583,7 @@ public class HostileParquetTests
         using var validMs = new MemoryStream();
         await validItems.WriteParquetAsync(validMs);
         validMs.Position = 0;
-        var restored = await ListRowParquet.From(validMs).ToListAsync();
+        var restored = await ListRowParquet.From(validMs).ToArrayAsync();
         restored.ShouldHaveSingleItem();
         restored[0].Id.ShouldBe(100);
     }
@@ -599,7 +597,7 @@ public class HostileParquetTests
 
         ms.Position = 0;
         var ex = await Should.ThrowAsync<InvalidDataException>(() =>
-            MultiRowGroupModelParquet.From(ms).ToListAsync()
+            MultiRowGroupModelParquet.From(ms).ToArrayAsync()
         );
         ex.Message.ShouldContain(
             "Column 'id' type 'System.Int64' does not match expected 'System.Int32'"
@@ -615,7 +613,7 @@ public class HostileParquetTests
 
         ms.Position = 0;
         var ex = await Should.ThrowAsync<InvalidDataException>(() =>
-            MultiRowGroupModelParquet.From(ms).ToListAsync()
+            MultiRowGroupModelParquet.From(ms).ToArrayAsync()
         );
         ex.Message.ShouldContain("Column 'id' type");
         ex.Message.ShouldContain("does not match expected 'System.Int32'");
@@ -636,10 +634,12 @@ public class HostileParquetTests
             ParquetPhysicalType.BYTE_ARRAY
         );
 
-        using (var listStream = new MemoryStream(hostileBytes, writable: false))
+        // The buffer's sequential array path (the List path it replaced went with #479).
         {
             var ex = await Should.ThrowAsync<InvalidDataException>(() =>
-                MultiRowGroupModelParquet.From(listStream).ToListAsync()
+                MultiRowGroupModelParquet
+                    .From(new ReadOnlyMemory<byte>(hostileBytes))
+                    .ToArrayAsync()
             );
             ex.Message.ShouldContain("physical type 'BYTE_ARRAY'");
             ex.Message.ShouldContain("expected 'INT32'");
@@ -729,7 +729,7 @@ public class HostileParquetTests
 
         using var hostileStream = new MemoryStream(hostileBytes, writable: false);
         var ex = await Should.ThrowAsync<InvalidDataException>(() =>
-            MultiRowGroupModelParquet.From(hostileStream).ToListAsync()
+            MultiRowGroupModelParquet.From(hostileStream).ToArrayAsync()
         );
         ex.Message.ShouldContain(expectedMessage);
     }

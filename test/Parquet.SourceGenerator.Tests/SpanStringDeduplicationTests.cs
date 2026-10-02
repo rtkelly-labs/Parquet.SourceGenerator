@@ -58,14 +58,14 @@ public sealed class SpanStringDeduplicationTests
         var deduplicated = await SpanDedupRecordParquet
             .From(new MemoryStream(bytes))
             .WithOptions(Deduplicating)
-            .ToListAsync();
+            .ToArrayAsync();
         var plain = await SpanDedupRecordParquet
             .From(new MemoryStream(bytes))
             .WithOptions(NotDeduplicating)
-            .ToListAsync();
+            .ToArrayAsync();
 
-        deduplicated.Count.ShouldBe(items.Count);
-        plain.Count.ShouldBe(items.Count);
+        deduplicated.Length.ShouldBe(items.Count);
+        plain.Length.ShouldBe(items.Count);
 
         for (int i = 0; i < items.Count; i++)
         {
@@ -111,7 +111,7 @@ public sealed class SpanStringDeduplicationTests
         var read = await SpanDedupRecordParquet
             .From(new MemoryStream(bytes))
             .WithOptions(Deduplicating)
-            .ToListAsync();
+            .ToArrayAsync();
 
         // An empty string must never be conflated with a null.
         read[0].OptionalCategory.ShouldBeNull();
@@ -142,7 +142,7 @@ public sealed class SpanStringDeduplicationTests
         var read = await SpanDedupRecordParquet
             .From(new MemoryStream(bytes))
             .WithOptions(Deduplicating)
-            .ToListAsync();
+            .ToArrayAsync();
 
         // A NUL must terminate nothing: full length has to be preserved.
         read[0].RequiredCategory.Length.ShouldBe(withNul.Length);
@@ -185,7 +185,7 @@ public sealed class SpanStringDeduplicationTests
         var read = await SpanDedupRecordParquet
             .From(new MemoryStream(bytes))
             .WithOptions(Deduplicating)
-            .ToListAsync();
+            .ToArrayAsync();
 
         // Two values sharing a 200,000-character prefix must not be conflated.
         read[0].RequiredCategory.ShouldBe(veryLong);
@@ -261,7 +261,7 @@ public sealed class SpanStringDeduplicationTests
         var read = await SpanDedupRecordParquet
             .From(new MemoryStream(bytes))
             .WithOptions(Deduplicating)
-            .ToListAsync();
+            .ToArrayAsync();
 
         var distinctRequired = read.Select(r => r.RequiredCategory)
             .Distinct(ReferenceEqualityComparer.Instance)
@@ -309,14 +309,14 @@ public sealed class SpanStringDeduplicationTests
         var deduplicatedRead = await SpanDedupRecordParquet
             .From(new MemoryStream(bytes))
             .WithOptions(Deduplicating)
-            .ToListAsync();
+            .ToArrayAsync();
         var plainRead = await SpanDedupRecordParquet
             .From(new MemoryStream(bytes))
             .WithOptions(NotDeduplicating)
-            .ToListAsync();
+            .ToArrayAsync();
 
-        deduplicatedRead.Count.ShouldBe(items.Count);
-        plainRead.Count.ShouldBe(items.Count);
+        deduplicatedRead.Length.ShouldBe(items.Count);
+        plainRead.Length.ShouldBe(items.Count);
 
         // 8 distinct required + 5 distinct optional values, however many rows carry them.
         int deduplicatedInstances = CountDistinctInstances(deduplicatedRead);
@@ -339,7 +339,7 @@ public sealed class SpanStringDeduplicationTests
             .ToList()
             .ShouldBe(items.Select(i => i.OptionalCategory).ToList());
 
-        static int CountDistinctInstances(List<SpanDedupRecord> rows)
+        static int CountDistinctInstances(IReadOnlyList<SpanDedupRecord> rows)
         {
             var seen = new HashSet<object>(ReferenceEqualityComparer.Instance);
             foreach (SpanDedupRecord row in rows)

@@ -81,9 +81,9 @@ public sealed class SchemaFieldResolutionTests
         // The file's columns are [alpha, beta, gamma]; this reader expects [gamma, beta, alpha].
         // Index 0 and index 2 therefore miss and must be resolved by name, while index 1 (beta)
         // still hits on position — so a single read covers both paths and the reuse between misses.
-        List<ReversedOrder> read = await ReversedOrderParquet.From(stream).ToListAsync();
+        ReversedOrder[] read = await ReversedOrderParquet.From(stream).ToArrayAsync();
 
-        read.Count.ShouldBe(3);
+        read.Length.ShouldBe(3);
         for (int i = 0; i < written.Count; i++)
         {
             // If resolution fell back to position rather than name, Alpha and Gamma would be
@@ -118,12 +118,12 @@ public sealed class SchemaFieldResolutionTests
         );
         stream.Position = 0;
 
-        List<ReversedOrder> read = await ReversedOrderParquet
+        ReversedOrder[] read = await ReversedOrderParquet
             .From(stream.ToArray())
             .Parallel()
-            .ToListAsync();
+            .ToArrayAsync();
 
-        read.Count.ShouldBe(written.Count);
+        read.Length.ShouldBe(written.Count);
         for (int i = 0; i < written.Count; i++)
         {
             read[i].Alpha.ShouldBe(written[i].Alpha);
@@ -150,7 +150,7 @@ public sealed class SchemaFieldResolutionTests
         await written.WriteParquetAsync(stream);
         stream.Position = 0;
 
-        List<ForwardOrder> read = await ForwardOrderParquet.From(stream).ToListAsync();
+        ForwardOrder[] read = await ForwardOrderParquet.From(stream).ToArrayAsync();
 
         read.ShouldHaveSingleItem();
         read[0].Alpha.ShouldBe(7);
@@ -173,7 +173,7 @@ public sealed class SchemaFieldResolutionTests
 
         // ForwardOrder requires 'gamma' (non-nullable double). Reading partial stream should throw InvalidDataException.
         var ex = await Should.ThrowAsync<InvalidDataException>(() =>
-            ForwardOrderParquet.From(stream).ToListAsync()
+            ForwardOrderParquet.From(stream).ToArrayAsync()
         );
         ex.Message.ShouldContain(
             "Required column 'gamma' was not found in the Parquet file schema"

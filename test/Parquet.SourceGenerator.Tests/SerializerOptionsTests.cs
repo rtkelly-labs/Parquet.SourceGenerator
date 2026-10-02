@@ -131,11 +131,9 @@ public sealed class SerializerOptionsTests
             );
             stream.Position = 0;
 
-            List<CompressibleRecord> read = await CompressibleRecordParquet
-                .From(stream)
-                .ToListAsync();
+            CompressibleRecord[] read = await CompressibleRecordParquet.From(stream).ToArrayAsync();
 
-            read.Count.ShouldBe(2);
+            read.Length.ShouldBe(2);
             read[0].Payload.ShouldBe("first");
             read[1].Payload.ShouldBe("second");
         }
@@ -153,7 +151,7 @@ public sealed class SerializerOptionsTests
             CompressibleRecordParquet
                 .From(new MemoryStream(bytes))
                 .WithOptions(options)
-                .ToListAsync()
+                .ToArrayAsync()
         );
         streamException.Message.ShouldContain("uncompressed size");
         streamException.Message.ShouldContain("exceeding maximum allowed 1");
@@ -170,7 +168,7 @@ public sealed class SerializerOptionsTests
                 .From(new ReadOnlyMemory<byte>(bytes))
                 .WithOptions(options)
                 .Parallel()
-                .ToListAsync()
+                .ToArrayAsync()
         );
 
         await Should.ThrowAsync<InvalidDataException>(async () =>
@@ -200,7 +198,7 @@ public sealed class SerializerOptionsTests
             CompressibleRecordParquet
                 .From(new MemoryStream(written.ToArray()))
                 .WithOptions(options)
-                .ToListAsync()
+                .ToArrayAsync()
         );
 
         exception.Message.ShouldContain("expands from");
@@ -226,7 +224,7 @@ public sealed class SerializerOptionsTests
         await written.WriteParquetAsync(stream);
         stream.Position = 0;
 
-        List<MicrosecondRecord> read = await MicrosecondRecordParquet.From(stream).ToListAsync();
+        MicrosecondRecord[] read = await MicrosecondRecordParquet.From(stream).ToArrayAsync();
 
         read.ShouldHaveSingleItem();
 

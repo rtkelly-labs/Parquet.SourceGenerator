@@ -258,7 +258,7 @@ public sealed class CorruptedParquetTests
             return;
         }
 
-        List<FuzzWideRecord> actual = outcome.Rows!;
+        IReadOnlyList<FuzzWideRecord> actual = outcome.Rows!;
         actual.Count.ShouldBe(
             expected.Count,
             $"{description}: read succeeded but returned {actual.Count} rows instead of "
@@ -326,9 +326,9 @@ public sealed class CorruptedParquetTests
         try
         {
             using var stream = new MemoryStream(bytes, writable: false);
-            List<FuzzWideRecord> rows = await FuzzWideRecordParquet
+            FuzzWideRecord[] rows = await FuzzWideRecordParquet
                 .From(stream)
-                .ToListAsync(cancellationToken);
+                .ToArrayAsync(cancellationToken);
             return new ReadOutcome(rows, null, TimedOut: false, 0);
         }
         catch (Exception ex)
@@ -338,7 +338,7 @@ public sealed class CorruptedParquetTests
     }
 
     private sealed record ReadOutcome(
-        List<FuzzWideRecord>? Rows,
+        IReadOnlyList<FuzzWideRecord>? Rows,
         Exception? Exception,
         bool TimedOut,
         long AllocatedBytes

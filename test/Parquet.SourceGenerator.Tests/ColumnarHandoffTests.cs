@@ -195,16 +195,16 @@ public sealed class ColumnarHandoffTests
 
         rowStream.Position = 0;
         columnarStream.Position = 0;
-        List<ColumnarHandoffModel> fromRows = await ColumnarHandoffModelParquet
+        ColumnarHandoffModel[] fromRows = await ColumnarHandoffModelParquet
             .From(rowStream)
-            .ToListAsync();
-        List<ColumnarHandoffModel> fromColumns = await ColumnarHandoffModelParquet
+            .ToArrayAsync();
+        ColumnarHandoffModel[] fromColumns = await ColumnarHandoffModelParquet
             .From(columnarStream)
-            .ToListAsync();
+            .ToArrayAsync();
 
-        fromColumns.Count.ShouldBe(RowCount);
-        fromColumns.Count.ShouldBe(fromRows.Count);
-        for (int i = 0; i < fromRows.Count; i++)
+        fromColumns.Length.ShouldBe(RowCount);
+        fromColumns.Length.ShouldBe(fromRows.Length);
+        for (int i = 0; i < fromRows.Length; i++)
         {
             fromColumns[i].Id.ShouldBe(fromRows[i].Id);
             fromColumns[i].Name.ShouldBe(fromRows[i].Name);
@@ -297,11 +297,9 @@ public sealed class ColumnarHandoffTests
         using var stream = new MemoryStream();
         await sliced.WriteParquetAsync(stream);
         stream.Position = 0;
-        List<ColumnarHandoffModel> read = await ColumnarHandoffModelParquet
-            .From(stream)
-            .ToListAsync();
+        ColumnarHandoffModel[] read = await ColumnarHandoffModelParquet.From(stream).ToArrayAsync();
 
-        read.Count.ShouldBe(shortCount);
+        read.Length.ShouldBe(shortCount);
         for (int i = 0; i < shortCount; i++)
         {
             read[i].Id.ShouldBe(rows[i].Id);
@@ -331,9 +329,7 @@ public sealed class ColumnarHandoffTests
         using var stream = new MemoryStream();
         await batch.WriteParquetAsync(stream);
         stream.Position = 0;
-        List<ColumnarHandoffModel> read = await ColumnarHandoffModelParquet
-            .From(stream)
-            .ToListAsync();
+        ColumnarHandoffModel[] read = await ColumnarHandoffModelParquet.From(stream).ToArrayAsync();
 
         read.ShouldBeEmpty();
     }
@@ -424,9 +420,7 @@ public sealed class ColumnarHandoffTests
         using var stream = new MemoryStream();
         await batch.WriteParquetAsync(stream);
         stream.Position = 0;
-        List<ColumnarHandoffModel> read = await ColumnarHandoffModelParquet
-            .From(stream)
-            .ToListAsync();
+        ColumnarHandoffModel[] read = await ColumnarHandoffModelParquet.From(stream).ToArrayAsync();
 
         read.ShouldBeEmpty();
     }
@@ -497,9 +491,9 @@ public sealed class ColumnarHandoffTests
         using var stream = new MemoryStream();
         await batch.WriteParquetAsync(stream);
         stream.Position = 0;
-        List<ColumnarCollisionModel> read = await ColumnarCollisionModelParquet
+        ColumnarCollisionModel[] read = await ColumnarCollisionModelParquet
             .From(stream)
-            .ToListAsync();
+            .ToArrayAsync();
 
         read.Select(r => r.RowCount).ToArray().ShouldBe(rowCounts);
         read.Select(r => r.Writer).ToArray().ShouldBe(writers);
@@ -518,7 +512,7 @@ public sealed class ColumnarHandoffTests
         using var stream = new MemoryStream();
         await batch.WriteParquetAsync(stream);
         stream.Position = 0;
-        List<ColumnarDenseModel> read = await ColumnarDenseModelParquet.From(stream).ToListAsync();
+        ColumnarDenseModel[] read = await ColumnarDenseModelParquet.From(stream).ToArrayAsync();
 
         read.Select(r => r.A).ToArray().ShouldBe(DenseA);
         read.Select(r => r.B).ToArray().ShouldBe(DenseB);
@@ -543,10 +537,8 @@ public sealed class ColumnarHandoffTests
         }
 
         stream.Position = 0;
-        List<ColumnarHandoffModel> read = await ColumnarHandoffModelParquet
-            .From(stream)
-            .ToListAsync();
-        read.Count.ShouldBe(RowCount * 2);
+        ColumnarHandoffModel[] read = await ColumnarHandoffModelParquet.From(stream).ToArrayAsync();
+        read.Length.ShouldBe(RowCount * 2);
         read[RowCount + 7].Name.ShouldBe(rows[7].Name);
     }
 
