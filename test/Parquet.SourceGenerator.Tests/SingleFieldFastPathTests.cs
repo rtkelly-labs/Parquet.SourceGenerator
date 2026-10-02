@@ -15,6 +15,26 @@ using Xunit;
 
 namespace Parquet.SourceGenerator.Tests;
 
+[ParquetSerializable]
+public partial struct FahrenheitBacked
+{
+    private float _fahrenheit;
+
+    [ParquetColumn("celsius")]
+    public float Value
+    {
+        get => (_fahrenheit - 32f) / 1.8f;
+        set => _fahrenheit = (value * 1.8f) + 32f;
+    }
+}
+
+[ParquetSerializable]
+public partial struct PlainCelsius
+{
+    [ParquetColumn("celsius")]
+    public float Value { get; set; }
+}
+
 /// <summary>
 /// Issue #389: the blittable fast path reinterprets <c>TStruct[]</c> as <c>TField[]</c>, which is
 /// only sound when the single serialized member IS the single field. Eligibility used to check the
@@ -128,5 +148,30 @@ public sealed class SingleFieldFastPathTests
         string emitted = CodeEmitter.EmitSource(result.Model!, GeneratorConfiguration.Default);
 
         (emitted.Contains("MemoryMarshal.Cast", StringComparison.Ordinal)).ShouldBe(cast);
+    }
+
+    [Fact]
+    public async Task EveryCollectionPathWritesThePropertyValueAsync()
+    {
+        // 100 is stored as 212 in the field. Each path (List<T> and T[]) is read back through a plain auto-property
+        // struct on the same column, so the file's values are seen without the symmetric cast on
+        // the read side of the model that wrote them.
+        var rows = new List<FahrenheitBacked>
+        {
+            new() { Value = 100f },
+            new() { Value = 0f },
+        };
+
+        using var fromList = new MemoryStream();
+        await rows.WriteParquetAsync(fromList);
+        using var fromArray = new MemoryStream();
+        await rows.ToArray().WriteParquetAsync(fromArray);
+
+        foreach (MemoryStream stream in new[] { fromList, fromArray })
+        {
+            stream.Position = 0;
+            PlainCelsius[] read = await PlainCelsiusParquet.From(stream).ToArrayAsync();
+            read.Select(r => (float)Math.Round(r.Value, 3)).ShouldBe([100f, 0f]);
+        }
     }
 }

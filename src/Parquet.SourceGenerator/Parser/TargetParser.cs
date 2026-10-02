@@ -630,12 +630,30 @@ internal static class TargetParser
         // is a property whose type differs from the field's.
         IFieldSymbol field = instanceFields[0];
         ISymbol member = field.AssociatedSymbol ?? field;
+        // C# 14 'field' lets a property keep a synthesized backing field and still compute through
+        // it, so the accessors must be automatically implemented too.
+        if (member is IPropertySymbol property && !IsAutoImplemented(property))
+            return false;
+
         return string.Equals(member.Name, serialized[0].Name, StringComparison.Ordinal)
             && SymbolEqualityComparer.Default.Equals(
                 field.Type,
                 (member as IPropertySymbol)?.Type ?? field.Type
             );
     }
+
+    private static bool IsAutoImplemented(IPropertySymbol property) =>
+        IsBodyless(property.GetMethod) && IsBodyless(property.SetMethod);
+
+    // A positional record's accessors are synthesized (their syntax is the parameter); written ones
+    // are bodiless only for `get;` / `set;` / `init;`.
+    private static bool IsBodyless(IMethodSymbol? accessor) =>
+        accessor is null
+        || accessor.DeclaringSyntaxReferences.All(reference =>
+            reference.GetSyntax()
+                is not AccessorDeclarationSyntax { Body: not null }
+                    and not AccessorDeclarationSyntax { ExpressionBody: not null }
+        );
 
     /// <summary>
     /// The per-target context <see cref="CollectMembers"/> reads: identical for every member of
