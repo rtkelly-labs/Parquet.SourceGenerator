@@ -45,7 +45,7 @@ public class CheckApiLedgerGateTests
         repo.Write(Ledger, "# Ledger\n");
         repo.Commit("base");
         repo.Write(Seams, "#nullable enable\nA.B.M() -> void\n");
-        repo.Write(Ledger, "# Ledger\n\n### 2026-10-02 - `A.B.M()`\n- **Semver:** internal\n");
+        repo.Write(Ledger, "# Ledger\n\n" + FullEntry("A.B.M()"));
         repo.Commit("catalogue and ledger");
 
         ScriptResult result = await repo.RunAsync();
@@ -89,6 +89,131 @@ public class CheckApiLedgerGateTests
         result.ExitCode.ShouldBe(1, result.Describe());
         result.Stderr.ShouldContain("cannot run");
     }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task ABareHeadingDoesNotSatisfyTheLedgerRuleAsync()
+    {
+        // #426: one line `### x` used to clear the gate for any number of added signatures.
+        using TempRepo repo = CatalogueGrowsBy(3, "# Ledger\n\n### x\n");
+
+        ScriptResult result = await repo.RunAsync();
+
+        result.ExitCode.ShouldBe(1, result.Describe());
+        result.Stderr.ShouldContain("'### x': **Surface:** is missing or empty");
+        result.Stderr.ShouldContain("'### x': **Semver:** is missing or empty");
+        result.Stderr.ShouldContain("'### x': **Issue:** is missing or empty");
+        result.Stderr.ShouldContain("'### x': **Rationale:** is missing or empty");
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task EntryWithoutARationaleOrWithAnUnknownSemverBucketFailsAsync()
+    {
+        const string entry = """
+            # Ledger
+
+            ### 2026-10-02 - `A.B.M()`
+            - **Surface:** seam
+            - **Semver:** whenever
+            - **Issue:** #1
+            - **Rationale:**
+            """;
+        using TempRepo repo = CatalogueGrowsBy(1, entry + "\n");
+
+        ScriptResult result = await repo.RunAsync();
+
+        result.ExitCode.ShouldBe(1, result.Describe());
+        result.Stderr.ShouldContain("**Semver:** 'whenever' does not start with one of");
+        result.Stderr.ShouldContain("**Rationale:** is missing or empty");
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task EntryThatKeepsThePrintedTemplatePlaceholdersFailsAsync()
+    {
+        const string entry = """
+            # Ledger
+
+            ### 2026-10-02 - `A.B.M()`
+            - **Surface:** seam
+            - **Semver:** additive-minor | breaking-major | internal | generated-shape
+            - **Issue:** #NNN
+            - **Rationale:** why no existing member can express this.
+            """;
+        using TempRepo repo = CatalogueGrowsBy(1, entry + "\n");
+
+        ScriptResult result = await repo.RunAsync();
+
+        result.ExitCode.ShouldBe(1, result.Describe());
+        result.Stderr.ShouldContain("**Issue:** still holds the template placeholder");
+        result.Stderr.ShouldContain("**Rationale:** still holds the template placeholder");
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task OneCompleteEntryMayCoverSeveralCatalogueLinesAsync()
+    {
+        // The ledger's own entries do this (the #481 entry records 16 removed lines), so the rule
+        // checks each entry's content, not its count against the catalogue lines.
+        using TempRepo repo = CatalogueGrowsBy(3, "# Ledger\n\n" + FullEntry("A.B.M1() .. M3()"));
+
+        ScriptResult result = await repo.RunAsync();
+
+        result.ExitCode.ShouldBe(0, result.Describe());
+        result.Stdout.ShouldContain("3 signature(s) added");
+        result.Stdout.ShouldContain("Ledger entry present");
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task TheNewestEntryOfTheRealLedgerPassesTheEntryShapeCheckAsync()
+    {
+        // Drift guard: the check must accept the format the ledger is actually written in.
+        string[] lines = global::System.IO.File.ReadAllLines(
+            Path.Combine(TempRepo.FindRepoRoot(), "docs", "api", "LEDGER.md")
+        );
+        int first = Array.FindIndex(lines, l => l.StartsWith("### ", StringComparison.Ordinal));
+        int second = Array.FindIndex(
+            lines,
+            first + 1,
+            l => l.StartsWith("### ", StringComparison.Ordinal)
+        );
+        first.ShouldBeGreaterThanOrEqualTo(0);
+        string entry = string.Join('\n', lines[first..second]) + "\n";
+        using TempRepo repo = CatalogueGrowsBy(1, "# Ledger\n\n" + entry);
+
+        ScriptResult result = await repo.RunAsync();
+
+        result.ExitCode.ShouldBe(0, result.Describe());
+    }
+
+    private static TempRepo CatalogueGrowsBy(int lines, string ledgerAfter)
+    {
+        var repo = new TempRepo();
+        repo.Write(Seams, "#nullable enable\n");
+        repo.Write(Ledger, "# Ledger\n");
+        repo.Commit("base");
+        repo.Write(
+            Seams,
+            "#nullable enable\n"
+                + string.Concat(Enumerable.Range(1, lines).Select(i => $"A.B.M{i}() -> void\n"))
+        );
+        repo.Write(Ledger, ledgerAfter);
+        repo.Commit("catalogue and ledger");
+        return repo;
+    }
+
+    private static string FullEntry(string member) =>
+        $"""
+            ### 2026-10-02 - `{member}`
+
+            - **Surface:** seam
+            - **Semver:** internal
+            - **Issue:** #1
+            - **Rationale:** the member is an implementation detail of the emitter.
+
+            """;
 
     [Fact]
     [Trait("Category", "Integration")]
@@ -254,7 +379,7 @@ public class CheckApiLedgerGateTests
             return global::System.IO.File.Exists(homeDotnet) ? homeDotnet : "dotnet";
         }
 
-        private static string FindRepoRoot()
+        internal static string FindRepoRoot()
         {
             var dir = new DirectoryInfo(AppContext.BaseDirectory);
             while (dir != null)
