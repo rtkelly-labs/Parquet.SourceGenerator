@@ -151,6 +151,45 @@ public sealed class DeclarationShapeDiagnosticTests
         result.GeneratedSources[0].HintName.ShouldStartWith("Demo.Fine.");
     }
 
+    [Theory]
+    [InlineData("current")]
+    [InlineData("legacy")]
+    public void AnUnsupportedPeerDoesNotClaimAGeneratedNameFromASupportedTarget(string flavor)
+    {
+        // A.BC and AB.C flatten to the same name (PARQ016), but AB.C is abstract and emits nothing,
+        // so there is nothing for A.BC to collide with.
+        const string Nested = """
+            using Parquet.SourceGenerator;
+
+            namespace Demo;
+
+            public partial class A
+            {
+                [ParquetSerializable]
+                public partial class BC { [ParquetColumn("x")] public int X { get; set; } }
+            }
+            """;
+        const string AbstractPeer = """
+            using Parquet.SourceGenerator;
+
+            namespace Demo;
+
+            public partial class AB
+            {
+                [ParquetSerializable]
+                public abstract partial class C { [ParquetColumn("x")] public int X { get; set; } }
+            }
+            """;
+
+        GeneratorRunResult result = Run(flavor, Nested, AbstractPeer);
+
+        result.Diagnostics.ShouldNotContain(d =>
+            d.Id == DiagnosticDescriptors.GeneratedNameCollision.Id
+        );
+        result.Diagnostics.Count(d => d.Id == "PARQ020").ShouldBe(1);
+        result.GeneratedSources.Length.ShouldBe(1);
+    }
+
     [Fact]
     public void TheDescriptorIdsAreDistinctFromTheTypeAdapterRange()
     {

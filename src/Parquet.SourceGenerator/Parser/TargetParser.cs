@@ -465,6 +465,9 @@ internal static class TargetParser
                     candidate.ContainingType is not null
                     && !IsReachableFromGeneratedCode(candidate.DeclaredAccessibility)
                 )
+                || (candidate.IsAbstract && !candidate.IsStatic)
+                || candidate.IsRefLikeType
+                || IsFileLocal(candidate)
                 || candidate
                     .GetAttributes()
                     .All(a => a.AttributeClass?.ToDisplayString() != AttributeFullName)
