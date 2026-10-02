@@ -295,6 +295,11 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   the list lost elements in between, the walk passed the end of the span it had taken (into slots of
   removed items, or past the array when the list was cleared). The emitted code now detects a span
   shorter than the captured count once, before the loop, and throws `InvalidOperationException`.
+- **A struct-in-list column whose sibling declares a different value count is rejected** (#365). The columns
+  under one `List<Struct>` are read by one walk driven by the first column's entry count, which indexed
+  every sibling's definition levels. Each column sizes and validates its own `num_values`, so a shorter
+  sibling was read past what was written, including stale levels left in its pooled array. The emitted
+  reader now compares each sibling's count with the anchor's and throws `InvalidDataException`.
 - **The generator pipeline caches value-equatable models, not a syntax context.** The main generator cached
   the `GeneratorSyntaxContext` itself, which retains a `SemanticModel` (and the compilation behind it) per
   target and has no value equality, so nothing downstream could compare as unchanged. It now parses inside
