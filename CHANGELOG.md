@@ -272,6 +272,11 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   levels, fill method, private plumbing) is now claimed against the model's own property names and
   moved aside on a clash (`ValueDefinitionLevels` becomes `ValueDefinitionLevels_`). Part b (the
   parameter list) was already handled.
+- **A second partial part carrying any attribute no longer takes the whole generator down.** The syntax
+  provider returned one element per attributed declaration, so a partial type split across files
+  produced two identical models, a second `AddSource` with the same hint name (`CS8785`, losing every
+  generated serializer) and every diagnostic twice. Both generators now admit only the declaration
+  that carries `[ParquetSerializable]`, one element per type (#368).
 - **Emitted read and write methods are bounded by column shape, not column count.** The per-column dictionary guard, all-null bypass, list-leaf sizing, list lanes, struct reconstruction, compound extraction and pooled-buffer returns are now shared or per-column `private static` helpers called once per column, clearing CA1502 and CA1505 in the generated output with no public API change (#552, part of #554).
 - **Emitted code braces multi-statement blocks under `if`** in the compound list readers, clearing S2681
   in the generated output (#551, part of #554).

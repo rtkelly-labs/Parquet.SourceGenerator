@@ -141,6 +141,80 @@ internal static class TargetParser
         return GetTargetModelCore(typeSymbol, syntax, apiLevel, compoundKinds);
     }
 
+    /// <summary>
+    /// Pipeline entry point (#368). Resolves the declared type and parses it only when
+    /// <paramref name="context"/> is the declaration that carries the type's first
+    /// <c>[ParquetSerializable]</c>; returns <c>null</c> for every other attributed declaration.
+    /// </summary>
+    /// <remarks>
+    /// Roslyn calls the transform once per partial part, and every part resolves to the same
+    /// symbol, whose attributes are the union across parts. Parsing from each part produced several
+    /// identical models, so <c>AddSource</c> saw the same hint name twice, threw, and took the whole
+    /// generator down; it also reported every diagnostic once per part. Admitting only the
+    /// declaration the attribute was written on gives exactly one element per type without holding
+    /// a symbol in the pipeline, and works at the Roslyn 4.0.1 floor.
+    /// </remarks>
+    public static TargetParserResult? GetPrimaryTargetModel(
+        GeneratorSyntaxContext context,
+        ParquetApiLevel apiLevel,
+        CompoundKinds compoundKinds
+    ) =>
+        TryGetPrimaryTarget(
+            context,
+            out INamedTypeSymbol? typeSymbol,
+            out TypeDeclarationSyntax? declaration
+        )
+            ? GetTargetModelCore(typeSymbol!, declaration!, apiLevel, compoundKinds)
+            : null;
+
+    /// <summary>
+    /// Single-dial form of <see cref="GetPrimaryTargetModel(GeneratorSyntaxContext, ParquetApiLevel, CompoundKinds)"/>
+    /// for the legacy generator, which emits no compound members.
+    /// </summary>
+    public static TargetParserResult? GetPrimaryTargetModel(
+        GeneratorSyntaxContext context,
+        ParquetApiLevel apiLevel
+    ) => GetPrimaryTargetModel(context, apiLevel, CompoundKinds.None);
+
+    private static bool TryGetPrimaryTarget(
+        GeneratorSyntaxContext context,
+        out INamedTypeSymbol? typeSymbol,
+        out TypeDeclarationSyntax? declaration
+    )
+    {
+        typeSymbol = null;
+        declaration = null;
+        if (context.Node is not TypeDeclarationSyntax typeDeclaration)
+            return false;
+
+        if (context.SemanticModel.GetDeclaredSymbol(typeDeclaration) is not INamedTypeSymbol symbol)
+            return false;
+
+        AttributeData? serializable = symbol
+            .GetAttributes()
+            .FirstOrDefault(a => a.AttributeClass?.ToDisplayString() == AttributeFullName);
+        if (serializable is null)
+            return false;
+
+        // ApplicationSyntaxReference is the attribute's own syntax: attribute -> attribute list ->
+        // the declaration it decorates. It is null only for metadata symbols, which cannot be a
+        // syntax context here, so a null reference falls back to admitting this declaration.
+        SyntaxNode? owner = serializable.ApplicationSyntaxReference?.GetSyntax().Parent?.Parent;
+        if (
+            owner is not null
+            && (
+                owner.SyntaxTree != typeDeclaration.SyntaxTree || owner.Span != typeDeclaration.Span
+            )
+        )
+        {
+            return false;
+        }
+
+        typeSymbol = symbol;
+        declaration = typeDeclaration;
+        return true;
+    }
+
     private static TargetParserResult GetTargetModelCore(
         INamedTypeSymbol typeSymbol,
         TypeDeclarationSyntax? typeDeclaration,

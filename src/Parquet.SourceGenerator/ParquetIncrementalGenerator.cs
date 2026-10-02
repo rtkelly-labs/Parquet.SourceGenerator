@@ -29,16 +29,19 @@ internal sealed class ParquetIncrementalGenerator : IIncrementalGenerator
                 predicate: static (s, _) => IsTargetSyntax(s),
                 transform: static (ctx, _) => ctx
             );
+        // Only the declaration that carries [ParquetSerializable] yields a result (#368), so a
+        // partial type split across files is one element rather than one per part.
         IncrementalValuesProvider<TargetParserResult> targets = targetNodes
             .Combine(configuration)
             .Select(
                 static (pair, _) =>
-                    TargetParser.GetTargetModel(
+                    TargetParser.GetPrimaryTargetModel(
                         pair.Left,
                         ParquetApiLevel.V6,
                         compoundKinds: CompoundKindsFor(pair.Right.FeatureLevel)
                     )
-            );
+            )
+            .Where(static result => result is not null)!;
 
         context.RegisterSourceOutput(
             configuration,

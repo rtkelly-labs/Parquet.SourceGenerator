@@ -20,11 +20,13 @@ internal sealed class ParquetLegacyIncrementalGenerator : IIncrementalGenerator
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         // 1. Filter syntax nodes decorated with attributes and extract target model + diagnostics
-        IncrementalValuesProvider<TargetParserResult> targets =
-            context.SyntaxProvider.CreateSyntaxProvider(
+        IncrementalValuesProvider<TargetParserResult> targets = context
+            .SyntaxProvider.CreateSyntaxProvider(
                 predicate: static (s, _) => IsTargetSyntax(s),
-                transform: static (ctx, _) => TargetParser.GetTargetModel(ctx, ParquetApiLevel.V4)
-            );
+                transform: static (ctx, _) =>
+                    TargetParser.GetPrimaryTargetModel(ctx, ParquetApiLevel.V4)
+            )
+            .Where(static result => result is not null)!;
 
         // 2. Register source output emission & diagnostic reporting
         IncrementalValueProvider<GeneratorConfiguration> configuration = context
