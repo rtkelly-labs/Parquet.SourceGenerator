@@ -1659,6 +1659,7 @@ internal static class CodeEmitter
 
         StringDeduplicatorComponent.EmitDeduplicatorDeclaration(builder, model);
 
+        builder.AppendLine("        long scannedRows = 0;");
         builder.AppendLine("        for (int r = firstRowGroup; r <= lastRowGroup; r++)");
         builder.AppendLine("        {");
         builder.AppendLine("            cancellationToken.ThrowIfCancellationRequested();");
@@ -1672,6 +1673,9 @@ internal static class CodeEmitter
             "                throw new global::System.IO.InvalidDataException($\"Row group {r} row count {rowCount} is invalid or exceeds maximum allowed {options.MaxAllocationValues}.\");"
         );
         builder.AppendLine("            }");
+        builder.AppendLine(
+            "            scannedRows = AddScannedRows(scannedRows, rowCount, options);"
+        );
         builder.AppendLine();
 
         EmitRentalsFor(builder, model, "rowCount", indent: "            ");
@@ -1726,6 +1730,25 @@ internal static class CodeEmitter
         builder.AppendLine("        {");
         builder.AppendLine("            await reader.DisposeAsync().ConfigureAwait(false);");
         builder.AppendLine("        }");
+        builder.AppendLine("    }");
+
+        // The per-group cap alone lets many groups, each under MaxAllocationValues, add up to far more
+        // than the caller allowed. Every other read path bounds the total; this one bounds the rows
+        // it scans (matched rows are a subset), through a helper so the loop gains no branch (#387).
+        builder.AppendLine();
+        builder.AppendLine(
+            "    private static long AddScannedRows(long scanned, int rowCount, global::Parquet.SourceGenerator.ParquetSerializerOptions options)"
+        );
+        builder.AppendLine("    {");
+        builder.AppendLine("        long total = checked(scanned + rowCount);");
+        builder.AppendLine("        if (total > options.MaxAllocationValues)");
+        builder.AppendLine("        {");
+        builder.AppendLine(
+            "            throw new global::System.IO.InvalidDataException($\"Total row count {total} exceeds maximum allowed {options.MaxAllocationValues}.\");"
+        );
+        builder.AppendLine("        }");
+        builder.AppendLine();
+        builder.AppendLine("        return total;");
         builder.AppendLine("    }");
     }
 

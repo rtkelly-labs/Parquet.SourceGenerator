@@ -291,6 +291,9 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   `num_values`, so a file declaring more rows than a chunk holds left the buffer tail unwritten, and
   pooled value-type buffers are returned uncleared. The emitted reader now compares each unrepeated
   column chunk's `num_values` with the row count and throws `InvalidDataException` naming the column.
+- **The sorted range reader enforces `MaxAllocationValues` across row groups** (#387). It capped each row group
+  but not their sum, the one read path that did not. The emitted reader now accumulates the rows it scans
+  and throws `InvalidDataException` when the total exceeds the cap, as the other paths do.
 - **A property or type named after a C# keyword no longer breaks the generated code** (#376). Roslyn drops
   the `@` from a member declared `@event`, so the model held the bare keyword and the emitters wrote
   `item.event`, `{ event = ... }` and `new class` into generated source (CS1001, CS1525). Every
