@@ -162,10 +162,6 @@ internal static class DecompressionGuardComponent
                     _knownStart = offset;
                     _knownEnd = payloadStart + compressedSize;
                 }
-                catch (global::System.IO.IOException)
-                {
-                    // An I/O failure while reading the header is left for the caller's own read to report.
-                }
                 finally
                 {
                     _inner.Position = savedPosition;
