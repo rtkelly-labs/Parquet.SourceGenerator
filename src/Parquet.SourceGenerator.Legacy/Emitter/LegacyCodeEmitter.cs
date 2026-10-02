@@ -237,6 +237,77 @@ internal static class LegacyCodeEmitter
         builder.AppendLine("            }");
         builder.AppendLine("        }");
         builder.AppendLine("    }");
+        EmitRowAndColumnBounds(builder);
+    }
+
+    /// <summary>
+    /// Emits the bounds the modern read path applies to file-declared row and value counts: each
+    /// row group's count and the running total are checked in 64 bits against
+    /// <c>MaxAllocationValues</c> before any is narrowed to an <c>int</c> or used to size an array,
+    /// a column's declared value count is checked before Parquet.Net allocates for it, and a column
+    /// that supplies fewer values than its row group declares rows is refused before it is indexed.
+    /// </summary>
+    private static void EmitRowAndColumnBounds(StringBuilder builder)
+    {
+        builder.AppendLine();
+        builder.AppendLine("    private static int CountRows(");
+        builder.AppendLine("        global::Parquet.ParquetReader reader,");
+        builder.AppendLine(
+            "        global::Parquet.SourceGenerator.ParquetSerializerOptions options)"
+        );
+        builder.AppendLine("    {");
+        builder.AppendLine("        long total = 0;");
+        builder.AppendLine("        for (int r = 0; r < reader.RowGroupCount; r++)");
+        builder.AppendLine("        {");
+        builder.AppendLine("            long rowCount = reader.RowGroups[r].RowCount;");
+        builder.AppendLine(
+            "            if (rowCount < 0 || rowCount > options.MaxAllocationValues)"
+        );
+        builder.AppendLine("            {");
+        builder.AppendLine(
+            "                throw new global::System.IO.InvalidDataException($\"Row group {r} row count {rowCount} is invalid or exceeds maximum allowed {options.MaxAllocationValues}.\");"
+        );
+        builder.AppendLine("            }");
+        builder.AppendLine("            total += rowCount;");
+        builder.AppendLine("        }");
+        builder.AppendLine("        if (total > options.MaxAllocationValues)");
+        builder.AppendLine("        {");
+        builder.AppendLine(
+            "            throw new global::System.IO.InvalidDataException($\"Total row count {total} exceeds maximum allowed {options.MaxAllocationValues}.\");"
+        );
+        builder.AppendLine("        }");
+        builder.AppendLine("        return (int)total;");
+        builder.AppendLine("    }");
+        builder.AppendLine();
+        builder.AppendLine("    private static void ValidateColumnValueCount(");
+        builder.AppendLine("        global::Parquet.ParquetRowGroupReader groupReader,");
+        builder.AppendLine("        global::Parquet.Schema.DataField field,");
+        builder.AppendLine(
+            "        global::Parquet.SourceGenerator.ParquetSerializerOptions options)"
+        );
+        builder.AppendLine("    {");
+        builder.AppendLine(
+            "        long entries = groupReader.GetMetadata(field).MetaData.NumValues;"
+        );
+        builder.AppendLine("        if (entries < 0 || entries > options.MaxAllocationValues)");
+        builder.AppendLine("        {");
+        builder.AppendLine(
+            "            throw new global::System.IO.InvalidDataException($\"Column '{field.Name}' NumValues ({entries}) is invalid or exceeds maximum allowed {options.MaxAllocationValues}.\");"
+        );
+        builder.AppendLine("        }");
+        builder.AppendLine("    }");
+        builder.AppendLine();
+        builder.AppendLine(
+            "    private static void ValidateColumnLength(int length, string fieldName, int groupRows)"
+        );
+        builder.AppendLine("    {");
+        builder.AppendLine("        if (length < groupRows)");
+        builder.AppendLine("        {");
+        builder.AppendLine(
+            "            throw new global::System.IO.InvalidDataException($\"Column '{fieldName}' supplied {length} values for a row group declaring {groupRows} rows.\");"
+        );
+        builder.AppendLine("        }");
+        builder.AppendLine("    }");
     }
 
     // ──────────────────────────────────────────────────────────
@@ -744,11 +815,7 @@ internal static class LegacyCodeEmitter
             return;
         }
 
-        builder.AppendLine("            int totalRows = 0;");
-        builder.AppendLine("            for (int r = 0; r < reader.RowGroupCount; r++)");
-        builder.AppendLine("            {");
-        builder.AppendLine("                totalRows += (int)reader.RowGroups[r].RowCount;");
-        builder.AppendLine("            }");
+        builder.AppendLine("            int totalRows = CountRows(reader, options);");
         builder.AppendLine();
         builder.AppendLine($"            var results = new {model.ClassName}[totalRows];");
         builder.AppendLine("            int currentOffset = 0;");
@@ -776,7 +843,7 @@ internal static class LegacyCodeEmitter
         builder.AppendLine("                cancellationToken.ThrowIfCancellationRequested();");
         builder.AppendLine("                using (var rgReader = reader.OpenRowGroupReader(r))");
         builder.AppendLine("                {");
-        builder.AppendLine("                    int groupRows = (int)rgReader.RowCount;");
+        builder.AppendLine("                    int groupRows = checked((int)rgReader.RowCount);");
         builder.AppendLine("                    if (groupRows == 0) continue;");
         builder.AppendLine();
 
@@ -787,11 +854,17 @@ internal static class LegacyCodeEmitter
             if (prop.IsNullable)
             {
                 builder.AppendLine(
+                    $"                    if (!missing_{i}) ValidateColumnValueCount(rgReader, field_{i}, options);"
+                );
+                builder.AppendLine(
                     $"                    if (!missing_{i}) ValidateDictionaryEntries(rgReader, stream, field_{i}, options);"
                 );
             }
             else
             {
+                builder.AppendLine(
+                    $"                    ValidateColumnValueCount(rgReader, field_{i}, options);"
+                );
                 builder.AppendLine(
                     $"                    ValidateDictionaryEntries(rgReader, stream, field_{i}, options);"
                 );
@@ -810,6 +883,9 @@ internal static class LegacyCodeEmitter
                         $"                        : ({elementType}[])(await rgReader.ReadColumnAsync(field_{i}, cancellationToken).ConfigureAwait(false)).Data;"
                     );
                     builder.AppendLine(
+                        $"                    if (!missing_{i}) ValidateColumnLength(data_{i}.Length, field_{i}.Name, groupRows);"
+                    );
+                    builder.AppendLine(
                         $"                    if (!missing_{i}) ValidateStringLengths(data_{i}, field_{i}.Name, options);"
                     );
                 }
@@ -822,6 +898,9 @@ internal static class LegacyCodeEmitter
                     builder.AppendLine(
                         $"                        : ({elementType}[])(await rgReader.ReadColumnAsync(field_{i}, cancellationToken).ConfigureAwait(false)).Data;"
                     );
+                    builder.AppendLine(
+                        $"                    if (!missing_{i}) ValidateColumnLength(data_{i}.Length, field_{i}.Name, groupRows);"
+                    );
                 }
             }
             else
@@ -831,6 +910,9 @@ internal static class LegacyCodeEmitter
                 );
                 builder.AppendLine(
                     $"                    var data_{i} = ({elementType}[])col_{i}.Data;"
+                );
+                builder.AppendLine(
+                    $"                    ValidateColumnLength(data_{i}.Length, field_{i}.Name, groupRows);"
                 );
                 if (IsStringColumn(prop))
                 {
