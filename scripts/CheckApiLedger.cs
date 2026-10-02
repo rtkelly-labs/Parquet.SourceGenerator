@@ -32,6 +32,18 @@ using System.Text;
 const string LedgerPath = "docs/api/LEDGER.md";
 const string UnapprovedMarker = "**Unapproved-by-design:**";
 
+string[] SemverBuckets = { "additive-minor", "breaking-major", "internal", "generated-shape" };
+string[] RequiredEntryKeys = { "Surface", "Semver", "Issue", "Rationale" };
+
+// Values copied unedited from the template this script prints.
+string[] PlaceholderValues =
+{
+    "emitted | package | seam",
+    "additive-minor | breaking-major | internal | generated-shape",
+    "#NNN",
+    "why no existing member can express this.",
+};
+
 string[] catalogueGlobs =
 {
     "src/api/seams.txt",
@@ -181,9 +193,12 @@ if (addedCatalogueLines.Count == 0 && removedCatalogueLines.Count == 0)
     return failures == 0 ? 0 : 1;
 }
 
-int addedLedgerEntries = Git($"diff --unified=0 --no-color {range} -- \"{LedgerPath}\"")
-    .Split('\n')
-    .Count(line => line.StartsWith("+### ", StringComparison.Ordinal));
+// Each added heading with its line number in the ledger at HEAD, from the hunk headers: two entries
+// may share a heading, so an entry is located by position and never by text.
+List<(string Heading, int Line)> addedLedgerHeadings = AddedHeadings(
+    Git($"diff --unified=0 --no-color {range} -- \"{LedgerPath}\"")
+);
+int addedLedgerEntries = addedLedgerHeadings.Count;
 
 Console.WriteLine(
     $"{addedCatalogueLines.Count} signature(s) added, {removedCatalogueLines.Count} signature(s) removed; "
@@ -228,10 +243,173 @@ if (addedLedgerEntries == 0)
 }
 else
 {
-    Console.WriteLine("Ledger entry present for this change.");
+    // #426: a heading alone satisfied the count, so one line `### x` cleared the gate for any number
+    // of signatures. Each added entry must now carry the fields the ledger exists to record. The
+    // count is deliberately NOT compared with the number of catalogue lines: one entry legitimately
+    // covers many (the #481 entry records 16 removed lines).
+    List<string> entryProblems = ValidateAddedEntries(addedLedgerHeadings);
+    if (entryProblems.Count == 0)
+    {
+        Console.WriteLine("Ledger entry present for this change.");
+    }
+    else
+    {
+        failures++;
+        Console.Error.WriteLine(
+            $"::error file={LedgerPath}::{entryProblems.Count} problem(s) in the ledger entr{(addedLedgerEntries == 1 ? "y" : "ies")} added by this change."
+        );
+        foreach (string problem in entryProblems)
+        {
+            Console.Error.WriteLine($"    - {problem}");
+        }
+
+        Console.Error.WriteLine();
+        Console.Error.WriteLine(
+            "  Each entry needs a non-empty **Surface:**, a **Semver:** that starts with one of "
+                + string.Join(", ", SemverBuckets)
+                + ", an **Issue:** and a **Rationale:**."
+        );
+    }
 }
 
 return failures == 0 ? 0 : 1;
+
+List<string> ValidateAddedEntries(List<(string Heading, int Line)> headings)
+{
+    var problems = new List<string>();
+    string[] lines = File.ReadAllLines(LedgerPath);
+    foreach ((string heading, int line) in headings)
+    {
+        int start = line - 1;
+        if (start < 0 || start >= lines.Length || lines[start].TrimEnd() != heading.TrimEnd())
+        {
+            problems.Add(
+                $"'{heading}': the heading is not at line {line} of {LedgerPath} at HEAD."
+            );
+            continue;
+        }
+
+        var block = new List<string>();
+        for (
+            int i = start + 1;
+            i < lines.Length && !lines[i].StartsWith("#", StringComparison.Ordinal);
+            i++
+        )
+        {
+            block.Add(lines[i]);
+        }
+
+        foreach (string key in RequiredEntryKeys)
+        {
+            string value = EntryValue(block, key);
+            if (value.Length == 0)
+            {
+                problems.Add($"'{heading}': **{key}:** is missing or empty.");
+            }
+            else if (PlaceholderValues.Contains(value))
+            {
+                problems.Add($"'{heading}': **{key}:** still holds the template placeholder.");
+            }
+            else if (
+                key == "Semver"
+                && !SemverBuckets.Any(bucket =>
+                    value.TrimStart('`', '*', ' ').StartsWith(bucket, StringComparison.Ordinal)
+                )
+            )
+            {
+                problems.Add(
+                    $"'{heading}': **Semver:** '{value}' does not start with one of {string.Join(", ", SemverBuckets)}."
+                );
+            }
+        }
+    }
+
+    return problems;
+}
+
+// `- **Key:**` or `* **Key:**`: the line that ends the previous field's value.
+static bool IsKeyBullet(string line)
+{
+    string text = line.TrimStart();
+    return (
+        text.StartsWith("- **", StringComparison.Ordinal)
+        || text.StartsWith("* **", StringComparison.Ordinal)
+    );
+}
+
+static List<(string Heading, int Line)> AddedHeadings(string diff)
+{
+    var headings = new List<(string, int)>();
+    int next = 0;
+    foreach (string raw in diff.Split('\n'))
+    {
+        string line = raw.TrimEnd('\r');
+        if (line.StartsWith("@@", StringComparison.Ordinal))
+        {
+            // @@ -a,b +c,d @@: the added lines start at c in the new file.
+            int plus = line.IndexOf('+', StringComparison.Ordinal);
+            int end = plus < 0 ? -1 : line.IndexOfAny(new[] { ',', ' ' }, plus);
+            next =
+                end > plus && int.TryParse(line.Substring(plus + 1, end - plus - 1), out int start)
+                    ? start
+                    : 0;
+        }
+        else if (
+            line.StartsWith("+", StringComparison.Ordinal)
+            && !line.StartsWith("+++", StringComparison.Ordinal)
+        )
+        {
+            if (line.StartsWith("+### ", StringComparison.Ordinal))
+            {
+                headings.Add((line.Substring(1), next));
+            }
+
+            next++;
+        }
+    }
+
+    return headings;
+}
+
+// A bullet line without its leading `- ` or `* `; the `**` that opens a bold key must survive.
+static string BulletText(string line)
+{
+    string text = line.TrimStart();
+    return
+        text.StartsWith("- ", StringComparison.Ordinal)
+        || text.StartsWith("* ", StringComparison.Ordinal)
+        ? text.Substring(2).TrimStart()
+        : text;
+}
+
+// The text of a `- **Key:** value` bullet, including its continuation lines up to the next key bullet.
+string EntryValue(List<string> block, string key)
+{
+    string marker = $"**{key}:**";
+    int index = block.FindIndex(line =>
+        BulletText(line).StartsWith(marker, StringComparison.Ordinal)
+    );
+    if (index < 0)
+    {
+        return string.Empty;
+    }
+
+    var text = new StringBuilder();
+    string first = block[index];
+    text.Append(first.Substring(first.IndexOf(marker, StringComparison.Ordinal) + marker.Length));
+    for (int i = index + 1; i < block.Count; i++)
+    {
+        string line = block[i];
+        if (IsKeyBullet(line))
+        {
+            break;
+        }
+
+        text.Append(' ').Append(line.Trim());
+    }
+
+    return text.ToString().Trim();
+}
 
 static string? ResolveBaseRange(string[] args)
 {

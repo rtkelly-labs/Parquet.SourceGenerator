@@ -237,6 +237,9 @@ Four steps.
    are empty, you changed an implementation, and steps 3 and 4 do not apply.
 3. **Write the ledger entry**, newest first, one per added or changed signature. Pick the bucket.
    Fill in *Alternatives considered* — that is the field with a reader in a year's time.
+   CI checks the shape of every entry you add: a non-empty **Surface:**, a **Semver:** that starts
+   with one of the four buckets, an **Issue:** and a **Rationale:** (#426).  One entry may cover
+   several catalogue lines.
 4. **Verify.**
    ```bash
    dotnet build Parquet.SourceGenerator.slnx --configuration Release -warnaserror
