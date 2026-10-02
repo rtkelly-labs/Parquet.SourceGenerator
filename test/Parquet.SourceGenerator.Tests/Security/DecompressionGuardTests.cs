@@ -337,10 +337,10 @@ public sealed class DecompressionGuardTests
         long payloadStart = HeaderOffset + header.Length;
         Should.NotThrow(() =>
         {
-            guard.Stream.Position = payloadStart;
-            guard.Stream.Position = payloadStart + 7;
+            guard.Stream.Seek(payloadStart, SeekOrigin.Begin);
+            guard.Stream.Seek(payloadStart + 7, SeekOrigin.Begin);
             guard.Stream.Seek(1, SeekOrigin.Current);
-            guard.Stream.Position = HeaderOffset + 2;
+            guard.Stream.Seek(HeaderOffset + 2, SeekOrigin.Begin);
             guard.Stream.Seek(1, SeekOrigin.Current);
         });
     }

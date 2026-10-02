@@ -13,54 +13,22 @@ namespace Parquet.SourceGenerator.Tests.Security;
 /// </summary>
 internal static class PageHeaderSplicer
 {
+    private readonly record struct PageLocation(long Offset, PageHeader Header, int Length);
+
     public static async Task<byte[]> ReplaceFirstPageHeaderAsync(
         byte[] file,
         Func<PageHeader, byte[]> buildHeader
     )
     {
-        long pageOffset;
-        PageHeader original;
-        long originalLength;
-        using (var input = new MemoryStream(file, writable: false))
-        {
-            await using ParquetReader reader = await ParquetReader.CreateAsync(input);
-            ColumnMetaData column = reader.Metadata!.RowGroups[0].Columns[0].MetaData!;
-            pageOffset = column.DictionaryPageOffset is > 0
-                ? column.DictionaryPageOffset.Value
-                : column.DataPageOffset;
+        PageLocation page = await LocateFirstPageAsync(file);
+        byte[] replacement = buildHeader(page.Header);
+        int delta = replacement.Length - page.Length;
 
-            System.Type protoType = typeof(ParquetReader).Assembly.GetType(
-                "Parquet.Meta.Proto.ThriftCompactProtocolReader",
-                throwOnError: true
-            )!;
-            input.Position = pageOffset;
-            object proto = Activator.CreateInstance(
-                protoType,
-                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-                binder: null,
-                args: [input],
-                culture: null
-            )!;
-            original = (PageHeader)
-                typeof(PageHeader)
-                    .GetMethod("Read", BindingFlags.Static | BindingFlags.NonPublic)!
-                    .Invoke(null, [proto])!;
-            originalLength = input.Position - pageOffset;
-        }
-
-        byte[] replacement = buildHeader(original);
-        int delta = replacement.Length - (int)originalLength;
-
-        var spliced = new byte[file.Length + delta];
-        Buffer.BlockCopy(file, 0, spliced, 0, (int)pageOffset);
-        Buffer.BlockCopy(replacement, 0, spliced, (int)pageOffset, replacement.Length);
-        Buffer.BlockCopy(
-            file,
-            (int)(pageOffset + originalLength),
-            spliced,
-            (int)pageOffset + replacement.Length,
-            file.Length - (int)(pageOffset + originalLength)
-        );
+        byte[] spliced = new byte[file.Length + delta];
+        file.AsSpan(0, (int)page.Offset).CopyTo(spliced);
+        replacement.CopyTo(spliced.AsSpan((int)page.Offset));
+        file.AsSpan((int)page.Offset + page.Length)
+            .CopyTo(spliced.AsSpan((int)page.Offset + replacement.Length));
 
         return await HostileParquetTests.RewriteColumnMetadataAsync(
             spliced,
@@ -72,14 +40,14 @@ internal static class PageHeaderSplicer
                     foreach (ColumnChunk chunk in rowGroup.Columns)
                     {
                         ColumnMetaData column = chunk.MetaData!;
-                        if (column.DataPageOffset > pageOffset)
+                        if (column.DataPageOffset > page.Offset)
                         {
                             column.DataPageOffset += delta;
                         }
 
                         if (
                             column.DictionaryPageOffset is > 0
-                            && column.DictionaryPageOffset > pageOffset
+                            && column.DictionaryPageOffset > page.Offset
                         )
                         {
                             column.DictionaryPageOffset += delta;
@@ -88,5 +56,33 @@ internal static class PageHeaderSplicer
                 }
             }
         );
+    }
+
+    private static async Task<PageLocation> LocateFirstPageAsync(byte[] file)
+    {
+        using var input = new MemoryStream(file, writable: false);
+        await using ParquetReader reader = await ParquetReader.CreateAsync(input);
+        ColumnMetaData column = reader.Metadata!.RowGroups[0].Columns[0].MetaData!;
+        long offset = column.DictionaryPageOffset is > 0
+            ? column.DictionaryPageOffset.Value
+            : column.DataPageOffset;
+
+        System.Type protoType = typeof(ParquetReader).Assembly.GetType(
+            "Parquet.Meta.Proto.ThriftCompactProtocolReader",
+            throwOnError: true
+        )!;
+        input.Position = offset;
+        object proto = Activator.CreateInstance(
+            protoType,
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+            binder: null,
+            args: [input],
+            culture: null
+        )!;
+        var header = (PageHeader)
+            typeof(PageHeader)
+                .GetMethod("Read", BindingFlags.Static | BindingFlags.NonPublic)!
+                .Invoke(null, [proto])!;
+        return new PageLocation(offset, header, (int)(input.Position - offset));
     }
 }

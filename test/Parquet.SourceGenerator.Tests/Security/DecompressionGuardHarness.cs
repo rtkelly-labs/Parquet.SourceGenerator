@@ -24,6 +24,9 @@ namespace Parquet.SourceGenerator.Tests.Security;
 /// <item><c>modern-csharp7</c> is the modern emitter's guard re-compiled at C# 7.3 with no target
 /// framework symbols, which is what a net472 consumer sees (no Span overloads, no newer syntax).</item>
 /// <item><c>legacy-csharp7</c> is the legacy emitter's guard compiled the same way.</item>
+/// <item><c>legacy-csharp7-checked</c> is that guard compiled with overflow checking on, as a
+/// consumer project with <c>CheckForOverflowUnderflow</c> would compile it: the guard must not
+/// depend on arithmetic wrapping silently.</item>
 /// </list>
 /// </remarks>
 internal static class DecompressionGuardHarness
@@ -31,12 +34,15 @@ internal static class DecompressionGuardHarness
     public const string Modern = "modern";
     public const string ModernCSharp7 = "modern-csharp7";
     public const string LegacyCSharp7 = "legacy-csharp7";
+    public const string LegacyChecked = "legacy-csharp7-checked";
 
     private static readonly Dictionary<string, Type> Types = new();
     private static readonly object Gate = new();
 
     public static IEnumerable<object[]> Flavours() =>
-        new[] { Modern, ModernCSharp7, LegacyCSharp7 }.Select(f => new object[] { f });
+        new[] { Modern, ModernCSharp7, LegacyCSharp7, LegacyChecked }.Select(f =>
+            new object[] { f }
+        );
 
     public sealed class Guard : IDisposable
     {
@@ -90,8 +96,9 @@ internal static class DecompressionGuardHarness
                     Modern => typeof(BufferModel)
                         .Assembly.GetTypes()
                         .First(t => t.Name == "DecompressionGuardStream"),
-                    ModernCSharp7 => CompileGuard(EmitModern()),
-                    LegacyCSharp7 => CompileGuard(EmitLegacy()),
+                    ModernCSharp7 => CompileGuard(EmitModern(), checkOverflow: false),
+                    LegacyCSharp7 => CompileGuard(EmitLegacy(), checkOverflow: false),
+                    LegacyChecked => CompileGuard(EmitLegacy(), checkOverflow: true),
                     _ => throw new ArgumentOutOfRangeException(nameof(flavour), flavour, null),
                 };
                 Types[flavour] = type;
@@ -125,7 +132,7 @@ internal static class DecompressionGuardHarness
     /// Cuts the guard class out of an emitted file and compiles it on its own at C# 7.3 with no
     /// preprocessor symbols. The guard depends on nothing but the base class library.
     /// </summary>
-    private static Type CompileGuard(string emitted)
+    private static Type CompileGuard(string emitted, bool checkOverflow)
     {
         string guard = ExtractClass(emitted, "private sealed class DecompressionGuardStream");
         string source =
@@ -143,7 +150,10 @@ internal static class DecompressionGuardHarness
             ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!)
                 .Split(Path.PathSeparator)
                 .Select(path => (MetadataReference)MetadataReference.CreateFromFile(path)),
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
+            new CSharpCompilationOptions(
+                OutputKind.DynamicallyLinkedLibrary,
+                checkOverflow: checkOverflow
+            )
         );
 
         using var image = new MemoryStream();

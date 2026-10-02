@@ -346,7 +346,8 @@ internal static class DecompressionGuardComponent
             private int ReadInt32()
             {
                 uint raw = ReadVarint32();
-                return (int)((raw >> 1) ^ (uint)-(int)(raw & 1));
+                // The consumer's project may compile with overflow checking on, and this wraps by design.
+                return unchecked((int)((raw >> 1) ^ (uint)-(int)(raw & 1)));
             }
 
             private uint ReadVarint32()
