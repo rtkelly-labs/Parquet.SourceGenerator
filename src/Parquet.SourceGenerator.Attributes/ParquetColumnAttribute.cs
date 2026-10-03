@@ -44,11 +44,22 @@ public sealed class ParquetColumnAttribute : Attribute
     /// Gets or sets whether string values in this column should be deduplicated during deserialization.
     /// When true, identical string values within a row group share the same object reference,
     /// reducing managed heap allocations and memory footprint for low-cardinality columns.
+    /// <para>
+    /// Precedence with <c>ParquetSerializerOptions.DeduplicateStrings</c>: the two are combined with
+    /// "or". <c>true</c> here deduplicates this column even when the option is <c>false</c>; the option
+    /// set to <c>true</c> deduplicates every string column, and there is no way to switch a column
+    /// off that this attribute switched on.
+    /// </para>
     /// </summary>
     public bool Deduplicate { get; set; }
 
     /// <summary>
     /// Gets or sets the physical column encoding hint to use when serializing this column.
+    /// <para>
+    /// Precedence with <c>ParquetSerializerOptions.ColumnEncodingHints</c>: the attribute is applied
+    /// first and a hint in the options for the same column name replaces it, so the runtime option
+    /// wins when both are set (including an explicit <see cref="ParquetColumnEncoding.Default"/>).
+    /// </para>
     /// </summary>
     public ParquetColumnEncoding Encoding { get; set; } = ParquetColumnEncoding.Default;
 }

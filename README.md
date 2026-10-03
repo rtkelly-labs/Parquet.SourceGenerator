@@ -326,6 +326,8 @@ await events.WriteParquetBatchedAsync(stream, options: options);
 
 Supported codecs: `None`, `Snappy` (default), `Gzip`, `Lz4`, `Brotli`, and `Zstd`.
 
+**Attribute versus option.** Where a model attribute and an option set the same thing, the rule is written once: for encoding, a `ParquetSerializerOptions.ColumnEncodingHints` entry replaces the column's `[ParquetColumn(Encoding = ...)]` hint (the option wins, including an explicit `Default`); for strings, `[ParquetColumn(Deduplicate = true)]` and `ParquetSerializerOptions.DeduplicateStrings` are combined with "or", so the option can add deduplication to every string column but cannot switch off a column whose attribute asked for it. `ColumnEncodingHints` applies to writes and `DeduplicateStrings` to reads; `MaxDegreeOfParallelism` only takes effect after `.Parallel()` on a buffer source; `RowGroupSize` does not apply to a `<Model>Batch` write, which is one row group. Tests: `RuntimeOptionsOverridesCompileTimeHint` and `ParquetColumnAttributeDeduplicateTrueDeduplicatesEvenWhenGlobalOptionIsFalse`.
+
 ---
 
 ## ✨ Core Features & Architecture
