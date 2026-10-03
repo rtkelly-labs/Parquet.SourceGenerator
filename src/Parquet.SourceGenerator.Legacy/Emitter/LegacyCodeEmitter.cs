@@ -238,6 +238,16 @@ internal static class LegacyCodeEmitter
         builder.AppendLine("        }");
         builder.AppendLine("    }");
         EmitRowAndColumnBounds(builder);
+
+        foreach (PropertyModel prop in model.Properties)
+        {
+            if (prop.Kind == PropertyKind.TimeOnly)
+            {
+                builder.AppendLine();
+                PropertyMappingComponent.EmitReadTimeOnlyHelper(builder);
+                break;
+            }
+        }
     }
 
     /// <summary>

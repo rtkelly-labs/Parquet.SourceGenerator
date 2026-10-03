@@ -81,10 +81,16 @@ internal static class ColumnHelpersComponent
         builder.AppendLine();
         EmitReadRowCount(builder);
 
+        if (!RowGroupPruningComponent.IsEnabled(model))
+        {
+            builder.AppendLine();
+            EmitSumRowGroupRows(builder);
+        }
+
         if (columns.Any(c => c.Leaf.Kind == PropertyKind.TimeOnly))
         {
             builder.AppendLine();
-            EmitReadTimeOnly(builder);
+            PropertyMappingComponent.EmitReadTimeOnlyHelper(builder);
         }
         if (columns.Length == 0)
             return;
@@ -189,21 +195,32 @@ internal static class ColumnHelpersComponent
         );
 
     /// <summary>
-    /// Builds a <c>TimeOnly</c> from a file-controlled <c>TIME_MICROS</c> value. Unchecked, an
-    /// out-of-range value throws <c>ArgumentOutOfRangeException</c>, and one that wraps on the multiply
-    /// yields a wrong time of day with no error (#371).
+    /// Sums the row groups' 64-bit row counts for a read with no statistics to prune on, checking each
+    /// and the total against <c>MaxAllocationValues</c> before narrowing to the <c>int</c> that sizes
+    /// the result (#371). The pruned branch of the selection pass does the same inline.
     /// </summary>
-    private static void EmitReadTimeOnly(StringBuilder builder) =>
+    private static void EmitSumRowGroupRows(StringBuilder builder) =>
         AppendLines(
             builder,
-            "    private static global::System.TimeOnly ReadTimeOnly(long micros)",
+            "    private static int SumRowGroupRows(global::Parquet.ParquetReader reader, global::Parquet.SourceGenerator.ParquetSerializerOptions options)",
             "    {",
-            "        if ((ulong)micros > 86_399_999_999UL)",
+            "        long total = 0;",
+            "        for (int r = 0; r < reader.RowGroups.Count; r++)",
             "        {",
-            "            throw new global::System.IO.InvalidDataException($\"TIME_MICROS value {micros} is outside one day.\");",
+            "            long rowCount = reader.RowGroups[r].RowCount;",
+            "            if (rowCount < 0 || rowCount > options.MaxAllocationValues)",
+            "            {",
+            "                throw new global::System.IO.InvalidDataException($\"Row group {r} row count {rowCount} is invalid or exceeds maximum allowed {options.MaxAllocationValues}.\");",
+            "            }",
+            "",
+            "            total += rowCount;",
+            "            if (total > options.MaxAllocationValues)",
+            "            {",
+            "                throw new global::System.IO.InvalidDataException($\"Total row count {total} exceeds maximum allowed {options.MaxAllocationValues}.\");",
+            "            }",
             "        }",
             "",
-            "        return new global::System.TimeOnly(micros * 10L);",
+            "        return (int)total;",
             "    }"
         );
 

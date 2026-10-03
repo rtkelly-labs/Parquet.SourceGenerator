@@ -169,6 +169,17 @@ public class LegacyEmitterTests
     }
 
     [Fact]
+    public void LegacyReaderEmitsTheTimeOnlyHelperItsMappingCalls()
+    {
+        string code = Emit(
+            Prop("At", "at", "global::System.TimeOnly", LegacyModels::PropertyKind.TimeOnly, false)
+        );
+
+        code.ShouldContain("ReadTimeOnly(");
+        code.ShouldContain("private static global::System.TimeOnly ReadTimeOnly(long micros)");
+    }
+
+    [Fact]
     public void LegacyReaderEmitsDictionaryAndStringSafetyGuards()
     {
         string code = Emit(

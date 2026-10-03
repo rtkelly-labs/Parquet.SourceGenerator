@@ -304,4 +304,25 @@ internal static class PropertyMappingComponent
             builder.AppendLine($"{indent}{bufferPrefix}{p}[{indexVar}] = {writeExpr};");
         }
     }
+
+    /// <summary>
+    /// Emits <c>ReadTimeOnly</c>, which builds a <c>TimeOnly</c> from a file-controlled
+    /// <c>TIME_MICROS</c> value. Unchecked, an out-of-range value throws
+    /// <c>ArgumentOutOfRangeException</c>, and one that wraps on the multiply yields a wrong time of day
+    /// with no error (#371). Every backend that maps a <c>TimeOnly</c> column emits it.
+    /// </summary>
+    public static void EmitReadTimeOnlyHelper(StringBuilder builder)
+    {
+        builder.AppendLine("    private static global::System.TimeOnly ReadTimeOnly(long micros)");
+        builder.AppendLine("    {");
+        builder.AppendLine("        if ((ulong)micros > 86_399_999_999UL)");
+        builder.AppendLine("        {");
+        builder.AppendLine(
+            "            throw new global::System.IO.InvalidDataException($\"TIME_MICROS value {micros} is outside one day.\");"
+        );
+        builder.AppendLine("        }");
+        builder.AppendLine();
+        builder.AppendLine("        return new global::System.TimeOnly(micros * 10L);");
+        builder.AppendLine("    }");
+    }
 }

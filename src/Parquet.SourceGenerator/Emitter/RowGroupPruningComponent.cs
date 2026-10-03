@@ -138,9 +138,7 @@ internal static class RowGroupPruningComponent
     {
         if (!IsEnabled(model))
         {
-            builder.AppendLine(
-                $"        int {totalRowsVar} = (int)global::System.Linq.Enumerable.Sum(reader.RowGroups, rg => rg.RowCount);"
-            );
+            builder.AppendLine($"        int {totalRowsVar} = SumRowGroupRows(reader, options);");
             return;
         }
 

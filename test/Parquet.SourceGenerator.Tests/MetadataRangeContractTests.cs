@@ -10,6 +10,14 @@ using Xunit;
 namespace Parquet.SourceGenerator.Tests;
 
 [ParquetSerializable]
+public sealed partial record NoStatisticsRow
+{
+    public Guid Key { get; init; }
+
+    public bool Flag { get; init; }
+}
+
+[ParquetSerializable]
 public sealed partial record TimeOfDayRow
 {
     public int Id { get; init; }
@@ -28,6 +36,8 @@ public sealed partial record TimeOfDayRow
 /// </summary>
 public sealed class MetadataRangeContractTests
 {
+    private static readonly Guid FirstKey = Guid.NewGuid();
+
     private const long Huge = 5_000_000_000;
 
     private static async Task<byte[]> WriteFlatAsync()
@@ -41,13 +51,17 @@ public sealed class MetadataRangeContractTests
         return stream.ToArray();
     }
 
-    private static Task<byte[]> WithHugeRowCountAsync(byte[] file, int rowGroup) =>
+    private static Task<byte[]> WithHugeRowCountAsync(
+        byte[] file,
+        int rowGroup,
+        long rows = Huge
+    ) =>
         HostileParquetTests.RewriteColumnMetadataAsync(
             file,
             (metadata, _) =>
             {
-                metadata.NumRows = Huge;
-                metadata.RowGroups[rowGroup].NumRows = Huge;
+                metadata.NumRows = rows;
+                metadata.RowGroups[rowGroup].NumRows = rows;
             }
         );
 
@@ -132,7 +146,7 @@ public sealed class MetadataRangeContractTests
         byte[] file = stream.ToArray();
 
         // One hour is 3.6e9 microseconds. Overwrite its PLAIN encoding with a value far past a day.
-        byte[] needle = BitConverter.GetBytes(3_600_000_000L);
+        byte[] needle = BitConverter.GetBytes(TimeSpan.FromHours(1).Ticks / 10);
         byte[] replacement = BitConverter.GetBytes(long.MaxValue / 7);
         int patched = 0;
         for (int at = file.AsSpan().IndexOf(needle); at >= 0; )
@@ -148,6 +162,24 @@ public sealed class MetadataRangeContractTests
 
         await Should.ThrowAsync<InvalidDataException>(() =>
             TimeOfDayRowParquet.From(new MemoryStream(file)).ToArrayAsync()
+        );
+    }
+
+    [Fact]
+    public async Task RowCountAboveIntRangeIsInvalidDataWhenNoColumnHasStatisticsToPruneOnAsync()
+    {
+        // Guid and bool columns have no pruning statistics, so the read sizes its result from a plain
+        // sum of the footer row counts rather than the pruning pre-pass.
+        var rows = new List<NoStatisticsRow>
+        {
+            new() { Key = FirstKey, Flag = true },
+        };
+        using var stream = new MemoryStream();
+        await rows.WriteParquetAsync(stream);
+        byte[] huge = await WithHugeRowCountAsync(stream.ToArray(), 0, int.MaxValue + 1L);
+
+        await Should.ThrowAsync<InvalidDataException>(() =>
+            NoStatisticsRowParquet.From(new MemoryStream(huge)).ToArrayAsync()
         );
     }
 
