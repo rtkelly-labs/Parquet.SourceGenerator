@@ -101,6 +101,10 @@ public sealed class ParquetSerializerOptions
     /// This is the only place the row group size can be set. <c>WriteParquetBatchedAsync</c> and the
     /// <c>IAsyncEnumerable</c> overload of <c>WriteParquetAsync</c> carried a duplicate
     /// <c>rowGroupSize</c> parameter until <c>0.0.x</c>; it was removed so the setting has one home.
+    /// <para>
+    /// It does not apply to the columnar <c>&lt;Model&gt;Batch.WriteParquetAsync</c>: a batch is written
+    /// as one complete row group.
+    /// </para>
     /// </remarks>
     public int RowGroupSize { get; set; } = 50_000;
 
@@ -144,6 +148,11 @@ public sealed class ParquetSerializerOptions
     /// Gets or sets whether to deduplicate string instances during deserialization (default is false).
     /// When enabled, identical string values within a row group share the same object reference,
     /// dramatically reducing managed heap allocations and memory footprint for low-cardinality columns.
+    /// <para>
+    /// Precedence with <c>[ParquetColumn(Deduplicate = true)]</c>: the two are combined with "or". The
+    /// attribute deduplicates its column even when this is <c>false</c>; this set to <c>true</c>
+    /// deduplicates every string column. Applies to reads only.
+    /// </para>
     /// </summary>
     public bool DeduplicateStrings { get; set; }
 
@@ -163,7 +172,11 @@ public sealed class ParquetSerializerOptions
 
     /// <summary>
     /// Specifies runtime encoding hints to the writer for specific columns by column path or name.
-    /// Takes precedence over or supplements compile-time attribute annotations.
+    /// Precedence with <c>[ParquetColumn(Encoding = ...)]</c>: the attribute is applied first and an
+    /// entry here for the same column name replaces it, so this wins when both are set (an explicit
+    /// <see cref="ParquetColumnEncoding.Default"/> removes the attribute's hint). Columns without an
+    /// entry keep their attribute hint. Applies to writes only, and to top-level columns: an
+    /// <c>Encoding</c> on a member inside a nested struct or list element is not emitted today.
     /// </summary>
     public IDictionary<string, ParquetColumnEncoding> ColumnEncodingHints { get; } =
         new Dictionary<string, ParquetColumnEncoding>(StringComparer.Ordinal);
