@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 using Shouldly;
 using Xunit;
 using IOFile = System.IO.File;
@@ -90,37 +91,79 @@ public sealed class AnalyzerGateTests
     {
         string root = FindRepositoryRoot();
 
-        Read(
-                root,
-                "src",
-                "Parquet.SourceGenerator.Attributes",
-                "Parquet.SourceGenerator.Attributes.csproj"
+        // Parsed, so a commented-out reference does not count.
+        ActiveItems(
+                Path.Combine(
+                    root,
+                    "src",
+                    "Parquet.SourceGenerator.Attributes",
+                    "Parquet.SourceGenerator.Attributes.csproj"
+                )
             )
-            .ShouldContain("Microsoft.CodeAnalysis.PublicApiAnalyzers");
+            .Any(i =>
+                i.Kind == "PackageReference"
+                && i.Include == "Microsoft.CodeAnalysis.PublicApiAnalyzers"
+            )
+            .ShouldBeTrue("Attributes must reference PublicApiAnalyzers");
 
         foreach (
             string project in new[] { "Parquet.SourceGenerator", "Parquet.SourceGenerator.Legacy" }
         )
         {
-            string csproj = Read(root, "src", project, project + ".csproj");
-            Regex
-                .IsMatch(
-                    csproj,
-                    @"ApiGates\.csproj""\s+OutputItemType=""Analyzer""",
-                    RegexOptions.CultureInvariant,
-                    TimeSpan.FromSeconds(2)
+            var items = ActiveItems(Path.Combine(root, "src", project, project + ".csproj"));
+            items
+                .Any(i =>
+                    i.Kind == "ProjectReference"
+                    && i.Include.EndsWith(
+                        "Parquet.SourceGenerator.ApiGates.csproj",
+                        StringComparison.Ordinal
+                    )
+                    && i.OutputItemType == "Analyzer"
                 )
                 .ShouldBeTrue($"{project} must reference ApiGates as an analyzer");
-            csproj.ShouldContain("seams.txt");
-            csproj.ShouldContain("CodeMetricsConfig.txt");
+            items
+                .Any(i =>
+                    i.Kind == "AdditionalFiles"
+                    && i.Include.EndsWith("seams.txt", StringComparison.Ordinal)
+                )
+                .ShouldBeTrue($"{project}: seams.txt");
+            items
+                .Any(i =>
+                    i.Kind == "AdditionalFiles"
+                    && i.Include.EndsWith("CodeMetricsConfig.txt", StringComparison.Ordinal)
+                )
+                .ShouldBeTrue($"{project}: CodeMetricsConfig.txt");
         }
 
-        string editorconfig = Read(root, ".editorconfig");
+        // Active lines only: a commented-out severity does not count.
+        string[] active = Read(root, ".editorconfig")
+            .Split('\n')
+            .Select(l => l.Trim())
+            .Where(l => !l.StartsWith('#') && !l.StartsWith(';'))
+            .ToArray();
         foreach (string rule in new[] { "CA1502", "CA1505", "CA1506" })
         {
-            editorconfig.ShouldContain($"dotnet_diagnostic.{rule}.severity = warning");
+            active.ShouldContain($"dotnet_diagnostic.{rule}.severity = warning");
         }
     }
+
+    private static (string Kind, string Include, string? OutputItemType)[] ActiveItems(
+        string csproj
+    ) =>
+        XDocument
+            .Load(csproj)
+            .Descendants()
+            .Where(e =>
+                e.Name.LocalName is "PackageReference" or "ProjectReference" or "AdditionalFiles"
+            )
+            .Select(e =>
+                (
+                    e.Name.LocalName,
+                    (string?)e.Attribute("Include") ?? string.Empty,
+                    (string?)e.Attribute("OutputItemType")
+                )
+            )
+            .ToArray();
 
     private static string Read(string root, params string[] segments) =>
         IOFile
