@@ -16,6 +16,30 @@ The rule, the three surfaces and the author process are in
 
 <!-- Add new entries directly below this line, newest first. -->
 
+### 2026-10-03 — `ParquetSerializerOptions.MaxAllocationBytes`, a byte budget for what a read allocates (#361)
+
+- **Surface:** unshipped
+- **Semver:** additive-minor
+- **Issue:** [#361](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/361), part of tracker
+  [#477](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/477)
+- **Change:** adds `long MaxAllocationBytes { get; set; }` to `ParquetSerializerOptions`, default
+  268,435,456 (256 MiB). The generated readers (modern and classic) multiply a row group's declared
+  row count by the model's per-row buffer size and throw `InvalidDataException`, naming the option,
+  before renting; repeated columns are checked as their chunks are read and added to the row group's running total.
+- **Rationale:** `MaxAllocationValues` bounds a count, which is the same number for a `bool` and a
+  `Guid` column and applies per column, so a roughly 1 KB file declaring ten million rows reserved
+  about a gigabyte for a nine column model before any page was read. The issue's other proposal,
+  rejecting a column whose `num_values` could not be encoded in its `total_uncompressed_size`, was
+  not taken: RLE, dictionary, all-null and delta encodings legitimately carry millions of values in a
+  few bytes (UPSTREAM_DEPENDENCY_LIMITATIONS.md). The only sound bound is the one the caller chooses.
+- **Default:** 256 MiB per row group admits any realistic group (a million rows of a ten column model
+  is about 100 MiB) and refuses the ten million rows a hostile footer can declare. A file with larger
+  row groups raises the option; the error message says which.
+- **Alternatives considered:** *dividing the budget across parallel workers* — not done: the budget is
+  per row group and per worker, documented on the option, because the split would change a limit a
+  caller sets for one read depending on the host's core count. *A hard-coded limit* — rejected: a
+  legitimately large file must be readable.
+
 ### 2026-10-02 — `{T}ColumnarBatch` and the nested `ColumnBatch` become one top-level `{T}Batch` (#508)
 
 - **Surface:** emitted

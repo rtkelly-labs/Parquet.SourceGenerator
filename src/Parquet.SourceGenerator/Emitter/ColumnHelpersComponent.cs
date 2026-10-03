@@ -76,6 +76,9 @@ internal static class ColumnHelpersComponent
             EmitThrowIfSourceShorter(builder);
         }
 
+        builder.AppendLine();
+        AllocationBudgetComponent.EmitHelper(builder);
+
         LeafColumn[] columns = EmissionPlan.For(model).Columns;
 
         builder.AppendLine();
@@ -385,6 +388,7 @@ internal static class ColumnHelpersComponent
             "        global::Parquet.Schema.DataField field,",
             "        string columnName,",
             "        global::Parquet.SourceGenerator.ParquetSerializerOptions options,",
+            "        ref long allocatedBytes,",
             "        ref T[] buffer,",
             "        ref int[] defLevels,",
             "        ref int[] repLevels)",
@@ -396,6 +400,7 @@ internal static class ColumnHelpersComponent
             "        }",
             "        if (entries > defLevels.Length)",
             "        {",
+            "            allocatedBytes = CheckAllocationBudget(allocatedBytes, entries - defLevels.Length, 24, options);",
             "            var newDefLevels = global::System.Buffers.ArrayPool<int>.Shared.Rent(entries);",
             "            global::System.Buffers.ArrayPool<int>.Shared.Return(defLevels, clearArray: false);",
             "            defLevels = newDefLevels;",

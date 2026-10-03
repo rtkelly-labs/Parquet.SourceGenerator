@@ -169,6 +169,18 @@ public class LegacyEmitterTests
     }
 
     [Fact]
+    public void LegacyReaderChecksTheByteBudgetBeforeReadingAColumnGroup()
+    {
+        string code = Emit(
+            Prop("Id", "id", "int", LegacyModels::PropertyKind.Primitive, false),
+            Prop("Name", "name", "string", LegacyModels::PropertyKind.Primitive, true)
+        );
+
+        code.ShouldContain("CheckAllocationBudget(0, groupRows, 40, options);");
+        code.ShouldContain("options.MaxAllocationBytes");
+    }
+
+    [Fact]
     public void LegacyReaderEmitsDictionaryAndStringSafetyGuards()
     {
         string code = Emit(
@@ -318,7 +330,9 @@ public class LegacyEmitterTests
 
         // A column's declared value count is checked before Parquet.Net reads it, and its length
         // before it is indexed. The behaviour is pinned by test/PackageConsumptionLegacy.
-        code.ShouldContain("ValidateColumnValueCount(rgReader, field_0, options);");
+        code.ShouldContain(
+            "ValidateColumnValueCount(rgReader, field_0, options, ref allocatedBytes, 4);"
+        );
         code.ShouldContain("ValidateColumnLength(data_0.Length, field_0.Name, groupRows);");
         code.ShouldContain(
             "if (!missing_1) ValidateColumnLength(data_1.Length, field_1.Name, groupRows);"

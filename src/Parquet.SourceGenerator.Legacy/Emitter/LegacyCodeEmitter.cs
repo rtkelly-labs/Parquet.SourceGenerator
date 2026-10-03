@@ -250,6 +250,8 @@ internal static class LegacyCodeEmitter
     private static void EmitRowAndColumnBounds(StringBuilder builder)
     {
         builder.AppendLine();
+        AllocationBudgetComponent.EmitHelper(builder);
+        builder.AppendLine();
         builder.AppendLine("    private static int CountRows(");
         builder.AppendLine("        global::Parquet.ParquetReader reader,");
         builder.AppendLine(
@@ -283,8 +285,10 @@ internal static class LegacyCodeEmitter
         builder.AppendLine("        global::Parquet.ParquetRowGroupReader groupReader,");
         builder.AppendLine("        global::Parquet.Schema.DataField field,");
         builder.AppendLine(
-            "        global::Parquet.SourceGenerator.ParquetSerializerOptions options)"
+            "        global::Parquet.SourceGenerator.ParquetSerializerOptions options,"
         );
+        builder.AppendLine("        ref long allocatedBytes,");
+        builder.AppendLine("        int bytesPerValue)");
         builder.AppendLine("    {");
         builder.AppendLine(
             "        long entries = groupReader.GetMetadata(field).MetaData.NumValues;"
@@ -295,6 +299,9 @@ internal static class LegacyCodeEmitter
             "            throw new global::System.IO.InvalidDataException($\"Column '{field.Name}' NumValues ({entries}) is invalid or exceeds maximum allowed {options.MaxAllocationValues}.\");"
         );
         builder.AppendLine("        }");
+        builder.AppendLine(
+            "        allocatedBytes = CheckAllocationBudget(allocatedBytes, entries, bytesPerValue, options);"
+        );
         builder.AppendLine("    }");
         builder.AppendLine();
         builder.AppendLine(
@@ -845,6 +852,12 @@ internal static class LegacyCodeEmitter
         builder.AppendLine("                {");
         builder.AppendLine("                    int groupRows = checked((int)rgReader.RowCount);");
         builder.AppendLine("                    if (groupRows == 0) continue;");
+        builder.AppendLine(
+            $"                    CheckAllocationBudget(0, groupRows, {AllocationBudgetComponent.FlatBytesPerRow(model.Properties)}, options);"
+        );
+        // Columns are read one after another and each array is kept until the group is materialized, so
+        // every column's declared value count is added to one running total.
+        builder.AppendLine("                    long allocatedBytes = 0;");
         builder.AppendLine();
 
         for (int i = 0; i < model.Properties.Length; i++)
@@ -854,7 +867,7 @@ internal static class LegacyCodeEmitter
             if (prop.IsNullable)
             {
                 builder.AppendLine(
-                    $"                    if (!missing_{i}) ValidateColumnValueCount(rgReader, field_{i}, options);"
+                    $"                    if (!missing_{i}) ValidateColumnValueCount(rgReader, field_{i}, options, ref allocatedBytes, {AllocationBudgetComponent.FlatBytesPerValue(prop)});"
                 );
                 builder.AppendLine(
                     $"                    if (!missing_{i}) ValidateDictionaryEntries(rgReader, stream, field_{i}, options);"
@@ -863,7 +876,7 @@ internal static class LegacyCodeEmitter
             else
             {
                 builder.AppendLine(
-                    $"                    ValidateColumnValueCount(rgReader, field_{i}, options);"
+                    $"                    ValidateColumnValueCount(rgReader, field_{i}, options, ref allocatedBytes, {AllocationBudgetComponent.FlatBytesPerValue(prop)});"
                 );
                 builder.AppendLine(
                     $"                    ValidateDictionaryEntries(rgReader, stream, field_{i}, options);"

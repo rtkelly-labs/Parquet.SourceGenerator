@@ -23,6 +23,8 @@ Parquet.SourceGenerator.ParquetSerializerOptions.DictionaryEncodingSampleSize.ge
 Parquet.SourceGenerator.ParquetSerializerOptions.DictionaryEncodingSampleSize.set -> void
 Parquet.SourceGenerator.ParquetSerializerOptions.DictionaryEncodingThreshold.get -> double?
 Parquet.SourceGenerator.ParquetSerializerOptions.DictionaryEncodingThreshold.set -> void
+Parquet.SourceGenerator.ParquetSerializerOptions.MaxAllocationBytes.get -> long
+Parquet.SourceGenerator.ParquetSerializerOptions.MaxAllocationBytes.set -> void
 Parquet.SourceGenerator.ParquetSerializerOptions.MaxAllocationValues.get -> int
 Parquet.SourceGenerator.ParquetSerializerOptions.MaxAllocationValues.set -> void
 Parquet.SourceGenerator.ParquetSerializerOptions.MaxDecompressedPageSize.get -> int
