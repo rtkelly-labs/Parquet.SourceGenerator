@@ -185,7 +185,7 @@ Feature output can be pinned project-wide with `ParquetGeneratorFeatureLevel` in
 
 The V5/classic generator is a declared core subset for Parquet.Net 4.x/5.x: flat read/write,
 batched write, row-group write, and schema. The modern v6 generator additionally provides builder,
-filtering, parallel, streaming, column-batch, and experimental Arrow surfaces. The compatibility
+filtering, parallel, streaming, column-batch, and Arrow `RecordBatch` ingestion surfaces (Arrow export is not shipped). The compatibility
 matrix documents the supported model and file envelope.
 
 ## 🔗 Links & Resources
