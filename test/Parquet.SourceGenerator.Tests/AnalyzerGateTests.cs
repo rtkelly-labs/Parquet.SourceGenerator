@@ -78,10 +78,21 @@ public sealed class AnalyzerGateTests
     [InlineData("release.yml", "Build Solution (Release)")]
     public void TheSolutionBuildStepsPromoteWarningsToErrors(string workflow, string step)
     {
-        string text = Read(FindRepositoryRoot(), ".github", "workflows", workflow);
-        int start = text.IndexOf($"- name: {step}", StringComparison.Ordinal);
-        start.ShouldBeGreaterThanOrEqualTo(0, $"{workflow} has no step '{step}'");
-        string body = text.Substring(start, Math.Min(500, text.Length - start));
+        // Comment lines are removed first, so a commented-out step name or run line does not count.
+        string text = string.Join(
+            '\n',
+            Read(FindRepositoryRoot(), ".github", "workflows", workflow)
+                .Split('\n')
+                .Where(l => !l.TrimStart().StartsWith('#'))
+        );
+        Match named = Regex.Match(
+            text,
+            "^\\s*- name: " + Regex.Escape(step) + "\\s*$",
+            RegexOptions.Multiline | RegexOptions.CultureInvariant,
+            TimeSpan.FromSeconds(2)
+        );
+        named.Success.ShouldBeTrue($"{workflow} has no active step '{step}'");
+        string body = text.Substring(named.Index, Math.Min(500, text.Length - named.Index));
         body.ShouldContain("dotnet build Parquet.SourceGenerator.slnx");
         body.ShouldContain("-warnaserror");
     }
