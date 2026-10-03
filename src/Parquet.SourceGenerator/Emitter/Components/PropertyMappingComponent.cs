@@ -309,7 +309,9 @@ internal static class PropertyMappingComponent
     /// Emits <c>ReadTimeOnly</c>, which builds a <c>TimeOnly</c> from a file-controlled
     /// <c>TIME_MICROS</c> value. Unchecked, an out-of-range value throws
     /// <c>ArgumentOutOfRangeException</c>, and one that wraps on the multiply yields a wrong time of day
-    /// with no error (#371). Every backend that maps a <c>TimeOnly</c> column emits it.
+    /// with no error (#371). The classic backend does not map
+    /// <c>TimeOnly</c> columns (its read buffer is a <c>TimeOnly[]</c>, which this expression cannot index),
+    /// so only the modern emitter emits it.
     /// </summary>
     public static void EmitReadTimeOnlyHelper(StringBuilder builder)
     {
