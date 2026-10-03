@@ -1,6 +1,7 @@
 # Exact entry list of the Parquet.SourceGenerator.Attributes package (#400); checked by scripts/VerifyPackageLayout.cs.
 # Any other entry fails CI. Add one deliberately, in the same pull request that packs it.
 # Content under build/, buildTransitive/ and tools/ runs on the consumer's machine: review it as code.
+@dependency Microsoft.Bcl.AsyncInterfaces
 LICENSE
 PACKAGE_README.md
 Parquet.SourceGenerator.Attributes.nuspec
