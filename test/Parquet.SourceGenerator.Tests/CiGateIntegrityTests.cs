@@ -432,13 +432,38 @@ public sealed class CiGateIntegrityTests
             .ShouldBeTrue();
     }
 
+    private static void AssertNoStandaloneNet472Workflow(string root) =>
+        IOFile
+            .Exists(Path.Combine(root, ".github", "workflows", "net472-consumer.yml"))
+            .ShouldBeFalse(
+                "the standalone workflow was moved into ci.yml; keeping both runs the job twice"
+            );
+
     [Fact]
     public void TheNet472ConsumerIsExecutedOnWindowsNotJustCompiled()
     {
         string root = FindRepositoryRoot();
-        string workflow = Read(root, ".github", "workflows", "net472-consumer.yml");
+        // The job is in ci.yml and in `build`'s needs (#565): the aggregate test above proves the
+        // latter for every job, this one pins what the job does and that nothing can skip it.
+        string ci = Read(root, ".github", "workflows", "ci.yml");
+        string workflow = JobBlock(ci, "net472-consumer");
+        AssertNoStandaloneNet472Workflow(root);
 
         workflow.ShouldContain("runs-on: windows-latest");
+        Regex
+            .IsMatch(
+                JobBlock(ci, "build"),
+                @"needs:\s*\[[^\]]*\bnet472-consumer\b",
+                Options,
+                RegexTimeout
+            )
+            .ShouldBeTrue("build must need net472-consumer");
+        // No `if:` at job level and no path filter on the workflow triggers, so it cannot be skipped.
+        Regex
+            .IsMatch(workflow, @"^    if:", Options, RegexTimeout)
+            .ShouldBeFalse("net472-consumer must not be conditional");
+        ci.Substring(0, ci.IndexOf("\njobs:\n", StringComparison.Ordinal))
+            .ShouldNotContain("paths:");
 
         // `dotnet build --framework net472` is what ci.yml already does; the gate is the run.
         Regex
