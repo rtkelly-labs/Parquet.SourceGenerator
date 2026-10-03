@@ -29,7 +29,7 @@ builder, filtering, parallel, streaming or columnar members. Checked against the
 | Modern capability | What Parquet.Net 4.25 offers |
 |:---|:---|
 | `Where` / row-group pruning | `ParquetRowGroupReader.GetStatistics(DataField)` returns `DataColumnStatistics` with `MinValue`, `MaxValue` and `NullCount`. The values are `object`, so the cost is one unbox per column per row group, not per row. |
-| `IAsyncEnumerable<T>` streaming, `ReadOnlyMemory<byte>` source | Parquet.Net 4.25 itself references `Microsoft.Bcl.AsyncInterfaces` and `System.Memory`, so a `net472` consumer already has both types. |
+| `IAsyncEnumerable<T>` streaming, `ReadOnlyMemory<byte>` source | The Parquet.Net 4.25.0 `.NETStandard2.0` nuspec group lists neither `Microsoft.Bcl.AsyncInterfaces` nor `System.Memory` (checked on nuget.org); `Microsoft.Bcl.AsyncInterfaces` only arrived transitively through `System.Text.Json` 8.0.4. The Attributes package now declares `Microsoft.Bcl.AsyncInterfaces` for netstandard2.0 itself (#598) and already declared `System.Memory`. |
 | `Parallel()` over a buffer | `ParquetReader.RowGroupCount` plus `OpenRowGroupReader(int)`: one reader per worker over a shared buffer, the same shape as the modern parallel path. |
 | `<Model>ColumnarBatch` write | `WriteColumnAsync(new DataColumn(field, array))`, at the cost of one copy per column into the array `DataColumn` requires. |
 | `<Model>ParquetReader`, `<Model>RowGroupMetadata`, write entry points | Pure generated C#, with no Parquet.Net dependency beyond the column I/O underneath. |

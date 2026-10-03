@@ -238,7 +238,7 @@
       "parquet.sourcegenerator": {
         "type": "Project",
         "dependencies": {
-          "Parquet.SourceGenerator.Attributes": "[1.0.0, )"
+          "Parquet.SourceGenerator.Attributes": "[0.0.1, )"
         }
       },
       "parquet.sourcegenerator.attributes": {
@@ -247,7 +247,7 @@
       "parquet.sourcegenerator.legacy": {
         "type": "Project",
         "dependencies": {
-          "Parquet.SourceGenerator.Attributes": "[1.0.0, )"
+          "Parquet.SourceGenerator.Attributes": "[0.0.1, )"
         }
       },
       "Microsoft.CodeAnalysis.Analyzers": {

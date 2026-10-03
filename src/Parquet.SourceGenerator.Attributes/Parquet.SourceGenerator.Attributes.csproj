@@ -11,6 +11,13 @@
 
     <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
         <PackageReference Include="System.Memory" />
+        <!--
+          Generated async iterators (IAsyncEnumerable, await foreach) need this on .NET Framework.
+          Parquet.Net 4.25 does not declare it (its netstandard2.0 group lists neither this nor
+          System.Memory); it only arrived transitively through System.Text.Json, so a Parquet.Net
+          update could have dropped it with no change here (#598).
+        -->
+        <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" />
     </ItemGroup>
 
     <ItemGroup>
