@@ -58,15 +58,29 @@ internal static class AllocationBudgetComponent
         int total = 0;
         foreach (PropertyModel prop in properties)
         {
-            total += ElementBytes(prop) + (prop.IsNullable ? 4 : 0);
-            if (prop.Kind == PropertyKind.ByteArray || prop.TypeName.Contains("string"))
-            {
-                total += 16;
-            }
+            total += FlatBytesPerValue(prop) + (prop.IsNullable ? 4 : 0);
         }
 
         return total;
     }
+
+    /// <summary>
+    /// The bytes one value of a flat column costs the array Parquet.Net allocates for it: the element
+    /// (see <see cref="BufferBytes"/>) and, for text and binary, the lane that wraps it.
+    /// </summary>
+    public static int FlatBytesPerValue(PropertyModel prop) =>
+        BufferBytes(prop) + (IsReferenceColumn(prop) ? 16 : 0);
+
+    /// <summary>
+    /// The element bytes of a column's buffer, allowing for the padding of <c>T?</c>: a nullable value
+    /// type is stored as a <c>Nullable&lt;T&gt;</c>, which the CLR pads to the element's alignment (a
+    /// <c>long?</c> is 16 bytes, a <c>decimal?</c> 24), so the element is counted twice.
+    /// </summary>
+    public static int BufferBytes(PropertyModel prop) =>
+        ElementBytes(prop) * (prop.IsNullable && !IsReferenceColumn(prop) ? 2 : 1);
+
+    private static bool IsReferenceColumn(PropertyModel prop) =>
+        prop.Kind == PropertyKind.ByteArray || prop.TypeName.Contains("string");
 
     /// <summary>Emits the helper every budget check calls. One helper, so a call site adds no branch.</summary>
     public static void EmitHelper(StringBuilder builder)

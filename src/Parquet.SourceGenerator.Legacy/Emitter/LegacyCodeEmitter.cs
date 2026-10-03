@@ -285,8 +285,9 @@ internal static class LegacyCodeEmitter
         builder.AppendLine("        global::Parquet.ParquetRowGroupReader groupReader,");
         builder.AppendLine("        global::Parquet.Schema.DataField field,");
         builder.AppendLine(
-            "        global::Parquet.SourceGenerator.ParquetSerializerOptions options)"
+            "        global::Parquet.SourceGenerator.ParquetSerializerOptions options,"
         );
+        builder.AppendLine("        int bytesPerValue)");
         builder.AppendLine("    {");
         builder.AppendLine(
             "        long entries = groupReader.GetMetadata(field).MetaData.NumValues;"
@@ -297,6 +298,7 @@ internal static class LegacyCodeEmitter
             "            throw new global::System.IO.InvalidDataException($\"Column '{field.Name}' NumValues ({entries}) is invalid or exceeds maximum allowed {options.MaxAllocationValues}.\");"
         );
         builder.AppendLine("        }");
+        builder.AppendLine("        CheckAllocationBudget(entries, bytesPerValue, options);");
         builder.AppendLine("    }");
         builder.AppendLine();
         builder.AppendLine(
@@ -859,7 +861,7 @@ internal static class LegacyCodeEmitter
             if (prop.IsNullable)
             {
                 builder.AppendLine(
-                    $"                    if (!missing_{i}) ValidateColumnValueCount(rgReader, field_{i}, options);"
+                    $"                    if (!missing_{i}) ValidateColumnValueCount(rgReader, field_{i}, options, {AllocationBudgetComponent.FlatBytesPerValue(prop)});"
                 );
                 builder.AppendLine(
                     $"                    if (!missing_{i}) ValidateDictionaryEntries(rgReader, stream, field_{i}, options);"
@@ -868,7 +870,7 @@ internal static class LegacyCodeEmitter
             else
             {
                 builder.AppendLine(
-                    $"                    ValidateColumnValueCount(rgReader, field_{i}, options);"
+                    $"                    ValidateColumnValueCount(rgReader, field_{i}, options, {AllocationBudgetComponent.FlatBytesPerValue(prop)});"
                 );
                 builder.AppendLine(
                     $"                    ValidateDictionaryEntries(rgReader, stream, field_{i}, options);"

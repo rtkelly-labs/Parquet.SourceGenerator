@@ -22,7 +22,7 @@ internal static class ReadBudget
         int total = 0;
         foreach (LeafColumn col in plan.Columns)
         {
-            total += AllocationBudgetComponent.ElementBytes(col.Leaf);
+            total += AllocationBudgetComponent.BufferBytes(col.Leaf);
             if (col.Leaf.IsNullable || col.IsListLeaf || col.IsCompound)
             {
                 total += 4;

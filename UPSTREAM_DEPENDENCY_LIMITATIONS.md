@@ -53,7 +53,7 @@ regains a `netstandard2.0` target.
 `ColumnChunk.num_values` (list and struct leaves) in the footer before it reads a page, so a file of
 about 1 KB whose footer declares ten million rows for the nine-column `OrderEvent` model asks for
 roughly 1 GB of nominal element storage (before `ArrayPool` rounding), and the parallel read path can
-rent that per worker. The legacy reader validates `ColumnChunk.num_values` and then delegates the
+rent that per worker. `MaxAllocationBytes` (below) now rejects that read before anything is rented. The legacy reader validates `ColumnChunk.num_values` and then delegates the
 whole-column allocation to Parquet.Net through `ReadColumnAsync`. The count is the same for a
 `bool` and a `Guid` and is applied per column, so wider models multiply it.
 
@@ -73,7 +73,8 @@ multiplies a row group's declared row count by the model's per-row buffer size a
 renting, in the modern readers and the classic one; list columns are checked per column. It is per
 row group and, in a parallel read, per worker, so a host that reads untrusted files in parallel should
 lower it by its worker count. The result array a read returns is bounded by `MaxAllocationValues`
-only.
+only. In the classic backend the budget is checked per row group and again per column against its
+declared value count, because Parquet.Net allocates the whole column from that count.
 
 **Upstream.** Parquet.Net sizes `List<T>` and `byte[]` from counts it has not checked against the
 bytes that remain (`ThriftCompactProtocolReader.ReadListHeader`, `ReadBinary`), and its `SkipField`
