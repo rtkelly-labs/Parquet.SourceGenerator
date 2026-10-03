@@ -197,8 +197,8 @@ public sealed class ParquetSerializerOptions
     /// reserve about a gigabyte. This bounds the bytes: the generated reader multiplies the row group's
     /// row count by the model's per-row buffer size (an upper estimate of the pooled arrays, not of the
     /// objects built from them) and throws <see cref="System.IO.InvalidDataException"/> naming this option
-    /// when the product exceeds the budget. Repeated (list) columns are checked as their chunks are read, against their
-    /// declared value count and added to the row group's running total. The budget applies to each row group and, in a parallel read, to each worker.
+    /// when the product exceeds the budget. Repeated (list) columns are checked as their chunks are read, for the growth of their buffers
+    /// beyond the row-sized estimate, and that growth is added to the row group's running total. The budget applies to each row group and, in a parallel read, to each worker.
     /// <para>
     /// The default admits any realistic row group (a million rows of a ten column model is on the order
     /// of 100 MiB) while refusing the ten million rows a hostile footer can declare for a few hundred

@@ -154,13 +154,14 @@ public sealed class AllocationBudgetTests
     {
         var rows = new List<ListRow>
         {
-            new() { Id = 1, Scores = [1, 2, 3] },
+            new() { Id = 1, Scores = Enumerable.Range(0, 100).ToList() },
         };
         using var stream = new MemoryStream();
         await rows.WriteParquetAsync(stream);
         byte[] file = stream.ToArray();
 
-        // Raise the budget from nothing until the row buffers fit. The first budget refused with a
+        // A list charge is the growth beyond the row-sized buffers, so the list needs more entries than
+        // the pooled minimum. Raise the budget from nothing until the row buffers fit. The first budget refused with a
         // running total in the message got past the row group check and was stopped by a list
         // column's charge, so the list path ran.
         string? listCharge = null;
