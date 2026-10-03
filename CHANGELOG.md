@@ -8,7 +8,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
-Changes since `0.0.4`; this section becomes the next release entry when one is cut.
+Changes since `0.0.3`, the last tagged release; this section becomes the next release entry when one is cut.
+
+### Migrating from 0.0.x to 0.1
+
+The first release after `0.0.3` breaks the generated API on purpose (pre-1.0, no shims). This table is
+the migration list; each row's detail is in the entries below and in `docs/api/LEDGER.md`. Rows marked
+**pending** are in flight and will be finalised when they land; they are placeholders, not promises.
+
+| 0.0.x | 0.1 | Source |
+|:--|:--|:--|
+| `ReadParquetAsync(Stream)` / `(ReadOnlyMemory<byte>)` | `<Model>Parquet.From(source).ToArrayAsync()` | #480, #489 |
+| `ReadParquetArrayAsync`, `ReadParquetStreamAsync` | `From(source).ToArrayAsync()`, `From(source).AsAsyncEnumerable()` | #480, #489 |
+| `ReadParquetParallelAsync`, `ReadParquetParallelArrayAsync` | `From(buffer).WithOptions(...).Parallel().ToArrayAsync()` (buffer source only) | #480, #489 |
+| `ReadParquetBatchesAsync` / `Batches()` | `From(source).AsBatches()` | #508, #576 |
+| `ToListAsync()` | `ToArrayAsync()` then `.ToList()` | #479 |
+| `<Model>ParquetStreamSource`, `...MemorySource`, `...FilteredSource`, `...ParallelSource` | one `<Model>ParquetReader` returned by both `From` overloads | #478 |
+| `<Model>ColumnarBatch` (write) and `ColumnBatch` (read, `x.AmountSpan`) | one `<Model>Batch` (`x.Amount.Span`; nullable columns are packed values plus definition levels) | #508, #576 |
+| row-group writers and columnar helpers, `RowGroupMetadata` constructor | internal | #481, #459 |
+| `Parquet.SourceGenerator.V5` (package id) | `Parquet.SourceGenerator.Legacy`; the classic generator keeps its flat reads | #494 |
+| sorted-key reads, `ParquetPruneStatistics`, public `Schema`, `ParquetColumnStatistics` constructor and `FromRaw` | **pending** (#584, #585, #586) | |
+| `WriteParquetBatchedAsync` | **pending** (fold, rename or keep: #512) | |
+| `ParquetGeneratorFeatureLevel` and `ParquetGeneratorOptionsAttribute` | **pending** (#587) | |
+| legacy backend parity (nested, Arrow, batches) and its migration table | **pending** (#604) | |
+| baseline: `PublicAPI.Unshipped.txt` promoted to `Shipped.txt` | **pending** (#592) | |
 
 ### Added
 - **Diagnostics for abstract, `ref struct` and file-local targets (PARQ020, PARQ021, PARQ022).** Each shape passed every
@@ -442,7 +465,12 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
 
 ---
 
-## [0.0.4] - 2026-09-11
+### Carried over from the entry that was headed `[0.0.4] - 2026-09-11`
+
+> `0.0.4` was never tagged or released: the tags and GitHub releases stop at `v0.0.3`. These changes are
+> unreleased and ship with the next release, so the heading is folded into this section (#594). It used
+> to be a version heading, which `scripts/ParseChangelog.cs --release` would have picked as the version
+> to publish.
 
 This release introduces the generated read builder (`{T}Parquet.From(...)`) and keeps every
 existing flat read method working as a forwarder. Both surfaces ship together while the compatibility
@@ -451,7 +479,7 @@ the `0.1.0` window; document 41 records the later removal gate. Callers can adop
 the flat methods are not yet marked
 `[Obsolete]` because the two surfaces are still being validated against each other.
 
-### Added
+#### Added
 - **Generated read builder (`{T}Parquet.From(...)`)**: reads are now expressed as a chain rather
   than a cross-product of method names — `PersonParquet.From(stream).ToListAsync(ct)`,
   `PersonParquet.From(bytes).Parallel().ToArrayAsync(ct)`,
@@ -533,7 +561,7 @@ the flat methods are not yet marked
   supported-schema and corrupted-file coverage. The envelope these test is written down in the
   compatibility docs.
 
-### Changed
+#### Changed
 - **Breaking (pre-1.0), #218 — every configuration option now has a single home.** The duplicated
   positional parameters are removed from the generated API; `ParquetSerializerOptions` is the only
   place either setting lives:
@@ -562,17 +590,17 @@ the flat methods are not yet marked
 - Generated public API baselines are emitted as signature-only `*.api.txt` files beside the golden
   `.g.cs` files, so an API change is reviewable separately from a body change.
 
-### Performance
+#### Performance
 - All-null nullable chunks are detected and bypassed instead of being decoded value by value.
 - Write-side extraction loops drop their bounds checks via `MemoryMarshal` and `Unsafe.Add`.
 - Null bitmap construction for nullable column extraction is branchless.
 
-### Fixed
+#### Fixed
 - The benchmark headline table is regenerated through a pull request rather than pushed directly
   to protected `main`, and is written without a UTF-8 BOM.
 - CI builds pull requests that are not based on `main`.
 
-### Known gaps
+#### Known gaps
 - Nested collections, `DateTimeOffset` and positional records are unsupported. They are now
   rejected at compile time (`PARQ006`/`PARQ008`) rather than failing at runtime.
 - `ReadParquetParallelAsync(Stream)` reads row groups sequentially — a single `ParquetReader`
