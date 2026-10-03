@@ -483,7 +483,9 @@ internal static class BatchReadComponent
         builder.AppendLine("        {");
         builder.AppendLine("            cancellationToken.ThrowIfCancellationRequested();");
         builder.AppendLine("            using var groupReader = reader.OpenRowGroupReader(r);");
-        builder.AppendLine("            int rowCount = checked((int)groupReader.RowCount);");
+        builder.AppendLine(
+            "            int rowCount = ReadRowCount(groupReader.RowCount, r, options);"
+        );
         builder.AppendLine(
             "            if (rowCount < 0 || rowCount > options.MaxAllocationValues)"
         );

@@ -77,6 +77,21 @@ internal static class ColumnHelpersComponent
         }
 
         LeafColumn[] columns = EmissionPlan.For(model).Columns;
+
+        builder.AppendLine();
+        EmitReadRowCount(builder);
+
+        if (!RowGroupPruningComponent.IsEnabled(model))
+        {
+            builder.AppendLine();
+            EmitSumRowGroupRows(builder);
+        }
+
+        if (columns.Any(c => c.Leaf.Kind == PropertyKind.TimeOnly))
+        {
+            builder.AppendLine();
+            PropertyMappingComponent.EmitReadTimeOnlyHelper(builder);
+        }
         if (columns.Length == 0)
             return;
 
@@ -157,6 +172,55 @@ internal static class ColumnHelpersComponent
             "        {",
             "            throw new global::System.IO.InvalidDataException($\"Column '{columnName}' is missing from the Parquet file; a column under a list or struct must be present.\");",
             "        }",
+            "    }"
+        );
+
+    /// <summary>
+    /// Narrows a row group's 64-bit row count with the range check done in <c>long</c> first, so a
+    /// footer value above <c>int.MaxValue</c> is an <c>InvalidDataException</c> and not the
+    /// <c>OverflowException</c> a checked cast raises before the limit is consulted (#371).
+    /// </summary>
+    private static void EmitReadRowCount(StringBuilder builder) =>
+        AppendLines(
+            builder,
+            "    private static int ReadRowCount(long rowCount, int rowGroup, global::Parquet.SourceGenerator.ParquetSerializerOptions options)",
+            "    {",
+            "        if (rowCount < 0 || rowCount > options.MaxAllocationValues)",
+            "        {",
+            "            throw new global::System.IO.InvalidDataException($\"Row group {rowGroup} row count {rowCount} is invalid or exceeds maximum allowed {options.MaxAllocationValues}.\");",
+            "        }",
+            "",
+            "        return (int)rowCount;",
+            "    }"
+        );
+
+    /// <summary>
+    /// Sums the row groups' 64-bit row counts for a read with no statistics to prune on, checking each
+    /// and the total against <c>MaxAllocationValues</c> before narrowing to the <c>int</c> that sizes
+    /// the result (#371). The pruned branch of the selection pass does the same inline.
+    /// </summary>
+    private static void EmitSumRowGroupRows(StringBuilder builder) =>
+        AppendLines(
+            builder,
+            "    private static int SumRowGroupRows(global::Parquet.ParquetReader reader, global::Parquet.SourceGenerator.ParquetSerializerOptions options)",
+            "    {",
+            "        long total = 0;",
+            "        for (int r = 0; r < reader.RowGroups.Count; r++)",
+            "        {",
+            "            long rowCount = reader.RowGroups[r].RowCount;",
+            "            if (rowCount < 0 || rowCount > options.MaxAllocationValues)",
+            "            {",
+            "                throw new global::System.IO.InvalidDataException($\"Row group {r} row count {rowCount} is invalid or exceeds maximum allowed {options.MaxAllocationValues}.\");",
+            "            }",
+            "",
+            "            total += rowCount;",
+            "            if (total > options.MaxAllocationValues)",
+            "            {",
+            "                throw new global::System.IO.InvalidDataException($\"Total row count {total} exceeds maximum allowed {options.MaxAllocationValues}.\");",
+            "            }",
+            "        }",
+            "",
+            "        return (int)total;",
             "    }"
         );
 

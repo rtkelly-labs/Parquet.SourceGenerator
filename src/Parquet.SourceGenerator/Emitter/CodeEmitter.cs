@@ -1241,7 +1241,9 @@ internal static class CodeEmitter
         builder.AppendLine("            cancellationToken.ThrowIfCancellationRequested();");
         RowGroupPruningComponent.EmitSelectionCheck(builder, model, "            ");
         builder.AppendLine("            using var groupReader = reader.OpenRowGroupReader(r);");
-        builder.AppendLine("            int rowCount = checked((int)groupReader.RowCount);");
+        builder.AppendLine(
+            "            int rowCount = ReadRowCount(groupReader.RowCount, r, options);"
+        );
         builder.AppendLine(
             "            if (rowCount < 0 || rowCount > options.MaxAllocationValues)"
         );
@@ -1377,7 +1379,9 @@ internal static class CodeEmitter
         builder.AppendLine("        {");
         builder.AppendLine("            cancellationToken.ThrowIfCancellationRequested();");
         builder.AppendLine("            using var groupReader = reader.OpenRowGroupReader(r);");
-        builder.AppendLine("            int rowCount = checked((int)groupReader.RowCount);");
+        builder.AppendLine(
+            "            int rowCount = ReadRowCount(groupReader.RowCount, r, options);"
+        );
         builder.AppendLine(
             "            if (rowCount < 0 || rowCount > options.MaxAllocationValues)"
         );
@@ -1647,7 +1651,9 @@ internal static class CodeEmitter
         builder.AppendLine("        {");
         builder.AppendLine("            cancellationToken.ThrowIfCancellationRequested();");
         builder.AppendLine("            using var groupReader = reader.OpenRowGroupReader(r);");
-        builder.AppendLine("            int rowCount = checked((int)groupReader.RowCount);");
+        builder.AppendLine(
+            "            int rowCount = ReadRowCount(groupReader.RowCount, r, options);"
+        );
         builder.AppendLine(
             "            if (rowCount < 0 || rowCount > options.MaxAllocationValues)"
         );
@@ -1817,7 +1823,9 @@ internal static class CodeEmitter
         builder.AppendLine("            {");
         builder.AppendLine("                cancellationToken.ThrowIfCancellationRequested();");
         builder.AppendLine("                using var groupReader = reader.OpenRowGroupReader(r);");
-        builder.AppendLine("                int rowCount = checked((int)groupReader.RowCount);");
+        builder.AppendLine(
+            "                int rowCount = ReadRowCount(groupReader.RowCount, r, options);"
+        );
         builder.AppendLine(
             "                if (rowCount < 0 || rowCount > options.MaxAllocationValues)"
         );
@@ -2123,7 +2131,7 @@ internal static class CodeEmitter
             "                    using var groupReader = reader.OpenRowGroupReader(r);"
         );
         builder.AppendLine(
-            "                    int rowCount = checked((int)groupReader.RowCount);"
+            "                    int rowCount = ReadRowCount(groupReader.RowCount, r, options);"
         );
         builder.AppendLine(
             "                    if (rowCount < 0 || rowCount > options.MaxAllocationValues)"
