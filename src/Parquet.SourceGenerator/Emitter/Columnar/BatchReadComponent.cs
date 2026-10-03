@@ -497,7 +497,7 @@ internal static class BatchReadComponent
         builder.AppendLine();
 
         builder.AppendLine(
-            $"            CheckAllocationBudget(rowCount, {ReadBudget.BytesPerRow(plan)}, options);"
+            $"            CheckAllocationBudget(0, rowCount, {ReadBudget.BytesPerRow(plan)}, options);"
         );
         EmitRentals(builder, plan, "            ");
 

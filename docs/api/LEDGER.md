@@ -25,7 +25,7 @@ The rule, the three surfaces and the author process are in
 - **Change:** adds `long MaxAllocationBytes { get; set; }` to `ParquetSerializerOptions`, default
   268,435,456 (256 MiB). The generated readers (modern and classic) multiply a row group's declared
   row count by the model's per-row buffer size and throw `InvalidDataException`, naming the option,
-  before renting; repeated columns are checked per column against their declared value count.
+  before renting; repeated columns are checked as their chunks are read and added to the row group's running total.
 - **Rationale:** `MaxAllocationValues` bounds a count, which is the same number for a `bool` and a
   `Guid` column and applies per column, so a roughly 1 KB file declaring ten million rows reserved
   about a gigabyte for a nine column model before any page was read. The issue's other proposal,

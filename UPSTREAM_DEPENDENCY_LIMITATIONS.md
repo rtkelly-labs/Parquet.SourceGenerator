@@ -70,7 +70,7 @@ with `MaxAllocationValues` (#362). Neither relates the count to a byte size.
 
 **The byte budget (#361).** `ParquetSerializerOptions.MaxAllocationBytes` (default 256 MiB per row group)
 multiplies a row group's declared row count by the model's per-row buffer size and refuses before
-renting, in the modern readers and the classic one; list columns are checked per column. It is per
+renting, in the modern readers and the classic one; list columns are added to the running total as their chunks are read. It is per
 row group and, in a parallel read, per worker, so a host that reads untrusted files in parallel should
 lower it by its worker count. The result array a read returns is bounded by `MaxAllocationValues`
 only. In the classic backend the budget is checked per row group and again per column against its

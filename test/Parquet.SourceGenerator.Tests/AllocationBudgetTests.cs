@@ -115,6 +115,41 @@ public sealed class AllocationBudgetTests
     }
 
     [Fact]
+    public async Task ListColumnsShareOneBudgetWithEachOtherAndTheRowBuffersAsync()
+    {
+        var rows = new List<ListRow>
+        {
+            new()
+            {
+                Id = 1,
+                Tags = Enumerable.Range(0, 100).Select(i => (string?)("t" + i)).ToList(),
+                Scores = Enumerable.Range(0, 100).ToList(),
+                Keys = Enumerable.Range(0, 100).Select(_ => Guid.NewGuid()).ToArray(),
+                When = Enumerable.Range(0, 100).Select(_ => (DateTime?)DateTime.UnixEpoch).ToList(),
+                Blobs = Enumerable.Range(0, 100).Select(i => new[] { (byte)i }).ToList(),
+            },
+        };
+        using var stream = new MemoryStream();
+        await rows.WriteParquetAsync(stream);
+        byte[] file = stream.ToArray();
+
+        // Each of the five list columns holds 100 entries, about 2,400 bytes apiece: any one fits in 3,000
+        // bytes, all five together with the row buffers do not.
+        var tight = new ParquetSerializerOptions { MaxAllocationBytes = 3_000 };
+        InvalidDataException error = await Should.ThrowAsync<InvalidDataException>(() =>
+            ListRowParquet.From(new MemoryStream(file)).WithOptions(tight).ToArrayAsync()
+        );
+        error.Message.ShouldContain("already allocated");
+
+        var roomy = new ParquetSerializerOptions { MaxAllocationBytes = 1_000_000 };
+        ListRow[] read = await ListRowParquet
+            .From(new MemoryStream(file))
+            .WithOptions(roomy)
+            .ToArrayAsync();
+        read.Length.ShouldBe(1);
+    }
+
+    [Fact]
     public async Task ListColumnsAreCheckedAgainstTheBudgetPerColumnAsync()
     {
         var rows = new List<ListRow>

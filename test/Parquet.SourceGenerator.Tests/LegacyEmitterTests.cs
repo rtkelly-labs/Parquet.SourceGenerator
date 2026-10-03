@@ -176,7 +176,7 @@ public class LegacyEmitterTests
             Prop("Name", "name", "string", LegacyModels::PropertyKind.Primitive, true)
         );
 
-        code.ShouldContain("CheckAllocationBudget(groupRows, 40, options);");
+        code.ShouldContain("CheckAllocationBudget(0, groupRows, 40, options);");
         code.ShouldContain("options.MaxAllocationBytes");
     }
 

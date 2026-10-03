@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Text;
 using Parquet.SourceGenerator.Emitter.Columnar;
 using Parquet.SourceGenerator.Emitter.Components;
@@ -619,7 +620,7 @@ internal static class CodeEmitter
             // Entries run ahead of rowCount for multi-element lists (docs/15 section 2.3).
             string packedL = col.PackedType;
             builder.AppendLine(
-                $"{indent}var entries_{col.Slot} = PrepareListLeafBuffers<{packedL}>(groupReader, {fieldAccess}, \"{col.Leaf.Name}\", options, ref buffer_{col.Slot}, ref defLevels_{col.Slot}, ref repLevels_{col.Slot});"
+                $"{indent}var entries_{col.Slot} = PrepareListLeafBuffers<{packedL}>(groupReader, {fieldAccess}, \"{col.Leaf.Name}\", options, ref allocatedBytes, ref buffer_{col.Slot}, ref defLevels_{col.Slot}, ref repLevels_{col.Slot});"
             );
             builder.AppendLine($"{indent}await groupReader.ReadRawAsync<{packedL}>(");
             builder.AppendLine($"{indent}    {fieldAccess},");
@@ -1837,6 +1838,7 @@ internal static class CodeEmitter
         builder.AppendLine("                if (rowCount == 0) continue;");
         builder.AppendLine();
 
+        EmitPerGroupBudgetReset(builder, model, "                ");
         foreach (LeafColumn col in EmissionPlan.For(model).Columns)
         {
             EmitReadWithNullBypass(builder, col, $"field_{col.Slot}", $"buffer_{col.Slot}");
@@ -2143,6 +2145,7 @@ internal static class CodeEmitter
         builder.AppendLine("                    }");
         builder.AppendLine("                    int startIdx = rowOffsets[r];");
         builder.AppendLine();
+        EmitPerGroupBudgetReset(builder, model, "                    ");
         foreach (LeafColumn col in EmissionPlan.For(model).Columns)
         {
             EmitReadWithNullBypass(
@@ -2422,6 +2425,26 @@ internal static class CodeEmitter
     // ── compound routing shims (#176 M2): flat models take the original shared components
     //    byte-for-byte unchanged; any model with a compound member takes the v6-only
     //    Compound/ implementations (the classic backend links the shared components only).
+    /// <summary>
+    /// For the two readers that rent once, outside their row group loop, restarts the running
+    /// allocation total at each group, so list leaves are budgeted against that group's buffers and not
+    /// the sum over every group read so far (#361).
+    /// </summary>
+    private static void EmitPerGroupBudgetReset(
+        StringBuilder builder,
+        TargetClassModel model,
+        string indent
+    )
+    {
+        EmissionPlan plan = EmissionPlan.For(model);
+        if (plan.Columns.Any(c => c.IsListLeaf))
+        {
+            builder.AppendLine(
+                $"{indent}allocatedBytes = CheckAllocationBudget(0, rowCount, {ReadBudget.BytesPerRow(plan)}, options);"
+            );
+        }
+    }
+
     private static void EmitRentalsFor(
         StringBuilder builder,
         TargetClassModel model,
@@ -2434,8 +2457,13 @@ internal static class CodeEmitter
         if (!isWrite)
         {
             // Refuse before renting: the sizes come from the footer, not from bytes already read (#361).
+            // A list leaf's entry count is only known when its chunk is read, so the running total is
+            // carried to PrepareListLeafBuffers and the leaves are budgeted together with these buffers.
+            string target = EmissionPlan.For(model).Columns.Any(c => c.IsListLeaf)
+                ? "long allocatedBytes = "
+                : string.Empty;
             builder.AppendLine(
-                $"{indent}CheckAllocationBudget({sizeExpr}, {ReadBudget.BytesPerRow(EmissionPlan.For(model))}, options);"
+                $"{indent}{target}CheckAllocationBudget(0, {sizeExpr}, {ReadBudget.BytesPerRow(EmissionPlan.For(model))}, options);"
             );
         }
 

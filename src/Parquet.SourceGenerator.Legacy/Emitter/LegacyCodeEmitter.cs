@@ -298,7 +298,7 @@ internal static class LegacyCodeEmitter
             "            throw new global::System.IO.InvalidDataException($\"Column '{field.Name}' NumValues ({entries}) is invalid or exceeds maximum allowed {options.MaxAllocationValues}.\");"
         );
         builder.AppendLine("        }");
-        builder.AppendLine("        CheckAllocationBudget(entries, bytesPerValue, options);");
+        builder.AppendLine("        CheckAllocationBudget(0, entries, bytesPerValue, options);");
         builder.AppendLine("    }");
         builder.AppendLine();
         builder.AppendLine(
@@ -850,7 +850,7 @@ internal static class LegacyCodeEmitter
         builder.AppendLine("                    int groupRows = checked((int)rgReader.RowCount);");
         builder.AppendLine("                    if (groupRows == 0) continue;");
         builder.AppendLine(
-            $"                    CheckAllocationBudget(groupRows, {AllocationBudgetComponent.FlatBytesPerRow(model.Properties)}, options);"
+            $"                    CheckAllocationBudget(0, groupRows, {AllocationBudgetComponent.FlatBytesPerRow(model.Properties)}, options);"
         );
         builder.AppendLine();
 

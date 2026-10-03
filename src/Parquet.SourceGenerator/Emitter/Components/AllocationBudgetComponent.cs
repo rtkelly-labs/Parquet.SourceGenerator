@@ -86,16 +86,18 @@ internal static class AllocationBudgetComponent
     public static void EmitHelper(StringBuilder builder)
     {
         builder.AppendLine(
-            "    private static void CheckAllocationBudget(long units, int bytesPerUnit, global::Parquet.SourceGenerator.ParquetSerializerOptions options)"
+            "    private static long CheckAllocationBudget(long allocated, long units, int bytesPerUnit, global::Parquet.SourceGenerator.ParquetSerializerOptions options)"
         );
         builder.AppendLine("    {");
-        builder.AppendLine("        long projected = checked(units * bytesPerUnit);");
+        builder.AppendLine("        long projected = checked(allocated + units * bytesPerUnit);");
         builder.AppendLine("        if (projected > options.MaxAllocationBytes)");
         builder.AppendLine("        {");
         builder.AppendLine(
-            "            throw new global::System.IO.InvalidDataException($\"Reading this file would allocate about {projected} bytes ({units} x {bytesPerUnit}), exceeding MaxAllocationBytes ({options.MaxAllocationBytes}). Raise ParquetSerializerOptions.MaxAllocationBytes if the file is legitimate.\");"
+            "            throw new global::System.IO.InvalidDataException($\"Reading this file would allocate about {projected} bytes ({units} x {bytesPerUnit}, plus {allocated} already allocated), exceeding MaxAllocationBytes ({options.MaxAllocationBytes}). Raise ParquetSerializerOptions.MaxAllocationBytes if the file is legitimate.\");"
         );
         builder.AppendLine("        }");
+        builder.AppendLine();
+        builder.AppendLine("        return projected;");
         builder.AppendLine("    }");
     }
 }
