@@ -100,7 +100,7 @@ gates.
 - [ ] [Issue #176](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/176) — complete
       nested POCOs, collections, and maps as true Parquet nested groups on both backends. This is
       later work beyond the documented 0.1 boundary and remains a prerequisite for the Arrow bridge.
-- [ ] [Issue #177](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/177) — Apache Arrow
+- [x] [Issue #177](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/177) — Apache Arrow
       `RecordBatch` ingestion, via a conditionally emitted bridge gated on the consumer's
       `Apache.Arrow` reference (no companion package). Resolves Option C of #137.
 - [ ] [Issue #178](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/178) — `RecordBatch`
