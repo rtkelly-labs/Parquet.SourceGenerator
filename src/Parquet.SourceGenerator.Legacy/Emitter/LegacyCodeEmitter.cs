@@ -287,6 +287,7 @@ internal static class LegacyCodeEmitter
         builder.AppendLine(
             "        global::Parquet.SourceGenerator.ParquetSerializerOptions options,"
         );
+        builder.AppendLine("        ref long allocatedBytes,");
         builder.AppendLine("        int bytesPerValue)");
         builder.AppendLine("    {");
         builder.AppendLine(
@@ -298,7 +299,9 @@ internal static class LegacyCodeEmitter
             "            throw new global::System.IO.InvalidDataException($\"Column '{field.Name}' NumValues ({entries}) is invalid or exceeds maximum allowed {options.MaxAllocationValues}.\");"
         );
         builder.AppendLine("        }");
-        builder.AppendLine("        CheckAllocationBudget(0, entries, bytesPerValue, options);");
+        builder.AppendLine(
+            "        allocatedBytes = CheckAllocationBudget(allocatedBytes, entries, bytesPerValue, options);"
+        );
         builder.AppendLine("    }");
         builder.AppendLine();
         builder.AppendLine(
@@ -852,6 +855,9 @@ internal static class LegacyCodeEmitter
         builder.AppendLine(
             $"                    CheckAllocationBudget(0, groupRows, {AllocationBudgetComponent.FlatBytesPerRow(model.Properties)}, options);"
         );
+        // Columns are read one after another and each array is kept until the group is materialized, so
+        // every column's declared value count is added to one running total.
+        builder.AppendLine("                    long allocatedBytes = 0;");
         builder.AppendLine();
 
         for (int i = 0; i < model.Properties.Length; i++)
@@ -861,7 +867,7 @@ internal static class LegacyCodeEmitter
             if (prop.IsNullable)
             {
                 builder.AppendLine(
-                    $"                    if (!missing_{i}) ValidateColumnValueCount(rgReader, field_{i}, options, {AllocationBudgetComponent.FlatBytesPerValue(prop)});"
+                    $"                    if (!missing_{i}) ValidateColumnValueCount(rgReader, field_{i}, options, ref allocatedBytes, {AllocationBudgetComponent.FlatBytesPerValue(prop)});"
                 );
                 builder.AppendLine(
                     $"                    if (!missing_{i}) ValidateDictionaryEntries(rgReader, stream, field_{i}, options);"
@@ -870,7 +876,7 @@ internal static class LegacyCodeEmitter
             else
             {
                 builder.AppendLine(
-                    $"                    ValidateColumnValueCount(rgReader, field_{i}, options, {AllocationBudgetComponent.FlatBytesPerValue(prop)});"
+                    $"                    ValidateColumnValueCount(rgReader, field_{i}, options, ref allocatedBytes, {AllocationBudgetComponent.FlatBytesPerValue(prop)});"
                 );
                 builder.AppendLine(
                     $"                    ValidateDictionaryEntries(rgReader, stream, field_{i}, options);"

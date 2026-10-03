@@ -150,7 +150,7 @@ public sealed class AllocationBudgetTests
     }
 
     [Fact]
-    public async Task ListColumnsAreCheckedAgainstTheBudgetPerColumnAsync()
+    public async Task AListColumnChargeIsWhatStopsAReadOnceTheRowBuffersFitAsync()
     {
         var rows = new List<ListRow>
         {
@@ -158,12 +158,33 @@ public sealed class AllocationBudgetTests
         };
         using var stream = new MemoryStream();
         await rows.WriteParquetAsync(stream);
+        byte[] file = stream.ToArray();
 
-        var tiny = new ParquetSerializerOptions { MaxAllocationBytes = 8 };
-        InvalidDataException error = await Should.ThrowAsync<InvalidDataException>(() =>
-            ListRowParquet.From(new MemoryStream(stream.ToArray())).WithOptions(tiny).ToArrayAsync()
-        );
+        // Raise the budget from nothing until the row buffers fit. The first budget refused with a
+        // running total in the message got past the row group check and was stopped by a list
+        // column's charge, so the list path ran.
+        string? listCharge = null;
+        for (int budget = 1; budget < 5_000 && listCharge is null; budget++)
+        {
+            var options = new ParquetSerializerOptions { MaxAllocationBytes = budget };
+            try
+            {
+                await ListRowParquet
+                    .From(new MemoryStream(file))
+                    .WithOptions(options)
+                    .ToArrayAsync();
+            }
+            catch (InvalidDataException ex) when (ex.Message.Contains("already allocated"))
+            {
+                listCharge = ex.Message;
+            }
+            catch (InvalidDataException ex)
+            {
+                ex.Message.ShouldContain("MaxAllocationBytes");
+            }
+        }
 
-        error.Message.ShouldContain("MaxAllocationBytes");
+        listCharge.ShouldNotBeNull("no budget made a list column charge the one that failed");
+        listCharge.ShouldContain("MaxAllocationBytes");
     }
 }
