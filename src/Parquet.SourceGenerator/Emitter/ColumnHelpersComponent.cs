@@ -77,6 +77,15 @@ internal static class ColumnHelpersComponent
         }
 
         LeafColumn[] columns = EmissionPlan.For(model).Columns;
+
+        builder.AppendLine();
+        EmitReadRowCount(builder);
+
+        if (columns.Any(c => c.Leaf.Kind == PropertyKind.TimeOnly))
+        {
+            builder.AppendLine();
+            EmitReadTimeOnly(builder);
+        }
         if (columns.Length == 0)
             return;
 
@@ -157,6 +166,44 @@ internal static class ColumnHelpersComponent
             "        {",
             "            throw new global::System.IO.InvalidDataException($\"Column '{columnName}' is missing from the Parquet file; a column under a list or struct must be present.\");",
             "        }",
+            "    }"
+        );
+
+    /// <summary>
+    /// Narrows a row group's 64-bit row count with the range check done in <c>long</c> first, so a
+    /// footer value above <c>int.MaxValue</c> is an <c>InvalidDataException</c> and not the
+    /// <c>OverflowException</c> a checked cast raises before the limit is consulted (#371).
+    /// </summary>
+    private static void EmitReadRowCount(StringBuilder builder) =>
+        AppendLines(
+            builder,
+            "    private static int ReadRowCount(long rowCount, int rowGroup, global::Parquet.SourceGenerator.ParquetSerializerOptions options)",
+            "    {",
+            "        if (rowCount < 0 || rowCount > options.MaxAllocationValues)",
+            "        {",
+            "            throw new global::System.IO.InvalidDataException($\"Row group {rowGroup} row count {rowCount} is invalid or exceeds maximum allowed {options.MaxAllocationValues}.\");",
+            "        }",
+            "",
+            "        return (int)rowCount;",
+            "    }"
+        );
+
+    /// <summary>
+    /// Builds a <c>TimeOnly</c> from a file-controlled <c>TIME_MICROS</c> value. Unchecked, an
+    /// out-of-range value throws <c>ArgumentOutOfRangeException</c>, and one that wraps on the multiply
+    /// yields a wrong time of day with no error (#371).
+    /// </summary>
+    private static void EmitReadTimeOnly(StringBuilder builder) =>
+        AppendLines(
+            builder,
+            "    private static global::System.TimeOnly ReadTimeOnly(long micros)",
+            "    {",
+            "        if ((ulong)micros > 86_399_999_999UL)",
+            "        {",
+            "            throw new global::System.IO.InvalidDataException($\"TIME_MICROS value {micros} is outside one day.\");",
+            "        }",
+            "",
+            "        return new global::System.TimeOnly(micros * 10L);",
             "    }"
         );
 

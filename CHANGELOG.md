@@ -276,6 +276,12 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   silently dropped its inherited columns (same source, different schema, no diagnostic). A metadata base now
   contributes when it is Parquet-aware (`[ParquetSerializable]` or a member with a Parquet attribute); framework bases
   such as `Exception` still contribute nothing (#420).
+- **Hostile row counts and times fail with `InvalidDataException` on every read path** (#371). A row group count
+  above `int.MaxValue` reached a checked cast first on the streaming, batch and sorted-range reads and
+  surfaced as `OverflowException`; a `TIME_MICROS` value outside one day surfaced as
+  `ArgumentOutOfRangeException`, or, when the multiply wrapped, as a wrong time of day. Both are now
+  range-checked first and rejected with `InvalidDataException`. Unvalidated enum widening is left
+  as is (see the issue).
 - **The blittable zero-copy fast path requires the single field to back the single serialized member.** A one-field
   struct whose property computed its value from a differently-meaning field (a unit-converting wrapper) took the
   `MemoryMarshal.Cast` path for `List<T>` and `T[]` and wrote the field's bytes, while `IEnumerable<T>` wrote the

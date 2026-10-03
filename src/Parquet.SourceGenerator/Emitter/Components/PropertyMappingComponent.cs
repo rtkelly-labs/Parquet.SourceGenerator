@@ -225,8 +225,8 @@ internal static class PropertyMappingComponent
         if (prop.Kind == PropertyKind.TimeOnly)
         {
             return prop.IsNullable
-                ? $"{valueExpression} is null ? (global::System.TimeOnly?)null : new global::System.TimeOnly({valueExpression}.Value * 10L)"
-                : $"new global::System.TimeOnly({valueExpression} * 10L)";
+                ? $"{valueExpression} is null ? (global::System.TimeOnly?)null : ReadTimeOnly({valueExpression}.Value)"
+                : $"ReadTimeOnly({valueExpression})";
         }
 
         if (prop.Kind == PropertyKind.DateOnly)
