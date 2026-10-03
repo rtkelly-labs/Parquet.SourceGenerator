@@ -1,4 +1,3 @@
-using System;
 using Shouldly;
 using Xunit;
 
@@ -51,38 +50,6 @@ public sealed class AttributesTests
         options.DictionaryEncodingSampleSize.ShouldBe(500);
         options.ColumnEncodingHints.Count.ShouldBe(1);
         options.ColumnEncodingHints["test_col"].ShouldBe(ParquetColumnEncoding.DeltaBinaryPacked);
-    }
-
-    [Theory]
-    [InlineData(ParquetColumnEncoding.Default)]
-    [InlineData(ParquetColumnEncoding.Dictionary)]
-    [InlineData(ParquetColumnEncoding.DeltaBinaryPacked)]
-    [InlineData(ParquetColumnEncoding.ByteSplitStream)]
-    public void ParquetColumnEncodingEnumValuesAreValid(ParquetColumnEncoding encoding)
-    {
-        Enum.IsDefined(encoding).ShouldBeTrue();
-    }
-
-    [Theory]
-    [InlineData(ParquetCompressionMethod.None)]
-    [InlineData(ParquetCompressionMethod.Snappy)]
-    [InlineData(ParquetCompressionMethod.Gzip)]
-    [InlineData(ParquetCompressionMethod.Lz4)]
-    [InlineData(ParquetCompressionMethod.Brotli)]
-    [InlineData(ParquetCompressionMethod.Zstd)]
-    public void ParquetCompressionMethodEnumValuesAreValid(ParquetCompressionMethod method)
-    {
-        Enum.IsDefined(method).ShouldBeTrue();
-    }
-
-    [Theory]
-    [InlineData(ParquetCompressionLevel.Optimal)]
-    [InlineData(ParquetCompressionLevel.Fastest)]
-    [InlineData(ParquetCompressionLevel.NoCompression)]
-    [InlineData(ParquetCompressionLevel.SmallestSize)]
-    public void ParquetCompressionLevelEnumValuesAreValid(ParquetCompressionLevel level)
-    {
-        Enum.IsDefined(level).ShouldBeTrue();
     }
 
     [Fact]

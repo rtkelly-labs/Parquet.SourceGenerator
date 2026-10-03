@@ -56,6 +56,36 @@ public sealed class CiGateIntegrityTests
     );
 
     [Fact]
+    public void TheRequiredTestJobChecksExecutedCountsForBothTestGroups()
+    {
+        string root = FindRepositoryRoot();
+        string job = JobBlock(Read(root, ".github", "workflows", "ci.yml"), "test");
+        job.ShouldContain("trx;LogFileName=required-core.trx");
+        job.ShouldContain("trx;LogFileName=required-external.trx");
+        job.ShouldContain("dotnet run scripts/TestCountGate.cs -- --self-test");
+        job.ShouldContain("test/required-test-floors.json");
+        job.ShouldContain("test/Parquet.SourceGenerator.Tests/TestResults/required-core.trx");
+        job.ShouldContain("test/Parquet.SourceGenerator.Tests/TestResults/required-external.trx");
+
+        int start = job.IndexOf(
+            "- name: Verify Executed Test Count Floors",
+            StringComparison.Ordinal
+        );
+        start.ShouldBeGreaterThanOrEqualTo(0);
+        int end = job.IndexOf("- name:", start + 7, StringComparison.Ordinal);
+        end.ShouldBeGreaterThan(start);
+        string gate = job.Substring(start, end - start);
+        gate.ShouldContain("if: always()");
+        gate.ShouldNotContain("continue-on-error");
+
+        using var floors = System.Text.Json.JsonDocument.Parse(
+            Read(root, "test", "required-test-floors.json")
+        );
+        floors.RootElement.GetProperty("core").GetInt32().ShouldBeGreaterThanOrEqualTo(1750);
+        floors.RootElement.GetProperty("external").GetInt32().ShouldBeGreaterThanOrEqualTo(2);
+    }
+
+    [Fact]
     public void EveryThirdPartyActionIsPinnedToAFortyCharacterCommitSha()
     {
         string root = FindRepositoryRoot();
