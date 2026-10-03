@@ -33,6 +33,12 @@
         <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     </PropertyGroup>
 
+    <!-- MSBuildProjectDirectory uses backslashes on Windows. Keep folder-based
+         dependency selection identical on every runner so committed lock files apply. -->
+    <PropertyGroup>
+        <ProjectDirectoryForConditions>$([System.String]::Copy('$(MSBuildProjectDirectory)').Replace('\', '/'))</ProjectDirectoryForConditions>
+    </PropertyGroup>
+
     <!-- Package Metadata & SourceLink -->
     <PropertyGroup>
         <Authors>Ryan Kelly</Authors>
@@ -57,17 +63,17 @@
         <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="All" />
     </ItemGroup>
 
-    <ItemGroup Condition="'$(IsTestProject)' != 'true' And !$(MSBuildProjectDirectory.Contains('/test/')) And !$(MSBuildProjectDirectory.EndsWith('test')) And !$(MSBuildProjectDirectory.Contains('/benchmarks/')) And !$(MSBuildProjectDirectory.Contains('/samples/'))">
+    <ItemGroup Condition="'$(IsTestProject)' != 'true' And !$(ProjectDirectoryForConditions.Contains('/test/')) And !$(ProjectDirectoryForConditions.EndsWith('test')) And !$(ProjectDirectoryForConditions.Contains('/benchmarks/')) And !$(ProjectDirectoryForConditions.Contains('/samples/'))">
         <PackageReference Include="Meziantou.Analyzer" PrivateAssets="All">
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
     </ItemGroup>
-    <ItemGroup Condition="'$(IsTestProject)' != 'true' And !$(MSBuildProjectDirectory.Contains('/test/')) And !$(MSBuildProjectDirectory.EndsWith('test')) And !$(MSBuildProjectDirectory.Contains('/benchmarks/')) And !$(MSBuildProjectDirectory.Contains('/samples/'))">
+    <ItemGroup Condition="'$(IsTestProject)' != 'true' And !$(ProjectDirectoryForConditions.Contains('/test/')) And !$(ProjectDirectoryForConditions.EndsWith('test')) And !$(ProjectDirectoryForConditions.Contains('/benchmarks/')) And !$(ProjectDirectoryForConditions.Contains('/samples/'))">
         <PackageReference Include="Roslynator.Analyzers" PrivateAssets="All" />
     </ItemGroup>
 
     <!-- Test, Benchmark, Tools, Samples, and CLI Project Suppressions -->
-    <PropertyGroup Condition="'$(IsTestProject)' == 'true' Or $(MSBuildProjectDirectory.Contains('/test/')) Or $(MSBuildProjectDirectory.EndsWith('test')) Or $(MSBuildProjectDirectory.Contains('/benchmarks/')) Or $(MSBuildProjectDirectory.Contains('/samples/')) Or $(MSBuildProjectName.Contains('Test')) Or $(MSBuildProjectName.Contains('Benchmark')) Or $(MSBuildProjectName.Contains('Sample')) Or $(MSBuildProjectName.Contains('CLI')) Or $(MSBuildProjectName.Contains('Gates'))">
+    <PropertyGroup Condition="'$(IsTestProject)' == 'true' Or $(ProjectDirectoryForConditions.Contains('/test/')) Or $(ProjectDirectoryForConditions.EndsWith('test')) Or $(ProjectDirectoryForConditions.Contains('/benchmarks/')) Or $(ProjectDirectoryForConditions.Contains('/samples/')) Or $(MSBuildProjectName.Contains('Test')) Or $(MSBuildProjectName.Contains('Benchmark')) Or $(MSBuildProjectName.Contains('Sample')) Or $(MSBuildProjectName.Contains('CLI')) Or $(MSBuildProjectName.Contains('Gates'))">
         <AnalysisMode>Default</AnalysisMode>
         <AnalysisLevel>latest-recommended</AnalysisLevel>
         <!--
