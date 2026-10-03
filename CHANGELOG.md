@@ -18,7 +18,7 @@ the migration list; each row's detail is in the entries below and in `docs/api/L
 
 | 0.0.x | 0.1 | Source |
 |:--|:--|:--|
-| `ReadParquetAsync(Stream)` / `(ReadOnlyMemory<byte>)` | `<Model>Parquet.From(source).ToArrayAsync()` | #480, #489 |
+| `ReadParquetAsync(Stream)` / `(ReadOnlyMemory<byte>)` (returned a `List<T>`) | `<Model>Parquet.From(source).ToArrayAsync()` returns `T[]`; call `.ToList()` for a `List<T>` | #480, #489 |
 | `ReadParquetArrayAsync`, `ReadParquetStreamAsync` | `From(source).ToArrayAsync()`, `From(source).AsAsyncEnumerable()` | #480, #489 |
 | `ReadParquetParallelAsync`, `ReadParquetParallelArrayAsync` | `From(buffer).WithOptions(...).Parallel().ToArrayAsync()` (buffer source only) | #480, #489 |
 | `ReadParquetBatchesAsync` / `Batches()` | `From(source).AsBatches()` | #508, #576 |
@@ -471,7 +471,10 @@ the migration list; each row's detail is in the entries below and in `docs/api/L
 > unreleased and ship with the next release, so the heading is folded into this section (#594). It used
 > to be a version heading, which `scripts/ParseChangelog.cs --release` would have picked as the version
 > to publish.
-
+>
+> **Superseded.** Statements in this carried-over block that the flat read methods remain, that they ship
+> alongside the builder, or that use `ToListAsync` describe the unreleased 0.0.4 state, not 0.1: the flat
+> reads and `ToListAsync` are removed in 0.1, and the migration table above is the guidance that applies.
 This release introduces the generated read builder (`{T}Parquet.From(...)`) and keeps every
 existing flat read method working as a forwarder. Both surfaces ship together while the compatibility
 window remains open. `docs/19-PUBLIC-API-SURFACE.md` decision D3 retains the flat methods through
