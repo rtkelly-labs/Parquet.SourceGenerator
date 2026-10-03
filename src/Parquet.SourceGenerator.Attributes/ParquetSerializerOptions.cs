@@ -175,7 +175,8 @@ public sealed class ParquetSerializerOptions
     /// Precedence with <c>[ParquetColumn(Encoding = ...)]</c>: the attribute is applied first and an
     /// entry here for the same column name replaces it, so this wins when both are set (an explicit
     /// <see cref="ParquetColumnEncoding.Default"/> removes the attribute's hint). Columns without an
-    /// entry keep their attribute hint. Applies to writes only.
+    /// entry keep their attribute hint. Applies to writes only, and to top-level columns: an
+    /// <c>Encoding</c> on a member inside a nested struct or list element is not emitted today.
     /// </summary>
     public IDictionary<string, ParquetColumnEncoding> ColumnEncodingHints { get; } =
         new Dictionary<string, ParquetColumnEncoding>(StringComparer.Ordinal);

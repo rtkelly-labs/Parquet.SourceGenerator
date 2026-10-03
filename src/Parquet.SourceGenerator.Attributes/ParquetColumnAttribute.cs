@@ -59,6 +59,8 @@ public sealed class ParquetColumnAttribute : Attribute
     /// Precedence with <c>ParquetSerializerOptions.ColumnEncodingHints</c>: the attribute is applied
     /// first and a hint in the options for the same column name replaces it, so the runtime option
     /// wins when both are set (including an explicit <see cref="ParquetColumnEncoding.Default"/>).
+    /// Only top-level columns carry the attribute hint today; one on a member inside a nested struct or
+    /// list element is not emitted.
     /// </para>
     /// </summary>
     public ParquetColumnEncoding Encoding { get; set; } = ParquetColumnEncoding.Default;
