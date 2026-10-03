@@ -22,7 +22,9 @@ try
         );
 
     using JsonDocument floors = JsonDocument.Parse(File.ReadAllText(args[0]));
-    foreach (var group in new[] { (Name: "core", Path: args[1]), (Name: "external", Path: args[2]) })
+    foreach (
+        var group in new[] { (Name: "core", Path: args[1]), (Name: "external", Path: args[2]) }
+    )
     {
         int minimum = floors.RootElement.GetProperty(group.Name).GetInt32();
         int passed = CheckReport(XDocument.Load(group.Path), minimum);
@@ -115,7 +117,10 @@ static XDocument Fixture(int total, int executed, int passed, params string[] ou
                     (outcome, index) =>
                         new XElement(
                             ns + "UnitTestResult",
-                            new XAttribute("executionId", index.ToString(CultureInfo.InvariantCulture)),
+                            new XAttribute(
+                                "executionId",
+                                index.ToString(CultureInfo.InvariantCulture)
+                            ),
                             new XAttribute("outcome", outcome)
                         )
                 )
