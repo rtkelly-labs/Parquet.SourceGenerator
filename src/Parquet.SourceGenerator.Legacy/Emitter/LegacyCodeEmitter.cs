@@ -250,6 +250,8 @@ internal static class LegacyCodeEmitter
     private static void EmitRowAndColumnBounds(StringBuilder builder)
     {
         builder.AppendLine();
+        AllocationBudgetComponent.EmitHelper(builder);
+        builder.AppendLine();
         builder.AppendLine("    private static int CountRows(");
         builder.AppendLine("        global::Parquet.ParquetReader reader,");
         builder.AppendLine(
@@ -845,6 +847,9 @@ internal static class LegacyCodeEmitter
         builder.AppendLine("                {");
         builder.AppendLine("                    int groupRows = checked((int)rgReader.RowCount);");
         builder.AppendLine("                    if (groupRows == 0) continue;");
+        builder.AppendLine(
+            $"                    CheckAllocationBudget(groupRows, {AllocationBudgetComponent.FlatBytesPerRow(model.Properties)}, options);"
+        );
         builder.AppendLine();
 
         for (int i = 0; i < model.Properties.Length; i++)

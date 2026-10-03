@@ -76,6 +76,9 @@ internal static class ColumnHelpersComponent
             EmitThrowIfSourceShorter(builder);
         }
 
+        builder.AppendLine();
+        AllocationBudgetComponent.EmitHelper(builder);
+
         LeafColumn[] columns = EmissionPlan.For(model).Columns;
 
         builder.AppendLine();
@@ -394,6 +397,7 @@ internal static class ColumnHelpersComponent
             "        {",
             "            throw new global::System.IO.InvalidDataException($\"Column '{columnName}' NumValues ({entries}) is invalid or exceeds maximum allowed {options.MaxAllocationValues}.\");",
             "        }",
+            "        CheckAllocationBudget(entries, 24, options);",
             "        if (entries > defLevels.Length)",
             "        {",
             "            var newDefLevels = global::System.Buffers.ArrayPool<int>.Shared.Rent(entries);",

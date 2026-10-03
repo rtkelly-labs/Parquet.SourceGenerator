@@ -68,15 +68,12 @@ lengths larger than the footer itself, and a row group count above `MaxRowGroupC
 Parquet.Net allocates for the footer. The legacy read path bounds row counts and column value counts
 with `MaxAllocationValues` (#362). Neither relates the count to a byte size.
 
-**What remains, and why it is not in this change.** A byte budget (`MaxAllocationBytes`, computed
-per row group from the element sizes the emitter knows, divided across parallel workers, with a lower
-default than 10,000,000 values per column) needs a new public option in
-`ParquetSerializerOptions.cs` and a check at each rental site in `CodeEmitter.cs` and the columnar
-read components. Both were being rewritten by the read-API collapse and the unified batch work while
-this lane ran, and the option is public API (ledger and catalogue entries per docs/18). It is
-tracked in #361, which stays open. Until it lands, hosts that read untrusted files should lower
-`MaxAllocationValues` to the largest row group they expect: the allocation for a read is bounded by
-that count times the row width, per worker.
+**The byte budget (#361).** `ParquetSerializerOptions.MaxAllocationBytes` (default 256 MiB per row group)
+multiplies a row group's declared row count by the model's per-row buffer size and refuses before
+renting, in the modern readers and the classic one; list columns are checked per column. It is per
+row group and, in a parallel read, per worker, so a host that reads untrusted files in parallel should
+lower it by its worker count. The result array a read returns is bounded by `MaxAllocationValues`
+only.
 
 **Upstream.** Parquet.Net sizes `List<T>` and `byte[]` from counts it has not checked against the
 bytes that remain (`ThriftCompactProtocolReader.ReadListHeader`, `ReadBinary`), and its `SkipField`

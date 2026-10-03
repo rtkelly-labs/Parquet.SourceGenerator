@@ -46,6 +46,7 @@ public sealed class SerializerOptionsTests
 
         options.MaxDictionaryEntries.ShouldBe(1_000_000);
         options.MaxStringLengthBytes.ShouldBe(1_048_576);
+        options.MaxAllocationBytes.ShouldBe(268_435_456L);
     }
 
     [Fact]

@@ -34,6 +34,12 @@ the migration list; each row's detail is in the entries below and in `docs/api/L
 | baseline: `PublicAPI.Unshipped.txt` promoted to `Shipped.txt` | **pending** (#592) | |
 
 ### Added
+- **`ParquetSerializerOptions.MaxAllocationBytes`, a byte budget for what a read allocates** (#361), default
+  256 MiB per row group. `MaxAllocationValues` bounds a count, so a file of about 1 KB declaring ten
+  million rows reserved roughly a gigabyte of pooled buffers before a page was read. The generated
+  readers (modern and classic) now multiply a row group's declared rows by the model's per-row buffer
+  size and throw `InvalidDataException` naming the option before renting; list columns are checked per
+  column. Raise it for files with genuinely larger row groups. In a parallel read it applies per worker.
 - **Diagnostics for abstract, `ref struct` and file-local targets (PARQ020, PARQ021, PARQ022).** Each shape passed every
   declaration check and then failed to compile inside the generated file (`CS0144`, `CS0306`/`CS8345`, `CS9051`). Each
   now reports one diagnostic at the declaration and emits nothing for the type; other targets are unaffected (#402).

@@ -187,6 +187,28 @@ public sealed class ParquetSerializerOptions
     public int MaxAllocationValues { get; set; } = 10_000_000;
 
     /// <summary>
+    /// Gets or sets the maximum number of bytes a read may allocate for one row group's column buffers,
+    /// computed from the row and value counts the file declares before any of them is allocated
+    /// (default is 268,435,456, which is 256 MiB).
+    /// </summary>
+    /// <remarks>
+    /// <see cref="MaxAllocationValues"/> bounds a count, and a count is the same number for a
+    /// <c>bool</c> column and a <c>Guid</c> column, so on its own it lets a small file with a lying footer
+    /// reserve about a gigabyte. This bounds the bytes: the generated reader multiplies the row group's
+    /// row count by the model's per-row buffer size (an upper estimate of the pooled arrays, not of the
+    /// objects built from them) and throws <see cref="System.IO.InvalidDataException"/> naming this option
+    /// when the product exceeds the budget. Repeated (list) columns are checked per column against their
+    /// declared value count. The budget applies to each row group and, in a parallel read, to each worker.
+    /// <para>
+    /// The default admits any realistic row group (a million rows of a ten column model is on the order
+    /// of 100 MiB) while refusing the ten million rows a hostile footer can declare for a few hundred
+    /// bytes. A file with genuinely larger row groups needs this raised, for example
+    /// <c>MaxAllocationBytes = 1_073_741_824</c>.
+    /// </para>
+    /// </remarks>
+    public long MaxAllocationBytes { get; set; } = 268_435_456;
+
+    /// <summary>
     /// Gets or sets the maximum number of values permitted in a dictionary page before the reader
     /// rejects the column (default is 1,000,000).
     /// </summary>

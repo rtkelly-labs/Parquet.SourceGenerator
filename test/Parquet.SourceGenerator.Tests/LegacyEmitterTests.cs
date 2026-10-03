@@ -169,6 +169,18 @@ public class LegacyEmitterTests
     }
 
     [Fact]
+    public void LegacyReaderChecksTheByteBudgetBeforeReadingAColumnGroup()
+    {
+        string code = Emit(
+            Prop("Id", "id", "int", LegacyModels::PropertyKind.Primitive, false),
+            Prop("Name", "name", "string", LegacyModels::PropertyKind.Primitive, true)
+        );
+
+        code.ShouldContain("CheckAllocationBudget(groupRows, 40, options);");
+        code.ShouldContain("options.MaxAllocationBytes");
+    }
+
+    [Fact]
     public void LegacyReaderEmitsDictionaryAndStringSafetyGuards()
     {
         string code = Emit(

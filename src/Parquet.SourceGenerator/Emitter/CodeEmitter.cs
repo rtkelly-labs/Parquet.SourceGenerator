@@ -2431,6 +2431,14 @@ internal static class CodeEmitter
         bool isWrite = false
     )
     {
+        if (!isWrite)
+        {
+            // Refuse before renting: the sizes come from the footer, not from bytes already read (#361).
+            builder.AppendLine(
+                $"{indent}CheckAllocationBudget({sizeExpr}, {ReadBudget.BytesPerRow(EmissionPlan.For(model))}, options);"
+            );
+        }
+
         if (EmissionPlan.For(model).HasCompound)
         {
             CompoundBuffers.EmitRentals(builder, model, sizeExpr, varPrefix, indent);
