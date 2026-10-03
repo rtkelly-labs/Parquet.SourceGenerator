@@ -271,6 +271,11 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   only for code that referenced the Attributes helpers directly.
 
 ### Fixed
+- **A base class moved into another project keeps contributing its columns.** The base-type walk stopped at any base
+  with no declaring syntax, which is every base read from metadata, so a shared base moved into a contracts project
+  silently dropped its inherited columns (same source, different schema, no diagnostic). A metadata base now
+  contributes when it is Parquet-aware (`[ParquetSerializable]` or a member with a Parquet attribute); framework bases
+  such as `Exception` still contribute nothing (#420).
 - **The blittable zero-copy fast path requires the single field to back the single serialized member.** A one-field
   struct whose property computed its value from a differently-meaning field (a unit-converting wrapper) took the
   `MemoryMarshal.Cast` path for `List<T>` and `T[]` and wrote the field's bytes, while `IEnumerable<T>` wrote the

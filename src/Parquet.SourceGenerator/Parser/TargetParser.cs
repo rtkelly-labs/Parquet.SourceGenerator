@@ -2017,8 +2017,9 @@ internal static class TargetParser
     /// <c>GetMembers()</c> returns declared members only, so a type deriving from a base that
     /// carried columns silently lost every one of them — no diagnostic, just missing columns.
     /// <para>
-    /// Two deliberate choices. The walk stops at the first base type not declared in source, so a
-    /// model deriving from a framework type does not drag in <c>Exception.Data</c> and friends as
+    /// Two deliberate choices. The walk skips every base type that is neither declared in source nor
+    /// Parquet-aware (see <see cref="ContributesColumns"/>), so a model deriving from a
+    /// framework type does not drag in <c>Exception.Data</c> and friends as
     /// columns. And members are collected base-first, with a derived declaration replacing a
     /// shadowed base one *in the base's position* — so adding an <see langword="override"/> or <c>new</c>
     /// member changes which declaration is used without reordering the schema.
@@ -2034,23 +2035,39 @@ internal static class TargetParser
         )
         {
             chain.Add(current);
-
-            INamedTypeSymbol? next = current.BaseType;
-            if (next is null || next.DeclaringSyntaxReferences.IsEmpty)
-                break;
         }
 
         chain.Reverse();
 
-        var ordered = new List<ISymbol>();
+        var ordered = new List<ISymbol?>();
         var positionByName = new Dictionary<string, int>(StringComparer.Ordinal);
 
         foreach (INamedTypeSymbol type in chain)
         {
+            // An unannotated metadata base is skipped, not a stop: an annotated ancestor above it
+            // still contributes (#420). A skipped base adds no columns, but a member it declares
+            // still hides a same-named member of an ancestor, as it would at the call site; an
+            // override does not hide, it re-declares the ancestor's member.
+            bool contributes = ReferenceEquals(type, typeSymbol) || ContributesColumns(type);
+
             foreach (ISymbol member in type.GetMembers())
             {
                 if (member is not IPropertySymbol && member is not IFieldSymbol)
                     continue;
+
+                if (!contributes)
+                {
+                    if (
+                        !member.IsOverride
+                        && positionByName.TryGetValue(member.Name, out int hidden)
+                    )
+                    {
+                        ordered[hidden] = null;
+                        positionByName.Remove(member.Name);
+                    }
+
+                    continue;
+                }
 
                 if (positionByName.TryGetValue(member.Name, out int existing))
                 {
@@ -2064,8 +2081,53 @@ internal static class TargetParser
             }
         }
 
-        return ordered;
+        return ordered.Where(member => member is not null).Select(member => member!).ToList();
     }
+
+    /// <summary>
+    /// Whether a base type's members join the derived model. A base declared in source always
+    /// does. One read from metadata (a shared contracts project) does only when it is Parquet-aware:
+    /// it carries <c>[ParquetSerializable]</c> or a member annotated with one of the Parquet
+    /// attributes (#420). The old test, <c>DeclaringSyntaxReferences.IsEmpty</c>, meant "came from
+    /// metadata", so moving a base into its own project silently dropped its columns; what it
+    /// was written to keep out is framework types (<c>Exception.Data</c> and friends), which carry
+    /// no Parquet attribute.
+    /// </summary>
+    private static bool ContributesColumns(INamedTypeSymbol baseType)
+    {
+        if (!baseType.DeclaringSyntaxReferences.IsEmpty)
+            return true;
+
+        if (baseType.GetAttributes().Any(IsParquetAttribute))
+            return true;
+
+        foreach (ISymbol member in baseType.GetMembers())
+        {
+            if (
+                (member is IPropertySymbol || member is IFieldSymbol)
+                && member.GetAttributes().Any(IsParquetAttribute)
+            )
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // The parser's own matchers, so every spelling it honours on a member (including the legacy
+    // Parquet.Attributes and Parquet.Serialization.Attributes namespaces) marks a base as aware.
+    // The Json attributes are not Parquet attributes and do not count.
+    private static bool IsParquetAttribute(AttributeData attribute) =>
+        attribute.AttributeClass?.ToDisplayString() == AttributeFullName
+        || MatchesAttributeName(attribute.AttributeClass, ColumnFullNames, ColumnShortNames)
+        || (
+            MatchesAttributeName(attribute.AttributeClass, IgnoreFullNames, IgnoreShortNames)
+            && attribute.AttributeClass?.Name.StartsWith("Json", StringComparison.Ordinal) != true
+        )
+        || MatchesAttributeName(attribute.AttributeClass, SortKeyFullNames, SortKeyShortNames)
+        || MatchesAttributeName(attribute.AttributeClass, DecimalFullNames, DecimalShortNames)
+        || MatchesAttributeName(attribute.AttributeClass, TimestampFullNames, TimestampShortNames);
 
     /// <summary>
     /// Types that pass straight through as a <see cref="PropertyKind.Primitive"/> <c>DataField</c>.
@@ -2221,8 +2283,16 @@ internal static class TargetParser
         // `init` accessors surface as a SetMethod with IsInitOnly, which an object initializer can
         // use, so no special case is needed for them.
         if (member is IPropertySymbol property)
-            return property.SetMethod is not null
-                && IsReachableFromGeneratedCode(property.SetMethod.DeclaredAccessibility);
+        {
+            if (property.SetMethod is null)
+                return false;
+
+            // A property read from metadata belongs to another assembly, where an internal setter
+            // is out of reach of generated code (#420); only a public one is usable.
+            return property.ContainingType.DeclaringSyntaxReferences.IsEmpty
+                ? property.SetMethod.DeclaredAccessibility == Accessibility.Public
+                : IsReachableFromGeneratedCode(property.SetMethod.DeclaredAccessibility);
+        }
 
         if (member is IFieldSymbol field)
             return !field.IsReadOnly && !field.IsConst;
