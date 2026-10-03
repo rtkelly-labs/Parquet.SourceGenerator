@@ -210,6 +210,11 @@ independent writers.
 
 ## Apache Arrow RecordBatch Ingestion (Experimental, #177)
 
+**Scope.** This is ingestion only: an `Apache.Arrow.RecordBatch` is written to Parquet. Export (reading
+Parquet into Arrow) is not shipped and is not listed as complete anywhere; the export issue #178 was
+closed as superseded by #267, which is also closed (doc 47 section 7 keeps export a non-goal until its
+ownership and performance contract is ready).
+
 When — and only when — the consumer compilation references **Apache.Arrow**, the generator emits one
 extra file per `[ParquetSerializable]` type:
 

@@ -271,6 +271,9 @@ Changes since `0.0.4`; this section becomes the next release entry when one is c
   only for code that referenced the Attributes helpers directly.
 
 ### Fixed
+- **Arrow scope is stated plainly** (#590). The READMEs, `docs/14`, `docs/19` and `docs/47` say that only Arrow
+  ingestion (`RecordBatch` to Parquet, when Apache.Arrow is referenced) ships; export to Arrow does not, and
+  `docs/19` no longer lists the closed #178 as open work.
 - **A base class moved into another project keeps contributing its columns.** The base-type walk stopped at any base
   with no declaring syntax, which is every base read from metadata, so a shared base moved into a contracts project
   silently dropped its inherited columns (same source, different schema, no diagnostic). A metadata base now
