@@ -92,7 +92,13 @@ public sealed class AnalyzerGateTests
             TimeSpan.FromSeconds(2)
         );
         named.Success.ShouldBeTrue($"{workflow} has no active step '{step}'");
-        string body = text.Substring(named.Index, Math.Min(500, text.Length - named.Index));
+        string body = text.Substring(named.Index);
+        int nextStep = body.IndexOf("\n      - name:", 1, StringComparison.Ordinal);
+        if (nextStep > 0)
+        {
+            body = body.Substring(0, nextStep);
+        }
+
         body.ShouldContain("dotnet build Parquet.SourceGenerator.slnx");
         body.ShouldContain("-warnaserror");
     }
