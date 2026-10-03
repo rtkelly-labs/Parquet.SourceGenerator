@@ -104,7 +104,9 @@ gates.
       `RecordBatch` ingestion, via a conditionally emitted bridge gated on the consumer's
       `Apache.Arrow` reference (no companion package). Resolves Option C of #137.
 - [ ] [Issue #178](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/178) — `RecordBatch`
-      export, same conditional-emission gate.
+      export, same conditional-emission gate. **Superseded, not shipped:** #178 was closed as
+      superseded by #267 (also closed) and export is a 0.1 non-goal ([47](47-0.1-CONTRACT-AND-DESIGN-GOALS.md)
+      section 7). Ingestion (#177) is what ships.
 
 ---
 

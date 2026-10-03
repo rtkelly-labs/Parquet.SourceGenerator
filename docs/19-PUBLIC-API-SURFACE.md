@@ -60,7 +60,7 @@ With #146 (prefetch) and #148 (file path / MMF) still open, the read grid is
 on track for 3 x 5 x 3 = 45 cells before feature flags (#225) multiply it again.
 
 Arrow export (Parquet to Arrow) is not part of this grid and does not ship: #178 is closed as
-superseded by #267, which is also closed, so nothing is open for it. Only Arrow ingestion
+superseded by #267, which is also closed, so no open implementation issue tracks it. Only Arrow ingestion
 (`RecordBatch` to Parquet) is emitted, and only when the consumer references Apache.Arrow
 ([14](14-COMPATIBILITY-MATRIX.md)).
 
