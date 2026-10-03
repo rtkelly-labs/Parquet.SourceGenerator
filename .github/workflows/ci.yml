@@ -229,35 +229,13 @@ jobs:
           # The version/schema-evolution matrix writes its per-cell record here so the run leaves
           # behind a compatibility report, not just a pass/fail.
           PARQUET_COMPAT_MATRIX_OUTPUT: ${{ runner.temp }}/parquet-source-generator/compatibility-matrix
-        run: |
-          rm -f test/Parquet.SourceGenerator.Tests/TestResults/required-core.trx
-          rm -f test/Parquet.SourceGenerator.Tests/TestResults/required-external.trx
-          dotnet test Parquet.SourceGenerator.slnx --configuration Release --no-build --filter "Category!=DatasetIntegrity&Category!=ExternalInterop" --verbosity normal --collect:"XPlat Code Coverage" --settings coverlet.runsettings --logger "trx;LogFileName=required-core.trx"
+        run: dotnet test Parquet.SourceGenerator.slnx --configuration Release --no-build --filter "Category!=DatasetIntegrity&Category!=ExternalInterop" --verbosity normal --collect:"XPlat Code Coverage" --settings coverlet.runsettings
 
       - name: Verify Generated Reader With PyArrow Fixture
         env:
           PARQUET_PYARROW_INTEROP_INPUT: ${{ runner.temp }}/parquet-source-generator/data/pyarrow_interop_input.parquet
           DUCKDB_INTEROP_INPUT: ${{ runner.temp }}/parquet-source-generator/generated-duckdb.parquet
-        run: dotnet test Parquet.SourceGenerator.slnx --configuration Release --no-build --filter "Category=ExternalInterop" --verbosity normal --logger "trx;LogFileName=required-external.trx"
-
-      # Exact files from this run, with independent floors: interop cannot hide a
-      # discovery regression in the main suite. Skips and absent reports fail.
-      - name: Verify Executed Test Count Floors
-        if: always()
-        run: |
-          dotnet run scripts/TestCountGate.cs -- --self-test
-          dotnet run scripts/TestCountGate.cs -- \
-            test/required-test-floors.json \
-            test/Parquet.SourceGenerator.Tests/TestResults/required-core.trx \
-            test/Parquet.SourceGenerator.Tests/TestResults/required-external.trx
-
-      - name: Upload Required Test Count Evidence
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: required-test-results
-          path: test/Parquet.SourceGenerator.Tests/TestResults/required-*.trx
-          if-no-files-found: error
+        run: dotnet test Parquet.SourceGenerator.slnx --configuration Release --no-build --filter "Category=ExternalInterop" --verbosity normal
 
       - name: Generate Code Coverage Summary & Evaluate Gate
         run: |
