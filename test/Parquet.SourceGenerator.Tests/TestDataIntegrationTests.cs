@@ -74,94 +74,113 @@ public sealed class TestDataIntegrationTests
             Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "data_csharp")
         );
 
-    [Fact]
-    public async Task ToArrayAsyncDeserializesPyArrowV1DatasetAsync()
+    [Theory]
+    [InlineData("v1")]
+    [InlineData("v2")]
+    [InlineData("v3")]
+    public async Task ToArrayAsyncDeserializesEveryPrimitiveValueAsync(string version)
     {
-        string filePath = Path.Combine(TestDataRoot, "v1", "01_small_flat_primitives.parquet");
-        System.IO.File.Exists(filePath).ShouldBeTrue($"File not found: {filePath}");
-
+        string filePath = FixturePath(version, "01_small_flat_primitives.parquet");
         using var stream = System.IO.File.OpenRead(filePath);
-        var records = await TestUserRecordParquet.From(stream).ToArrayAsync();
+        TestUserRecord[] records = await TestUserRecordParquet.From(stream).ToArrayAsync();
 
-        records.Length.ShouldBe(100);
-        records[0].Id.ShouldBe(0);
-        records[0].Name.ShouldBe("user_0");
-        records[0].Score.ShouldBe(0.0);
-        records[0].IsActive.ShouldBeTrue();
-        records[0].CreatedAtMs.ShouldBe(1700000000000L);
+        AssertPrimitiveRows(records);
+    }
 
-        records[99].Id.ShouldBe(99);
-        records[99].Name.ShouldBe("user_99");
-        records[99].IsActive.ShouldBeFalse();
+    [Theory]
+    [InlineData("v3")]
+    public async Task ToArrayAsyncDeserializesEveryNullableValueAsync(string version)
+    {
+        string filePath = FixturePath(version, "02_medium_nullable_types.parquet");
+        using var stream = System.IO.File.OpenRead(filePath);
+        TestNullableRecord[] records = await TestNullableRecordParquet.From(stream).ToArrayAsync();
+
+        records.Length.ShouldBe(10_000);
+        for (int i = 0; i < records.Length; i++)
+        {
+            var expected = new TestNullableRecord
+            {
+                Id = i,
+                NullableInt = i % 5 == 0 ? null : i * 10,
+                NullableDouble = i % 5 == 0 ? null : (i * 3.14159) % 1000.0,
+                NullableString = i % 5 == 0 ? null : $"str_val_{i}",
+                NullableBool = i % 5 == 0 ? null : i % 3 == 0,
+            };
+            records[i].ShouldBe(expected, $"{version}: row {i}");
+        }
+    }
+
+    [Theory]
+    [InlineData("v3")]
+    public async Task ToArrayAsyncDeserializesEveryLargeScaleValueAsync(string version)
+    {
+        string filePath = FixturePath(version, "05_large_scale_flat.parquet");
+        using var stream = System.IO.File.OpenRead(filePath);
+        TestLargeFlatRecord[] records = await TestLargeFlatRecordParquet
+            .From(stream)
+            .ToArrayAsync();
+
+        records.Length.ShouldBe(100_000);
+        for (int i = 0; i < records.Length; i++)
+        {
+            var expected = new TestLargeFlatRecord
+            {
+                Id = i,
+                Payload = $"payload_data_string_buffer_segment_{i % 500}",
+                ValA = i * 7,
+                ValB = i * 0.123456789,
+                IsValid = i % 7 != 0,
+            };
+            records[i].ShouldBe(expected, $"{version}: row {i}");
+        }
     }
 
     [Fact]
-    public async Task ToArrayAsyncDeserializesPyArrowV2DatasetAsync()
+    public async Task FixtureComparisonRejectsAChangedInteriorValueAsync()
     {
-        string filePath = Path.Combine(TestDataRoot, "v2", "01_small_flat_primitives.parquet");
-        System.IO.File.Exists(filePath).ShouldBeTrue($"File not found: {filePath}");
-
-        using var stream = System.IO.File.OpenRead(filePath);
-        var records = await TestUserRecordParquet.From(stream).ToArrayAsync();
-
-        records.Length.ShouldBe(100);
-        records[50].Id.ShouldBe(50);
-        records[50].Name.ShouldBe("user_50");
-        records[50].IsActive.ShouldBeTrue();
-    }
-
-    [Fact]
-    public async Task ToArrayAsyncDeserializesCSharpV3DatasetAsync()
-    {
-        string filePath = Path.Combine(
-            TestDataCSharpRoot,
-            "v3",
-            "01_small_flat_primitives.parquet"
+        // Keep the row count and endpoints intact, as the old sampled assertions did.
+        using var fixture = System.IO.File.OpenRead(
+            FixturePath("v1", "01_small_flat_primitives.parquet")
         );
-        System.IO.File.Exists(filePath).ShouldBeTrue($"File not found: {filePath}");
+        TestUserRecord[] rows = await TestUserRecordParquet.From(fixture).ToArrayAsync();
+        AssertPrimitiveRows(rows);
+        rows[37] = rows[37] with { Score = rows[37].Score + 1 };
 
-        using var stream = System.IO.File.OpenRead(filePath);
-        var records = await TestUserRecordParquet.From(stream).ToArrayAsync();
+        using var changed = new MemoryStream();
+        await rows.WriteParquetAsync(changed);
+        changed.Position = 0;
+        TestUserRecord[] actual = await TestUserRecordParquet.From(changed).ToArrayAsync();
 
-        records.Length.ShouldBe(100);
-        records[10].Id.ShouldBe(10);
-        records[10].Name.ShouldBe("user_10");
-        records[10].IsActive.ShouldBeTrue();
-    }
-
-    [Fact]
-    public async Task ToArrayAsyncDeserializesNullableDatasetAsync()
-    {
-        string filePath = Path.Combine(
-            TestDataCSharpRoot,
-            "v3",
-            "02_medium_nullable_types.parquet"
+        actual[37].Score.ShouldBe(rows[37].Score);
+        ShouldAssertException exception = Should.Throw<ShouldAssertException>(() =>
+            AssertPrimitiveRows(actual)
         );
-        System.IO.File.Exists(filePath).ShouldBeTrue($"File not found: {filePath}");
-
-        using var stream = System.IO.File.OpenRead(filePath);
-        var records = await TestNullableRecordParquet.From(stream).ToArrayAsync();
-
-        records.Length.ShouldBe(10000);
-        records[0].NullableInt.ShouldBeNull();
-        records[0].NullableString.ShouldBeNull();
-
-        records[1].NullableInt.ShouldBe(10);
-        records[1].NullableString.ShouldBe("str_val_1");
+        exception.Message.ShouldContain("row 37");
     }
 
-    [Fact]
-    public async Task ToArrayAsyncDeserializesLargeScaleDatasetAsync()
+    private static string FixturePath(string version, string fileName)
     {
-        string filePath = Path.Combine(TestDataCSharpRoot, "v3", "05_large_scale_flat.parquet");
-        System.IO.File.Exists(filePath).ShouldBeTrue($"File not found: {filePath}");
+        string root = version == "v3" ? TestDataCSharpRoot : TestDataRoot;
+        string path = Path.Combine(root, version, fileName);
+        System.IO.File.Exists(path).ShouldBeTrue($"File not found: {path}");
+        return path;
+    }
 
-        using var stream = System.IO.File.OpenRead(filePath);
-        var records = await TestLargeFlatRecordParquet.From(stream).ToArrayAsync();
-
-        records.Length.ShouldBe(100000);
-        records[0].Id.ShouldBe(0L);
-        records[99999].Id.ShouldBe(99999L);
-        records[99999].ValA.ShouldBe(699993);
+    private static void AssertPrimitiveRows(TestUserRecord[] records)
+    {
+        // Independent expectations follow the deterministic fixture specification, not the reader.
+        records.Length.ShouldBe(100);
+        for (int i = 0; i < records.Length; i++)
+        {
+            var expected = new TestUserRecord
+            {
+                Id = i,
+                Name = $"user_{i}",
+                Score = (i * 1.5) % 100.0,
+                IsActive = i % 2 == 0,
+                CreatedAtMs = 1_700_000_000_000L + (i * 1000L),
+            };
+            records[i].ShouldBe(expected, $"row {i}");
+        }
     }
 }
