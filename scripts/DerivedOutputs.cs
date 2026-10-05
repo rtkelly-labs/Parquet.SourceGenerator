@@ -128,6 +128,7 @@ Run(
     "--golden",
     golden
 );
+Run(repo, "dotnet", null, "run", "scripts/ExportApiDocs.cs", "--", "--repo", repo, "--out", output);
 
 Console.WriteLine($"Derived outputs written to {output}.");
 return 0;
