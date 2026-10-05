@@ -136,11 +136,11 @@ public async Task ReadLogsAsync(Stream stream)
 }
 ```
 
-#### Accessing Compiled Schema
+#### Internal Schema Definition
 ```csharp
 using Parquet.Data;
 
-// Static schema definition generated at compile time
+// Internal static schema definition generated at compile time within the consuming assembly
 ParquetSchema schema = TransactionLogParquetExtensions.Schema;
 ```
 
@@ -158,7 +158,7 @@ namespace Analytics.Models;
 
 public static partial class TransactionLogParquetExtensions
 {
-    public static readonly global::Parquet.Data.ParquetSchema Schema = new global::Parquet.Data.ParquetSchema(
+    internal static readonly global::Parquet.Data.ParquetSchema Schema = new global::Parquet.Data.ParquetSchema(
         new global::Parquet.Data.DataField<global::System.Guid>("tx_id"),
         new global::Parquet.Data.DataField<string>("user_id"),
         new global::Parquet.Data.DataField<decimal>("amount"),
