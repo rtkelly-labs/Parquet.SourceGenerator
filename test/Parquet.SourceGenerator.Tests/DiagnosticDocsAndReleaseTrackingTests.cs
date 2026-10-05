@@ -86,6 +86,7 @@ public sealed class DiagnosticDocsAndReleaseTrackingTests
         string root = FindRepositoryRoot();
         string[] files =
         [
+            Path.Combine(root, "docs", "vision.md"),
             Path.Combine(root, "docs", "architecture", "overview.md"),
             Path.Combine(root, "docs", "architecture", "roslyn-pipeline.md"),
             Path.Combine(root, "docs", "reference", "compiler-diagnostics.md"),

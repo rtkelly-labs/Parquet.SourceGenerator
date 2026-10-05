@@ -20,13 +20,13 @@ This study investigates design choices across three serialization engines target
 PSG is demonstrably ahead of both reference ecosystems in several engineering and governance dimensions:
 
 1. **Emitted API Surface Governance**:
-   - PSG renders a signature-only `.api.txt` for every golden model and posts its diff against the merge base on every pull request, alongside `RS0016` / `PARQAPI002` build-error gates on the shipped and internal surfaces and semver classification in [`docs/api/LEDGER.md`](./api/LEDGER.md) (see [`17 - Generated Public API Baselines`](./17-GENERATED-API-BASELINES.md) and [`18 - The API Change Contract`](./18-API-CHANGE-CONTRACT.md)). (When this study was written the emitted surface was also build-gated, by the since-retired `PARQAPI001`.) Neither protobuf repository surfaces emitted-API changes for review automatically.
+   - PSG renders a signature-only `.api.txt` for every golden model and posts its diff against the merge base on every pull request, alongside `RS0016` / `PARQAPI002` build-error gates on the shipped and internal surfaces and semver classification in [`docs/api/LEDGER.md`](../../api/LEDGER.md) (see [API Governance & Change Contract](../api-governance.md)). (When this study was written the emitted surface was also build-gated, by the since-retired `PARQAPI001`.) Neither protobuf repository surfaces emitted-API changes for review automatically.
 2. **Deterministic Triple-Golden System**:
    - Generated code is published in three derived views — exact emitted text, public API signatures (`.api.txt`), and Roslyn complexity/ELOC metrics (`.metrics.txt`) — each diffed against the pull request's base, and bound against a real `CSharpCompilation` in `GoldenCodeGenRegressionTests` and in `scripts/CodeMetrics.cs` (`ERRORS=0`). (When this study was written the three were checked-in, drift-gated baselines.) Google.Protobuf tests generated code by compiling and executing its test suite, with no review of emitted text changes.
 3. **Incremental Pipeline Hygiene**:
-   - Strict `EquatableArray<T>` caching discipline across generator pipeline steps, immutable domain models, and aggressive pruning of non-cacheable Roslyn semantic types (see [`03 - Incremental Generator Pipeline`](./03-INCREMENTAL-GENERATOR-PIPELINE.md)).
+   - Strict `EquatableArray<T>` caching discipline across generator pipeline steps, immutable domain models, and aggressive pruning of non-cacheable Roslyn semantic types (see [Roslyn Pipeline Architecture](../roslyn-pipeline.md)).
 4. **Empirical Dremel Spike Artifacts**:
-   - The findings in [`15 - Nested Types: M0 Spike Findings`](./15-NESTED-TYPES-SPIKE-FINDINGS.md) (identifying Parquet.Net's nested interior-null loss and using PyArrow as an external oracle) represent rigorous verification that exceeds peer documentation.
+   - The findings in [Nested Types Guide](../../guides/nested-types.md) (identifying Parquet.Net's nested interior-null loss and using PyArrow as an external oracle) represent rigorous verification that exceeds peer documentation.
 5. **Target Framework Fast Paths**:
    - Using `#if NET6_0_OR_GREATER` fast paths in emitted code parallels Google.Protobuf’s `GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE`, validating conditional modern framework acceleration without dropping .NET Standard 2.0 consumer compatibility.
 
@@ -40,7 +40,7 @@ PSG is demonstrably ahead of both reference ecosystems in several engineering an
   - New generated code + Old runtime
   - Old generated code + New runtime
 * **PSG Assessment**: **High Priority Adoption.**
-  - *Current state*: PSG validates wire-format interop across versions ([`test/CrossVersionInterop`](../test/CrossVersionInterop)) and pins `Parquet.Net` per golden compilation ([`16 - Version And Schema-Evolution Matrix`](./16-VERSION-AND-SCHEMA-EVOLUTION.md)).
+  - *Current state*: PSG validates wire-format interop across versions ([`test/CrossVersionInterop`](../../../test/CrossVersionInterop)) and pins `Parquet.Net` per golden compilation ([Schema Evolution & Versioning Matrix](../../reference/schema-evolution.md)).
   - *The gap*: PSG's emitted code makes ~15 direct calls into `Parquet.Net` primitives (`WriteAllPartsAsync`, `ReadRawAsync`, `ParquetRowGroupWriter`, `DataField`, `ParquetSchema`). If a consumer compiled generated code using PSG v1.0 against Parquet.Net 6.1.0 and later upgrades `Parquet.Net` to 6.2.0 or 7.0 without regenerating, any binary signature drift will trigger runtime `MissingMethodException` or `TypeLoadException`.
   - *Action*: Introduce a matrix test compiling committed historical `.g.cs` fixtures against current and upcoming `Parquet.Net` package builds.
 

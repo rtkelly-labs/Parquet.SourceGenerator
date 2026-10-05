@@ -470,7 +470,8 @@ OrderEventParquetExtensions.WriteParquetRowGroupAsync(writer, recordBatch);
 | ⚠️ **[Known Limitations](docs/reference/known-limitations.md)** | Comprehensive audit of behavioural gaps and upstream boundaries. |
 | 📊 **[Full Benchmarks Report](docs/reference/benchmarks.md)** | Multi-scale sweeps (1k, 10k, 100k, 1M rows) and real-world datasets. |
 | 🎯 **[0.1 Milestone & Release Status](Milestone.md)** | Current 0.1 release gates, blocker status, and CI verification index. |
-| 🏛️ **[Architecture & Internals](docs/architecture/overview.md)** | Core design tenets, Roslyn caching pipeline, and buffer recycling. |
+| 🔭 **[Vision & Design Tenets](docs/vision.md)** | Core mission, reflection bottlenecks, and the Member Test. |
+| 🏛️ **[System Architecture](docs/architecture/overview.md)** | Subsystem pipeline, Roslyn caching, and buffer recycling. |
 
 ---
 

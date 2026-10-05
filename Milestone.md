@@ -1,7 +1,7 @@
 # 0.1 Milestone & Release Status Index
 
 > **Release Tracker:** [#477](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/477) • 
-> **Architecture & Tenets:** [Architectural Overview](./docs/architecture/overview.md) • 
+> **Architecture & Tenets:** [Vision & Tenets](./docs/vision.md) • [System Architecture](./docs/architecture/overview.md) • 
 > **CI Verification:** [CI Gate Matrix](./docs/internals/ci-gate-matrix.md)
 
 | Attribute | Current Status |

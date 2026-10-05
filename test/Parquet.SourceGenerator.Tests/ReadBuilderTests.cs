@@ -312,7 +312,7 @@ public sealed class ReadBuilderTests
             .ShouldBeEmpty();
     }
 
-    // ── Combinations the #217 state types made unrepresentable (#478, docs/architecture/overview.md §3) ──────────
+    // ── Combinations the #217 state types made unrepresentable (#478, docs/vision.md §3) ──────────
     //
     // Rule: the call that completes an unsupported combination throws NotSupportedException.
     // Parallel() and Where() know the source and existing state, so they throw themselves; a

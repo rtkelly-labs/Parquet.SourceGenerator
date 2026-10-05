@@ -157,7 +157,7 @@ The native consumer checks real serialization behavior and fails on a mismatch.
 
 The workflow also checks the publish log for trimming and dynamic-code warnings. Warnings attributed
 to Parquet.Net are currently tolerated; this is not a claim of zero warnings across all dependencies.
-See the Native AOT row in [51 - CI Gate Matrix](./51-CI-GATE-MATRIX.md) for the exact gate boundary.
+See the Native AOT row in [CI Gate Matrix](../internals/ci-gate-matrix.md) for the exact gate boundary.
 
 ---
 
@@ -228,7 +228,7 @@ This matrix tracks the verification status across all 23 supported schema types 
 | `ReadOnlyMemory<byte>` (Zero-copy slice) | ✅ Verified (`TestDataIntegration`) | ✅ Full terminal coverage | ✅ Verified | ⚠️ Unsupported | ❌ Blocked on net472 |
 | `enum` (Int32 underlying type) | ✅ Verified (Diamonds & Fuzzing) | ✅ Full terminal coverage | ✅ Verified | ✅ Exercised | ✅ Executed |
 | `enum` (Non-int: `byte`, `short`, `long`) | ⚠️ Generator-verified | ⚠️ Compiles only | ⚠️ Compiles only | ⚠️ Untested | ⚠️ Compiles only |
-| Compound models (Single-level nested) | ✅ Verified (`NestedModelTests`) | ✅ Full terminal coverage | ⚠️ In progress | ❌ Non-goal for Arrow | ⚠️ Scoped subset ([doc 42](./42-NESTED-BACKEND-SCOPE-176.md)) |
+| Compound models (Single-level nested) | ✅ Verified (`NestedModelTests`) | ✅ Full terminal coverage | ⚠️ In progress | ❌ Non-goal for Arrow | ⚠️ Scoped subset ([Nested Types Guide](../guides/nested-types.md)) |
 
 ### 6.2 Test Sufficiency Findings & Concrete Gaps
 
