@@ -21,9 +21,10 @@ internal sealed class ParquetIncrementalGenerator : IIncrementalGenerator
     {
         // 1. Read project policy as value-equatable state, then parse decorated target nodes with
         // the feature level's compound-shape allowance.
-        IncrementalValueProvider<GeneratorConfiguration> configuration = context
-            .CompilationProvider.Combine(context.AnalyzerConfigOptionsProvider)
-            .Select(static (pair, _) => GeneratorConfiguration.From(pair.Left, pair.Right));
+        IncrementalValueProvider<GeneratorConfiguration> configuration =
+            context.AnalyzerConfigOptionsProvider.Select(
+                static (options, _) => GeneratorConfiguration.From(options)
+            );
         // The transform parses and returns models, never the syntax context: a context holds a
         // SemanticModel, which roots the compilation, and has no value equality, so caching it
         // retained a compilation per target and left nothing downstream able to compare as
@@ -36,18 +37,13 @@ internal sealed class ParquetIncrementalGenerator : IIncrementalGenerator
                     TargetParser.GetTargetParseSet(
                         ctx,
                         ParquetApiLevel.V6,
-                        CompoundKindsFor(GeneratorConfiguration.Default.FeatureLevel)
+                        CompoundKindsFor(GeneratorConfiguration.Default.FlatOnly)
                     )
             )
             .Where(static parse => parse is not null)!;
         IncrementalValuesProvider<TargetParserResult> targets = parses
             .Combine(configuration)
-            .Select(
-                static (pair, _) =>
-                    CompoundKindsFor(pair.Right.FeatureLevel) == Parser.CompoundKinds.None
-                        ? pair.Left.Flat
-                        : pair.Left.Compound
-            );
+            .Select(static (pair, _) => pair.Right.FlatOnly ? pair.Left.Flat : pair.Left.Compound);
 
         context.RegisterSourceOutput(
             configuration,
@@ -163,8 +159,8 @@ internal sealed class ParquetIncrementalGenerator : IIncrementalGenerator
             || node is StructDeclarationSyntax { AttributeLists.Count: > 0 };
     }
 
-    private static Parser.CompoundKinds CompoundKindsFor(GeneratorFeatureLevel featureLevel) =>
-        featureLevel == GeneratorFeatureLevel.Level1Flat
+    private static Parser.CompoundKinds CompoundKindsFor(bool flatOnly) =>
+        flatOnly
             ? Parser.CompoundKinds.None
             : Parser.CompoundKinds.Struct | Parser.CompoundKinds.List;
 }

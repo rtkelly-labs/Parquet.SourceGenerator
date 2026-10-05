@@ -24,7 +24,6 @@ This document details all diagnostic codes, their severity, rationale, and remed
 | **[`PARQ012`](#parq012-cyclic-compound-type)** | **Error** | Cyclic compound type | A struct or list member reaches its own declaring type again, so there is no finite column layout. |
 | **[`PARQ013`](#parq013-compound-nesting-too-deep)** | **Error** | Compound nesting too deep | Compound members nest more than 6 levels deep. |
 | **[`PARQ014`](#parq014-member-cannot-be-a-sort-key)** | **Error** | Member cannot be a sort key | `[ParquetSortKey]` is on a member that cannot drive row-group pruning. |
-| **[`PARQ015`](#parq015-invalid-generator-feature-level)** | **Error** | Invalid generator feature level | `ParquetGeneratorFeatureLevel` is present but is not a defined level. |
 | **[`PARQ016`](#parq016-generated-type-names-collide)** | **Error** | Generated type names collide | Two targets whose containing-type paths flatten to the same name, such as `A.BC` and `AB.C`. |
 | **[`PARQ020`](#parq020-abstract-type-not-supported)** | **Error** | Abstract type not supported | Target type is abstract. |
 | **[`PARQ021`](#parq021-ref-struct-not-supported)** | **Error** | Ref struct not supported | Target type is a `ref struct`. |
@@ -211,17 +210,6 @@ This document details all diagnostic codes, their severity, rationale, and remed
 
 ---
 
-### PARQ015: Invalid Generator Feature Level
-
-- **Severity**: Error
-- **Cause**: `ParquetGeneratorFeatureLevel` was supplied through MSBuild or
-  `[ParquetGeneratorOptions]`, but its value is not one of the defined feature levels.
-- **Why**: Silently falling back to the default level makes a misspelled build property change the
-  generated API without any indication that the requested policy was ignored.
-- **Remediation**: Use `Level1Flat`, `Level2CompoundPreview`, or `Level3ModernCSharp`.
-
----
-
 ### PARQ016: Generated Type Names Collide
 - **Severity**: Error
 - **Cause**: Two `[ParquetSerializable]` types in the same namespace have containing-type paths that
@@ -265,3 +253,9 @@ This document details all diagnostic codes, their severity, rationale, and remed
 - **Disabled-feature omission diagnostic (#226).** Reporting the cause when a member is missing
   because a feature is disabled is deferred until the feature-profile and configuration state it
   would read is settled. See [document 37](37-DISABLED-FEATURE-DIAGNOSTIC-SCOPE-226.md).
+
+---
+
+## 🗄️ Retired Diagnostics
+
+- **PARQ015: Invalid Generator Feature Level**: Retired in 0.1 after collapsing `ParquetGeneratorFeatureLevel` and `[ParquetGeneratorOptions]` into the boolean MSBuild switch `<ParquetGeneratorFlatOnly>true</ParquetGeneratorFlatOnly>`. Flat-only schema enforcement is now configured via MSBuild.

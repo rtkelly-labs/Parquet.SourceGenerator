@@ -361,7 +361,7 @@ Full details on every diagnostic rule (`PARQ001` to `PARQ016`), with examples an
 - `PARQ007`–`PARQ010`: Assignability, constructors, nested-type accessibility, and generic type constraints
 - `PARQ011`: Classic API version compatibility
 - `PARQ012`–`PARQ014`: Cyclic or too-deep compound types, and an ineligible `[ParquetSortKey]`
-- `PARQ015`–`PARQ016`: Invalid generator feature level, and colliding generated type names
+- `PARQ016`: Colliding generated type names (`PARQ015` retired)
 
 ---
 
@@ -446,7 +446,7 @@ OrderEventParquetExtensions.WriteParquetRowGroupAsync(writer, recordBatch);
 | **Positional Records** | ❌ Unsupported | Constructor with parameters reported as `PARQ008`. Use nominal records with `{ get; init; }`. |
 | **.NET Framework (net472)** | ✅ Supported via V5 | Use `Parquet.SourceGenerator.Legacy` for Parquet.Net 4.x/5.x support. |
 | **Apache Arrow ingestion** | 🧪 Experimental (v6 only) | Ingestion only (`RecordBatch` to Parquet); export to Arrow is not shipped. Emitted only when the consumer references Apache.Arrow. Flat models only; Native AOT exercised by the repository's published AOT harness. |
-| **Generator feature level** | ✅ Configurable | Defaults to `Level2CompoundPreview`; pin `Level1Flat` or opt into `Level3ModernCSharp` with `ParquetGeneratorFeatureLevel`. |
+| **Flat-only schemas** | ✅ Configurable | Defaults to compound + flat; enforce flat-only schemas with `<ParquetGeneratorFlatOnly>true</ParquetGeneratorFlatOnly>`. |
 | **V5 generated API** | ✅ Declared core subset | V5 intentionally exposes flat read/write, batched write, row-group write, and schema; modern builder, filtering, parallel, streaming, column-batch, and Arrow members are v6-only. |
 
 > A complete audit of limitations and remediation roadmap is in **[`docs/reference/known-limitations.md`](docs/reference/known-limitations.md)**.
