@@ -42,7 +42,7 @@ public sealed class FeatureLevelPipelineTests
         }
         """;
 
-    private static GeneratorRunResult Run(string? featureLevel)
+    private static GeneratorRunResult Run(string? flatOnly = null, string? featureLevel = null)
     {
         MetadataReference[] references =
         [
@@ -68,6 +68,10 @@ public sealed class FeatureLevelPipelineTests
         );
 
         var options = new Dictionary<string, string>();
+        if (flatOnly is not null)
+        {
+            options["build_property.ParquetGeneratorFlatOnly"] = flatOnly;
+        }
         if (featureLevel is not null)
         {
             options["build_property.ParquetGeneratorFeatureLevel"] = featureLevel;
@@ -83,9 +87,9 @@ public sealed class FeatureLevelPipelineTests
     }
 
     [Fact]
-    public void ACompoundMemberEmitsUnderTheDefaultFeatureLevel()
+    public void ACompoundMemberEmitsUnderTheDefaultConfiguration()
     {
-        GeneratorRunResult result = Run(featureLevel: null);
+        GeneratorRunResult result = Run();
 
         result.Exception.ShouldBeNull();
         result.GeneratedSources.ShouldContain(source =>
@@ -97,9 +101,23 @@ public sealed class FeatureLevelPipelineTests
     }
 
     [Fact]
-    public void ACompoundMemberIsRejectedUnderLevel1Flat()
+    public void ACompoundMemberIsRejectedUnderFlatOnly()
     {
-        GeneratorRunResult result = Run("Level1Flat");
+        GeneratorRunResult result = Run(flatOnly: "true");
+
+        result.Exception.ShouldBeNull();
+        result.GeneratedSources.ShouldNotContain(source =>
+            source.HintName == "Demo.Person.ParquetSerializer.g.cs"
+        );
+        result.Diagnostics.ShouldContain(d =>
+            d.Id == DiagnosticDescriptors.UnsupportedPropertyType.Id
+        );
+    }
+
+    [Fact]
+    public void ACompoundMemberIsRejectedUnderLegacyLevel1Flat()
+    {
+        GeneratorRunResult result = Run(featureLevel: "Level1Flat");
 
         result.Exception.ShouldBeNull();
         result.GeneratedSources.ShouldNotContain(source =>

@@ -16,6 +16,22 @@ The rule, the three surfaces and the author process are in
 
 <!-- Add new entries directly below this line, newest first. -->
 
+### 2026-10-05 — Collapse `ParquetGeneratorFeatureLevel` and `ParquetGeneratorOptionsAttribute` to `ParquetGeneratorFlatOnly` (#587)
+
+- **Surface:** unshipped
+- **Semver:** breaking-major
+- **Issue:** [#587](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/587), part of tracker
+  [#477](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/477)
+- **Change:** Removed `ParquetGeneratorFeatureLevel` enum (3 values: `Level1Flat`, `Level2CompoundPreview`,
+  `Level3ModernCSharp`) and `ParquetGeneratorOptionsAttribute` from `Parquet.SourceGenerator.Attributes`.
+  Replaced with the MSBuild property `<ParquetGeneratorFlatOnly>true</ParquetGeneratorFlatOnly>`. Retired
+  diagnostic `PARQ015`.
+- **Rationale:** The feature-level enum and assembly attribute were redundant mechanisms to spell a single
+  binary behavior toggle: only `Level1Flat` ever altered emitter behavior (by disabling compound types).
+  `Level2CompoundPreview` was an unnecessary preview label for default supported functionality, and
+  `Level3ModernCSharp` was unused. Collapsing this to a single MSBuild boolean property removes 8 unshipped
+  API lines, eliminates the assembly attribute scan, and avoids confusing multi-tiered feature levels.
+
 ### 2026-10-05 — Hide `ParquetColumnStatistics<T>` constructor and `FromRaw` with `[EditorBrowsable(Never)]` (#586)
 
 - **Surface:** unshipped

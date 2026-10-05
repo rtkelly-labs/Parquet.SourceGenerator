@@ -24,9 +24,9 @@ The documentation is organized into four distinct sections:
    - Package installation for modern .NET and .NET Framework.
    - First annotated model and basic read/write examples.
 
-2. **[Configuration & Feature Levels](./getting-started/configuration.md)**
-   - Setting `ParquetGeneratorFeatureLevel` via MSBuild or assembly attributes.
-   - Compatibility policies and compiler output verification.
+2. **[Configuration & Generator Switches](./getting-started/configuration.md)**
+   - Configuring `ParquetGeneratorFlatOnly` via MSBuild.
+   - Flat-only schema enforcement and compiler output verification.
 
 ---
 

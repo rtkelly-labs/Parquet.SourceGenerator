@@ -29,7 +29,7 @@ the migration list; each row's detail is in the entries below and in `docs/api/L
 | `Parquet.SourceGenerator.V5` (package id) | `Parquet.SourceGenerator.Legacy`; the classic generator keeps its flat reads | #494 |
 | sorted-key reads, `ParquetPruneStatistics`, public `Schema`, `ParquetColumnStatistics` constructor and `FromRaw` | **pending** (#584, #585, #586) | |
 | `WriteParquetBatchedAsync` | **pending** (fold, rename or keep: #512) | |
-| `ParquetGeneratorFeatureLevel` and `ParquetGeneratorOptionsAttribute` | **pending** (#587) | |
+| `ParquetGeneratorFeatureLevel` and `ParquetGeneratorOptionsAttribute` | Removed; use `<ParquetGeneratorFlatOnly>true</ParquetGeneratorFlatOnly>` in MSBuild if flat-only behavior is required | #587 |
 | legacy backend parity (nested, Arrow, batches) and its migration table | **pending** (#604) | |
 | baseline: `PublicAPI.Unshipped.txt` promoted to `Shipped.txt` | **pending** (#592) | |
 

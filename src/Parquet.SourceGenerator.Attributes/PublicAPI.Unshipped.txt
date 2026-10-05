@@ -1,12 +1,4 @@
 #nullable enable
-Parquet.SourceGenerator.ParquetGeneratorFeatureLevel
-Parquet.SourceGenerator.ParquetGeneratorFeatureLevel.Level1Flat = 1 -> Parquet.SourceGenerator.ParquetGeneratorFeatureLevel
-Parquet.SourceGenerator.ParquetGeneratorFeatureLevel.Level2CompoundPreview = 2 -> Parquet.SourceGenerator.ParquetGeneratorFeatureLevel
-Parquet.SourceGenerator.ParquetGeneratorFeatureLevel.Level3ModernCSharp = 3 -> Parquet.SourceGenerator.ParquetGeneratorFeatureLevel
-Parquet.SourceGenerator.ParquetGeneratorOptionsAttribute
-Parquet.SourceGenerator.ParquetGeneratorOptionsAttribute.FeatureLevel.get -> Parquet.SourceGenerator.ParquetGeneratorFeatureLevel
-Parquet.SourceGenerator.ParquetGeneratorOptionsAttribute.FeatureLevel.set -> void
-Parquet.SourceGenerator.ParquetGeneratorOptionsAttribute.ParquetGeneratorOptionsAttribute() -> void
 Parquet.SourceGenerator.ParquetColumnAttribute.Deduplicate.get -> bool
 Parquet.SourceGenerator.ParquetColumnAttribute.Deduplicate.set -> void
 Parquet.SourceGenerator.ParquetColumnAttribute.Encoding.get -> Parquet.SourceGenerator.ParquetColumnEncoding

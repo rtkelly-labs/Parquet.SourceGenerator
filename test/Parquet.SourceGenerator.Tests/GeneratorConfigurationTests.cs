@@ -12,38 +12,44 @@ namespace Parquet.SourceGenerator.Tests;
 public sealed class GeneratorConfigurationTests
 {
     [Fact]
-    public void ReadsFeatureLevelFromGlobalAnalyzerConfig()
+    public void ReadsFlatOnlyFromGlobalAnalyzerConfig()
+    {
+        var provider = new TestOptionsProvider(
+            new Dictionary<string, string> { ["build_property.ParquetGeneratorFlatOnly"] = "true" }
+        );
+
+        GeneratorConfiguration.From(provider).FlatOnly.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void ReadsFlatOnlyFallbackFromLegacyFeatureLevel()
     {
         var provider = new TestOptionsProvider(
             new Dictionary<string, string>
             {
-                ["build_property.ParquetGeneratorFeatureLevel"] = "Level3ModernCSharp",
+                ["build_property.ParquetGeneratorFeatureLevel"] = "Level1Flat",
             }
         );
 
-        GeneratorConfiguration
-            .From(CSharpCompilation.Create("test"), provider)
-            .FeatureLevel.ShouldBe(GeneratorFeatureLevel.Level3ModernCSharp);
+        GeneratorConfiguration.From(provider).FlatOnly.ShouldBeTrue();
     }
 
     [Fact]
-    public void EmptyGlobalFeatureLevelUsesTheDefault()
+    public void EmptyGlobalOptionsUsesTheDefault()
     {
         var provider = new TestOptionsProvider(
-            new Dictionary<string, string> { ["build_property.ParquetGeneratorFeatureLevel"] = "" }
+            new Dictionary<string, string> { ["build_property.ParquetGeneratorFlatOnly"] = "" }
         );
 
-        GeneratorConfiguration configuration = GeneratorConfiguration.From(
-            CSharpCompilation.Create("test"),
-            provider
-        );
+        GeneratorConfiguration configuration = GeneratorConfiguration.From(provider);
 
-        configuration.FeatureLevel.ShouldBe(GeneratorConfiguration.Default.FeatureLevel);
+        configuration.FlatOnly.ShouldBe(GeneratorConfiguration.Default.FlatOnly);
+        configuration.FlatOnly.ShouldBeFalse();
         configuration.ConfigurationDiagnostic.ShouldBeNull();
     }
 
     [Fact]
-    public void ConfiguredFeatureLevelIsStampedInEmittedSource()
+    public void ConfiguredFlatOnlyIsStampedInEmittedSource()
     {
         var model = new TargetClassModel(
             Namespace: "TestNamespace",
@@ -53,31 +59,11 @@ public sealed class GeneratorConfigurationTests
 
         string source = CodeEmitter.EmitSource(
             model,
-            new GeneratorConfiguration(GeneratorFeatureLevel.Level2CompoundPreview, "test-version")
+            new GeneratorConfiguration(FlatOnly: false, "test-version")
         );
 
-        source.ShouldContain("// ParquetGeneratorFeatureLevel: Level2CompoundPreview");
+        source.ShouldContain("// ParquetGeneratorFlatOnly: False");
         source.ShouldContain("// ParquetGeneratorVersion:");
-    }
-
-    [Fact]
-    public void InvalidGlobalFeatureLevelProducesAnErrorInsteadOfFallingBack()
-    {
-        var provider = new TestOptionsProvider(
-            new Dictionary<string, string>
-            {
-                ["build_property.ParquetGeneratorFeatureLevel"] = "TypoLevel",
-            }
-        );
-
-        GeneratorConfiguration configuration = GeneratorConfiguration.From(
-            CSharpCompilation.Create("test"),
-            provider
-        );
-
-        configuration.ConfigurationDiagnostic.ShouldNotBeNull();
-        configuration.ConfigurationDiagnostic.Value.Descriptor.Id.ShouldBe("PARQ015");
-        configuration.ConfigurationDiagnostic.Value.MessageArgs.ShouldContain("TypoLevel");
     }
 
     [Fact]
