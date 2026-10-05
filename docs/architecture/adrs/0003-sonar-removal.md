@@ -1,7 +1,7 @@
-# 55 - SonarAnalyzer.CSharp removal
+# ADR 0003: SonarAnalyzer.CSharp Removal & Permissive Replacement
 
-> Companion to [50](./50-GENERATED-CODE-ANALYSIS.md) (the emitted-code analyzer gate) and
-> [51](./51-CI-GATE-MATRIX.md) (the gate matrix). This page records why the Sonar analyzer left
+> Companion to [Code Quality & Metrics](../../internals/code-quality-and-metrics.md) (the emitted-code analyzer gate) and
+> [CI Gate Matrix](../../internals/ci-gate-matrix.md) (the gate matrix). This page records why the Sonar analyzer left
 > the repository, which of its rules had a counterpart elsewhere, and what was dropped.
 
 ## Decision

@@ -31,13 +31,13 @@ The one genuine difference is **column I/O**. v4 reads and writes whole `DataCol
 allocates them itself; v6 fills and drains caller-owned `Memory<T>` buffers. That is a performance
 difference, and it is documented, not hidden. It is not an API difference. The limitation and the
 upstream change that would remove it are recorded in
-[UPSTREAM_DEPENDENCY_LIMITATIONS.md](../UPSTREAM_DEPENDENCY_LIMITATIONS.md#parquetnet-4250-column-io-allocates-whole-columns).
+[Known Limitations](../reference/known-limitations.md#parquetnet-4250-column-io-allocates-whole-columns).
 
 ## The rule
 
 1. **One surface.** For every capability both backends support, the legacy backend emits the same
    type names, member names, signatures and semantics as the modern backend. That includes the
-   `NotSupportedException` combinations recorded under [47 §4.2](./47-0.1-CONTRACT-AND-DESIGN-GOALS.md#42-generated-read-api).
+   `NotSupportedException` combinations recorded under [Vision & Design Tenets](../vision.md §3).
 2. **Differences are listed, not implied.** A member missing from the legacy surface must appear
    in the parity allowlist with a reason and a tracking issue. Each entry is either **temporary**
    (a gap to close; the allowlist can only shrink, and an entry that no longer differs fails the
@@ -46,7 +46,7 @@ upstream change that would remove it are recorded in
 3. **One implementation of the surface.** The reader, metadata, pruning, write entry points and
    validation are emitted once and shared. Only column I/O has a per-backend implementation (#492).
 4. **Performance is per backend.** Allocation and throughput differences are recorded in the
-   benchmark tables and in [14](./14-COMPATIBILITY-MATRIX.md). They are not gated as parity
+   benchmark tables and in [Compatibility Matrix](../reference/compatibility-matrix.md). They are not gated as parity
    failures.
 
 ## Initial allowlist
@@ -61,18 +61,17 @@ upstream change that would remove it are recorded in
 
 | Capability | Why the legacy backend lacks it today | Tracking |
 |:---|:---|:---|
-| Nested types (structs, lists, maps) | The legacy emitter is flat-only. Parquet.Net 4.x can represent repeated and group columns, so this is emitter work, not a platform limit. | #176, [42](./42-NESTED-BACKEND-SCOPE-176.md) |
-| `ReadOnlyMemory<byte>` / `ReadOnlyMemory<char>` members (PARQ011) | The v4 `DataColumn` API has no `ReadOnlyMemory` column representation, so the classic parser rejects these today. They can be mapped onto `byte[]` / `string` columns at one copy per value on write and read. That is emitter work, recorded in [UPSTREAM_DEPENDENCY_LIMITATIONS.md](../UPSTREAM_DEPENDENCY_LIMITATIONS.md). | #494 |
+| Nested types (structs, lists, maps) | The legacy emitter is flat-only. Parquet.Net 4.x can represent repeated and group columns, so this is emitter work, not a platform limit. | #176, [Nested Types Guide](./nested-types.md) |
+| `ReadOnlyMemory<byte>` / `ReadOnlyMemory<char>` members (PARQ011) | The v4 `DataColumn` API has no `ReadOnlyMemory` column representation, so the classic parser rejects these today. They can be mapped onto `byte[]` / `string` columns at one copy per value on write and read. That is emitter work, recorded in [Known Limitations](../reference/known-limitations.md). | #494 |
 | Arrow `RecordBatch` bridge | Not yet built for v4. Apache.Arrow supports `netstandard2.0`, so it is possible. | #490 |
 
 ### Legacy-only members
 
 The legacy flat `ReadParquet*Async` methods have no modern counterpart: the modern emitter removed
-them in favour of the builder ([48](./48-FLAT-READ-REMOVAL-480.md), #480), and 48 keeps them on the
+them in favour of the builder (issue #480), and keeps them on the
 legacy emitter only until a legacy replacement exists. The legacy builder (#494) is that
 replacement, so the flat methods are a **temporary** legacy-only entry: they are carried until #494
-lands and are removed with it, not kept as a permanent second read surface. Document 48 stays as
-the record of why they were kept.
+lands and are removed with it, not kept as a permanent second read surface.
 
 Everything else in the modern surface is in scope for parity: the reader and its options, buffer
 and stream sources, `ToArrayAsync`, `AsAsyncEnumerable`, `Where` and row-group metadata,

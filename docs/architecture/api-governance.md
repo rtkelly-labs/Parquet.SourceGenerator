@@ -25,10 +25,42 @@ deliberate.
 | 2 | **Shipped package API** | `public` members of `Parquet.SourceGenerator.Attributes`. (The generator assemblies ship only as analyzers and have no public surface; their types are `internal` since #461.) | `PublicAPI.Shipped.txt` / `PublicAPI.Unshipped.txt` | `RS0016` | `Microsoft.CodeAnalysis.PublicApiAnalyzers` (pre-existing; unchanged) |
 | 3 | **Internal seams** | Members in `src/` widened past `private` so another component can call them. | `src/api/seams.txt` | `PARQAPI002` | `InternalSeamGateAnalyzer` (build **error**) |
 
-Both catalogues, and the derived emitted `.api.txt`, use **one grammar** — the one
-[17 §The grammar](./17-GENERATED-API-BASELINES.md#the-grammar) documents, which is the grammar
-`PublicAPI.Shipped.txt` already used. One signature per line, self-contained, ordinal-sorted,
-`->` introducing the return type. Learn it once.
+Both catalogues, and the derived emitted `.api.txt`, use **one grammar** — the grammar
+`PublicAPI.Shipped.txt` already used in Roslyn ecosystems. One signature per line, self-contained,
+ordinal-sorted, `->` introducing the return type. Learn it once.
+
+## The Catalogue Signature Grammar
+
+The grammar is shared across all surfaces so contributors and reviewers learn one syntax:
+
+| Construct | Grammar Line Example |
+|:---|:---|
+| Header | `#nullable enable` — always line 1 |
+| Type | `Sample.Space.Widget` — generic types keep their parameter list, `Ns.Box<T>` |
+| Nested type | `Sample.Space.Widget.Batch` |
+| Method | `static Ns.T.ReadAsync(System.IO.Stream stream, int max = -1) -> System.Threading.Tasks.Task<int>` |
+| Constructor | `Ns.T.T(int rowGroupIndex, long rowCount) -> void` |
+| Property | `Ns.T.RowCount.get -> int`, `Ns.T.Label.set -> void`, `Ns.T.Label.init -> void` |
+| Indexer | `Ns.T.this[int index].get -> string?` |
+| Field | `static readonly Ns.T.Schema -> Parquet.Schema.ParquetSchema` |
+| Constant | `const Ns.T.Limit = 512 -> int` |
+| Enum member | `Ns.E.Ten = 10 -> Ns.E` |
+| Event | `Ns.T.Changed -> System.EventHandler` |
+| Operator | `static Ns.T.operator +(Ns.T left, Ns.T right) -> Ns.T` |
+
+### Invariant Rules:
+
+1. **`->` introduces the return type.** `void` is written out explicitly rather than omitted.
+2. **Every line carries its fully-qualified containing type.** One generated or internal file routinely holds
+   several types. A line is therefore self-contained: adding or removing an unrelated member never rewrites it.
+3. **Parameters carry type, name and default value**, in source order:
+   `(System.IO.Stream stream, ParquetSerializerOptions? options = null)`. Parameter modifiers
+   (`this`, `ref`, `out`, `in`, `params`, `scoped`) are preserved as part of the contract.
+4. **API-relevant modifiers are prefixed in one fixed canonical order**:
+   `const static readonly required abstract virtual override sealed`. Accessibility keywords (`public`, `internal`),
+   `partial`, `async`, `unsafe`, `extern`, `new`, and `volatile` are implementation details and are omitted.
+5. **Only externally-reachable declarations are listed.** A member appears when it is accessible past `private`.
+6. **One member per line, ordinal-sorted, duplicates collapsed.**
 
 Surface 2 is deliberately left exactly as it was. It already had a build-error gate that works, has
 years of Microsoft maintenance behind it, and produces messages contributors already recognise.
@@ -58,7 +90,7 @@ that property for the emitted surface: those changes leave its "Emitted public A
 A model-specific surface claim in `GoldenCodeGenRegressionTests` (a `ShouldContain` /
 `ShouldNotContain` on the emitted source) still fails the test run when a change breaks it, and
 `BackendCompatibilityPolicyTests` still holds the classic backend to its declared core surface
-([14](./14-COMPATIBILITY-MATRIX.md)). Those are behavioural claims about specific members, not a
+([Compatibility Matrix](../reference/compatibility-matrix.md)). Those are behavioural claims about specific members, not a
 catalogue.
 
 ### Division of labour between the build and CI
@@ -79,7 +111,7 @@ Neither half is redundant and neither can do the other's job.
 `PARQAPI001` used to apply the same two halves to the emitted surface: an analyzer compared each
 checked-in golden `.g.cs` with its checked-in `.api.txt`, and `CheckApiLedger.cs` demanded a ledger
 entry whenever an `.api.txt` changed. Both halves depended on those files being checked in. When
-the golden output became a derived CI artifact ([17](./17-GENERATED-API-BASELINES.md#why-none-of-it-is-checked-in))
+the golden output became a derived CI artifact
 there was nothing left for either to compare, so `PARQAPI001` and its analyzer were deleted — the
 ID is retired and will not be reused — and `CheckApiLedger.cs` no longer looks at `*.api.txt`.
 
@@ -117,10 +149,10 @@ Every ledger entry carries exactly one.
 
 Feature-level changes are governed as generated-shape changes. The default remains
 `Level2CompoundPreview`; consumers can pin `Level1Flat` or opt into `Level3ModernCSharp` through the
-shared MSBuild/assembly configuration channel documented in [29](./29-FEATURE-LEVELS.md).
+shared MSBuild/assembly configuration channel documented in [Configuration & Feature Levels](../getting-started/configuration.md).
 
 `0.0.x` permits breaking changes without a major bump; the release-cadence note in
-[04 - Roadmap](./04-ROADMAP-AND-CONTRIBUTING.md) says so, and that is not changing here. The bucket
+[Roadmap & Contributing](../../Milestone.md) says so, and that is not changing here. The bucket
 on an entry therefore does not gate a release today. **It is recorded anyway, because the point is
 that the decision was made** — that someone looked at a `breaking-major` label and shipped it
 knowingly rather than discovering it from a consumer's bug report. At `0.1.0` the ledger becomes the
@@ -292,10 +324,10 @@ the built `.nupkg` files from a local feed and compile against them on four targ
 
 | Thing | Where |
 |:---|:---|
-| Grammar for every catalogue line | [17 - Generated Public API Baselines](./17-GENERATED-API-BASELINES.md) |
+| Grammar for every catalogue line | [The Catalogue Signature Grammar](#the-catalogue-signature-grammar) |
 | Emitted API review diff | `derived` job in `.github/workflows/ci.yml`; `scripts/DerivedOutputs.cs`, `scripts/DerivedReport/` |
-| The ledger | [`docs/api/LEDGER.md`](./api/LEDGER.md) |
-| Seam catalogue | [`src/api/seams.txt`](../src/api/seams.txt) |
+| The ledger | [`docs/api/LEDGER.md`](../api/LEDGER.md) |
+| Seam catalogue | [`src/api/seams.txt`](../../src/api/seams.txt) |
 | Analyzer (`PARQAPI002`) | `tools/Parquet.SourceGenerator.ApiGates/` |
 | CI check | `scripts/CheckApiLedger.cs` |
 | `0.1.0` freeze | [#230](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/230) |

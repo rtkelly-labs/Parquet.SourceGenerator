@@ -317,7 +317,7 @@ enshrined behaviour that did not exist.
 
 **Superseded** by [#218](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/218): both
 parameters were deleted rather than given precedence rules, so there is now one source and no
-precedence to state. See [19 - Public API Surface](./19-PUBLIC-API-SURFACE.md).
+precedence to state. See [Reading Parquet Guide](../guides/reading-parquet.md).
 
 ### 3.3 `ParquetSerializerOptions.Default` is a mutable shared singleton ✅
 

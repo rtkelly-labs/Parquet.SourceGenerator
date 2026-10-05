@@ -18,7 +18,7 @@ namespace Parquet.SourceGenerator.Emitter;
 /// method-name cross-product and replaced it with a public state-type cross-product. #478 collapses
 /// the four into one public <c>readonly struct &lt;Model&gt;ParquetReader</c> whose state — source
 /// kind, options, predicate and the parallel flag — is private
-/// (<c>docs/architecture/overview.md</c> §4.2).
+/// (<c>docs/vision.md</c> §3).
 /// </para>
 /// <para>
 /// Combinations the separate types made unrepresentable are now callable, so each one has defined

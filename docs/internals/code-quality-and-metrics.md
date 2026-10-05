@@ -5,8 +5,8 @@
 
 ## Why this exists
 
-Before this, the repository measured its public surface ([17](./17-GENERATED-API-BASELINES.md),
-[18](./18-API-CHANGE-CONTRACT.md)), its test coverage, and the correctness of its emitted output —
+Before this, the repository measured its public surface ([API Governance](../architecture/api-governance.md)),
+its test coverage, and the correctness of its emitted output —
 and measured the *maintainability of the code doing the emitting* not at all. `CodeEmitter.cs` grew
 to 2,536 source lines with nothing recording the fact. Four separate hand-rolled copies of
 `ResolveSchemaField` accumulated across the emitted read paths and all broke together, because
@@ -16,8 +16,7 @@ Two mechanisms answer that. The **gate** is the `CA1502` / `CA1505` / `CA1506` a
 the thresholds in `CodeMetricsConfig.txt` — a build error, on every pull request. The **report** is
 `scripts/CodeMetrics.cs`: every namespace, type and member under `src/` with its numbers, derived
 from the code on demand and published by CI's `derived` job as the `derived-outputs` artifact, a
-step summary, and a base-versus-head diff on every pull request
-([17](./17-GENERATED-API-BASELINES.md#the-review-diff)).
+step summary, and a base-versus-head diff on every pull request.
 
 > **History.** This layer originally checked the report in under `metrics/` and failed CI on any
 > drift from it — the `.api.txt` pattern applied to quality. That was removed: see
@@ -82,7 +81,7 @@ two reports — two CI runs, or a local run before and after a refactor — diff
 
 ### Determinism
 
-The same rules as [17](./17-GENERATED-API-BASELINES.md):
+The same rules as [API Governance](../architecture/api-governance.md):
 
 - Every ordering is `StringComparer.Ordinal`. Never culture-sensitive — this repository has already
   paid for that once.
@@ -113,7 +112,7 @@ renderer in place of XML.
 what `scripts/CodeMetrics.cs` reports for the same commit. The division of labour: **the
 cross-platform computation is the per-PR report** (fast feedback, same OS as the rest of CI),
 **Microsoft's binary is the oracle**
-("is our ruler accurate?" is a nightly question). See [24 — The Metrics Oracle](./24-METRICS-ORACLE.md).
+("is our ruler accurate?" is a nightly question, tracked via `scripts/MetricsOracleCompare.cs`).
 
 ## Generating
 
@@ -123,8 +122,7 @@ dotnet run scripts/CodeMetrics.cs -- --summary out.md   # plus the Markdown summ
 dotnet run scripts/CodeMetrics.cs -- --out <dir>        # somewhere else
 ```
 
-The same run also measures the published golden models for
-[22](./22-GENERATED-CODE-METRICS.md) (`--src-only` skips that) and validates
+The same run also measures the published golden models for emitted code metrics (`--src-only` skips that) and validates
 `CodeMetricsConfig.txt`; an invalid config and emitted code that does not compile are the parts
 that can fail. On a pull request CI already compares against the merge base — the "Hand-written
 code metrics (src/)" section of the derived-output comment. To compare against any other commit,
@@ -150,9 +148,7 @@ failed on any drift — CC, CL, DIT, SLOC and ELOC exact, MI within ±2. In prac
 So the numbers are now derived when they are wanted: every CI run publishes them in the
 `derived-outputs` artifact and a step summary, every pull request shows how they moved against its
 merge base, and anyone can regenerate them locally. The **generated**-code baselines
-([22](./22-GENERATED-CODE-METRICS.md)) at first stayed checked in beside the golden files; they
-followed once the golden files themselves stopped being checked in
-([17](./17-GENERATED-API-BASELINES.md#why-none-of-it-is-checked-in)).
+at first stayed checked in beside the golden files; they followed once the golden files themselves stopped being checked in.
 
 ## The analyzer rules
 
@@ -324,8 +320,6 @@ async state machine's field count (8 → 23), grew native code 21% and AOT binar
 regressed the `List<T>` fast path 6.8% under Server GC — in exchange for about 1 ms of one-time JIT
 per process. The C# compiler had already outlined most of the method for free.
 
-The conclusion, with the numbers, is in
-[22 § Is emitted method size actionable?](./22-GENERATED-CODE-METRICS.md#is-emitted-method-size-actionable-no-watch-it-do-not-fix-it).
 **Emitted method size is informational — a debuggability and correctness-risk proxy and a drift
 detector — not a performance defect to fix.** The layer-1 complexity numbers on this page are a
 different claim and remain actionable on their own terms: `CollectMembers` at 105 is a testability
@@ -333,10 +327,6 @@ and comprehension problem, not a codegen one.
 
 ## Related
 
-- [17 - Generated Public API Baselines](./17-GENERATED-API-BASELINES.md) — the line-per-entity
-  rendering this borrows wholesale, and the base-vs-head review diff these reports now share.
-- [22 - Generated Code Metrics](./22-GENERATED-CODE-METRICS.md) — layer 2, the emitted half.
-- [18 - The API Change Contract](./18-API-CHANGE-CONTRACT.md) — the gating philosophy. Note that the
-  metrics reports are **not** a governed API surface, and changing the code they measure needs no
-  `docs/api/LEDGER.md` entry on their account.
-- [05 - Testing Machinery & Benchmarking Strategy](./05-TESTING-STRATEGY-AND-BENCHMARKS.md).
+- [API Governance & Change Contract](../architecture/api-governance.md) — The signature-level gating philosophy, baseline derivation, and change ledger.
+- [CI Gate Matrix](ci-gate-matrix.md) — How code metrics and analyzers are wired into CI check suites.
+- [Testing Strategy](../architecture/testing-strategy.md) — The comprehensive testing pyramid and behavioral validation.

@@ -1,83 +1,124 @@
-# Architectural Vision & Design Tenets
+# System Architecture Overview
 
-## Executive Summary
+This document provides a technical walkthrough of the internal subsystem architecture, compilation pipeline, and emitter topology of `Parquet.SourceGenerator`.
 
-`Parquet.SourceGenerator` is a high-performance, compile-time Roslyn source generator for C# targeting the [Parquet.Net](https://github.com/aloneguid/parquet-dotnet) ecosystem. Its primary objective is to replace reflection-based object serialization and schema discovery with zero-allocation, strongly-typed compile-time generated column reader/writer implementations.
-
----
-
-## 1. The Problem: Reflection Bottlenecks in Data Pipelines
-
-The default high-level API in `Parquet.Net` (`ParquetConvert.SerializeAsync<T>` and `ParquetConvert.DeserializeAsync<T>`) relies on runtime reflection:
-1. **Property Scanning**: At runtime, `ParquetConvert` uses `typeof(T).GetProperties()` to discover fields, inspect attributes, and map C# types to Parquet `DataField`s.
-2. **Dynamic Value Dereferencing**: Reading and writing property values requires invoking `PropertyInfo.GetValue` and `PropertyInfo.SetValue`, resulting in boxing overhead for primitive types (`int`, `double`, `DateTime`, etc.).
-3. **Array Allocations & Transposition**: High-throughput Parquet storage relies on column-oriented batching. Converting a row-oriented collection (`List<T>`) into column arrays via reflection causes significant GC pressure and CPU cache misses.
-4. **Native AOT & Trimming Incompatibility**: Reflection-heavy serialization breaks when compiling applications with `PublishAot=true` or trimming enabled in .NET 8/9+, as the linker cannot statically trace dynamic property access.
+For the high-level product motivation and design philosophy, see the [Vision & Design Tenets](../vision.md).
 
 ---
 
-## 2. The Solution: Compile-Time Code Generation
+## 1. Subsystem Architecture & Compilation Pipeline
 
-`Parquet.SourceGenerator` leverages Roslyn `IIncrementalGenerator` APIs to inspect annotated classes, records, and structs during compilation and generate dedicated serializer extensions:
+The source generator implements Roslyn's `IIncrementalGenerator` interface. The execution pipeline is divided into distinct, decoupled phases designed to maximize Roslyn incremental caching and minimize compilation churn:
 
-```text
-+-------------------+      Roslyn Incremental      +--------------------------------+
-| User POCO / Record| ---- Generator Pipeline ---> | Generated Extension Methods    |
-| [ParquetClass]    |                              | - Schema Discovery             |
-+-------------------+                              | - Column Batch Writer          |
-                                                   | - Fluent Column Batch Reader   |
-                                                   +--------------------------------+
+```mermaid
+flowchart TD
+    subgraph Syntax["1. Syntax Discovery"]
+        Src["C# Source Code"] --> SyntaxFilter["SyntaxValueProvider (Class / Record / Struct)"]
+    end
+
+    subgraph Parser["2. Semantic Parsing"]
+        SyntaxFilter --> TargetParser["TargetParser.GetTargetModel(...)"]
+        Semantic["SemanticModel & Symbols"] --> TargetParser
+        TargetParser --> Model["TargetClassModel (Value-Equatable Record)"]
+    end
+
+    subgraph Planning["3. Emission Planning"]
+        Model --> EmissionPlan["EmissionPlan.For(TargetClassModel)"]
+        EmissionPlan --> Columns["LeafColumns & Slot Allocations"]
+        EmissionPlan --> DefinitionLadder["Definition & Repetition Ladders"]
+    end
+
+    subgraph Emission["4. Component Emitters"]
+        EmissionPlan --> CodeEmitter["CodeEmitter / LegacyCodeEmitter"]
+        CodeEmitter --> SchemaComp["SchemaComponent"]
+        CodeEmitter --> BufferComp["BufferPoolComponent"]
+        CodeEmitter --> WriteComp["ColumnarBatchComponent"]
+        CodeEmitter --> ReadComp["ReadBuilderComponent"]
+        CodeEmitter --> CompoundComp["CompoundMapping"]
+    end
+
+    subgraph Output["5. Generated Output"]
+        CodeEmitter --> SourceOut["<Model>ParquetExtensions.g.cs"]
+    end
 ```
 
-### Key Benefits
-- **Zero Reflection at Runtime**: Property access and column array mapping are hardcoded by the compiler.
-- **Ultra-High Throughput**: Directly transposes primitive arrays between memory buffers and Parquet `DataColumn` instances.
-- **Minimal GC Allocations**: Eliminates object boxing and intermediate dynamic objects via progressive `ArrayPool.Shared` recycling.
-- **Native AOT & Trimmer Safe**: Fully deterministic compile-time C# code with zero dynamic code emission (`Reflection.Emit`).
-- **Compile-Time Diagnostics**: Emits Roslyn compiler errors and warnings (`PARQ001` to `PARQ016`, catalogued in [Compiler Diagnostics Reference](../reference/compiler-diagnostics.md)) if an unsupported type or invalid attribute configuration is used.
+### Stage 1: Syntax Discovery (`SyntaxValueProvider`)
+- The pipeline begins with a lightweight syntax filter checking for type declarations annotated with `[ParquetSerializable]` (or the legacy attribute `[ParquetClass]`).
+- No symbol resolution or type system binding occurs in this filter, keeping Roslyn syntax pass overhead negligible.
+
+### Stage 2: Semantic Parsing (`TargetParser`)
+- When an annotated type syntax node changes, `TargetParser` inspects the node using Roslyn's `SemanticModel`.
+- It validates attributes, properties, nested hierarchy depth, and types, producing a clean `TargetClassModel`.
+- **Value Equality Invariant**: Every model type (`TargetClassModel`, `PropertyModel`, etc.) is an immutable C# record implementing value equality. Roslyn uses `Equals` to skip downstream stages if code changes (such as method body edits) did not change the model shape.
+
+### Stage 3: Emission Planning (`EmissionPlan`)
+- Rather than recalculating column offsets, buffer slots, or repetition/definition level ladders dynamically across multiple emitters, an `EmissionPlan` is synthesized once per model.
+- The plan resolves:
+  - Column ordering and slot indices.
+  - Primitive vs Compound (nested structs and lists) column leaf chains.
+  - Definition level thresholds (`MaxDef`) and repetition level boundaries (`MaxRep`).
+  - Rental size expressions and buffer requirements.
+
+### Stage 4: Modular Code Emission (`CodeEmitter`)
+- The emitter translates the `EmissionPlan` into idiomatic, zero-allocation C# source code.
+- Emission is partitioned into focused, single-responsibility components:
+  - **`SchemaComponent`**: Emits static `ParquetSchema` and `DataField` definitions.
+  - **`BufferPoolComponent`**: Emits `ArrayPool.Shared` buffer rentals, slicing, and deterministic cleanup.
+  - **`ColumnarBatchComponent`**: Emits vectorized column batch writes and row-to-column transposition.
+  - **`ReadBuilderComponent`**: Emits the public fluent reader struct (`<Model>ParquetReader`) and terminal materializers (`ToArrayAsync`, `ToListAsync`, `AsBatchesAsync`).
+  - **`CompoundMapping`**: Emits nested struct flattening and multi-level list level-shredding (Dremel definition/repetition ladders).
 
 ---
 
-## 3. Core Design Tenets: The Member Test & Visibility Tiers
+## 2. Generator Assembly Topology
 
-To keep the durable public surface minimal while allowing deep internal optimizations, all API additions are governed by two foundational principles:
+The generator repository is structured into distinct projects separated by operational role and dependency constraints:
 
-### The Member Test
-Every candidate public member must pass one question:
+| Project | Target | Description | Dependencies |
+|:---|:---|:---|:---|
+| `Parquet.SourceGenerator.Attributes` | `netstandard2.0`, `net8.0` | Consumer-facing attributes (`[ParquetSerializable]`, `[ParquetColumn]`, etc.) | **Zero dependencies** |
+| `Parquet.SourceGenerator` | `netstandard2.0` (Analyzer) | Modern Roslyn incremental generator targeting **Parquet.Net 6.x** | Roslyn 4.8 / 4.12 analyzers |
+| `Parquet.SourceGenerator.Legacy` | `netstandard2.0` (Analyzer) | Legacy Roslyn incremental generator targeting **Parquet.Net 4.x** | Roslyn 4.8 / 4.12 analyzers |
+| `Parquet.SourceGenerator.ApiGates` | `netstandard2.0` (Analyzer) | Build-time Roslyn analyzer enforcing public surface and internal seam contracts | Roslyn analyzers |
 
-> **Does this member describe user intent, or an implementation strategy?**
+### Modern vs. Legacy Backends
 
-The stable surface answers user questions: How do I annotate a type? How do I read, stream, or filter rows? How do I write rows or columnar arrays? How do I configure codec and resource limits?
-
-It does not expose implementation strategies: which reader state type is active, which emitter slot a column occupies, which pooled array backs a batch, or which SIMD helper performs a transform. Implementation strategy stays internal.
-
-### Three Visibility Tiers
-
-| Tier | What Lives There | Governed By |
-|:---|:---|:---|
-| **Stable Public Contract** | Attributes, `ParquetSerializerOptions`, core read/write entry points, and `<Model>Batch` with borrowed lifetime semantics | Derived `*.api.txt` review, `PublicAPI.*.txt`, [API Ledger](../api/LEDGER.md) |
-| **Internal Generated Capability** | Generated into consumer assemblies but not exported: low-level row-group writers, conversion helpers, pruning instrumentation | Golden `.g.cs` review diffs |
-| **Repository Implementation Detail** | Parser models, emitters, planning types, SIMD helpers, test adapters, benchmark helpers | `internal` + `InternalsVisibleTo` |
+- **Modern Generator (`Parquet.SourceGenerator`)**:
+  - Targets `Parquet.Net 6.x` APIs (`ParquetRowGroupWriter.WriteColumnAsync`, `ParquetRowGroupReader.ReadColumnAsync`).
+  - Emits packed definition-level ladders for compound structs and lists.
+  - Generates unified batch reader/writer pipelines and fluent builder interfaces.
+- **Legacy Generator (`Parquet.SourceGenerator.Legacy`)**:
+  - Targets `Parquet.Net 4.x` APIs with flat-aligned arrays.
+  - Maintains source compatibility for enterprise ecosystems pinned to older Parquet runtimes.
+  - Shares core parser models and component infrastructure, but targets legacy row-group APIs.
 
 ---
 
-## 4. Architecture Pipeline Overview
+## 3. Memory & Buffer Recycling Architecture
 
-```text
-Syntax/Symbol Discovery
-        ↓
-TargetParser (SyntaxProvider, equatable models)
-        ↓
-Backend-Neutral Compile-Time Model (internal)
-        ↓
-EmissionPlan (computed once per model)
-        ↓
-Capability-Focused Emitters
-        ↓
-Generated Source (*.g.cs)
-```
+Minimizing garbage collection pressure in high-volume columnar data pipelines requires strict zero-allocation discipline:
 
-- Parser outputs are value-equatable for Roslyn caching.
-- `EmissionPlan` is computed once per model, not reconstructed inside emitter templates.
-- Modern and legacy backends share common planning models while targeting specialized column I/O engines.
-- For complete pipeline details, see [Roslyn Pipeline Architecture](roslyn-pipeline.md).
+1. **`ArrayPool<T>.Shared` Recycling**: Column buffers for primitive types are rented from the shared array pool prior to reading or writing a row group.
+2. **Eager Buffer Return**: Once a column chunk is written via `WriteColumnAsync`, its buffer is immediately returned to `ArrayPool.Shared` rather than holding it open until row-group completion.
+3. **Unboxed Memory Slices**: Strings and binary payloads utilize `ReadOnlyMemory<char>` and `ReadOnlyMemory<byte>` slices to prevent heap strings during column transposition.
+4. **Borrowed Batches**: `<Model>Batch` exposes borrowed memory spans backed by rented buffers, giving consumers zero-allocation row access when processing streaming Parquet data.
+
+Detailed memory triage, allocation bounds, and benchmarking protocols are documented in [Memory and Performance](memory-and-performance.md).
+
+---
+
+## 4. Visibility Boundaries & Governance
+
+To prevent API sprawl and preserve internal agility, the system enforces three strict visibility tiers:
+
+1. **Stable Public Contract**:
+   - Includes user-facing attributes, `ParquetSerializerOptions`, and top-level entry points (`<Model>Parquet`).
+   - Any additions or breaking changes require an approved entry in [`docs/api/LEDGER.md`](../api/LEDGER.md) and PR review diff verification.
+2. **Internal Generated Capability**:
+   - Low-level row-group readers/writers and schema resolvers are emitted as `internal static` methods in consumer assemblies.
+   - Consumers cannot call or rely on these directly, permitting internal emitter optimization across releases without breaking consumer code.
+3. **Repository Implementation Details**:
+   - Internal generator types, AST nodes, and emitters are strictly internal to the generator assemblies.
+   - Governed by build gate `PARQAPI002` which prevents widening members without registration in `src/api/seams.txt`.
+
+For the full governance contract and catalogue signature grammar, see [API Governance](api-governance.md).

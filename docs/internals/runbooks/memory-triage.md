@@ -1,4 +1,4 @@
-# 09 - Performance & Memory Triage with dotnet-dump
+# Performance & Memory Triage with dotnet-dump
 
 This guide explains the runtime memory diagnostic and dump triage workflow in **Parquet.SourceGenerator** using `dotnet-dump` and SOS commands.
 
@@ -6,7 +6,7 @@ This guide explains the runtime memory diagnostic and dump triage workflow in **
 
 ## 🎯 Motivation
 
-While [BenchmarkDotNet](./05-TESTING-STRATEGY-AND-BENCHMARKS.md) measures elapsed execution time and total allocated bytes per operation, it does not reveal:
+While [BenchmarkDotNet](../../reference/benchmarks.md) measures elapsed execution time and total allocated bytes per operation, it does not reveal:
 1. **Live Managed Heap Topography**: Which objects survive Gen 0 collections and accumulate into Gen 1/Gen 2.
 2. **Buffer Pool Leaks & Anchored References**: Verifying that `ArrayPool<T>` buckets and string deduplicators (`StringDeduplicator`) return rented buffers and do not anchor large byte/char arrays.
 3. **Large Object Heap (LOH) & Pinned Object Heap (POH) Fragmentation**: Identifying buffers exceeding 85,000 bytes or pinned spans that cause fragmentation and GC pauses under analytical workloads (e.g. 1M+ rows).
