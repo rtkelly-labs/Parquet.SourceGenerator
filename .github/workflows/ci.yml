@@ -715,20 +715,87 @@ jobs:
   # the gates in `derived` (emitted code compiles, call-graph rules, CodeMetricsConfig.txt) and
   # `generated-analysis` (analyzer findings in emitted code) block a merge exactly as the ones in
   # `test` do, while the jobs still run in parallel.
+  # The Legacy package exists for .NET Framework. The compile-only net472 step in `test` proves it
+  # builds and nothing about running it (#565); this job executes the consumer on a real .NET
+  # Framework runtime (windows-latest): write, read, compression, batching and schema evolution
+  # scenarios, the blocked-SynchronizationContext round trip, and a file hand-off with net8.0 in both
+  # directions. It is part of the `build` aggregate and has no path filter, so a change outside src/
+  # cannot skip it and then leave a required check satisfied by absence. It builds its own two
+  # packages because artifacts do not cross jobs without extra steps.
+  net472-consumer:
+    name: net472-consumer
+    runs-on: windows-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Pack the Attributes and Legacy packages
+        run: |
+          set -euo pipefail
+          dotnet pack src/Parquet.SourceGenerator.Attributes/Parquet.SourceGenerator.Attributes.csproj \
+            --configuration Release --output artifacts -p:Version=0.0.0-net472.1
+          dotnet pack src/Parquet.SourceGenerator.Legacy/Parquet.SourceGenerator.Legacy.csproj \
+            --configuration Release --output artifacts -p:Version=0.0.0-net472.1
+          ls artifacts
+
+      # Executed, not compiled: `dotnet run` starts the net472 executable on the .NET Framework
+      # runtime of the runner. A missing method, binding redirect or System.Memory version skew
+      # fails here and passed ci.yml's compile-only step.
+      - name: Run the Legacy consumer on .NET Framework 4.7.2
+        run: |
+          set -euo pipefail
+          dotnet run --project test/PackageConsumptionLegacy/PackageConsumptionLegacy.csproj \
+            --framework net472 --configuration Release \
+            -p:GeneratorPackageVersion=0.0.0-net472.1 \
+            -p:RestorePackagesPath="$RUNNER_TEMP/consumption-packages-legacy-net472"
+
+      # The same file format has to cross runtimes: written by .NET Framework and read on .NET 8,
+      # and the reverse. Each leg prints the producer so a mislabelled run is visible.
+      - name: Hand a file between .NET Framework 4.7.2 and .NET 8
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/net472-interop"
+          mkdir -p "$dir"
+          project=test/PackageConsumptionLegacy/PackageConsumptionLegacy.csproj
+          net472=(dotnet run --project "$project" --framework net472 --configuration Release
+            -p:GeneratorPackageVersion=0.0.0-net472.1
+            -p:RestorePackagesPath="$RUNNER_TEMP/consumption-packages-legacy-net472")
+          net8=(dotnet run --project "$project" --framework net8.0 --configuration Release
+            -p:GeneratorPackageVersion=0.0.0-net472.1
+            -p:RestorePackagesPath="$RUNNER_TEMP/consumption-packages-legacy-net8")
+
+          "${net472[@]}" -- --write-interop "$dir/net472.parquet"
+          "${net8[@]}" -- --read-interop "$dir/net472.parquet" classic/net472
+          "${net8[@]}" -- --write-interop "$dir/net8.parquet"
+          "${net472[@]}" -- --read-interop "$dir/net8.parquet" classic/net8.0
+
   build:
     name: build
     if: always()
-    needs: [test, derived, generated-analysis]
+    needs: [test, derived, generated-analysis, net472-consumer]
     runs-on: ubuntu-latest
     steps:
-      - name: Require test, derived and generated-analysis
+      - name: Require test, derived, generated-analysis and net472-consumer
         env:
           TEST_RESULT: ${{ needs.test.result }}
           DERIVED_RESULT: ${{ needs.derived.result }}
           ANALYSIS_RESULT: ${{ needs.generated-analysis.result }}
+          NET472_RESULT: ${{ needs.net472-consumer.result }}
         run: |
-          echo "test: $TEST_RESULT, derived: $DERIVED_RESULT, generated-analysis: $ANALYSIS_RESULT"
-          if [ "$TEST_RESULT" != "success" ] || [ "$DERIVED_RESULT" != "success" ] || [ "$ANALYSIS_RESULT" != "success" ]; then
-            echo "::error::Required jobs did not all succeed (test=$TEST_RESULT, derived=$DERIVED_RESULT, generated-analysis=$ANALYSIS_RESULT)."
+          echo "test: $TEST_RESULT, derived: $DERIVED_RESULT, generated-analysis: $ANALYSIS_RESULT, net472-consumer: $NET472_RESULT"
+          if [ "$TEST_RESULT" != "success" ] || [ "$DERIVED_RESULT" != "success" ] || [ "$ANALYSIS_RESULT" != "success" ] || [ "$NET472_RESULT" != "success" ]; then
+            echo "::error::Required jobs did not all succeed (test=$TEST_RESULT, derived=$DERIVED_RESULT, generated-analysis=$ANALYSIS_RESULT, net472-consumer=$NET472_RESULT)."
             exit 1
           fi
