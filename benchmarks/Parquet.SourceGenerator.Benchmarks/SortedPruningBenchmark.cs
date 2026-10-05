@@ -109,12 +109,11 @@ public class SortedPruningBenchmark
     [Benchmark]
     public async Task<int> PrunedPointLookup()
     {
-        List<SortedSeriesEvent> found =
-            await SortedSeriesEventParquetExtensions.ReadParquetBySequenceNumberAsync(
-                Open(),
-                _pointKey
-            );
-        return found.Count;
+        SortedSeriesEvent[] found = await SortedSeriesEventParquet
+            .From(Open())
+            .Where(m => m.SequenceNumber.MayContain(_pointKey))
+            .ToArrayAsync();
+        return found.Count(r => r.SequenceNumber == _pointKey);
     }
 
     [Benchmark]
@@ -127,32 +126,34 @@ public class SortedPruningBenchmark
     [Benchmark]
     public async Task<int> PrunedRangeSlice()
     {
-        List<SortedSeriesEvent> slice =
-            await SortedSeriesEventParquetExtensions.ReadParquetSequenceNumberRangeAsync(
-                Open(),
-                _rangeStart,
-                _rangeEnd
-            );
-        return slice.Count;
+        SortedSeriesEvent[] slice = await SortedSeriesEventParquet
+            .From(Open())
+            .Where(m => m.SequenceNumber.MayContainBetween(_rangeStart, _rangeEnd))
+            .ToArrayAsync();
+        return slice.Count(r => r.SequenceNumber >= _rangeStart && r.SequenceNumber <= _rangeEnd);
     }
 
     /// <summary>
-    /// Isolates the metadata half of the work: how long the sortedness certification plus the
-    /// two binary searches take, with no column data decompressed at all. This is the figure
-    /// the "sub-millisecond record location" acceptance criterion is about.
+    /// Isolates the metadata half of the work: how long footer statistics evaluation takes
+    /// with no column data decompressed at all.
     /// </summary>
     [Benchmark]
     public async Task<int> PruneMetadataOnly()
     {
-        var pruning = new ParquetPruneStatistics();
-        // An out-of-range key: pruning selects zero row groups, so nothing is decompressed and
-        // the measurement is the footer search on its own.
-        await SortedSeriesEventParquetExtensions.ReadParquetBySequenceNumberAsync(
-            Open(),
-            long.MaxValue,
-            pruning
-        );
-        return pruning.RowGroupsPruned;
+        int pruned = 0;
+        await SortedSeriesEventParquet
+            .From(Open())
+            .Where(m =>
+            {
+                bool match = m.SequenceNumber.MayContain(long.MaxValue);
+                if (!match)
+                {
+                    pruned++;
+                }
+                return match;
+            })
+            .ToArrayAsync();
+        return pruned;
     }
 
     /// <summary>

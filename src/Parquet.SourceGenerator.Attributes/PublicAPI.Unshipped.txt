@@ -31,22 +31,6 @@ Parquet.SourceGenerator.ParquetSerializerOptions.MaxRowGroupCount.get -> int
 Parquet.SourceGenerator.ParquetSerializerOptions.MaxRowGroupCount.set -> void
 Parquet.SourceGenerator.ParquetSerializerOptions.MaxStringLengthBytes.get -> int
 Parquet.SourceGenerator.ParquetSerializerOptions.MaxStringLengthBytes.set -> void
-Parquet.SourceGenerator.ParquetPruneStatistics
-Parquet.SourceGenerator.ParquetPruneStatistics.ParquetPruneStatistics() -> void
-Parquet.SourceGenerator.ParquetPruneStatistics.FirstRowGroupRead.get -> int
-Parquet.SourceGenerator.ParquetPruneStatistics.FirstRowGroupRead.set -> void
-Parquet.SourceGenerator.ParquetPruneStatistics.LastRowGroupRead.get -> int
-Parquet.SourceGenerator.ParquetPruneStatistics.LastRowGroupRead.set -> void
-Parquet.SourceGenerator.ParquetPruneStatistics.Reset() -> void
-Parquet.SourceGenerator.ParquetPruneStatistics.RowGroupCount.get -> int
-Parquet.SourceGenerator.ParquetPruneStatistics.RowGroupCount.set -> void
-Parquet.SourceGenerator.ParquetPruneStatistics.RowGroupsPruned.get -> int
-Parquet.SourceGenerator.ParquetPruneStatistics.RowGroupsScanned.get -> int
-Parquet.SourceGenerator.ParquetPruneStatistics.RowGroupsScanned.set -> void
-Parquet.SourceGenerator.ParquetPruneStatistics.SortedColumnDetected.get -> bool
-Parquet.SourceGenerator.ParquetPruneStatistics.SortedColumnDetected.set -> void
-Parquet.SourceGenerator.ParquetPruneStatistics.StrictlyMonotonic.get -> bool
-Parquet.SourceGenerator.ParquetPruneStatistics.StrictlyMonotonic.set -> void
 Parquet.SourceGenerator.ParquetSortKeyAttribute
 Parquet.SourceGenerator.ParquetSortKeyAttribute.ParquetSortKeyAttribute() -> void
 Parquet.SourceGenerator.ParquetColumnStatistics

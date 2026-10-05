@@ -27,7 +27,9 @@ the migration list; each row's detail is in the entries below and in `docs/api/L
 | `<Model>ColumnarBatch` (write) and `ColumnBatch` (read, `x.AmountSpan`) | one `<Model>Batch` (`x.Amount.Span`; nullable columns are packed values plus definition levels) | #508, #576 |
 | row-group writers and columnar helpers, `RowGroupMetadata` constructor | internal | #481, #459 |
 | `Parquet.SourceGenerator.V5` (package id) | `Parquet.SourceGenerator.Legacy`; the classic generator keeps its flat reads | #494 |
-| sorted-key reads, `ParquetPruneStatistics`, public `Schema`, `ParquetColumnStatistics` constructor and `FromRaw` | **pending** (#584, #585, #586) | |
+| `ReadParquetBy<Key>Async`, `ReadParquet<Key>RangeAsync`, `ParquetPruneStatistics` | `<Model>Parquet.From(stream).Where(m => m.<Key>.MayContain(...))` and `MayContainBetween(...)`; `ParquetPruneStatistics` internalized | #584 |
+| `ParquetColumnStatistics<T>` constructor and `FromRaw` | Hidden with `[EditorBrowsable(Never)]` | #586 |
+| `<Model>ParquetExtensions.Schema` | Internalized; backend-specific `ParquetSchema` hidden from consumer surface | #585 |
 | `WriteParquetBatchedAsync` | **pending** (fold, rename or keep: #512) | |
 | `ParquetGeneratorFeatureLevel` and `ParquetGeneratorOptionsAttribute` | Removed; use `<ParquetGeneratorFlatOnly>true</ParquetGeneratorFlatOnly>` in MSBuild if flat-only behavior is required | #587 |
 | legacy backend parity (nested, Arrow, batches) and its migration table | **pending** (#604) | |
