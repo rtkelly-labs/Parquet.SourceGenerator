@@ -8,7 +8,7 @@ using System.Text;
 // -----------------------------------------------------------------------------
 // CheckApiLedger.cs
 //
-// The CI half of the API change contract (docs/18-API-CHANGE-CONTRACT.md). Two rules, both of
+// The CI half of the API change contract (docs/architecture/api-governance.md). Two rules, both of
 // which need a diff and therefore cannot live in an analyzer:
 //
 //   1. A pull request that ADDS a line to a governed catalogue must also ADD an entry to
@@ -239,7 +239,7 @@ if (addedLedgerEntries == 0)
     Console.Error.WriteLine("    - **Rationale:** why no existing member can express this.");
     Console.Error.WriteLine("    - **Alternatives considered:** what was rejected, and why.");
     Console.Error.WriteLine();
-    Console.Error.WriteLine("  The full contract is in docs/18-API-CHANGE-CONTRACT.md.");
+    Console.Error.WriteLine("  The full contract is in docs/architecture/api-governance.md.");
 }
 else
 {

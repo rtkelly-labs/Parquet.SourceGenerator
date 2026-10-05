@@ -48,7 +48,7 @@ public sealed class DiagnosticInfoPipelineTests
     {
         // The pipeline caches TargetParseSet and GeneratorConfiguration. Walking their field graph
         // is what catches the next Location or ISymbol that slips into a model, which no analyzer
-        // does (docs/44 section 5).
+        // does (docs/architecture/adrs/0001-generator-tooling-evaluation.md section 5).
         var offenders = new List<string>();
         var seen = new HashSet<Type>();
         Walk(typeof(TargetParseSet), "TargetParseSet", seen, offenders);

@@ -18,7 +18,7 @@ namespace Parquet.SourceGenerator.Tests;
 /// and publishes the emitted source plus its derived API files to
 /// <see cref="GoldenCorpus.OutputDirectory"/>. Nothing is compared against a checked-in copy: CI
 /// diffs the published output against the pull request's base and posts the diff for review
-/// (docs/17-GENERATED-API-BASELINES.md).
+/// (docs/architecture/api-governance.md).
 /// </summary>
 public sealed class GoldenCodeGenRegressionTests
 {

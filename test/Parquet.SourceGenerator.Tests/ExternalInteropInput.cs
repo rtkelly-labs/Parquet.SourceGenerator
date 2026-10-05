@@ -10,7 +10,7 @@ namespace Parquet.SourceGenerator.Tests;
 /// test fails instead: when <c>CI</c> is set (GitHub Actions sets <c>CI=true</c>), or when
 /// <c>PARQUET_REQUIRE_EXTERNAL_INTEROP</c> is <c>1</c> or <c>true</c> for a local run that wants
 /// the same strictness. Same stance as the coverage and IL gates, which fail when they examine
-/// nothing (docs/51-CI-GATE-MATRIX.md).
+/// nothing (docs/internals/ci-gate-matrix.md).
 /// </summary>
 internal static class ExternalInteropInput
 {

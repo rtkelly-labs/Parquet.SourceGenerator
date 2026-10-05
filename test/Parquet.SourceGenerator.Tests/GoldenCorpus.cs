@@ -31,7 +31,7 @@ internal sealed record GoldenEmission(
 /// against a checked-in copy: the code is the source of truth. Each emission is written to
 /// <see cref="OutputDirectory"/> as <c>Name.g.cs</c>, its signature-only API <c>Name.api.txt</c>
 /// and its shape summary <c>Name.api.shape.txt</c>, all from the same string. CI diffs that
-/// directory against the pull request's base and posts the result (docs/17-GENERATED-API-BASELINES.md).
+/// directory against the pull request's base and posts the result (docs/architecture/api-governance.md).
 /// </summary>
 internal static class GoldenCorpus
 {

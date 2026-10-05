@@ -4,7 +4,7 @@ namespace Parquet.SourceGenerator.ApiGates;
 
 /// <summary>
 /// The build-time API-contract rule. It is an error rather than a warning on purpose: the
-/// contract in <c>docs/18-API-CHANGE-CONTRACT.md</c> is that nothing enters a governed surface
+/// contract in <c>docs/architecture/api-governance.md</c> is that nothing enters a governed surface
 /// without appearing in a catalogue file, and a warning is something a build can carry.
 /// (<c>PARQAPI001</c>, the emitted-API gate over checked-in golden files, was retired when the
 /// golden output became a derived CI artifact; the ID is not reused.)
@@ -40,6 +40,6 @@ public static class ApiGateDiagnostics
         description: "Members widened past 'private' so another component can call them are the "
             + "repository's internal seams. They are catalogued in src/api/seams.txt using the same "
             + "one-per-line grammar as the emitted API baselines. See "
-            + "docs/18-API-CHANGE-CONTRACT.md."
+            + "docs/architecture/api-governance.md."
     );
 }

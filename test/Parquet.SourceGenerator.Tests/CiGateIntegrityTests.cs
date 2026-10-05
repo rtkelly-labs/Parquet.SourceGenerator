@@ -11,7 +11,7 @@ using IOFile = System.IO.File;
 namespace Parquet.SourceGenerator.Tests;
 
 /// <summary>
-/// Guards the wiring around the CI gates rather than any one gate (docs/51-CI-GATE-MATRIX.md):
+/// Guards the wiring around the CI gates rather than any one gate (docs/internals/ci-gate-matrix.md):
 /// the required check names, the aggregate that funnels the jobs into them, and the pin policy
 /// for third-party actions. A gate that is not reachable from a required check, or that runs
 /// code nobody pinned, protects nothing. Each repository test asserts it examined something, and

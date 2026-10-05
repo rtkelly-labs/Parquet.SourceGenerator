@@ -10,7 +10,7 @@ namespace Parquet.SourceGenerator.Emitter;
 /// <para>
 /// Reads used to encode source, shape and execution into method names, with pushdown appended as a
 /// parameter to some cells and not others. Naming a cross-product does not scale; expressing each
-/// axis as a member does. See <c>docs/19-PUBLIC-API-SURFACE.md</c>.
+/// axis as a member does. See <c>docs/guides/reading-parquet.md</c>.
 /// </para>
 /// <para>
 /// The first builder pass (#217) was <b>type-state</b>: four public structs (stream, memory,
@@ -18,7 +18,7 @@ namespace Parquet.SourceGenerator.Emitter;
 /// method-name cross-product and replaced it with a public state-type cross-product. #478 collapses
 /// the four into one public <c>readonly struct &lt;Model&gt;ParquetReader</c> whose state — source
 /// kind, options, predicate and the parallel flag — is private
-/// (<c>docs/47-0.1-CONTRACT-AND-DESIGN-GOALS.md</c> §4.2).
+/// (<c>docs/architecture/overview.md</c> §4.2).
 /// </para>
 /// <para>
 /// Combinations the separate types made unrepresentable are now callable, so each one has defined
@@ -350,7 +350,7 @@ internal static class ReadBuilderComponent
     /// <summary>
     /// Buffer + predicate + array. The buffer array core takes no predicate, so this routes through
     /// the streaming core that does and collects — the same rows by the same pruning — rather than
-    /// leaving the cell unavailable (defect 3 in docs/19). Unchanged from the #217 filtered source.
+    /// leaving the cell unavailable (defect 3 in docs/guides/reading-parquet.md). Unchanged from the #217 filtered source.
     /// </summary>
     private static void EmitCollectFilteredBuffer(
         StringBuilder builder,

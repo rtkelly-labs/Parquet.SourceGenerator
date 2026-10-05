@@ -13,7 +13,7 @@ namespace Parquet.SourceGenerator.Tests;
 /// Keeps the diagnostics reference and the release-tracking files in step with the descriptors
 /// (#428, #593). PARQ ids are consumer contract: users put them in <c>NoWarn</c> and
 /// <c>.editorconfig</c>. The build already fails (RS2000 series) when a descriptor is missing from
-/// the release files; nothing failed when docs/13 lacked a section, which is how PARQ012 to PARQ014
+/// the release files; nothing failed when compiler-diagnostics.md lacked a section, which is how PARQ012 to PARQ014
 /// went undocumented.
 /// </summary>
 public sealed class DiagnosticDocsAndReleaseTrackingTests
@@ -25,15 +25,18 @@ public sealed class DiagnosticDocsAndReleaseTrackingTests
     {
         string root = FindRepositoryRoot();
         string[] ids = DescriptorIds(root);
-        string doc = Read(root, "docs", "13-COMPILER-DIAGNOSTICS.md");
+        string doc = Read(root, "docs", "reference", "compiler-diagnostics.md");
 
         ids.Length.ShouldBeGreaterThanOrEqualTo(16, "the descriptor scan examined too few ids");
         foreach (string id in ids)
         {
-            doc.ShouldContain($"### {id}:", customMessage: $"docs/13 has no section for {id}");
+            doc.ShouldContain(
+                $"### {id}:",
+                customMessage: $"compiler-diagnostics.md has no section for {id}"
+            );
             doc.ShouldContain(
                 $"| **[`{id}`](#",
-                customMessage: $"docs/13 catalog has no row for {id}"
+                customMessage: $"compiler-diagnostics.md catalog has no row for {id}"
             );
         }
 
@@ -83,9 +86,9 @@ public sealed class DiagnosticDocsAndReleaseTrackingTests
         string root = FindRepositoryRoot();
         string[] files =
         [
-            Path.Combine(root, "docs", "01-VISION-AND-ARCHITECTURE.md"),
-            Path.Combine(root, "docs", "03-INCREMENTAL-GENERATOR-PIPELINE.md"),
-            Path.Combine(root, "docs", "13-COMPILER-DIAGNOSTICS.md"),
+            Path.Combine(root, "docs", "architecture", "overview.md"),
+            Path.Combine(root, "docs", "architecture", "roslyn-pipeline.md"),
+            Path.Combine(root, "docs", "reference", "compiler-diagnostics.md"),
             Path.Combine(root, "README.md"),
             Path.Combine(root, "PACKAGE_README.md"),
         ];
@@ -128,8 +131,8 @@ public sealed class DiagnosticDocsAndReleaseTrackingTests
         {
             if (
                 IOFile.Exists(
-                    Path.Combine(directory.FullName, "docs", "13-COMPILER-DIAGNOSTICS.md")
-                )
+                    Path.Combine(directory.FullName, "docs", "reference", "compiler-diagnostics.md")
+                ) || IOFile.Exists(Path.Combine(directory.FullName, "Parquet.SourceGenerator.slnx"))
             )
             {
                 return directory.FullName;
