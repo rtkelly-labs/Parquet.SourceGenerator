@@ -109,6 +109,18 @@ public sealed class CiGateIntegrityTests
     }
 
     [Fact]
+    public void TheRequiredSuiteEvidenceRunsInsideTheRequiredTestJob()
+    {
+        string ci = Read(FindRepositoryRoot(), ".github", "workflows", "ci.yml");
+        string test = JobBlock(ci, "test");
+
+        test.ShouldContain("ci-core.trx");
+        test.ShouldContain("ci-external.trx");
+        test.ShouldContain("Verify Required Test Execution");
+        test.ShouldContain("dotnet run scripts/VerifyRequiredTestExecution.cs");
+    }
+
+    [Fact]
     public void TheRequiredCheckNamesAreTheJobNamesBranchProtectionMatchesOn()
     {
         string root = FindRepositoryRoot();
