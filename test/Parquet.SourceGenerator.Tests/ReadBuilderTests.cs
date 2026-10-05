@@ -36,7 +36,7 @@ public sealed class ReadBuilderTests
     {
         using var stream = new MemoryStream();
         await Rows(count)
-            .WriteParquetBatchedAsync(
+            .WriteParquetAsync(
                 stream,
                 new ParquetSerializerOptions { RowGroupSize = RowsPerGroup }
             );

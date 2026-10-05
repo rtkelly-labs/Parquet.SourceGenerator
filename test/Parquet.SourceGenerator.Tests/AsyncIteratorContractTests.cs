@@ -30,10 +30,7 @@ public sealed class AsyncIteratorContractTests
             .Range(1, 5)
             .Select(i => new ColumnBatchOrder { OrderId = i, Region = "emea" })
             .ToList();
-        await rows.WriteParquetBatchedAsync(
-            stream,
-            new ParquetSerializerOptions { RowGroupSize = 2 }
-        );
+        await rows.WriteParquetAsync(stream, new ParquetSerializerOptions { RowGroupSize = 2 });
         stream.Position = 0;
         return stream;
     }

@@ -115,7 +115,7 @@ public sealed class NestedListRoundTripTests
             .ToList();
 
         var ms = new MemoryStream();
-        await rows.WriteParquetBatchedAsync(ms, new ParquetSerializerOptions { RowGroupSize = 7 });
+        await rows.WriteParquetAsync(ms, new ParquetSerializerOptions { RowGroupSize = 7 });
         ms.Position = 0;
         var back = await ListRowParquet.From(ms.ToArray()).Parallel().ToArrayAsync();
 
@@ -262,7 +262,7 @@ public sealed partial record ListRow
         }
 
         var ms = new MemoryStream();
-        await rows.WriteParquetBatchedAsync(ms, new ParquetSerializerOptions { RowGroupSize = 10 });
+        await rows.WriteParquetAsync(ms, new ParquetSerializerOptions { RowGroupSize = 10 });
         ms.Position = 0;
 
         var back = await TripRowParquet.From(ms.ToArray()).Parallel().ToArrayAsync();

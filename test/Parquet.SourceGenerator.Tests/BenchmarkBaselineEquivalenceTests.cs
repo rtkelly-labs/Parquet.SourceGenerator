@@ -62,7 +62,7 @@ public sealed class BenchmarkBaselineEquivalenceTests
             .ToList();
 
         using var stream = new MemoryStream();
-        await original.WriteParquetBatchedAsync(
+        await original.WriteParquetAsync(
             stream,
             new ParquetSerializerOptions { RowGroupSize = 20 }
         );
@@ -114,7 +114,7 @@ public sealed class BenchmarkBaselineEquivalenceTests
             .ToList();
 
         using var stream = new MemoryStream();
-        await original.WriteParquetBatchedAsync(
+        await original.WriteParquetAsync(
             stream,
             new ParquetSerializerOptions { RowGroupSize = 10 }
         );
@@ -162,10 +162,7 @@ public sealed class BenchmarkBaselineEquivalenceTests
             .ToList();
 
         using var ms = new MemoryStream();
-        await data.WriteParquetBatchedAsync(
-            ms,
-            new ParquetSerializerOptions { RowGroupSize = 2_000 }
-        );
+        await data.WriteParquetAsync(ms, new ParquetSerializerOptions { RowGroupSize = 2_000 });
         byte[] bytes = ms.ToArray();
 
         // Warmup

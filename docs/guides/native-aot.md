@@ -39,7 +39,7 @@ We measured cold single-shot execution across the complete `Parquet.SourceGenera
 ### Architectural Reasons for the 7.2× Acceleration
 
 1. **JIT Compilation Overhead Elimination**:
-   - `Parquet.SourceGenerator` emits ~15 specialized methods per model (`WriteParquetRowGroupAsync`, the parallel read core behind `From(buffer).Parallel()`, `WriteParquetBatchedAsync`, etc.).
+   - `Parquet.SourceGenerator` emits specialized methods per model (`WriteParquetRowGroupAsync`, the parallel read core behind `From(buffer).Parallel()`, `WriteParquetAsync`, etc.).
    - In CoreCLR, RyuJIT must compile every method from CIL bytecode into native machine code upon its first call. Compiling the serializer surface consumes **~280 ms of pure CPU time** before writing a single byte.
    - Under Native AOT, `ILCompiler` performs all code generation ahead of time at build time. The CPU begins executing native machine code within **2 milliseconds** of process launch.
 

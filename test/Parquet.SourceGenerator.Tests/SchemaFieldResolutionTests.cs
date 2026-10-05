@@ -112,10 +112,7 @@ public sealed class SchemaFieldResolutionTests
         }
 
         using var stream = new MemoryStream();
-        await written.WriteParquetBatchedAsync(
-            stream,
-            new ParquetSerializerOptions { RowGroupSize = 10 }
-        );
+        await written.WriteParquetAsync(stream, new ParquetSerializerOptions { RowGroupSize = 10 });
         stream.Position = 0;
 
         ReversedOrder[] read = await ReversedOrderParquet

@@ -30,7 +30,7 @@ the migration list; each row's detail is in the entries below and in `docs/api/L
 | `ReadParquetBy<Key>Async`, `ReadParquet<Key>RangeAsync`, `ParquetPruneStatistics` | `<Model>Parquet.From(stream).Where(m => m.<Key>.MayContain(...))` and `MayContainBetween(...)`; `ParquetPruneStatistics` internalized | #584 |
 | `ParquetColumnStatistics<T>` constructor and `FromRaw` | Hidden with `[EditorBrowsable(Never)]` | #586 |
 | `<Model>ParquetExtensions.Schema` | Internalized; backend-specific `ParquetSchema` hidden from consumer surface | #585 |
-| `WriteParquetBatchedAsync` | **pending** (fold, rename or keep: #512) | |
+| `WriteParquetBatchedAsync` | Folded into `WriteParquetAsync(stream, options)` (#512) | #512 |
 | `ParquetGeneratorFeatureLevel` and `ParquetGeneratorOptionsAttribute` | Removed; use `<ParquetGeneratorFlatOnly>true</ParquetGeneratorFlatOnly>` in MSBuild if flat-only behavior is required | #587 |
 | legacy backend parity (nested, Arrow, batches) and its migration table | **pending** (#604) | |
 | baseline: `PublicAPI.Unshipped.txt` promoted to `Shipped.txt` | **pending** (#592) | |

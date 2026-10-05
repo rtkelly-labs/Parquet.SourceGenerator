@@ -43,7 +43,7 @@ The documentation is organized into four distinct sections:
 
 3. **[Writing Parquet Guide](./guides/writing-parquet.md)**
    - Serializing in-memory collections, spans, and arrays (`WriteParquetAsync`).
-   - High-throughput chunked writes (`WriteParquetBatchedAsync`) and asynchronous stream feeds (`IAsyncEnumerable<T>`).
+   - High-throughput chunked writes (`WriteParquetAsync`) and asynchronous stream feeds (`IAsyncEnumerable<T>`).
    - Direct zero-allocation columnar batch writing (`<Model>Batch`) and row group compression tuning.
 
 4. **[Native AOT & Trimming Guide](./guides/native-aot.md)**

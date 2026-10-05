@@ -60,21 +60,15 @@ public sealed class ParserAndEmitterTests
     }
 
     [Fact]
-    public async Task WriteParquetBatchedAsyncInvalidRowGroupSizeThrowsArgumentOutOfRange()
+    public async Task WriteParquetAsyncInvalidRowGroupSizeThrowsArgumentOutOfRange()
     {
         var items = new List<TypeCoverageRecord> { new() };
         var stream = new MemoryStream();
         await Should.ThrowAsync<ArgumentOutOfRangeException>(() =>
-            items.WriteParquetBatchedAsync(
-                stream,
-                new ParquetSerializerOptions { RowGroupSize = 0 }
-            )
+            items.WriteParquetAsync(stream, new ParquetSerializerOptions { RowGroupSize = 0 })
         );
         await Should.ThrowAsync<ArgumentOutOfRangeException>(() =>
-            items.WriteParquetBatchedAsync(
-                stream,
-                new ParquetSerializerOptions { RowGroupSize = -10 }
-            )
+            items.WriteParquetAsync(stream, new ParquetSerializerOptions { RowGroupSize = -10 })
         );
     }
 

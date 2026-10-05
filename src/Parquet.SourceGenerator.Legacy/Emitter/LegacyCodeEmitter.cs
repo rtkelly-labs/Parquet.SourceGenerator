@@ -84,9 +84,6 @@ internal static class LegacyCodeEmitter
         EmitWriteAsync(builder, model);
         builder.AppendLine();
 
-        EmitWriteBatchedAsync(builder, model);
-        builder.AppendLine();
-
         EmitReadAsync(builder, model);
         builder.AppendLine();
 
@@ -610,56 +607,11 @@ internal static class LegacyCodeEmitter
     {
         builder.AppendLine("    /// <summary>");
         builder.AppendLine(
-            $"    /// Asynchronously serializes all <c>{model.ClassName}</c> items to stream using Parquet.Net v4/v5."
+            $"    /// Asynchronously serializes items into a Parquet file using the legacy backend."
         );
         builder.AppendLine("    /// </summary>");
         builder.AppendLine(
             "    public static async global::System.Threading.Tasks.Task WriteParquetAsync("
-        );
-        builder.AppendLine(
-            $"        this global::System.Collections.Generic.IReadOnlyList<{model.ClassName}> items,"
-        );
-        builder.AppendLine("        global::System.IO.Stream stream,");
-        builder.AppendLine(
-            "        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,"
-        );
-        builder.AppendLine(
-            "        global::System.Threading.CancellationToken cancellationToken = default)"
-        );
-        builder.AppendLine("    {");
-        AppendNullGuard(builder, "items");
-        AppendNullGuard(builder, "stream");
-        builder.AppendLine();
-        builder.AppendLine(
-            "        options ??= global::Parquet.SourceGenerator.ParquetSerializerOptions.Default;"
-        );
-        builder.AppendLine(
-            "        using (var writer = await global::Parquet.ParquetWriter.CreateAsync("
-        );
-        builder.AppendLine("            Schema,");
-        builder.AppendLine("            stream,");
-        builder.AppendLine("            BuildFormatOptions(),");
-        builder.AppendLine(
-            "            cancellationToken: cancellationToken).ConfigureAwait(false))"
-        );
-        builder.AppendLine("        {");
-        builder.AppendLine("            ApplyCompression(writer, options);");
-        builder.AppendLine(
-            "            await writer.WriteRowGroupAsync(items, cancellationToken).ConfigureAwait(false);"
-        );
-        builder.AppendLine("        }");
-        builder.AppendLine("    }");
-    }
-
-    private static void EmitWriteBatchedAsync(StringBuilder builder, TargetClassModel model)
-    {
-        builder.AppendLine("    /// <summary>");
-        builder.AppendLine(
-            $"    /// Asynchronously serializes items in fixed-size row group chunks."
-        );
-        builder.AppendLine("    /// </summary>");
-        builder.AppendLine(
-            "    public static async global::System.Threading.Tasks.Task WriteParquetBatchedAsync("
         );
         builder.AppendLine(
             $"        this global::System.Collections.Generic.IEnumerable<{model.ClassName}> items,"

@@ -123,7 +123,7 @@ using var stream = File.Create("events.parquet");
 await events.WriteParquetAsync(stream);
 
 // Chunked streaming write in fixed 10,000 row-group chunks
-await events.WriteParquetBatchedAsync(
+await events.WriteParquetAsync(
     stream,
     new ParquetSerializerOptions { RowGroupSize = 10_000 });
 
@@ -321,7 +321,7 @@ var options = new ParquetSerializerOptions
     CompressionLevel = ParquetCompressionLevel.Fastest
 };
 
-await events.WriteParquetBatchedAsync(stream, options: options);
+await events.WriteParquetAsync(stream, options: options);
 ```
 
 Supported codecs: `None`, `Snappy` (default), `Gzip`, `Lz4`, `Brotli`, and `Zstd`.

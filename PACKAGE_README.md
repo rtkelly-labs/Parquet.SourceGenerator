@@ -52,7 +52,7 @@ using var stream = File.Create("events.parquet");
 await events.WriteParquetAsync(stream);
 
 // Chunked row-group streaming write
-await events.WriteParquetBatchedAsync(
+await events.WriteParquetAsync(
     stream,
     new ParquetSerializerOptions { RowGroupSize = 10_000 });
 
@@ -98,7 +98,7 @@ var options = new ParquetSerializerOptions
     CompressionMethod = ParquetCompressionMethod.Zstd
 };
 
-await events.WriteParquetBatchedAsync(stream, options: options);
+await events.WriteParquetAsync(stream, options: options);
 ```
 
 Compression options: `None`, `Snappy` (default), `Gzip`, `Lz4`, `Brotli`, `Zstd`.

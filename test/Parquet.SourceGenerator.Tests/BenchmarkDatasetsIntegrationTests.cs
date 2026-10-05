@@ -288,7 +288,7 @@ public sealed class BenchmarkDatasetsIntegrationTests
         var original = await AdultCensusRecordParquet.From(stream).ToArrayAsync();
 
         using var outputStream = new MemoryStream();
-        await original.WriteParquetBatchedAsync(
+        await original.WriteParquetAsync(
             outputStream,
             new ParquetSerializerOptions { RowGroupSize = 5_000 }
         );

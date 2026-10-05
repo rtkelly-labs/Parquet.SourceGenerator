@@ -95,10 +95,6 @@ internal static class CodeEmitter
         EmitWriteAsync(builder, model);
         builder.AppendLine();
 
-        // Batched streaming write — splits IEnumerable into fixed-size row groups
-        EmitWriteBatchedAsync(builder, model);
-        builder.AppendLine();
-
         // IAsyncEnumerable streaming write
         EmitWriteAsyncEnumerable(builder, model);
         builder.AppendLine();
@@ -948,61 +944,11 @@ internal static class CodeEmitter
     {
         builder.AppendLine("    /// <summary>");
         builder.AppendLine(
-            $"    /// Asynchronously serializes all <c>{model.ClassName}</c> items using Parquet.Net low-level primitives."
+            $"    /// Asynchronously serializes all <c>{model.ClassName}</c> items into a Parquet file using Parquet.Net low-level primitives."
         );
         builder.AppendLine("    /// </summary>");
         builder.AppendLine(
             "    public static async global::System.Threading.Tasks.Task WriteParquetAsync("
-        );
-        builder.AppendLine(
-            $"        this global::System.Collections.Generic.IReadOnlyCollection<{EmittedText.Ident(model.ClassName)}> items,"
-        );
-        builder.AppendLine("        global::System.IO.Stream stream,");
-        builder.AppendLine(
-            "        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,"
-        );
-        builder.AppendLine(
-            "        global::System.Threading.CancellationToken cancellationToken = default)"
-        );
-        builder.AppendLine("    {");
-        builder.AppendLine("        global::System.ArgumentNullException.ThrowIfNull(items);");
-        builder.AppendLine("        global::System.ArgumentNullException.ThrowIfNull(stream);");
-        builder.AppendLine("        cancellationToken.ThrowIfCancellationRequested();");
-        builder.AppendLine();
-        builder.AppendLine(
-            "        options ??= global::Parquet.SourceGenerator.ParquetSerializerOptions.Default;"
-        );
-        builder.AppendLine();
-        builder.AppendLine("        var writer = await global::Parquet.ParquetWriter.CreateAsync(");
-        builder.AppendLine("            Schema,");
-        builder.AppendLine("            stream,");
-        builder.AppendLine("            BuildFormatOptions(options),");
-        builder.AppendLine(
-            "            cancellationToken: cancellationToken).ConfigureAwait(false);"
-        );
-        // try/finally instead of an `await using` scope: ConfigureAwait on an IAsyncDisposable needs ConfiguredAsyncDisposable, and these methods sit at the CA1506 ceiling.
-        builder.AppendLine("        try");
-        builder.AppendLine("        {");
-        builder.AppendLine(
-            "        await writer.WriteParquetRowGroupAsync(items, cancellationToken).ConfigureAwait(false);"
-        );
-        builder.AppendLine("        }");
-        builder.AppendLine("        finally");
-        builder.AppendLine("        {");
-        builder.AppendLine("            await writer.DisposeAsync().ConfigureAwait(false);");
-        builder.AppendLine("        }");
-        builder.AppendLine("    }");
-    }
-
-    private static void EmitWriteBatchedAsync(StringBuilder builder, TargetClassModel model)
-    {
-        builder.AppendLine("    /// <summary>");
-        builder.AppendLine(
-            $"    /// Streams <c>{model.ClassName}</c> items into a Parquet file in fixed-size row group batches using low-level primitives."
-        );
-        builder.AppendLine("    /// </summary>");
-        builder.AppendLine(
-            "    public static async global::System.Threading.Tasks.Task WriteParquetBatchedAsync("
         );
         builder.AppendLine(
             $"        this global::System.Collections.Generic.IEnumerable<{EmittedText.Ident(model.ClassName)}> items,"
@@ -1017,6 +963,7 @@ internal static class CodeEmitter
         builder.AppendLine("    {");
         builder.AppendLine("        global::System.ArgumentNullException.ThrowIfNull(items);");
         builder.AppendLine("        global::System.ArgumentNullException.ThrowIfNull(stream);");
+        builder.AppendLine("        cancellationToken.ThrowIfCancellationRequested();");
         EmitRowGroupSizeResolution(builder);
         builder.AppendLine();
         builder.AppendLine(
@@ -1036,9 +983,9 @@ internal static class CodeEmitter
         builder.AppendLine("            try");
         builder.AppendLine("            {");
         builder.AppendLine(
-            "            await singleWriter.WriteParquetRowGroupAsync(col, cancellationToken).ConfigureAwait(false);"
+            "                await singleWriter.WriteParquetRowGroupAsync(col, cancellationToken).ConfigureAwait(false);"
         );
-        builder.AppendLine("            return;");
+        builder.AppendLine("                return;");
         builder.AppendLine("            }");
         builder.AppendLine("            finally");
         builder.AppendLine("            {");
@@ -1059,23 +1006,23 @@ internal static class CodeEmitter
         builder.AppendLine("        try");
         builder.AppendLine("        {");
         builder.AppendLine(
-            $"        var buffer = new global::System.Collections.Generic.List<{EmittedText.Ident(model.ClassName)}>(targetChunkSize);"
+            $"            var buffer = new global::System.Collections.Generic.List<{EmittedText.Ident(model.ClassName)}>(targetChunkSize);"
         );
-        builder.AppendLine("        foreach (var item in items)");
-        builder.AppendLine("        {");
-        builder.AppendLine("            cancellationToken.ThrowIfCancellationRequested();");
-        builder.AppendLine("            buffer.Add(item);");
-        builder.AppendLine("            if (buffer.Count == targetChunkSize)");
+        builder.AppendLine("            foreach (var item in items)");
         builder.AppendLine("            {");
+        builder.AppendLine("                cancellationToken.ThrowIfCancellationRequested();");
+        builder.AppendLine("                buffer.Add(item);");
+        builder.AppendLine("                if (buffer.Count == targetChunkSize)");
+        builder.AppendLine("                {");
+        builder.AppendLine(
+            "                    await writer.WriteParquetRowGroupAsync(buffer, cancellationToken).ConfigureAwait(false);"
+        );
+        builder.AppendLine("                    buffer.Clear();");
+        builder.AppendLine("                }");
+        builder.AppendLine("            }");
+        builder.AppendLine("            if (buffer.Count > 0)");
         builder.AppendLine(
             "                await writer.WriteParquetRowGroupAsync(buffer, cancellationToken).ConfigureAwait(false);"
-        );
-        builder.AppendLine("                buffer.Clear();");
-        builder.AppendLine("            }");
-        builder.AppendLine("        }");
-        builder.AppendLine("        if (buffer.Count > 0)");
-        builder.AppendLine(
-            "            await writer.WriteParquetRowGroupAsync(buffer, cancellationToken).ConfigureAwait(false);"
         );
         builder.AppendLine("        }");
         builder.AppendLine("        finally");

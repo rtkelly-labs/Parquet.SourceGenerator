@@ -51,7 +51,7 @@ public sealed class ParallelReadTests
             .ToList();
 
         using var stream = new MemoryStream();
-        await rows.WriteParquetBatchedAsync(
+        await rows.WriteParquetAsync(
             stream,
             new ParquetSerializerOptions { RowGroupSize = rowGroupSize }
         );

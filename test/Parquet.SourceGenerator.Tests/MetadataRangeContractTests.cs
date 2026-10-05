@@ -114,10 +114,7 @@ public sealed class MetadataRangeContractTests
             })
             .ToList();
         using var stream = new MemoryStream();
-        await events.WriteParquetBatchedAsync(
-            stream,
-            new ParquetSerializerOptions { RowGroupSize = 100 }
-        );
+        await events.WriteParquetAsync(stream, new ParquetSerializerOptions { RowGroupSize = 100 });
         byte[] huge = await WithHugeRowCountAsync(stream.ToArray(), 1);
 
         await Should.ThrowAsync<InvalidDataException>(() =>

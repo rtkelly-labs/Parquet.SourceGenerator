@@ -282,7 +282,7 @@ public sealed class GeneratedTypeMatrixTests
     )
     {
         using var stream = new MemoryStream();
-        await ((IEnumerable<GeneratedTypeMatrixRecord>)rows).WriteParquetBatchedAsync(
+        await ((IEnumerable<GeneratedTypeMatrixRecord>)rows).WriteParquetAsync(
             stream,
             new ParquetSerializerOptions
             {
@@ -300,7 +300,7 @@ public sealed class GeneratedTypeMatrixTests
     )
     {
         using var stream = new MemoryStream();
-        await ((IEnumerable<NullableGeneratedTypeMatrixRecord>)rows).WriteParquetBatchedAsync(
+        await ((IEnumerable<NullableGeneratedTypeMatrixRecord>)rows).WriteParquetAsync(
             stream,
             new ParquetSerializerOptions
             {

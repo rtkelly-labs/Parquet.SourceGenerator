@@ -146,7 +146,7 @@ public sealed class TypeCoverageTests
         };
 
         var stream = new MemoryStream();
-        await items.WriteParquetBatchedAsync(stream, options: options);
+        await items.WriteParquetAsync(stream, options: options);
         stream.Position = 0;
 
         var result = await TypeCoverageRecordParquet
@@ -280,7 +280,7 @@ public sealed class TypeCoverageTests
 
         var stream = new MemoryStream();
         // Write in 3 row groups (rowGroupSize=333 → 3 groups + tail)
-        await ((IEnumerable<TypeCoverageRecord>)items).WriteParquetBatchedAsync(
+        await ((IEnumerable<TypeCoverageRecord>)items).WriteParquetAsync(
             stream,
             new ParquetSerializerOptions { RowGroupSize = 333 }
         );
@@ -300,7 +300,7 @@ public sealed class TypeCoverageTests
         var items = TestFakers.CreateTypeCoverageRecordFaker().Generate(1_000);
 
         var stream = new MemoryStream();
-        await ((IEnumerable<TypeCoverageRecord>)items).WriteParquetBatchedAsync(
+        await ((IEnumerable<TypeCoverageRecord>)items).WriteParquetAsync(
             stream,
             new ParquetSerializerOptions { RowGroupSize = 250 }
         );
