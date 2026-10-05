@@ -119,11 +119,6 @@ jobs:
           # Workaround for dotnet/sdk #53783: cold tool-resolver cache can misattribute package commands on initial restore
           dotnet tool restore --disable-parallel || dotnet tool restore --disable-parallel
 
-      - name: Show required-suite formatter diff (temporary)
-        run: |
-          dotnet csharpier format scripts/VerifyRequiredTestExecution.cs
-          git diff -- scripts/VerifyRequiredTestExecution.cs
-
       - name: Verify C# Code Formatting (CSharpier)
         run: dotnet csharpier check .
 
