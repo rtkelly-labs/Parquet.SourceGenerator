@@ -229,13 +229,16 @@ jobs:
           # The version/schema-evolution matrix writes its per-cell record here so the run leaves
           # behind a compatibility report, not just a pass/fail.
           PARQUET_COMPAT_MATRIX_OUTPUT: ${{ runner.temp }}/parquet-source-generator/compatibility-matrix
-        run: dotnet test Parquet.SourceGenerator.slnx --configuration Release --no-build --filter "Category!=DatasetIntegrity&Category!=ExternalInterop" --verbosity normal --collect:"XPlat Code Coverage" --settings coverlet.runsettings
+        run: dotnet test Parquet.SourceGenerator.slnx --configuration Release --no-build --filter "Category!=DatasetIntegrity&Category!=ExternalInterop" --verbosity normal --collect:"XPlat Code Coverage" --settings coverlet.runsettings --logger "trx;LogFileName=ci-core.trx"
 
       - name: Verify Generated Reader With PyArrow Fixture
         env:
           PARQUET_PYARROW_INTEROP_INPUT: ${{ runner.temp }}/parquet-source-generator/data/pyarrow_interop_input.parquet
           DUCKDB_INTEROP_INPUT: ${{ runner.temp }}/parquet-source-generator/generated-duckdb.parquet
-        run: dotnet test Parquet.SourceGenerator.slnx --configuration Release --no-build --filter "Category=ExternalInterop" --verbosity normal
+        run: dotnet test Parquet.SourceGenerator.slnx --configuration Release --no-build --filter "Category=ExternalInterop" --verbosity normal --logger "trx;LogFileName=ci-external.trx"
+
+      - name: Verify Required Test Execution
+        run: dotnet run scripts/VerifyRequiredTestExecution.cs
 
       - name: Generate Code Coverage Summary & Evaluate Gate
         run: |
