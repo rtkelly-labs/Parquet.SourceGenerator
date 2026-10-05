@@ -139,10 +139,11 @@ data) but cannot remove the per-row `char[]` that Parquet.Net allocates undernea
 
 The upstream API that would close the gap is a `ReadRawAsync<ReadOnlyMemory<byte>>` (or a
 `ReadUtf8Async(DataField, Memory<ReadOnlyMemory<byte>>, …)`) that hands out slices of a single
-pooled page buffer. `Utf8StringDeduplicator` in
-`test/Parquet.SourceGenerator.Tests/Utf8StringDeduplicatorPrototypeTests.cs` is a tested prototype
-of the byte-keyed table that would sit behind it; it is deliberately not wired into the generated
-reader, because feeding it would require round-tripping through `string` and defeat the purpose.
+pooled page buffer. A byte-keyed `Utf8StringDeduplicator` prototype is preserved in
+[Git history](https://github.com/rtkelly-labs/Parquet.SourceGenerator/blob/898a9ed0d31eedba7262b83d05530bc19432b07b/test/Parquet.SourceGenerator.Tests/Utf8StringDeduplicatorPrototypeTests.cs).
+Its tests were removed from the required suite in #614 because the generated reader never used
+it: feeding it would require round-tripping through `string` and defeat the purpose. An upstream
+byte-level API would enable integration and behavioural tests of the emitted reader.
 ## Parquet.Net 6.1.0 Column Decode Always Allocates
 
 `ParquetRowGroupReader.ReadAsync` and `ReadRawAsync<T>` both decode a column chunk into an
