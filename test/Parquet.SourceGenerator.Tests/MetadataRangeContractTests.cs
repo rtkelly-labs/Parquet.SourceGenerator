@@ -121,11 +121,10 @@ public sealed class MetadataRangeContractTests
         byte[] huge = await WithHugeRowCountAsync(stream.ToArray(), 1);
 
         await Should.ThrowAsync<InvalidDataException>(() =>
-            SortedEventParquetExtensions.ReadParquetSequenceNumberRangeAsync(
-                new MemoryStream(huge),
-                0,
-                299
-            )
+            SortedEventParquet
+                .From(new MemoryStream(huge))
+                .Where(m => m.SequenceNumber.MayContainBetween(0, 299))
+                .ToArrayAsync()
         );
     }
 

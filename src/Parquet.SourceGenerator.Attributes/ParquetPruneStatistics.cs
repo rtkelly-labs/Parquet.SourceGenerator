@@ -3,22 +3,15 @@ using System.Diagnostics.CodeAnalysis;
 namespace Parquet.SourceGenerator;
 
 /// <summary>
-/// Diagnostics recorded by the generated sorted-column lookup overloads
-/// (<c>ReadParquetBy&lt;Column&gt;Async</c> / <c>ReadParquet&lt;Column&gt;RangeAsync</c>).
-/// <para>
-/// Pass an instance to a lookup call to learn whether the file's row-group
-/// <c>[Min, Max]</c> statistics certified the key column as sorted, and how many row
-/// groups actually had to be decompressed. Nothing on the read path depends on it —
-/// it exists so callers, tests and benchmarks can prove that pruning happened rather
-/// than infer it from wall-clock time.
-/// </para>
+/// Internal diagnostics for sorted-column row-group pruning (issue #584).
+/// Superseded by row-group predicate pushdown via <c>Where</c>.
 /// </summary>
 [SuppressMessage(
     "Design",
     "CA1044:Properties should not be write only",
     Justification = "All members are read/write; generated code populates them."
 )]
-public sealed class ParquetPruneStatistics
+internal sealed class ParquetPruneStatistics
 {
     /// <summary>Total row groups present in the file.</summary>
     public int RowGroupCount { get; set; }

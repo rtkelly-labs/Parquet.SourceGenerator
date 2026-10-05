@@ -16,6 +16,25 @@ The rule, the three surfaces and the author process are in
 
 <!-- Add new entries directly below this line, newest first. -->
 
+### 2026-10-05 — Internalize sorted-key reads and `ParquetPruneStatistics`, express key lookups through `Where` (#584)
+
+- **Surface:** unshipped
+- **Semver:** breaking-major
+- **Issue:** [#584](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/584), part of tracker
+  [#477](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/477)
+- **Change:** `ParquetPruneStatistics` changed from `public` to `internal` (removing 16 entries from
+  `PublicAPI.Unshipped.txt`). `ReadParquetBy{Key}Async` and `ReadParquet{Key}RangeAsync` emitted on
+  `<Model>ParquetExtensions` are removed. Key point-lookups and range queries are expressed using the
+  fluent `<Model>Parquet.From(...).Where(meta => meta.<Key>.MayContain(...))` and `MayContainBetween(...)`
+  grammar.
+- **Rationale:** The emitted `ReadParquetBy*` and `ReadParquet*RangeAsync` methods were the last remaining
+  `Stream`-only and `List<T>`-returning reads, taking custom statistics parameters where the rest of the
+  read surface accepts options and tokens. Row-group zone-map pushdown is already uniformly available via
+  `.Where(...)` over `<Model>RowGroupMetadata` using `MayContain*` helpers, which operates over the footer
+  statistics without decompressing skipped row groups. Internalizing `ParquetPruneStatistics` and removing
+  the sorted read overloads contracts the public API surface (-16 package API lines, -4 emitted members per
+  sorted model) while unifying all row-group filtering under the fluent reader.
+
 ### 2026-10-05 — Collapse `ParquetGeneratorFeatureLevel` and `ParquetGeneratorOptionsAttribute` to `ParquetGeneratorFlatOnly` (#587)
 
 - **Surface:** unshipped

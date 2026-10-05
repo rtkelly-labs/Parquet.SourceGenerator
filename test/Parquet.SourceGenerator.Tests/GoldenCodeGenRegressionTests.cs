@@ -134,20 +134,21 @@ public sealed class GoldenCodeGenRegressionTests
         generated.ShouldContain("ParquetColumnStatistics<int> WeightGrams { get; }");
         generated.ShouldContain("ParquetColumnStatistics<string> Carrier { get; }");
 
-        // Sorted-lookup surface, one pair per key column, over the shared core.
-        generated.ShouldContain("bool TryPruneSortedRowGroups<");
-        generated.ShouldContain("ReadPrunedRangeAsync<");
-        generated.ShouldContain("ReadParquetBySequenceAsync(");
-        generated.ShouldContain("ReadParquetByShippedAtAsync(");
+        // No sorted-lookup overloads are emitted; key lookups express through Where (#584).
+        generated.ShouldNotContain("TryPruneSortedRowGroups");
+        generated.ShouldNotContain("ReadPrunedRangeAsync");
+        generated.ShouldNotContain("ReadParquetBySequenceAsync");
+        generated.ShouldNotContain("ReadParquetByShippedAtAsync");
+        generated.ShouldNotContain("ReadParquetSequenceRangeAsync");
+        generated.ShouldNotContain("ReadParquetShippedAtRangeAsync");
+        generated.ShouldNotContain("ReadParquetByCarrierAsync", Case.Sensitive);
 
-        // Eligibility boundaries held where they should: a DateTime key is searched but
-        // never projected; a string is projected but can never be searched. Output that
-        // starts disagreeing with this is a silent API-surface move.
+        // Eligibility boundaries held where they should: DateTime is not projected into zone map;
+        // string is projected into zone map.
         generated.ShouldNotContain(
             "ParquetColumnStatistics<System.DateTime> ShippedAt",
             Case.Sensitive
         );
-        generated.ShouldNotContain("ReadParquetByCarrierAsync(", Case.Sensitive);
     }
 
     [Fact]

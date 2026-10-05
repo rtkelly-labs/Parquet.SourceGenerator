@@ -43,15 +43,14 @@ public sealed class PrunedRangeAggregateCapTests
         var options = new ParquetSerializerOptions { MaxAllocationValues = 250 };
 
         InvalidDataException error = await Should.ThrowAsync<InvalidDataException>(() =>
-            SortedEventParquetExtensions.ReadParquetSequenceNumberRangeAsync(
-                new MemoryStream(bytes),
-                0,
-                599,
-                options: options
-            )
+            SortedEventParquet
+                .From(new MemoryStream(bytes))
+                .WithOptions(options)
+                .Where(m => m.SequenceNumber.MayContainBetween(0, 599))
+                .ToArrayAsync()
         );
 
-        error.Message.ShouldContain("Total row count");
+        error.Message.ShouldContain("Total matching row count");
     }
 
     [Fact]
@@ -60,14 +59,12 @@ public sealed class PrunedRangeAggregateCapTests
         byte[] bytes = await WriteAsync(600, rowGroupSize: 100);
         var options = new ParquetSerializerOptions { MaxAllocationValues = 250 };
 
-        List<SortedEvent> rows =
-            await SortedEventParquetExtensions.ReadParquetSequenceNumberRangeAsync(
-                new MemoryStream(bytes),
-                120,
-                210,
-                options: options
-            );
+        SortedEvent[] rows = await SortedEventParquet
+            .From(new MemoryStream(bytes))
+            .WithOptions(options)
+            .Where(m => m.SequenceNumber.MayContainBetween(120, 210))
+            .ToArrayAsync();
 
-        rows.Count.ShouldBe(91);
+        rows.Length.ShouldBe(200);
     }
 }

@@ -3,17 +3,10 @@ using System;
 namespace Parquet.SourceGenerator;
 
 /// <summary>
-/// Opts a property or field in to sorted row-group pruning (issue #151), asking the generator to
-/// emit <c>ReadParquetBy&lt;Member&gt;Async</c> (point lookup) and
-/// <c>ReadParquet&lt;Member&gt;RangeAsync</c> (inclusive slice) for it.
+/// Marks a property or field as a sorted key column for row-group pruning (issue #151, #584).
+/// Key lookups and range queries are expressed through <c>Where(m =&gt; m.&lt;Key&gt;.MayContain(...))</c>.
 /// </summary>
 /// <remarks>
-/// <para>
-/// The marker is opt-in on purpose. Both overloads are public API on the generated extension
-/// class, and emitting them for every eligible column would grow a wide model's surface by two
-/// methods per column whether or not anyone ever looks that column up. Declaring the lookup keys
-/// keeps the emitted API to the ones the model author actually wants.
-/// </para>
 /// <para>
 /// A marked member must be a flat, non-nullable root column of a totally ordered type whose
 /// Parquet statistics order matches <c>Comparer&lt;T&gt;.Default</c>: the integral types,
