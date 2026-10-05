@@ -19,7 +19,7 @@ The rule, the three surfaces and the author process are in
 ### 2026-10-05 — Hide `ParquetColumnStatistics<T>` constructor and `FromRaw` with `[EditorBrowsable(Never)]` (#586)
 
 - **Surface:** unshipped
-- **Semver:** internal
+- **Semver:** breaking-major
 - **Issue:** [#586](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/586), part of tracker
   [#477](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/477)
 - **Change:** `ParquetColumnStatistics(bool, T, bool, T, long?, long?)` constructor, the static class
@@ -27,10 +27,10 @@ The rule, the three surfaces and the author process are in
   annotated with `[EditorBrowsable(EditorBrowsableState.Never)]`.
 - **Rationale:** `ParquetColumnStatistics<T>` is a shared runtime type whose query surface (`Min`, `Max`,
   `NullCount`, `DistinctCount`, `HasMinMax`, `IsKnownNonNull`, `MayContain*`) is designed for row-group
-  filtering expressions in `.Where(...)`. Construction is only ever performed by generated reader code
-  inside the consumer's assembly as row groups are inspected. Hiding construction and `FromRaw` via
-  `[EditorBrowsable(EditorBrowsableState.Never)]` keeps consumer autocomplete clean while preserving the
-  required cross-assembly plumbing without introducing redundant per-assembly emitted helper types.
+  filtering expressions in `.Where(...)`. Generated reader code calls `FromRaw<T>` from the consumer
+  assembly as row groups are inspected, and `FromRaw<T>` invokes the constructor in the attributes assembly.
+  `[EditorBrowsable(EditorBrowsableState.Never)]` hides these members from IntelliSense without preventing direct
+  calls, preserving the required cross-assembly plumbing without introducing redundant per-assembly emitted helper types.
 - **Classification of Equality:** `ParquetColumnStatistics<T>` is a `readonly struct` and retains
   `IEquatable<ParquetColumnStatistics<T>>`, `Equals`, `GetHashCode`, `==`, and `!=` for standard .NET
   value-type semantics and CA1815 compliance.
