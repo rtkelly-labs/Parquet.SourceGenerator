@@ -317,6 +317,60 @@ public sealed class IncrementalityTests
             );
     }
 
+    [Theory]
+    [InlineData("\"id\"", "\"renamed_id\"")]
+    [InlineData("public int Id", "public int? Id")]
+    [InlineData("\"id\"", "\"id\", Encoding = ParquetColumnEncoding.DeltaBinaryPacked")]
+    public void ColumnContractEditsInvalidateOnlyTheAffectedModel(
+        string original,
+        string replacement
+    )
+    {
+        SyntaxTree modelA = CSharpSyntaxTree.ParseText(ModelASource);
+        CSharpCompilation initial = CreateCompilation(
+            modelA,
+            CSharpSyntaxTree.ParseText(ModelBSource),
+            CSharpSyntaxTree.ParseText(UnrelatedSource)
+        );
+        GeneratorRunResult first = Run(CreateDriver(), initial, out GeneratorDriver driver);
+        CSharpCompilation edited = initial.ReplaceSyntaxTree(
+            modelA,
+            CSharpSyntaxTree.ParseText(ModelASource.Replace(original, replacement))
+        );
+
+        GeneratorRunResult second = Run(driver, edited, out _);
+
+        first.Diagnostics.ShouldNotContain(d => d.Severity == DiagnosticSeverity.Error);
+        second.Diagnostics.ShouldNotContain(d => d.Severity == DiagnosticSeverity.Error);
+        AllTrackedOutputSteps(second)
+            .SelectMany(step => step.Outputs)
+            .Count(output => output.Reason == IncrementalStepRunReason.Modified)
+            .ShouldBe(1, DescribeTrackedSteps(second));
+        AllTrackedOutputSteps(second)
+            .SelectMany(step => step.Outputs)
+            .Count(output => output.Reason == IncrementalStepRunReason.Cached)
+            .ShouldBeGreaterThan(0, DescribeTrackedSteps(second));
+
+        foreach (string model in new[] { "ModelA", "ModelB" })
+        {
+            string hint = $"Demo.{model}.ParquetSerializer.g.cs";
+            string before = first
+                .GeneratedSources.Single(source => source.HintName == hint)
+                .SourceText.ToString();
+            string after = second
+                .GeneratedSources.Single(source => source.HintName == hint)
+                .SourceText.ToString();
+            if (model == "ModelA")
+            {
+                after.ShouldNotBe(before);
+            }
+            else
+            {
+                after.ShouldBe(before);
+            }
+        }
+    }
+
     [Fact]
     public void GeneratedNameCollisionTracksDeclarationsInOtherFilesOnAReusedDriver()
     {

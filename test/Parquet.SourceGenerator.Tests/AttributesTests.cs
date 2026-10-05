@@ -24,78 +24,9 @@ public sealed class AttributesTests
         // Default returns a fresh instance each time to prevent accidental mutation of shared state
         var options2 = ParquetSerializerOptions.Default;
         options.ShouldNotBeSameAs(options2);
-    }
-
-    [Fact]
-    public void ParquetSerializerOptionsCanBeMutated()
-    {
-        var options = new ParquetSerializerOptions
-        {
-            RowGroupSize = 10_000,
-            MaxDegreeOfParallelism = 4,
-            CompressionMethod = ParquetCompressionMethod.Zstd,
-            CompressionLevel = ParquetCompressionLevel.SmallestSize,
-            DeduplicateStrings = true,
-            DictionaryEncodingThreshold = 0.5,
-            DictionaryEncodingSampleSize = 500,
-            ColumnEncodingHints = { ["test_col"] = ParquetColumnEncoding.DeltaBinaryPacked },
-        };
-
-        options.RowGroupSize.ShouldBe(10_000);
-        options.MaxDegreeOfParallelism.ShouldBe(4);
-        options.CompressionMethod.ShouldBe(ParquetCompressionMethod.Zstd);
-        options.CompressionLevel.ShouldBe(ParquetCompressionLevel.SmallestSize);
-        options.DeduplicateStrings.ShouldBeTrue();
-        options.DictionaryEncodingThreshold.ShouldBe(0.5);
-        options.DictionaryEncodingSampleSize.ShouldBe(500);
-        options.ColumnEncodingHints.Count.ShouldBe(1);
-        options.ColumnEncodingHints["test_col"].ShouldBe(ParquetColumnEncoding.DeltaBinaryPacked);
-    }
-
-    [Fact]
-    public void ParquetColumnAttributeStoresProperties()
-    {
-        var attr = new ParquetColumnAttribute("test_col")
-        {
-            Order = 42,
-            Encoding = ParquetColumnEncoding.DeltaBinaryPacked,
-        };
-
-        attr.Name.ShouldBe("test_col");
-        attr.Order.ShouldBe(42);
-        attr.Encoding.ShouldBe(ParquetColumnEncoding.DeltaBinaryPacked);
-    }
-
-    [Fact]
-    public void ParquetDecimalAttributeStoresProperties()
-    {
-        var attr = new ParquetDecimalAttribute(18, 4);
-
-        attr.Precision.ShouldBe(18);
-        attr.Scale.ShouldBe(4);
-    }
-
-    [Fact]
-    public void ParquetTimestampAttributeStoresProperties()
-    {
-        var attrMs = new ParquetTimestampAttribute(ParquetTimestampUnit.Milliseconds);
-        attrMs.Unit.ShouldBe(ParquetTimestampUnit.Milliseconds);
-
-        var attrUs = new ParquetTimestampAttribute(ParquetTimestampUnit.Microseconds);
-        attrUs.Unit.ShouldBe(ParquetTimestampUnit.Microseconds);
-    }
-
-    [Fact]
-    public void ParquetIgnoreAttributeCanBeInstantiated()
-    {
-        var attr = new ParquetIgnoreAttribute();
-        attr.ShouldNotBeNull();
-    }
-
-    [Fact]
-    public void ParquetSerializableAttributeCanBeInstantiated()
-    {
-        var defaultAttr = new ParquetSerializableAttribute();
-        defaultAttr.ShouldNotBeNull();
+        options.RowGroupSize = 1;
+        options.ColumnEncodingHints["id"] = ParquetColumnEncoding.DeltaBinaryPacked;
+        options2.RowGroupSize.ShouldBe(50_000);
+        options2.ColumnEncodingHints.ShouldBeEmpty();
     }
 }

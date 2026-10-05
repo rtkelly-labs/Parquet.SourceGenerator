@@ -121,6 +121,10 @@ the migration list; each row's detail is in the entries below and in `docs/api/L
   number is known is vacuous or permanently red.
 
 ### Changed
+- **Behavioral test coverage:** remove attribute plumbing and redundant emitter-text checks;
+  compare every primitive, nullable and large-fixture value across both PyArrow format settings
+  and the C# producer; exercise column-contract edits through a reused Roslyn driver. The Windows
+  net472 package consumer and both cross-runtime handoffs now participate in required CI.
 - **Removed the SonarAnalyzer.CSharp analyzer (source-available license).** Its license grants use only for a
   non-competitive purpose, which excludes AI tooling that ingests or interprets the analyzer's output,
   and this repository has AI agents read and fix diagnostics. The remaining analyzers stay

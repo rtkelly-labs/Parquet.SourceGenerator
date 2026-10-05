@@ -2,146 +2,65 @@
 
 ## Overview
 
-Testing a C# Roslyn Source Generator requires specialized machinery compared to standard application development. Because the generator executes *inside* the compiler host against arbitrary user syntax trees, testing must validate:
-1. **Source Generation Correctness**: Emitted C# code structure and syntax.
-2. **Roslyn Incremental Performance & Caching**: Cache retention across syntax tree mutations.
-3. **Binary Serialization Roundtrips**: End-to-end reading/writing with `Parquet.Net`.
-4. **Native AOT & Trimming**: Zero reflection and zero trim warnings.
-5. **Runtime Benchmarks**: Execution speed and allocation comparisons against reflection.
+Prioritize evidence at consumer and data boundaries:
 
----
+1. **End-to-end tests:** pack the actual NuGet packages, compile consumer projects, execute their
+   read/write scenarios, and publish and execute a native AOT consumer.
+2. **Integration tests:** run the real Roslyn driver, compile emitted source, inspect Parquet file
+   metadata, and compare data across Parquet.Net, PyArrow, DuckDB and Apache Parquet.
+3. **Golden and regression fixtures:** retain deterministic external files and minimized fuzz
+   failures with independent expected values. Generated-source artifacts support review.
 
-## 1. Generator Unit & Snapshot Testing (`Verify.SourceGenerators`)
+Small tests remain useful when they protect a distinct contract: diagnostics, option defaults,
+incremental cache invalidation, buffer lifetimes, or a gate that must reject a seeded failure.
+Avoid tests that merely instantiate an empty attribute, assign and read a property, list existing
+members of an enum, or pin private helper names in generated text. Before deleting a check, identify
+its behavioral replacement; test count and coverage percentages alone do not establish correctness.
 
-Unit tests inspect the source generator output directly using Roslyn's `CSharpGeneratorDriver` combined with `Verify.Xunit` snapshot testing.
+## 1. End-to-End Package Consumption
 
-### Test Harness Setup
-```csharp
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-using Parquet.SourceGenerator;
-using VerifyXunit;
+`test/PackageConsumption` and `test/PackageConsumptionLegacy` restore the packed packages from a
+local feed rather than referencing the shipping projects. CI executes both on .NET 8 and .NET 9,
+then hands files between the modern and legacy consumers in both directions. These checks exercise
+package layout, analyzer loading, attribute dependencies, compilation and serialization together.
 
-public static class ModuleInitializer
-{
-    [System.Runtime.CompilerServices.ModuleInitializer]
-    public static void Init() => VerifySourceGenerators.Initialize();
-}
+The Windows `net472-consumer` job in `ci.yml` executes the Legacy package on .NET Framework 4.7.2
+and hands files to and from .NET 8. It is part of the required `build` aggregate, with no path filter
+or failure bypass. The native AOT publish-and-execute check is described in section 4.
 
-public class GeneratorSnapshotTests
-{
-    [Fact]
-    public Task GeneratesCorrectSerializerForPoco()
-    {
-        string source = """
-            using System;
-            using Parquet.SourceGenerator;
+## 2. Generator and File Integration
 
-            namespace TestApp;
+`DiagnosticTests` runs real annotated C# through Roslyn and checks consumer-visible diagnostics.
+`IncrementalityTests` reuses a driver across unrelated edits, formatting changes and model changes;
+column-name, nullability and encoding edits must change only the affected model's output. Retain
+focused internal equality checks where they cover nested state not exercised by these edits.
+See [28 - Build Incrementality](./28-BUILD-INCREMENTALITY-258.md) for the tracked-step evidence.
 
-            [ParquetSerializable]
-            public partial record Customer
-            {
-                [ParquetColumn("customer_id")]
-                public Guid Id { get; init; }
+`ColumnEncodingTests` checks the encodings actually recorded in Parquet metadata and reads the
+values back, including runtime overrides of compile-time hints. This is the contract that emitter
+assignment-string assertions only approximated.
 
-                public string Name { get; init; } = string.Empty;
-            }
-            """;
+CI validates generated files with PyArrow, DuckDB and Apache Parquet, and reads external-engine
+fixtures with the generated reader. A generated writer/reader round trip alone can conceal a shared
+mistake; preserve these external checks alongside the independent Parquet.Net client used by fuzzing.
 
-        Compilation compilation = CSharpCompilation.Create(
-            assemblyName: "TestAssembly",
-            syntaxTrees: new[] { CSharpSyntaxTree.ParseText(source) },
-            references: new[]
-            {
-                MetadataReference.CreateFromFile(typeof(object).Assembly.Location),
-                MetadataReference.CreateFromFile(typeof(ParquetSerializableAttribute).Assembly.Location)
-            });
+## 3. Golden Fixtures and Derived Review Outputs
 
-        var generator = new ParquetIncrementalGenerator();
-        GeneratorDriver driver = CSharpGeneratorDriver.Create(generator);
+`TestDataIntegrationTests` compares every row and every column of the primitive, nullable and
+100,000-row fixtures for PyArrow format settings 1.0 and 2.6 and the C# Parquet.Net producer.
+Expected values come from the deterministic fixture specification, independently of the generated
+reader. A positive control rewrites an interior-row value while preserving the count and endpoints
+and requires the full comparison to reject the result.
 
-        driver = driver.RunGenerators(compilation);
+Minimized fuzz cases are committed inputs replayed as permanent behavioral regressions. Preserve
+nulls, empty strings and buffers, boundary values, and schema evolution in these fixtures and the
+external interoperability oracle.
 
-        return Verifier.Verify(driver);
-    }
-}
-```
-
----
-
-## 2. Incremental Cache Testing (`TrackIncrementalSteps`)
-
-To ensure Roslyn doesn't re-run expensive generator transforms on unrelated edits (e.g., adding a comment or editing a method body), we test incremental step caching:
-
-```csharp
-[Fact]
-public void GeneratorCachesOutputsOnUnrelatedChanges()
-{
-    string initialCode = "/* initial code */";
-    string modifiedCode = "/* modified code with added method */";
-
-    var driver = CSharpGeneratorDriver.Create(
-        generators: new[] { new ParquetIncrementalGenerator().AsSourceGenerator() },
-        driverOptions: new GeneratorDriverOptions(
-            disabledOutputs: IncrementalGeneratorOutputKind.None,
-            trackIncrementalSteps: true));
-
-    // Run 1
-    driver = driver.RunGenerators(compilation1);
-    
-    // Run 2 with modified compilation
-    driver = driver.RunGenerators(compilation2);
-
-    GeneratorDriverRunResult result = driver.GetRunResult();
-    
-    // Assert generator steps were cached rather than recalculated
-    var outputSteps = result.Results[0].TrackedOutputSteps.Values.SelectMany(steps => steps);
-    Assert.All(outputSteps, step =>
-        Assert.All(step.Outputs, output => Assert.Equal(IncrementalStepRunReason.Cached, output.Reason)));
-}
-```
-
-The concrete #258 evidence, including unrelated-file and per-model edits, is in
-[`28 - Build Incrementality Spike`](./28-BUILD-INCREMENTALITY-258.md). Stable provider labels via
-`WithTrackingName` are not available on this repository's Roslyn 4.0.1 shipping floor or its
-Roslyn 4.8.0 test dependency, so the tests use the public tracked-output collection instead.
-
----
-
-## 3. End-to-End Binary Data Roundtrip Testing
-
-Integration tests verify that data written with generated code can be parsed seamlessly by standard `ParquetReader` and vice versa.
-
-```csharp
-[Fact]
-public async Task Roundtrip_Poco_Matches_ParquetNet()
-{
-    var records = new List<TestRecord>
-    {
-        new(Guid.NewGuid(), "Alice", 100.50m, DateTime.UtcNow),
-        new(Guid.NewGuid(), "Bob", 250.00m, DateTime.UtcNow)
-    };
-
-    using var stream = new MemoryStream();
-
-    // 1. Write using generated serializer
-    await records.WriteParquetAsync(stream);
-
-    // 2. Read using standard ParquetReader (Parquet.Net)
-    stream.Position = 0;
-    using var reader = await ParquetReader.CreateAsync(stream);
-    Assert.Equal(1, reader.RowGroupCount);
-    Assert.Equal(4, reader.Schema.DataFields.Length);
-
-    // 3. Read back using generated deserializer
-    stream.Position = 0;
-    TestRecord[] readRecords = await TestRecordParquet.From(stream).ToArrayAsync();
-
-    Assert.Equal(records.Count, readRecords.Length);
-    Assert.Equal(records[0].Name, readRecords[0].Name);
-}
-```
+`GoldenCodeGenRegressionTests` checks canonical models and publishes emitted source and public API
+artifacts. CI semantically compiles every corpus model and runs emitted-code analyzers. The source
+and API artifacts are derived, uncommitted outputs diffed against the merge base for review; they
+are not automatic snapshot-equality gates. See
+[17 - Generated Public API Baselines](./17-GENERATED-API-BASELINES.md).
 
 ---
 
@@ -232,24 +151,13 @@ anything the generator can do — see `UPSTREAM_DEPENDENCY_LIMITATIONS.md`.
 
 ## 4. Native AOT & Trimming Verification
 
-A dedicated project target (`test/Parquet.SourceGenerator.AotTest`) tests compilation with `<PublishAot>true</PublishAot>`:
+CI publishes `test/Parquet.SourceGenerator.AotTest` for `linux-x64` with Native AOT enabled,
+then executes the published native binary. A CoreCLR `dotnet run` does not prove AOT support.
+The native consumer checks real serialization behavior and fails on a mismatch.
 
-```xml
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
-    <PublishAot>true</PublishAot>
-    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-  </PropertyGroup>
-</Project>
-```
-
-Testing Command:
-```bash
-dotnet publish test/Parquet.SourceGenerator.AotTest/Parquet.SourceGenerator.AotTest.csproj -c Release
-```
-*Result*: Asserts that `dotnet publish` completes without emitting any trimming warnings (`IL2026`, `IL3050`) or reflection errors.
+The workflow also checks the publish log for trimming and dynamic-code warnings. Warnings attributed
+to Parquet.Net are currently tolerated; this is not a claim of zero warnings across all dependencies.
+See the Native AOT row in [51 - CI Gate Matrix](./51-CI-GATE-MATRIX.md) for the exact gate boundary.
 
 ---
 
