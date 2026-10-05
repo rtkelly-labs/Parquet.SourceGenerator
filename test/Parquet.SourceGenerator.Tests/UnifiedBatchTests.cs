@@ -96,10 +96,7 @@ public sealed class UnifiedBatchTests
     {
         GeneratedTypeMatrixRecord[] expected = RequiredRows();
         using var source = new MemoryStream();
-        await expected.WriteParquetBatchedAsync(
-            source,
-            new ParquetSerializerOptions { RowGroupSize = 2 }
-        );
+        await expected.WriteParquetAsync(source, new ParquetSerializerOptions { RowGroupSize = 2 });
         byte[] bytes = source.ToArray();
 
         var rewritten = new List<byte[]>();
@@ -136,10 +133,7 @@ public sealed class UnifiedBatchTests
             .Select(SparseRow)
             .ToArray();
         using var source = new MemoryStream();
-        await expected.WriteParquetBatchedAsync(
-            source,
-            new ParquetSerializerOptions { RowGroupSize = 4 }
-        );
+        await expected.WriteParquetAsync(source, new ParquetSerializerOptions { RowGroupSize = 4 });
         byte[] bytes = source.ToArray();
 
         // Stream source, and the in-memory source: both reach the same iterator.
@@ -187,10 +181,7 @@ public sealed class UnifiedBatchTests
             .Select(SparseRow)
             .ToArray();
         using var stream = new MemoryStream();
-        await rows.WriteParquetBatchedAsync(
-            stream,
-            new ParquetSerializerOptions { RowGroupSize = 10 }
-        );
+        await rows.WriteParquetAsync(stream, new ParquetSerializerOptions { RowGroupSize = 10 });
         stream.Position = 0;
 
         int seen = 0;
@@ -272,10 +263,7 @@ public sealed class UnifiedBatchTests
             })
             .ToArray();
         using var stream = new MemoryStream();
-        await rows.WriteParquetBatchedAsync(
-            stream,
-            new ParquetSerializerOptions { RowGroupSize = 9 }
-        );
+        await rows.WriteParquetAsync(stream, new ParquetSerializerOptions { RowGroupSize = 9 });
         stream.Position = 0;
 
         int seen = 0;
@@ -584,10 +572,7 @@ public sealed class UnifiedBatchTests
             })
             .ToArray();
         using var stream = new MemoryStream();
-        await rows.WriteParquetBatchedAsync(
-            stream,
-            new ParquetSerializerOptions { RowGroupSize = 4 }
-        );
+        await rows.WriteParquetAsync(stream, new ParquetSerializerOptions { RowGroupSize = 4 });
         stream.Position = 0;
 
         BatchFillModelBatch kept = default;
@@ -882,7 +867,7 @@ public sealed class UnifiedBatchTests
                 Weight = i * 0.25,
             })
             .ToList()
-            .WriteParquetBatchedAsync(
+            .WriteParquetAsync(
                 stream,
                 new ParquetSerializerOptions { RowGroupSize = rowGroupSize }
             );

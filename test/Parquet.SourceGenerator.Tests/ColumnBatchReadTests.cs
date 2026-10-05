@@ -91,7 +91,7 @@ public sealed class ColumnBatchReadTests
     )
     {
         var stream = new MemoryStream();
-        await rows.WriteParquetBatchedAsync(
+        await rows.WriteParquetAsync(
             stream,
             new ParquetSerializerOptions { RowGroupSize = rowGroupSize }
         );
@@ -318,10 +318,7 @@ public sealed class ColumnBatchReadTests
     {
         using var writeStream = new MemoryStream();
         await SampleMetrics(20_000)
-            .WriteParquetBatchedAsync(
-                writeStream,
-                new ParquetSerializerOptions { RowGroupSize = 5_000 }
-            );
+            .WriteParquetAsync(writeStream, new ParquetSerializerOptions { RowGroupSize = 5_000 });
         byte[] bytes = writeStream.ToArray();
 
         // Warm the ArrayPool and every lazily-initialised path so the measurement below sees the
@@ -425,16 +422,10 @@ public sealed class ColumnBatchReadTests
         // allocation regardless of how many row groups are traversed.
         using var fewStream = new MemoryStream();
         await SampleMetrics(200)
-            .WriteParquetBatchedAsync(
-                fewStream,
-                new ParquetSerializerOptions { RowGroupSize = 100 }
-            );
+            .WriteParquetAsync(fewStream, new ParquetSerializerOptions { RowGroupSize = 100 });
         using var manyStream = new MemoryStream();
         await SampleMetrics(2_000)
-            .WriteParquetBatchedAsync(
-                manyStream,
-                new ParquetSerializerOptions { RowGroupSize = 100 }
-            );
+            .WriteParquetAsync(manyStream, new ParquetSerializerOptions { RowGroupSize = 100 });
         byte[] fewBytes = fewStream.ToArray();
         byte[] manyBytes = manyStream.ToArray();
 

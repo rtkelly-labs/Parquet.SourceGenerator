@@ -95,12 +95,11 @@ public sealed class ParquetSerializerOptions
     public static ParquetSerializerOptions Default => new();
 
     /// <summary>
-    /// Gets or sets the target row group size for batched writing operations (default is 50,000 rows).
+    /// Gets or sets the target row group size for chunked writing operations (default is 50,000 rows).
     /// </summary>
     /// <remarks>
-    /// This is the only place the row group size can be set. <c>WriteParquetBatchedAsync</c> and the
-    /// <c>IAsyncEnumerable</c> overload of <c>WriteParquetAsync</c> carried a duplicate
-    /// <c>rowGroupSize</c> parameter until <c>0.0.x</c>; it was removed so the setting has one home.
+    /// This is the only place the row group size can be set. <c>WriteParquetAsync</c> chunks rows into
+    /// row groups using this size when a collection exceeds it or when streaming unbuffered rows.
     /// <para>
     /// It does not apply to the columnar <c>&lt;Model&gt;Batch.WriteParquetAsync</c>: a batch is written
     /// as one complete row group.

@@ -657,10 +657,7 @@ public sealed class CorpusDifferentialSweepTests
         };
 
         using var ms = new MemoryStream();
-        await records.WriteParquetBatchedAsync(
-            ms,
-            new ParquetSerializerOptions { RowGroupSize = 2 }
-        );
+        await records.WriteParquetAsync(ms, new ParquetSerializerOptions { RowGroupSize = 2 });
 
         // 1. Sequential Reader
         ms.Position = 0;

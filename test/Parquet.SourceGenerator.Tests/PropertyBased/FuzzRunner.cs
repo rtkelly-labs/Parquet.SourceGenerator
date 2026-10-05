@@ -184,7 +184,7 @@ public static class FuzzRunner
     )
     {
         using var stream = new MemoryStream();
-        await rows.WriteParquetBatchedAsync(
+        await rows.WriteParquetAsync(
             stream,
             options: BuildOptions(fuzzCase),
             cancellationToken: cancellationToken

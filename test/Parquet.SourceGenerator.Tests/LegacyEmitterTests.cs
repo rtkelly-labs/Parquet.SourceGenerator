@@ -123,9 +123,10 @@ public class LegacyEmitterTests
             "writer.CompressionLevel = global::System.IO.Compression.CompressionLevel.Fastest;"
         );
 
-        // Both WriteParquetAsync and WriteParquetBatchedAsync must call it, or the batched path
-        // quietly keeps the default while the simple path honours the option.
-        CountOccurrences(code, "ApplyCompression(writer, options);").ShouldBe(2);
+        // Both the single-row-group fast path and the multi-row-group chunked path must call it,
+        // so the chunked path honours compression just like the fast path.
+        CountOccurrences(code, "ApplyCompression(singleWriter, options);").ShouldBe(1);
+        CountOccurrences(code, "ApplyCompression(writer, options);").ShouldBe(1);
     }
 
     /// <summary>

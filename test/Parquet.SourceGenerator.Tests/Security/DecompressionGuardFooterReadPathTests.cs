@@ -108,10 +108,7 @@ public sealed class DecompressionGuardFooterReadPathTests
             .Select(i => new MultiRowGroupModel { Id = i, Name = "item_" + i })
             .ToList();
         using var written = new MemoryStream();
-        await items.WriteParquetBatchedAsync(
-            written,
-            new ParquetSerializerOptions { RowGroupSize = 2 }
-        );
+        await items.WriteParquetAsync(written, new ParquetSerializerOptions { RowGroupSize = 2 });
 
         var ex = await Should.ThrowAsync<InvalidDataException>(() =>
             MultiRowGroupModelParquet

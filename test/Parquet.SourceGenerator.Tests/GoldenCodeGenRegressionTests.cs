@@ -92,6 +92,7 @@ public sealed class GoldenCodeGenRegressionTests
 
         emittedCode.ShouldContain("public static partial class GoldenModelParquetExtensions");
         emittedCode.ShouldContain("WriteParquetAsync");
+        emittedCode.ShouldNotContain("WriteParquetBatchedAsync");
         emittedCode.ShouldContain("ReadParallelArrayCoreAsync");
         // #479: List<T> is a caller-side conversion, not a second read implementation.
         emittedCode.ShouldNotContain("ReadParallelListCoreAsync");

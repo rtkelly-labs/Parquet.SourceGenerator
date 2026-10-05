@@ -28,7 +28,7 @@ public sealed class PrunedRangeAggregateCapTests
             })
             .ToList();
         using var stream = new MemoryStream();
-        await events.WriteParquetBatchedAsync(
+        await events.WriteParquetAsync(
             stream,
             new ParquetSerializerOptions { RowGroupSize = rowGroupSize }
         );

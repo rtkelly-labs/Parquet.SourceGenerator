@@ -22,8 +22,8 @@ await events.WriteParquetAsync(stream);
 ```
 
 ### 1.1 Collection Shape & Row Group Behavior
-- `WriteParquetAsync` requires an `IReadOnlyCollection<T>` (where `.Count` is known up front) and writes the entire collection into **a single row group**.
-- To stream arbitrary `IEnumerable<T>` sequences or partition writes across multiple row groups, use `WriteParquetBatchedAsync`.
+- `WriteParquetAsync` accepts `IEnumerable<T>` (including `IReadOnlyCollection<T>`). When `.Count` is known and does not exceed `options.RowGroupSize` (default: 50,000), it writes the collection into **a single row group** using the zero-allocation fast path.
+- When the sequence exceeds `RowGroupSize` or when streaming an arbitrary unbuffered sequence, `WriteParquetAsync` partitions the write across row groups.
 
 ---
 
@@ -31,14 +31,14 @@ await events.WriteParquetAsync(stream);
 
 For large datasets, writing rows in chunks (row groups) prevents excessive memory usage and enables downstream engines (DuckDB, Spark, Polars) to prune row groups and process data in parallel.
 
-### 2.1 Fixed-Size Row Group Streaming (`WriteParquetBatchedAsync`)
-When writing large collections or arbitrary `IEnumerable<T>` sequences, use `WriteParquetBatchedAsync` to flush data at regular row thresholds:
+### 2.1 Fixed-Size Row Group Streaming (`WriteParquetAsync`)
+When writing large collections or arbitrary `IEnumerable<T>` sequences, `WriteParquetAsync` flushes data at regular row thresholds configured by `RowGroupSize`:
 
 ```csharp
 using var stream = File.Create("large_dataset.parquet");
 IEnumerable<UserEvent> items = GetEventSequence();
 
-await items.WriteParquetBatchedAsync(
+await items.WriteParquetAsync(
     stream,
     new ParquetSerializerOptions
     {
@@ -92,7 +92,7 @@ This path binds directly to `ParquetWriter.WriteAsync<T>(field, ReadOnlyMemory<T
 
 ## 4. Serialization Options (`ParquetSerializerOptions`)
 
-Both `WriteParquetAsync` and `WriteParquetBatchedAsync` accept an optional `ParquetSerializerOptions` instance:
+`WriteParquetAsync` accepts an optional `ParquetSerializerOptions` instance:
 
 ```csharp
 var options = new ParquetSerializerOptions
@@ -103,11 +103,11 @@ var options = new ParquetSerializerOptions
     // Optional fine-grained compression level
     CompressionLevel = ParquetCompressionLevel.Optimal,
 
-    // Number of rows per row group for batched/streaming writes (default: 50,000)
+    // Number of rows per row group for chunked/streaming writes (default: 50,000)
     RowGroupSize = 100_000
 };
 
-await events.WriteParquetBatchedAsync(stream, options);
+await events.WriteParquetAsync(stream, options);
 ```
 
 ### 4.1 Compression Codecs

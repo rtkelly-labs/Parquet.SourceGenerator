@@ -198,7 +198,7 @@ internal static class Program
             .ToList();
 
         using var mem = new MemoryStream();
-        await data.WriteParquetBatchedAsync(
+        await data.WriteParquetAsync(
             mem,
             new ParquetSerializerOptions { RowGroupSize = rowGroupSize }
         );

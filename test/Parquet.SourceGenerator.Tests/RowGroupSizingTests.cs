@@ -32,7 +32,7 @@ public sealed class RowGroupSizingTests
     )
     {
         using var stream = new MemoryStream();
-        await Rows(rowCount).WriteParquetBatchedAsync(stream, options);
+        await Rows(rowCount).WriteParquetAsync(stream, options);
         stream.Position = 0;
 
         // Parquet.Net v6's ParquetReader exposes DisposeAsync only — there is no sync Dispose.
@@ -79,20 +79,12 @@ public sealed class RowGroupSizingTests
 
         ArgumentOutOfRangeException zero = await Should.ThrowAsync<ArgumentOutOfRangeException>(
             () =>
-                Rows(2)
-                    .WriteParquetBatchedAsync(
-                        stream,
-                        new ParquetSerializerOptions { RowGroupSize = 0 }
-                    )
+                Rows(2).WriteParquetAsync(stream, new ParquetSerializerOptions { RowGroupSize = 0 })
         );
         zero.ParamName.ShouldBe("options");
 
         await Should.ThrowAsync<ArgumentOutOfRangeException>(() =>
-            Rows(2)
-                .WriteParquetBatchedAsync(
-                    stream,
-                    new ParquetSerializerOptions { RowGroupSize = -10 }
-                )
+            Rows(2).WriteParquetAsync(stream, new ParquetSerializerOptions { RowGroupSize = -10 })
         );
     }
 

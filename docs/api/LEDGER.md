@@ -16,6 +16,24 @@ The rule, the three surfaces and the author process are in
 
 <!-- Add new entries directly below this line, newest first. -->
 
+### 2026-10-05 — Fold `WriteParquetBatchedAsync` into `WriteParquetAsync` (#512)
+
+- **Surface:** generated-shape
+- **Semver:** breaking-major
+- **Issue:** [#512](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/512), part of tracker
+  [#477](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/477), [#505](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/505)
+- **Change:** `WriteParquetBatchedAsync` is removed from code generation on both modern and legacy emitters.
+  The row-writing overload `WriteParquetAsync(this IEnumerable<T> items, Stream stream, ParquetSerializerOptions? options = null, CancellationToken cancellationToken = default)`
+  widens from `IReadOnlyCollection<T>` (modern) / `IReadOnlyList<T>` (legacy) to `IEnumerable<T>`. When the collection size is within
+  `options.RowGroupSize` (default: 50,000), it writes a single row group via the direct fast path; when the sequence
+  exceeds `RowGroupSize` or is an unbuffered `IEnumerable<T>`, it chunks into row groups of `RowGroupSize`.
+- **Rationale:** Once `AsBatches()` and `<Model>Batch` exist, the term "batch" refers specifically to columnar chunks.
+  `WriteParquetBatchedAsync` used the same word for writing row-group-partitioned `IEnumerable<T>` rows, causing ambiguity
+  beside `batch.WriteParquetAsync`. Furthermore, chunking is already controlled by `ParquetSerializerOptions.RowGroupSize`,
+  and `WriteParquetAsync(IAsyncEnumerable<T>)` already chunks using that setting. Folding `WriteParquetBatchedAsync` into
+  `WriteParquetAsync` removes an extra public member (-1 emitted method per model across both backends) and satisfies the
+  invariant that no public write member uses "batch" unless it takes `<Model>Batch`.
+
 ### 2026-10-05 — Internalize sorted-key reads and `ParquetPruneStatistics`, express key lookups through `Where` (#584)
 
 - **Surface:** unshipped
