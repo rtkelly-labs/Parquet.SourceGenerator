@@ -84,7 +84,7 @@ internal static class SchemaComponent
         );
         builder.AppendLine("    /// </summary>");
         builder.AppendLine(
-            "    public static readonly global::Parquet.Schema.ParquetSchema Schema = new global::Parquet.Schema.ParquetSchema("
+            "    internal static readonly global::Parquet.Schema.ParquetSchema Schema = new global::Parquet.Schema.ParquetSchema("
         );
 
         for (int i = 0; i < model.Properties.Length; i++)

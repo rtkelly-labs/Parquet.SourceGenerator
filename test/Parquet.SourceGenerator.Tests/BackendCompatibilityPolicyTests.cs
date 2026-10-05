@@ -27,7 +27,6 @@ public sealed class BackendCompatibilityPolicyTests
         "static ClassicExtensions.ReadParquetAsync(System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<System.Collections.Generic.List<T>>",
         "static ClassicExtensions.WriteParquetAsync(this System.Collections.Generic.IReadOnlyList<T> items, System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task",
         "static ClassicExtensions.WriteParquetBatchedAsync(this System.Collections.Generic.IEnumerable<T> items, System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task",
-        "static readonly ClassicExtensions.Schema -> Parquet.Schema.ParquetSchema",
     };
 
     [Fact]

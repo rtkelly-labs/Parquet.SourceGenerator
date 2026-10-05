@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -159,12 +160,15 @@ public sealed class EmitterNameInjectionTests
         System.Reflection.Assembly assembly = GeneratedSourceHarness.Load(output);
 
         Type flat = assembly.GetType("Hostile.FlatParquetExtensions", throwOnError: true)!;
-        var schema = (global::Parquet.Schema.ParquetSchema)flat.GetField("Schema")!.GetValue(null)!;
+        var schema = (global::Parquet.Schema.ParquetSchema)
+            flat.GetField("Schema", BindingFlags.NonPublic | BindingFlags.Static)!.GetValue(null)!;
         schema.Fields.Select(f => f.Name).ShouldBe(FlatColumnNames, ignoreOrder: true);
 
         Type compound = assembly.GetType("Hostile.CompoundParquetExtensions", throwOnError: true)!;
         var compoundSchema = (global::Parquet.Schema.ParquetSchema)
-            compound.GetField("Schema")!.GetValue(null)!;
+            compound
+                .GetField("Schema", BindingFlags.NonPublic | BindingFlags.Static)!
+                .GetValue(null)!;
         compoundSchema.Fields.Select(f => f.Name).ShouldBe(CompoundColumnNames, ignoreOrder: true);
     }
 }

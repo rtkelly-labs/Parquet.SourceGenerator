@@ -16,6 +16,19 @@ The rule, the three surfaces and the author process are in
 
 <!-- Add new entries directly below this line, newest first. -->
 
+### 2026-10-05 — Internalize `ParquetSchema Schema` field across emitted extensions (#585)
+
+- **Surface:** emitted
+- **Semver:** breaking-major
+- **Issue:** [#585](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/585), part of tracker
+  [#477](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/477)
+- **Change:** `public static readonly global::Parquet.Schema.ParquetSchema Schema` on generated
+  `<Model>ParquetExtensions` is now `internal static readonly`.
+- **Rationale:** `ParquetSchema` is an external dependency type that differs per backend (Parquet.Net 6
+  vs 4.25), so exposing it on the public contract leaked the backend package choice into consumer API
+  surfaces. Internalizing the field hides the backend dependency while keeping the schema definition
+  accessible for intra-assembly deserialization and internal helpers.
+
 ### 2026-10-03 — `ParquetSerializerOptions.MaxAllocationBytes`, a byte budget for what a read allocates (#361)
 
 - **Surface:** unshipped

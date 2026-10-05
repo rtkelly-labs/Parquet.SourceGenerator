@@ -26,7 +26,7 @@ public class LegacyEmitterTests
         code.ShouldContain("namespace TestNamespace;");
         code.ShouldContain("public static partial class TestModelParquetLegacyExtensions");
         code.ShouldContain(
-            "public static readonly global::Parquet.Schema.ParquetSchema Schema = new global::Parquet.Schema.ParquetSchema("
+            "internal static readonly global::Parquet.Schema.ParquetSchema Schema = new global::Parquet.Schema.ParquetSchema("
         );
         code.ShouldContain("new global::Parquet.Data.DataColumn(_field_0, colArray_0)");
         code.ShouldContain("rgWriter.WriteColumnAsync(col_0, cancellationToken)");
