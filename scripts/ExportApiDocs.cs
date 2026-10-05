@@ -30,7 +30,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 string? repoArg = null;
 string? outArg = null;
-string version = "0.1.0";
+string? versionArg = null;
 
 string[] argv = Environment.GetCommandLineArgs();
 for (int i = 1; i < argv.Length; i++)
@@ -40,12 +40,18 @@ for (int i = 1; i < argv.Length; i++)
     else if (argv[i] == "--out" && i + 1 < argv.Length)
         outArg = argv[++i];
     else if (argv[i] == "--version" && i + 1 < argv.Length)
-        version = argv[++i];
+        versionArg = argv[++i];
 }
 
 string repoRoot = Path.GetFullPath(repoArg ?? Directory.GetCurrentDirectory());
 string outputDir = Path.GetFullPath(outArg ?? Path.Combine(repoRoot, "artifacts"));
 Directory.CreateDirectory(outputDir);
+
+string version =
+    versionArg
+    ?? Environment.GetEnvironmentVariable("VERSION")
+    ?? ResolveRepoVersion(repoRoot)
+    ?? "0.0.1";
 
 var targetProjects = new[]
 {
@@ -102,7 +108,7 @@ foreach (var proj in targetProjects)
         foreach (var typeDecl in typeDeclarations)
         {
             var symbol = semanticModel.GetDeclaredSymbol(typeDecl) as INamedTypeSymbol;
-            if (symbol == null || symbol.DeclaredAccessibility != Accessibility.Public)
+            if (symbol == null || !IsPubliclyAccessible(symbol))
                 continue;
 
             string ns = symbol.ContainingNamespace?.ToDisplayString() ?? "Global";
@@ -189,7 +195,14 @@ static TypeDocModel ExtractType(INamedTypeSymbol symbol, string assemblyName)
     )
     {
         if (member.IsImplicitlyDeclared)
-            continue;
+        {
+            // Preserve implicit public parameterless constructors for classes/structs
+            if (
+                member
+                is not IMethodSymbol { MethodKind: MethodKind.Constructor, Parameters.Length: 0 }
+            )
+                continue;
+        }
 
         var memberSyntax = member.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
         var (memSummary, memRemarks, memParams) = ExtractDocFromSyntax(memberSyntax);
@@ -219,13 +232,23 @@ static TypeDocModel ExtractType(INamedTypeSymbol symbol, string assemblyName)
                     }
                 );
             }
-            else if (method.MethodKind == MethodKind.Ordinary)
+            else if (
+                method.MethodKind
+                is MethodKind.Ordinary
+                    or MethodKind.UserDefinedOperator
+                    or MethodKind.Conversion
+            )
             {
+                string memberKind = method.MethodKind switch
+                {
+                    MethodKind.UserDefinedOperator or MethodKind.Conversion => "Operator",
+                    _ => "Method",
+                };
                 methods.Add(
                     new MemberDocModel
                     {
                         Name = method.Name,
-                        Kind = "Method",
+                        Kind = memberKind,
                         ReturnType = method.ReturnType.ToDisplayString(),
                         IsStatic = method.IsStatic,
                         Syntax = method.ToDisplayString(
@@ -358,6 +381,27 @@ static string CleanXmlContent(string raw)
         .Select(l => l.Trim().TrimStart('/', '*').Trim())
         .Where(l => !string.IsNullOrEmpty(l));
     return string.Join(" ", lines);
+}
+
+static bool IsPubliclyAccessible(INamedTypeSymbol symbol)
+{
+    for (INamedTypeSymbol? current = symbol; current != null; current = current.ContainingType)
+    {
+        if (current.DeclaredAccessibility != Accessibility.Public)
+            return false;
+    }
+    return true;
+}
+
+static string? ResolveRepoVersion(string repoRoot)
+{
+    string propsFile = Path.Combine(repoRoot, "Directory.Build.props");
+    if (!File.Exists(propsFile))
+        return null;
+
+    string text = File.ReadAllText(propsFile);
+    var match = System.Text.RegularExpressions.Regex.Match(text, @"<Version>([^<]+)</Version>");
+    return match.Success ? match.Groups[1].Value.Trim() : null;
 }
 
 public class ApiDocProjectModel
