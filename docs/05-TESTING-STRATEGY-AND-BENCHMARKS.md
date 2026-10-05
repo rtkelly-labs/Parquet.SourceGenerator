@@ -195,3 +195,53 @@ public class SerializationBenchmark
     }
 }
 ```
+
+---
+
+## 6. Supported Types & Backend Execution Matrix
+
+This matrix tracks the verification status across all 23 supported schema types and primary execution paths. It audits test sufficiency across the modern v6 generator and legacy v4/v5 backend, distinguishing executed integration coverage from compile-only presence.
+
+### 6.1 Type × Path Matrix
+
+| CLR Type / Logical Mapping | Round-Trip (`Write`/`Read`) | Read Terminals (`ToArray`, `IAsyncEnumerable`, `Batches`) | Columnar Write (`WriteColumns`) | Arrow Ingestion (`FromArrowReader`) | Legacy Backend (v4/v5 Execution) |
+|:---|:---:|:---:|:---:|:---:|:---:|
+| `bool`, `bool?` | ✅ Verified (`TestDataIntegration`) | ✅ Full terminal coverage | ✅ Verified | ✅ Exercised | ✅ Executed |
+| `byte`, `byte?` | ✅ Verified (`TestDataIntegration`) | ✅ Full terminal coverage | ✅ Verified | ✅ Exercised | ✅ Executed |
+| `sbyte`, `sbyte?` | ✅ Verified (`TestDataIntegration`) | ✅ Full terminal coverage | ✅ Verified | ✅ Exercised | ✅ Executed |
+| `short`, `short?` | ✅ Verified (`TestDataIntegration`) | ✅ Full terminal coverage | ✅ Verified | ✅ Exercised | ✅ Executed |
+| `ushort`, `ushort?` | ✅ Verified (`TestDataIntegration`) | ✅ Full terminal coverage | ✅ Verified | ✅ Exercised | ✅ Executed |
+| `int`, `int?` | ✅ Verified (`TestDataIntegration`) | ✅ Full terminal coverage | ✅ Verified | ✅ Exercised | ✅ Executed |
+| `uint`, `uint?` | ✅ Verified (`TestDataIntegration`) | ✅ Full terminal coverage | ✅ Verified | ✅ Exercised | ✅ Executed |
+| `long`, `long?` | ✅ Verified (`TestDataIntegration`) | ✅ Full terminal coverage | ✅ Verified | ✅ Exercised | ✅ Executed |
+| `ulong`, `ulong?` | ✅ Verified (`TestDataIntegration`) | ✅ Full terminal coverage | ✅ Verified | ✅ Exercised | ✅ Executed |
+| `float`, `float?` | ✅ Verified (`TestDataIntegration`) | ✅ Full terminal coverage | ✅ Verified | ✅ Exercised | ✅ Executed |
+| `double`, `double?` | ✅ Verified (`TestDataIntegration`) | ✅ Full terminal coverage | ✅ Verified | ✅ Exercised | ✅ Executed |
+| `decimal`, `decimal?` (custom prec/scale) | ✅ Verified (TPC-H LineItem & Fixtures) | ✅ Full terminal coverage | ✅ Verified | ✅ Exercised | ✅ Executed |
+| `DateTime`, `DateTime?` (Millis/Micros) | ✅ Verified (`TestDataIntegration`) | ✅ Full terminal coverage | ✅ Verified | ✅ Exercised | ✅ Executed |
+| `TimeSpan`, `TimeSpan?` (Millis/Micros) | ✅ Verified (`TestDataIntegration`) | ✅ Full terminal coverage | ✅ Verified | ✅ Exercised | ✅ Executed |
+| `DateOnly`, `DateOnly?` (Date32) | ✅ Verified (`TestDataIntegration`) | ✅ Full terminal coverage | ✅ Verified | ✅ Exercised | ⚠️ Compiles only (#600) |
+| `TimeOnly`, `TimeOnly?` (Time32/64) | ✅ Verified (`TestDataIntegration`) | ✅ Full terminal coverage | ✅ Verified | ✅ Exercised | ⚠️ Compiles only (#600) |
+| `Guid`, `Guid?` (Fixed-length byte array) | ✅ Verified (`TestDataIntegration`) | ✅ Full terminal coverage | ✅ Verified | ✅ Exercised | ✅ Executed |
+| `string` (Plain & Dictionary) | ✅ Verified (Adult Census & Fuzzing) | ✅ Full terminal coverage | ✅ Verified | ✅ Exercised | ✅ Executed |
+| `byte[]` (Binary byte array) | ✅ Verified (`TestDataIntegration`) | ✅ Full terminal coverage | ✅ Verified | ✅ Exercised | ✅ Executed |
+| `ReadOnlyMemory<byte>` (Zero-copy slice) | ✅ Verified (`TestDataIntegration`) | ✅ Full terminal coverage | ✅ Verified | ⚠️ Unsupported | ❌ Blocked on net472 |
+| `enum` (Int32 underlying type) | ✅ Verified (Diamonds & Fuzzing) | ✅ Full terminal coverage | ✅ Verified | ✅ Exercised | ✅ Executed |
+| `enum` (Non-int: `byte`, `short`, `long`) | ⚠️ Generator-verified | ⚠️ Compiles only | ⚠️ Compiles only | ⚠️ Untested | ⚠️ Compiles only |
+| Compound models (Single-level nested) | ✅ Verified (`NestedModelTests`) | ✅ Full terminal coverage | ⚠️ In progress | ❌ Non-goal for Arrow | ⚠️ Scoped subset ([doc 42](./42-NESTED-BACKEND-SCOPE-176.md)) |
+
+### 6.2 Test Sufficiency Findings & Concrete Gaps
+
+From the 0.1 testing evaluation, three specific verification gaps remain prior to the 0.1 release gate:
+
+1. **Non-Int Enum Execution Gap**:
+   - While `int`-backed enums are exercised across property-based fuzzing and canonical regression fixtures, non-`int` underlying enums (`byte`, `sbyte`, `short`, `ushort`, `long`, `ulong`) compile cleanly through Roslyn analysis but lack dedicated round-trip binary assertion fixtures.
+   - *Target*: Add explicit test cases in `TestDataIntegrationTests` asserting correct physical storage type (Int32 vs Int64) and round-trip fidelity for non-int enums.
+
+2. **Multi-Codec Compound Coverage**:
+   - Primary round-trip and fuzzing tests run against `Snappy`, `Gzip`, and `Uncompressed`. Codec variations like `Zstd` and `Brotli` are exercised in multi-codec TPC-H LineItem benchmarks, but lack complete sweeps across all nullable boundary edge cases.
+   - *Target*: Ensure codec variations are parameterized in property-based fuzzing runs (`.github/workflows/fuzz.yml`).
+
+3. **Legacy Integration Suite Execution (#600, #494)**:
+   - While `PackageConsumptionLegacy` confirms end-to-end NuGet package consumption and basic serialization on .NET Framework 4.7.2 and .NET 8, the full suite of 23 types is currently executed only against the modern engine. `DateOnly`, `TimeOnly`, and non-int enums must either have green execution proof in the legacy suite or emit clean compile-time diagnostic rejection (`PARQ006` / `PARQ007`).
+
