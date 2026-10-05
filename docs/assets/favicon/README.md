@@ -8,8 +8,7 @@ uv run image-reconcile favicon
 
 Below roughly 48px the full [`logo.svg`](../logo.svg) loses its emblems to smudging and its
 circuit network to mud, so this is a distinct builder variant — coarser cells, trunk-only
-circuit, no emblems, heavier lines — rather than the same drawing scaled down. See
-[`STATEMENT_OF_INTENT.md`](../STATEMENT_OF_INTENT.md).
+circuit, no emblems, heavier lines — rather than the same drawing scaled down.
 
 | File | Use |
 | :--- | :--- |

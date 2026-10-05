@@ -41,15 +41,20 @@ The documentation is organized into four distinct sections:
    - Materializing arrays (`ToArrayAsync`), memory-bounded streaming (`AsAsyncEnumerable`), and borrowed batch iteration (`AsBatches`).
    - Predicate pushdown filtering (`Where`) and in-memory buffer reads.
 
-3. **[Native AOT & Trimming Guide](./guides/native-aot.md)**
+3. **[Writing Parquet Guide](./guides/writing-parquet.md)**
+   - Serializing in-memory collections, spans, and arrays (`WriteParquetAsync`).
+   - High-throughput chunked writes (`WriteParquetBatchedAsync`) and asynchronous stream feeds (`IAsyncEnumerable<T>`).
+   - Direct zero-allocation columnar batch writing (`<Model>Batch`) and row group compression tuning.
+
+4. **[Native AOT & Trimming Guide](./guides/native-aot.md)**
    - Zero-reflection ahead-of-time compilation for CoreCLR and Linux x64 containers.
    - Trimming analysis, linker safety, and Native Directives (`rd.xml`).
 
-4. **[Nested Types & Compound Models](./guides/nested-types.md)**
+5. **[Nested Types & Compound Models](./guides/nested-types.md)**
    - Serializing nested POCOs, struct fields, and collections (`List<T>`).
    - Definition and repetition level ladder mechanics and backend support boundaries.
 
-5. **[Legacy Backend & .NET Framework Support](./guides/legacy-support.md)**
+6. **[Legacy Backend & .NET Framework Support](./guides/legacy-support.md)**
    - Targeting .NET Framework 4.7.2+, .NET Standard 2.0, and Parquet.Net 4.x/5.x.
    - Single-calling-contract parity between modern and classic emitters.
 
@@ -126,5 +131,5 @@ The documentation is organized into four distinct sections:
 
 ## 🎯 Release Status & Governance
 
-- **Live Release Status**: **[Milestone.md](../Milestone.md)** (Tracks 0.1 gates, blocking issues, and critical path).
+- **Milestone & Release Tracking**: **[GitHub 0.1 Milestone](https://github.com/rtkelly-labs/Parquet.SourceGenerator/milestones)** (Tracks release gates, blocking issues, and roadmap).
 - **Public API Change Ledger**: **[docs/api/LEDGER.md](api/LEDGER.md)** (Governed by `PARQAPI002`).

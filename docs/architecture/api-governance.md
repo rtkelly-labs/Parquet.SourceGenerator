@@ -151,8 +151,8 @@ Feature-level changes are governed as generated-shape changes. The default remai
 `Level2CompoundPreview`; consumers can pin `Level1Flat` or opt into `Level3ModernCSharp` through the
 shared MSBuild/assembly configuration channel documented in [Configuration & Feature Levels](../getting-started/configuration.md).
 
-`0.0.x` permits breaking changes without a major bump; the release-cadence note in
-[Roadmap & Contributing](../../Milestone.md) says so, and that is not changing here. The bucket
+`0.0.x` permits breaking changes without a major bump; the pre-1.0 release-cadence
+policy says so, and that is not changing here. The bucket
 on an entry therefore does not gate a release today. **It is recorded anyway, because the point is
 that the decision was made** — that someone looked at a `breaking-major` label and shipped it
 knowingly rather than discovering it from a consumer's bug report. At `0.1.0` the ledger becomes the

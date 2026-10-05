@@ -4,8 +4,8 @@
 > protection reaches it, how it can pass without checking anything, and what is known to be open.
 > Every claim was checked against the workflow or script it cites, not against another document.
 > Companion to [API Governance](../architecture/api-governance.md) and
-> [Testing Strategy](../architecture/testing-strategy.md). Live release status is indexed in
-> [Milestone.md](../../Milestone.md).
+> [Testing Strategy](../architecture/testing-strategy.md). Live release status is tracked via
+> [GitHub Milestones](https://github.com/rtkelly-labs/Parquet.SourceGenerator/milestones).
 
 A green `build` check means "every gate below marked **via `build`** passed on this commit", and
 nothing more. This page exists so that sentence can be read without opening ten workflows.
