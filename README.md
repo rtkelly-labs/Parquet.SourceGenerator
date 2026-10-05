@@ -462,14 +462,15 @@ OrderEventParquetExtensions.WriteParquetRowGroupAsync(writer, recordBatch);
 | 🚀 **[Installation & Quickstart](docs/getting-started/installation.md)** | Setup, package installation, and first annotated model. |
 | 🏷️ **[Model Attributes Guide](docs/guides/model-attributes.md)** | `[ParquetSerializable]`, `[ParquetColumn]`, decimals, and timestamps. |
 | 📖 **[Reading Parquet Guide](docs/guides/reading-parquet.md)** | Fluent read builder, streaming, pushdown filtering, and batching. |
+| ✍️ **[Writing Parquet Guide](docs/guides/writing-parquet.md)** | Direct serialization, batched streaming, columnar batch writes, and options. |
 | ⚡ **[Native AOT & Trimming Guide](docs/guides/native-aot.md)** | Zero-reflection CoreCLR AOT compilation and linker safety. |
 | 🧩 **[Nested Types & Compound Models](docs/guides/nested-types.md)** | Structs, lists, and repetition/definition level rungs. |
 | 🧱 **[Legacy Backend Support](docs/guides/legacy-support.md)** | Multi-targeting .NET Framework 4.7.2+ and Parquet.Net 4.x/5.x. |
 | 🛡️ **[Compiler Diagnostics Reference](docs/reference/compiler-diagnostics.md)** | Full catalog of `PARQ001`–`PARQ016` diagnostic rules, causes, and fixes. |
 | 🧪 **[Parquet Compatibility Matrix](docs/reference/compatibility-matrix.md)** | Supported format envelope, producer/consumer boundaries, and type matrix. |
-| ⚠️ **[Known Limitations](docs/reference/known-limitations.md)** | Comprehensive audit of behavioural gaps and upstream boundaries. |
+| ⚠️ **[Known Limitations](docs/reference/known-limitations.md)** | Active platform boundaries, type constraints, and upstream caveats. |
 | 📊 **[Full Benchmarks Report](docs/reference/benchmarks.md)** | Multi-scale sweeps (1k, 10k, 100k, 1M rows) and real-world datasets. |
-| 🎯 **[0.1 Milestone & Release Status](Milestone.md)** | Current 0.1 release gates, blocker status, and CI verification index. |
+| 🎯 **[0.1 Milestone & Release Tracking](https://github.com/rtkelly-labs/Parquet.SourceGenerator/milestones)** | GitHub release gates, blocker tracking, and milestone index. |
 | 🔭 **[Vision & Design Tenets](docs/vision.md)** | Core mission, reflection bottlenecks, and the Member Test. |
 | 🏛️ **[System Architecture](docs/architecture/overview.md)** | Subsystem pipeline, Roslyn caching, and buffer recycling. |
 
