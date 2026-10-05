@@ -12,7 +12,7 @@ This guide explains how to serialize in-memory collections, stream asynchronous 
 
 ## 1. Writing In-Memory Collections
 
-The simplest way to write Parquet data is via the `WriteParquetAsync` extension method, generated for any collection, list, or array of an annotated model:
+The simplest way to write Parquet data is via the `WriteParquetAsync` extension method, emitted for any `IReadOnlyCollection<T>` (such as `List<T>` or `T[]`) of an annotated model:
 
 ```csharp
 using var stream = File.Create("users.parquet");
@@ -21,13 +21,9 @@ List<UserEvent> events = GetEvents();
 await events.WriteParquetAsync(stream);
 ```
 
-### 1.1 Supported Collection Shapes
-The generator emits overloads for:
-- `IReadOnlyList<T>` / `List<T>` / `T[]`
-- `IEnumerable<T>`
-- Read-only spans and segments
-
-When writing an in-memory collection with default options, all rows are written into a single row group unless batching options are specified.
+### 1.1 Collection Shape & Row Group Behavior
+- `WriteParquetAsync` requires an `IReadOnlyCollection<T>` (where `.Count` is known up front) and writes the entire collection into **a single row group**.
+- To stream arbitrary `IEnumerable<T>` sequences or partition writes across multiple row groups, use `WriteParquetBatchedAsync`.
 
 ---
 
@@ -36,17 +32,18 @@ When writing an in-memory collection with default options, all rows are written 
 For large datasets, writing rows in chunks (row groups) prevents excessive memory usage and enables downstream engines (DuckDB, Spark, Polars) to prune row groups and process data in parallel.
 
 ### 2.1 Fixed-Size Row Group Streaming (`WriteParquetBatchedAsync`)
-When writing large collections, use `WriteParquetBatchedAsync` to flush data at regular row thresholds:
+When writing large collections or arbitrary `IEnumerable<T>` sequences, use `WriteParquetBatchedAsync` to flush data at regular row thresholds:
 
 ```csharp
 using var stream = File.Create("large_dataset.parquet");
+IEnumerable<UserEvent> items = GetEventSequence();
 
 await items.WriteParquetBatchedAsync(
     stream,
     new ParquetSerializerOptions
     {
         RowGroupSize = 50_000,
-        CompressionMethod = CompressionMethod.Snappy
+        CompressionMethod = ParquetCompressionMethod.Snappy
     });
 ```
 
@@ -64,7 +61,7 @@ await eventFeed.WriteParquetAsync(
     new ParquetSerializerOptions
     {
         RowGroupSize = 25_000,
-        CompressionMethod = CompressionMethod.Zstd
+        CompressionMethod = ParquetCompressionMethod.Zstd
     });
 ```
 
@@ -101,12 +98,12 @@ Both `WriteParquetAsync` and `WriteParquetBatchedAsync` accept an optional `Parq
 var options = new ParquetSerializerOptions
 {
     // Compression codec (Snappy, Gzip, Zstd, None)
-    CompressionMethod = CompressionMethod.Zstd,
+    CompressionMethod = ParquetCompressionMethod.Zstd,
 
     // Optional fine-grained compression level
-    CompressionLevel = System.IO.Compression.CompressionLevel.Optimal,
+    CompressionLevel = ParquetCompressionLevel.Optimal,
 
-    // Number of rows per row group (default: 50,000)
+    // Number of rows per row group for batched/streaming writes (default: 50,000)
     RowGroupSize = 100_000
 };
 
@@ -114,10 +111,10 @@ await events.WriteParquetBatchedAsync(stream, options);
 ```
 
 ### 4.1 Compression Codecs
-- **`CompressionMethod.Snappy`** (Default): Fast, balanced compression optimal for analytical processing.
-- **`CompressionMethod.Zstd`**: Superior compression ratio with high decompression speeds.
-- **`CompressionMethod.Gzip`**: Legacy compatibility across Hadoop ecosystems.
-- **`CompressionMethod.None`**: Uncompressed raw parquet; fastest serialization when I/O is not the bottleneck.
+- **`ParquetCompressionMethod.Snappy`** (Default): Fast, balanced compression optimal for analytical processing.
+- **`ParquetCompressionMethod.Zstd`**: Superior compression ratio with high decompression speeds.
+- **`ParquetCompressionMethod.Gzip`**: Legacy compatibility across Hadoop ecosystems.
+- **`ParquetCompressionMethod.None`**: Uncompressed raw parquet; fastest serialization when I/O is not the bottleneck.
 
 > ⚠️ **Platform Constraint:** Compressed serialization relies on `IronCompress`. On Windows 32-bit (`win-x86`) processes, native compression binaries are unavailable (see [Known Limitations](../reference/known-limitations.md)).
 

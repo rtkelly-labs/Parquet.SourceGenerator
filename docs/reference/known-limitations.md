@@ -59,7 +59,7 @@ public partial record User(int Id, string Name)
 ```
 
 ### 2.2 Generic Models and Nested Types (`PARQ009`, `PARQ010`)
-- **Nested Types (`PARQ009`):** Target types declared inside another class are rejected at compile time. Move the model to namespace scope.
+- **Nested Types (`PARQ009`):** Nested target types are permitted when generated code can access them. `PARQ009` reports target types nested inside classes or scopes unreachable from the generated extension class.
 - **Generic Models (`PARQ010`):** Generic types (`Record<T>`) cannot be serialized. The emitted Parquet schema is generated as a `static readonly` descriptor per type, which cannot vary by generic argument.
 
 ### 2.3 List Nesting Depth Boundaries
@@ -84,7 +84,11 @@ See the [Compatibility Matrix](./compatibility-matrix.md) for the exhaustive 23-
 The fluent reader provides parallel row group decoding via:
 
 ```csharp
-await <Model>Parquet.From(memory).ToArrayAsync(options);
+await <Model>Parquet
+    .From(memory)
+    .WithOptions(options)
+    .Parallel()
+    .ToArrayAsync();
 ```
 
 This distributes decompression and decoding across worker threads using disjoint index offsets.
