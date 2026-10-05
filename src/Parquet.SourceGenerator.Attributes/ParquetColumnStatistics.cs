@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Runtime.InteropServices;
 
 namespace Parquet.SourceGenerator;
@@ -55,6 +56,7 @@ public readonly struct ParquetColumnStatistics<T> : IEquatable<ParquetColumnStat
     /// <param name="max">The chunk maximum, when <paramref name="hasMax"/> is set.</param>
     /// <param name="nullCount">The chunk's recorded null count, when present.</param>
     /// <param name="distinctCount">The chunk's recorded distinct count, when present.</param>
+    [EditorBrowsable(EditorBrowsableState.Never)]
     public ParquetColumnStatistics(
         bool hasMin,
         T min,
@@ -175,6 +177,7 @@ public readonly struct ParquetColumnStatistics<T> : IEquatable<ParquetColumnStat
 /// Projects the loosely typed <c>MinValue</c> / <c>MaxValue</c> objects Parquet.Net hands back onto the
 /// CLR type of a generated model property. Called only by generated code, once per row group.
 /// </summary>
+[EditorBrowsable(EditorBrowsableState.Never)]
 public static class ParquetColumnStatistics
 {
     /// <summary>
@@ -189,6 +192,7 @@ public static class ParquetColumnStatistics
     /// <param name="nullCount">The recorded null count, when present.</param>
     /// <param name="distinctCount">The recorded distinct count, when present.</param>
     /// <returns>The projected statistics.</returns>
+    [EditorBrowsable(EditorBrowsableState.Never)]
     public static ParquetColumnStatistics<T> FromRaw<T>(
         object? min,
         object? max,
