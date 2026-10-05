@@ -22,10 +22,10 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 //
 // Usage:
 //   dotnet run scripts/CoverageMap.cs             # compare the checked-in map
-//   dotnet run scripts/CoverageMap.cs -- --update # refresh docs/28-COVERAGE-MAP.md
+//   dotnet run scripts/CoverageMap.cs -- --update # refresh docs/internals/coverage-envelope.md
 // -----------------------------------------------------------------------------
 
-const string OutputPath = "docs/28-COVERAGE-MAP.md";
+const string OutputPath = "docs/internals/coverage-envelope.md";
 
 string repoRoot = FindRepositoryRoot();
 Directory.SetCurrentDirectory(repoRoot);

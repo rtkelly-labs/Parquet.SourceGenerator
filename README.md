@@ -449,27 +449,28 @@ OrderEventParquetExtensions.WriteParquetRowGroupAsync(writer, recordBatch);
 | **Generator feature level** | ✅ Configurable | Defaults to `Level2CompoundPreview`; pin `Level1Flat` or opt into `Level3ModernCSharp` with `ParquetGeneratorFeatureLevel`. |
 | **V5 generated API** | ✅ Declared core subset | V5 intentionally exposes flat read/write, batched write, row-group write, and schema; modern builder, filtering, parallel, streaming, column-batch, and Arrow members are v6-only. |
 
-> A complete audit of limitations and remediation roadmap is in **[`docs/07-KNOWN-LIMITATIONS.md`](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/07-KNOWN-LIMITATIONS.md)**.
+> A complete audit of limitations and remediation roadmap is in **[`docs/reference/known-limitations.md`](docs/reference/known-limitations.md)**.
 
 ---
 
 ## 📖 Documentation Hub
 
-> 🌐 **Interactive Documentation & API Catalog**: Visit [docs.ryankelly.dev/parquet-sourcegenerator](https://docs.ryankelly.dev/parquet-sourcegenerator) for interactive guides, live search and architecture diagrams. The generated API symbol catalog is planned, not yet populated: it will be pinned to each release's derived output, and the profile-aware API grid remains a post-freeze follow-up; see [document 39](docs/39-API-SITE-SCOPE-229.md).
+> 🌐 **Documentation Portal**: Visit the [Documentation Hub](docs/index.md) for full architectural guides, reference specifications, and compiler diagnostics.
 
 | Document | Topic |
 |:--- |:--- |
-| 🏗️ **[01 - Vision & Architecture](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/01-VISION-AND-ARCHITECTURE.md)** | Core design tenets, columnar transposition, and benchmarks. |
-| 🏷️ **[02 - API Design & Attributes](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/02-API-DESIGN-AND-ATTRIBUTES.md)** | `[ParquetSerializable]`, `[ParquetColumn]`, decimals, and timestamps. |
-| ⚙️ **[03 - Incremental Generator Pipeline](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/03-INCREMENTAL-GENERATOR-PIPELINE.md)** | Roslyn incremental pipeline stages and caching semantics. |
-| ⚠️ **[07 - Known Limitations Audit](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/07-KNOWN-LIMITATIONS.md)** | Comprehensive audit of behavioural gaps and remediation plans. |
-| 🚀 **[10 - Native AOT & Trimming Guide](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/10-NATIVE-AOT-GUIDE.md)** | ILCompiler analysis, CoreCLR runtime directives, and AOT compilation. |
-| 🔬 **[11 - Performance & Zero-Boxing Findings](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/11-PERFORMANCE-OPTIMIZATION-FINDINGS.md)** | IL interrogation, zero-boxing string serialization, and L1 cache deduplication. |
-| 🧠 **[12 - Buffer Reuse & Extraction Strategies](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/12-BUFFER-REUSE-AND-EXTRACTION-STRATEGIES.md)** | CPU cache spatial locality vs multi-pass traversal empirical analysis. |
-| 🛡️ **[13 - Compiler Diagnostics Reference](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/13-COMPILER-DIAGNOSTICS.md)** | Full catalog of `PARQ001`–`PARQ016` diagnostic rules, causes, and fixes. |
-| 🧪 **[14 - Parquet Compatibility Matrix](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/14-COMPATIBILITY-MATRIX.md)** | Supported format envelope, producer/consumer boundaries, and compatibility definitions. |
+| 🚀 **[Installation & Quickstart](docs/getting-started/installation.md)** | Setup, package installation, and first annotated model. |
+| 🏷️ **[Model Attributes Guide](docs/guides/model-attributes.md)** | `[ParquetSerializable]`, `[ParquetColumn]`, decimals, and timestamps. |
+| 📖 **[Reading Parquet Guide](docs/guides/reading-parquet.md)** | Fluent read builder, streaming, pushdown filtering, and batching. |
+| ⚡ **[Native AOT & Trimming Guide](docs/guides/native-aot.md)** | Zero-reflection CoreCLR AOT compilation and linker safety. |
+| 🧩 **[Nested Types & Compound Models](docs/guides/nested-types.md)** | Structs, lists, and repetition/definition level rungs. |
+| 🧱 **[Legacy Backend Support](docs/guides/legacy-support.md)** | Multi-targeting .NET Framework 4.7.2+ and Parquet.Net 4.x/5.x. |
+| 🛡️ **[Compiler Diagnostics Reference](docs/reference/compiler-diagnostics.md)** | Full catalog of `PARQ001`–`PARQ016` diagnostic rules, causes, and fixes. |
+| 🧪 **[Parquet Compatibility Matrix](docs/reference/compatibility-matrix.md)** | Supported format envelope, producer/consumer boundaries, and type matrix. |
+| ⚠️ **[Known Limitations](docs/reference/known-limitations.md)** | Comprehensive audit of behavioural gaps and upstream boundaries. |
+| 📊 **[Full Benchmarks Report](docs/reference/benchmarks.md)** | Multi-scale sweeps (1k, 10k, 100k, 1M rows) and real-world datasets. |
 | 🎯 **[0.1 Milestone & Release Status](Milestone.md)** | Current 0.1 release gates, blocker status, and CI verification index. |
-| 📊 **[Full Benchmarks Report](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/BENCHMARKS.md)** | Multi-scale sweeps (1k, 10k, 100k, 1M rows) and real-world datasets. |
+| 🏛️ **[Architecture & Internals](docs/architecture/overview.md)** | Core design tenets, Roslyn caching pipeline, and buffer recycling. |
 
 ---
 

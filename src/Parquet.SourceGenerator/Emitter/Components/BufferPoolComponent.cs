@@ -129,7 +129,7 @@ internal static class BufferPoolComponent
     /// <remarks>
     /// Returning the buffer while the row-group writer is still open assumes Parquet.Net has finished with the
     /// caller's memory when <c>WriteAsync</c> / <c>WriteAllPartsAsync</c> completes. That is undocumented upstream
-    /// and is pinned by <c>WriteCompletionContractTests</c> (#399, docs/12).
+    /// and is pinned by <c>WriteCompletionContractTests</c> (#399, docs/architecture/memory-and-performance.md).
     /// </remarks>
     public static void EmitSingleWriteReturn(
         StringBuilder builder,

@@ -19,7 +19,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 // src/ and writes it as a deterministic ordinal report (artifacts/metrics/duplication.txt,
 // gitignored). The report is derived from src/ on demand and published by CI as a build
 // artifact and step summary; it is not checked in and not gated on drift.
-// See docs/23-DUPLICATION.md for the design and its known limits.
+// See docs/internals/code-quality-and-metrics.md for the design and its known limits.
 //
 // What it computes: for every method body, a stream of normalized token units (identifiers
 // collapse to a placeholder, keywords and operators keep their syntax kind, literals keep
@@ -34,7 +34,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 // Gating on emitted duplication would produce a permanent false positive, and "reported but
 // never gated" was rejected too: there is no decision the number could inform.
 //
-// Calibration (docs/23-DUPLICATION.md): the settings below were chosen against the repo's
+// Calibration (docs/internals/code-quality-and-metrics.md): the settings below were chosen against the repo's
 // demonstrated failure — the hand-rolled copies of ResolveSchemaField that all broke when
 // #196 added a parameter. Run `--root <checkout-of-8d4a097>/src --report -` and the detector
 // names the cross-file pair. A configuration that cannot find the copies that already broke
@@ -349,7 +349,9 @@ static string RenderArtifact(List<Cluster> clusters, int totalTokens)
     sb.AppendLine($"# K: cluster — duplicated token span x copies — ordinal-sorted method ids.");
     sb.AppendLine($"# Method ids are RELATIVE-PATH:Type.Method. No line numbers: a refactor that");
     sb.AppendLine("# moves code without changing overlap must not change this report.");
-    sb.AppendLine("# Emitted/generated code is out of scope by design (docs/23-DUPLICATION.md).");
+    sb.AppendLine(
+        "# Emitted/generated code is out of scope by design (docs/internals/code-quality-and-metrics.md)."
+    );
     sb.AppendLine($"# totals: clusters={clusters.Count} duplicated-tokens={totalTokens}");
     foreach (Cluster c in clusters)
         sb.AppendLine($"K | span={c.Span} copies={c.Copies} | {c.Key}");

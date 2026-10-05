@@ -13,7 +13,7 @@ namespace Parquet.SourceGenerator.Tests;
 /// <summary>
 /// The emitted writers return each column's pooled buffer to <see cref="ArrayPool{T}"/> as soon as
 /// that column's <c>WriteAsync</c> / <c>WriteAllPartsAsync</c> completes, while the row-group
-/// writer is still open (docs/12). That is correct only if Parquet.Net has fully consumed the
+/// writer is still open (docs/architecture/memory-and-performance.md). That is correct only if Parquet.Net has fully consumed the
 /// caller's memory by the time the task completes and keeps no reference to it until the row group
 /// is disposed. Nothing in Parquet.Net documents that, so these tests pin it: a Parquet.Net upgrade
 /// that deferred encoding would fail here instead of corrupting files under load (#399).

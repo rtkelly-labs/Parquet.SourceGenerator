@@ -698,7 +698,7 @@ public sealed class UnifiedBatchTests
     {
         // CHARACTERIZATION, not a guarantee. A ReadOnlyMemory<T> lane taken from a live batch is a
         // plain view, so using it after the enumerator advanced does not throw today. The contract
-        // (docs/47 section 5.1) still calls that use invalid. Lane-level lease checking
+        // (docs/guides/reading-parquet.md section 1.3) still calls that use invalid. Lane-level lease checking
         // (https://github.com/rtkelly13/Parquet.SourceGenerator/issues/580) will make it throw:
         // when it lands, flip this test to expect ObjectDisposedException. The values read are
         // deliberately not asserted: the pool may hand the array to another renter at any time.

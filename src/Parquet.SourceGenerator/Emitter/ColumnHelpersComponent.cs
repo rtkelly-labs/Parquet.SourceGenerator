@@ -381,7 +381,7 @@ internal static class ColumnHelpersComponent
         AppendLines(
             builder,
             "    // Entries run ahead of rowCount for multi-element lists: size from the column",
-            "    // metadata and re-rent on growth (docs/15 section 2.3: the values buffer must cover",
+            "    // metadata and re-rent on growth (docs/guides/nested-types.md §2.3: the values buffer must cover",
             "    // NumValues, the packed lane follows inside it).",
             "    private static int PrepareListLeafBuffers<T>(",
             "        global::Parquet.ParquetRowGroupReader groupReader,",

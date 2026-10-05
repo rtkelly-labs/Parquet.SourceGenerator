@@ -162,7 +162,7 @@ public sealed class ReadBuilderTests
         // The removed flat methods grew `predicate` on the stream overloads of ReadParquetAsync
         // and ReadParquetArrayAsync but never on the buffer ones, so buffer + List and buffer +
         // array were the two cells of the grid where pushdown was simply unavailable (defect 3 in
-        // docs/19). The builder routes those through the streaming core that does accept a
+        // docs/guides/reading-parquet.md). The builder routes those through the streaming core that does accept a
         // predicate, so the same filter is reachable from every source.
         byte[] bytes = await WriteAsync(200);
 
@@ -312,7 +312,7 @@ public sealed class ReadBuilderTests
             .ShouldBeEmpty();
     }
 
-    // ── Combinations the #217 state types made unrepresentable (#478, docs/47 §4.2) ──────────
+    // ── Combinations the #217 state types made unrepresentable (#478, docs/architecture/overview.md §3) ──────────
     //
     // Rule: the call that completes an unsupported combination throws NotSupportedException.
     // Parallel() and Where() know the source and existing state, so they throw themselves; a

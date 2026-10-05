@@ -154,8 +154,8 @@ internal static class CodeEmitter
         }
 
         // Read entry point and its single reader struct (#217, #478). Each axis of the read grid becomes a
-        // member rather than a name segment; see docs/19-PUBLIC-API-SURFACE.md. The builder is the
-        // only public read surface (#480, docs/48): the internal Read*CoreAsync methods above are
+        // member rather than a name segment; see docs/guides/reading-parquet.md. The builder is the
+        // only public read surface (#480): the internal Read*CoreAsync methods above are
         // the implementations its terminals delegate to, and are not part of the consumer contract.
         ReadBuilderComponent.Emit(builder, model);
 
@@ -466,7 +466,7 @@ internal static class CodeEmitter
     {
         if (col.IsListLeaf)
         {
-            // List lane: values + def + rep arrays sized by written entries (docs/15 §1.2).
+            // List lane: values + def + rep arrays sized by written entries (docs/guides/nested-types.md §1.2).
             string packedL = col.PackedType;
             return $"{indent}await groupWriter.WriteAllPartsAsync<{packedL}>(\n"
                 + $"{indent}    {fieldAccess},\n"
@@ -479,7 +479,7 @@ internal static class CodeEmitter
         if (col.IsCompound)
         {
             // Compound-path leaf: packed values plus a definition ladder; the group's own
-            // optionality means even a non-nullable leaf needs levels (docs/15 §1).
+            // optionality means even a non-nullable leaf needs levels (docs/guides/nested-types.md §1).
             string packed = col.PackedType;
             return $"{indent}await groupWriter.WriteAllPartsAsync<{packed}>(\n"
                 + $"{indent}    {fieldAccess},\n"
@@ -617,7 +617,7 @@ internal static class CodeEmitter
 
         if (col.IsListLeaf)
         {
-            // Entries run ahead of rowCount for multi-element lists (docs/15 section 2.3).
+            // Entries run ahead of rowCount for multi-element lists (docs/guides/nested-types.md section 2.3).
             string packedL = col.PackedType;
             builder.AppendLine(
                 $"{indent}var entries_{col.Slot} = PrepareListLeafBuffers<{packedL}>(groupReader, {fieldAccess}, \"{col.Leaf.Name}\", options, ref allocatedBytes, ref buffer_{col.Slot}, ref defLevels_{col.Slot}, ref repLevels_{col.Slot});"
