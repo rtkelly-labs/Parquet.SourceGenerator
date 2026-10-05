@@ -229,9 +229,9 @@ jobs:
         run: |
           set -euo pipefail
           out="$RUNNER_TEMP/derived"
-          dotnet run scripts/DerivedOutputs.cs -- --out "$out"
+          dotnet run scripts/DerivedOutputs.cs -- --out "$out" --version "$VERSION"
           printf '{"version":"%s","tag":"%s","commit":"%s"}\n' "$VERSION" "$TAG" "$GITHUB_SHA" > "$out/manifest.json"
-          tar -czf "$RUNNER_TEMP/derived-outputs.tar.gz" -C "$out" manifest.json golden metrics callgraph
+          tar -czf "$RUNNER_TEMP/derived-outputs.tar.gz" -C "$out" manifest.json golden metrics callgraph api-model.json
 
       - name: Upload Derived Outputs
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7

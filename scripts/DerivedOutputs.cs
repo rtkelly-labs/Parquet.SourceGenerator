@@ -43,6 +43,7 @@ using System.Linq;
 
 string? repo = null;
 string? outArg = null;
+string? versionArg = null;
 string[] argv = Environment.GetCommandLineArgs();
 for (int i = 1; i < argv.Length; i++)
 {
@@ -50,6 +51,8 @@ for (int i = 1; i < argv.Length; i++)
         repo = argv[++i];
     else if (argv[i] == "--out" && i + 1 < argv.Length)
         outArg = argv[++i];
+    else if (argv[i] == "--version" && i + 1 < argv.Length)
+        versionArg = argv[++i];
     else
     {
         Console.Error.WriteLine($"Unknown argument: {argv[i]}");
@@ -128,6 +131,23 @@ Run(
     "--golden",
     golden
 );
+
+var exportArgs = new List<string>
+{
+    "run",
+    "scripts/ExportApiDocs.cs",
+    "--",
+    "--repo",
+    repo,
+    "--out",
+    output,
+};
+if (!string.IsNullOrEmpty(versionArg))
+{
+    exportArgs.Add("--version");
+    exportArgs.Add(versionArg);
+}
+Run(repo, "dotnet", null, exportArgs.ToArray());
 
 Console.WriteLine($"Derived outputs written to {output}.");
 return 0;
