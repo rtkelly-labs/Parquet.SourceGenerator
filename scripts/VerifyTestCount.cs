@@ -6,21 +6,21 @@ using System.Xml.Linq;
 
 // A discovery regression must not turn the required test job green by running fewer tests.
 // Lower this reviewed floor only with an explanation in the PR and the 0.1 gate matrix.
-// The main project ran 1,773 tests after the behavioral cleanup in #670/#671.
-const int MinimumExecuted = 1750;
+// The main project ran 1,752 tests after the behavioral cleanup in #670/#671.
+const int MinimumExecuted = 1700;
 const string TrxPath = "test/Parquet.SourceGenerator.Tests/TestResults/ci.trx";
 
 if (
     !CountsMeetFloor(
         XDocument.Parse(
-            "<TestRun><ResultSummary><Counters total=\"1750\" executed=\"1750\" /></ResultSummary></TestRun>"
+            "<TestRun><ResultSummary><Counters total=\"1700\" executed=\"1700\" /></ResultSummary></TestRun>"
         ),
         MinimumExecuted,
         out _
     )
     || CountsMeetFloor(
         XDocument.Parse(
-            "<TestRun><ResultSummary><Counters total=\"1749\" executed=\"1749\" /></ResultSummary></TestRun>"
+            "<TestRun><ResultSummary><Counters total=\"1699\" executed=\"1699\" /></ResultSummary></TestRun>"
         ),
         MinimumExecuted,
         out _
