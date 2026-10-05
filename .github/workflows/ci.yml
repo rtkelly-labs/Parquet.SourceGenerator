@@ -229,7 +229,10 @@ jobs:
           # The version/schema-evolution matrix writes its per-cell record here so the run leaves
           # behind a compatibility report, not just a pass/fail.
           PARQUET_COMPAT_MATRIX_OUTPUT: ${{ runner.temp }}/parquet-source-generator/compatibility-matrix
-        run: dotnet test Parquet.SourceGenerator.slnx --configuration Release --no-build --filter "Category!=DatasetIntegrity&Category!=ExternalInterop" --verbosity normal --collect:"XPlat Code Coverage" --settings coverlet.runsettings
+        run: dotnet test Parquet.SourceGenerator.slnx --configuration Release --no-build --filter "Category!=DatasetIntegrity&Category!=ExternalInterop" --verbosity normal --collect:"XPlat Code Coverage" --settings coverlet.runsettings --logger "trx;LogFileName=ci.trx"
+
+      - name: Verify Executed Test Count
+        run: dotnet run scripts/VerifyTestCount.cs
 
       - name: Verify Generated Reader With PyArrow Fixture
         env:
