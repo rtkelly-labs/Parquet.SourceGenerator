@@ -67,6 +67,7 @@ The documentation is organized into three distinct tiers based on audience and i
 7. **[47 - 0.1 Contract & Design Goals](./47-0.1-CONTRACT-AND-DESIGN-GOALS.md)**
    - What `0.1` means: a confidence and minimal-contract milestone, not "freeze everything" (#477).
    - The three visibility tiers, the target consumer surface, and the `0.1` release gate.
+   - Live release gate tracker and critical path status: **[Milestone.md](../Milestone.md)**.
 
 ---
 

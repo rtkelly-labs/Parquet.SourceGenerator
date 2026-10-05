@@ -468,6 +468,7 @@ OrderEventParquetExtensions.WriteParquetRowGroupAsync(writer, recordBatch);
 | 🧠 **[12 - Buffer Reuse & Extraction Strategies](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/12-BUFFER-REUSE-AND-EXTRACTION-STRATEGIES.md)** | CPU cache spatial locality vs multi-pass traversal empirical analysis. |
 | 🛡️ **[13 - Compiler Diagnostics Reference](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/13-COMPILER-DIAGNOSTICS.md)** | Full catalog of `PARQ001`–`PARQ016` diagnostic rules, causes, and fixes. |
 | 🧪 **[14 - Parquet Compatibility Matrix](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/14-COMPATIBILITY-MATRIX.md)** | Supported format envelope, producer/consumer boundaries, and compatibility definitions. |
+| 🎯 **[0.1 Milestone & Release Status](Milestone.md)** | Current 0.1 release gates, blocker status, and CI verification index. |
 | 📊 **[Full Benchmarks Report](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/BENCHMARKS.md)** | Multi-scale sweeps (1k, 10k, 100k, 1M rows) and real-world datasets. |
 
 ---
