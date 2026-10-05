@@ -76,7 +76,9 @@ static bool VerifyFile(string path, string[] classes)
         if (!success)
             Console.Error.WriteLine($"{path}: {reason}");
         else
-            Console.WriteLine($"{path}: all tests ran and {classes.Length} required suites passed.");
+            Console.WriteLine(
+                $"{path}: all tests ran and {classes.Length} required suites passed."
+            );
         return success;
     }
     catch (Exception ex)
@@ -113,8 +115,7 @@ static bool Verify(XDocument report, string[] classes, out string reason)
     foreach (XElement test in report.Descendants().Where(e => e.Name.LocalName == "UnitTest"))
     {
         string? id = test.Attribute("id")?.Value;
-        string? className = test
-            .Descendants()
+        string? className = test.Descendants()
             .FirstOrDefault(e => e.Name.LocalName == "TestMethod")
             ?.Attribute("className")
             ?.Value;
