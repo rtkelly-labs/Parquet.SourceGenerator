@@ -400,7 +400,7 @@ To enable Native AOT in your application:
 
 ---
 
-## 🏹 Apache Arrow RecordBatch Ingestion (Experimental)
+## 🏹 Apache Arrow RecordBatch Ingestion (Optional Integration)
 
 > **Scope:** ingestion only (`RecordBatch` to Parquet), and only when your project references Apache.Arrow. Exporting Parquet to Arrow is not shipped.
 
@@ -445,7 +445,7 @@ OrderEventParquetExtensions.WriteParquetRowGroupAsync(writer, recordBatch);
 | **`DateTimeOffset`** | ❌ Unsupported | Parquet has no direct representation; use `DateTime` + offset column. |
 | **Positional Records** | ❌ Unsupported | Constructor with parameters reported as `PARQ008`. Use nominal records with `{ get; init; }`. |
 | **.NET Framework (net472)** | ✅ Supported via V5 | Use `Parquet.SourceGenerator.Legacy` for Parquet.Net 4.x/5.x support. |
-| **Apache Arrow ingestion** | 🧪 Experimental (v6 only) | Ingestion only (`RecordBatch` to Parquet); export to Arrow is not shipped. Emitted only when the consumer references Apache.Arrow. Flat models only; Native AOT exercised by the repository's published AOT harness. |
+| **Apache Arrow ingestion** | 🔗 Optional Integration (v6 only) | Ingestion only (`RecordBatch` to Parquet); export to Arrow is not shipped. Emitted only when the consumer references Apache.Arrow. Flat models only; Native AOT exercised by the repository's published AOT harness. |
 | **Flat-only schemas** | ✅ Configurable | Defaults to compound + flat; enforce flat-only schemas with `<ParquetGeneratorFlatOnly>true</ParquetGeneratorFlatOnly>`. |
 | **V5 generated API** | ✅ Declared core subset | V5 intentionally exposes flat read/write, batched write, row-group write, and schema; modern builder, filtering, parallel, streaming, column-batch, and Arrow members are v6-only. |
 

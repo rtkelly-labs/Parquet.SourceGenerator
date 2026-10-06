@@ -54,6 +54,7 @@ internal static class GoldenCorpus
             ListOrder(),
             PocoOrder(),
             SortedShipment(),
+            ArrowOrder(),
         }
     );
 
@@ -344,6 +345,33 @@ internal static class GoldenCorpus
         return Driven("SortedShipmentParquetExtensions.g.cs", source);
     }
 
+    private static GoldenEmission ArrowOrder()
+    {
+        string source = """
+            using Parquet.SourceGenerator;
+            using System;
+
+            namespace SampleDomain.Models;
+
+            [ParquetSerializable]
+            public partial class ArrowOrder
+            {
+                public int Id { get; set; }
+                public string? Name { get; set; }
+                public double Score { get; set; }
+                [ParquetDecimal(18, 4)]
+                public decimal Price { get; set; }
+                [ParquetTimestamp(ParquetTimestampUnit.Microseconds)]
+                public System.DateTime CreatedAt { get; set; }
+                public System.TimeSpan Duration { get; set; }
+                public System.Guid CorrelationId { get; set; }
+                public byte[]? Payload { get; set; }
+            }
+            """;
+
+        return DrivenWithArrow("ArrowOrderParquetExtensions.g.cs", source);
+    }
+
     private static GoldenEmission Driven(string fileName, string source)
     {
         var (diagnostics, outputTrees) = RunGenerator(source);
@@ -352,6 +380,32 @@ internal static class GoldenCorpus
             outputTrees[outputTrees.Count - 1].ToString(),
             diagnostics
         );
+    }
+
+    private static GoldenEmission DrivenWithArrow(string fileName, string source)
+    {
+        var (diagnostics, outputTrees) = RunGenerator(source, referenceArrow: true);
+        var generatedTrees = outputTrees.Skip(1).Select(t => t.ToString()).ToList();
+        string combined;
+        if (generatedTrees.Count == 1)
+        {
+            combined = generatedTrees[0];
+        }
+        else
+        {
+            // The generator emits {Type}.ParquetSerializer.g.cs and {Type}.Arrow.g.cs as two
+            // separate compilation units, each with its own file-scoped namespace declaration.
+            // When combining them into the single golden review file, strip the redundant header
+            // and namespace declaration from the secondary Arrow unit so it merges into the
+            // primary file-scoped namespace.
+            string primary = generatedTrees[0];
+            string arrow = generatedTrees[1];
+            int classIndex = arrow.IndexOf("public static partial class", StringComparison.Ordinal);
+            string arrowBody = classIndex >= 0 ? arrow.Substring(classIndex) : arrow;
+            combined = primary.TrimEnd() + "\n\n" + arrowBody;
+        }
+
+        return new GoldenEmission(fileName, combined, diagnostics);
     }
 
     private static PropertyModel Prop(
@@ -407,7 +461,7 @@ internal static class GoldenCorpus
     internal static (
         IReadOnlyList<Diagnostic> Diagnostics,
         IReadOnlyList<SyntaxTree> OutputTrees
-    ) RunGenerator(string source)
+    ) RunGenerator(string source, bool referenceArrow = false)
     {
         SyntaxTree syntaxTree = CSharpSyntaxTree.ParseText(source);
         // The real runtime reference set (filtered TPA): an emitted source that only
@@ -428,6 +482,11 @@ internal static class GoldenCorpus
                         or "mscorlib.dll"
                         or "Parquet.dll"
                         or "Parquet.SourceGenerator.Attributes.dll"
+                || (
+                    referenceArrow
+                    && Path.GetFileName(p)
+                        .Equals("Apache.Arrow.dll", StringComparison.OrdinalIgnoreCase)
+                )
             )
             .Distinct(StringComparer.Ordinal)
             .Select(p => (MetadataReference)MetadataReference.CreateFromFile(p))

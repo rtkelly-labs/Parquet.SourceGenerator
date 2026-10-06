@@ -16,6 +16,36 @@ The rule, the three surfaces and the author process are in
 
 <!-- Add new entries directly below this line, newest first. -->
 
+### 2026-10-06 — Emitted consumer API shape budget gate (#588)
+
+- **Surface:** generated-shape
+- **Semver:** generated-shape
+- **Issue:** [#588](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/588), completing the second half
+  of [#459](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/459), tracker [#477](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/477)
+- **Change:** Introduced `src/api/emitted-api-budgets.txt` containing checked-in ceiling budgets for emitted
+  consumer API shapes (flat/sorted <= 40 members, <= 36 parameters; compound <= 20 members, <= 20 parameters;
+  legacy <= 10 members, <= 15 parameters). Governed by `scripts/DerivedOutputs.cs`, unit-tested by
+  `GeneratedApiBudgetGateTests`, and added to governed catalogues in `scripts/CheckApiLedger.cs`.
+- **Rationale:** Retirement of `PARQAPI001` left the emitted consumer surface without a regression gate on member
+  or parameter count growth. Hard ceilings per model category prevent silent bloat while allowing normal internal
+  emitter refactoring. Raising any budget requires a ledger entry, and the gate fails closed if 0 models are examined.
+
+### 2026-10-06 — Apache Arrow ingestion golden model and stability classification (#589, #482, #583)
+
+- **Surface:** generated-shape
+- **Semver:** additive-minor
+- **Issue:** [#589](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/589), [#482](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/482),
+  [#583](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/583), tracker [#477](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/477)
+- **Change:** Added golden model `ArrowOrder` to `GoldenCorpus`, exposing the conditionally emitted
+  `WriteParquetRowGroupAsync(ParquetWriter, RecordBatch, ...)` in derived `.api.txt` and shape summaries
+  (33 members, 32 parameters). Formally classified Arrow RecordBatch ingestion as **Optional Integration**
+  (stable for 0.1, modern backend only), removing legacy "(Experimental)" tags from documentation. Recorded
+  decision that taking `ParquetWriter` is the correct contract for row-group streaming pipelines.
+- **Rationale:** Previously, no golden model referenced `Apache.Arrow`, leaving the emitted bridge invisible to
+  API review diffs and shape measurements. Adding `ArrowOrder` brings the overload under API review and budget
+  governance. Arrow batches represent individual Parquet row groups in caller-managed streaming pipelines, so
+  accepting `ParquetWriter` matches caller lifecycle and compression control requirements.
+
 ### 2026-10-05 — Fold `WriteParquetBatchedAsync` into `WriteParquetAsync` (#512)
 
 - **Surface:** generated-shape
