@@ -77,8 +77,12 @@ internal static class ArrowBridgeEmitter
             "        global::System.Threading.CancellationToken cancellationToken = default)"
         );
         builder.AppendLine("    {");
-        builder.AppendLine("        global::System.ArgumentNullException.ThrowIfNull(writer);");
-        builder.AppendLine("        global::System.ArgumentNullException.ThrowIfNull(batch);");
+        builder.AppendLine(
+            "        if (writer is null) throw new global::System.ArgumentNullException(nameof(writer));"
+        );
+        builder.AppendLine(
+            "        if (batch is null) throw new global::System.ArgumentNullException(nameof(batch));"
+        );
         builder.AppendLine(
             "        return ArrowBridge.WriteParquetRowGroupAsync(writer, batch, options, cancellationToken);"
         );

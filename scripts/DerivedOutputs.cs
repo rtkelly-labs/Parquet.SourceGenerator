@@ -276,11 +276,33 @@ static int VerifyEmittedApiBudgets(string goldenDirectory, string budgetFilePath
         );
     }
 
+    string[] gcsFiles = Directory.GetFiles(goldenDirectory, "*.g.cs");
     string[] shapeFiles = Directory.GetFiles(goldenDirectory, "*.api.shape.txt");
-    if (shapeFiles.Length == 0)
+    if (shapeFiles.Length == 0 || gcsFiles.Length == 0)
     {
         throw new InvalidOperationException(
             $"Emitted API shape budget gate examined 0 models in '{goldenDirectory}'; positive control failed."
+        );
+    }
+
+    var expectedStems = new HashSet<string>(
+        gcsFiles.Select(f =>
+            Path.GetFileName(f).Substring(0, Path.GetFileName(f).Length - ".g.cs".Length)
+        ),
+        StringComparer.Ordinal
+    );
+    var shapeStems = new HashSet<string>(
+        shapeFiles.Select(f =>
+            Path.GetFileName(f).Substring(0, Path.GetFileName(f).Length - ".api.shape.txt".Length)
+        ),
+        StringComparer.Ordinal
+    );
+
+    var missingShapes = expectedStems.Except(shapeStems).ToList();
+    if (missingShapes.Count > 0)
+    {
+        throw new InvalidOperationException(
+            $"Emitted API shape budget gate missing shape summaries for: {string.Join(", ", missingShapes)}"
         );
     }
 

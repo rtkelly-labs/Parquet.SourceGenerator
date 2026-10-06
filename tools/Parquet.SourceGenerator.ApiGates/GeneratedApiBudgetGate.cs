@@ -104,17 +104,31 @@ public static class GeneratedApiBudgetGate
                 {
                     if (parts[i].StartsWith("MEMBERS=", StringComparison.Ordinal))
                     {
-                        maxMembers = int.Parse(
-                            parts[i].Substring("MEMBERS=".Length),
-                            CultureInfo.InvariantCulture
-                        );
+                        if (
+                            int.TryParse(
+                                parts[i].Substring("MEMBERS=".Length),
+                                NumberStyles.Integer,
+                                CultureInfo.InvariantCulture,
+                                out int val
+                            )
+                        )
+                        {
+                            maxMembers = val;
+                        }
                     }
                     else if (parts[i].StartsWith("PARAMETERS=", StringComparison.Ordinal))
                     {
-                        maxParams = int.Parse(
-                            parts[i].Substring("PARAMETERS=".Length),
-                            CultureInfo.InvariantCulture
-                        );
+                        if (
+                            int.TryParse(
+                                parts[i].Substring("PARAMETERS=".Length),
+                                NumberStyles.Integer,
+                                CultureInfo.InvariantCulture,
+                                out int val
+                            )
+                        )
+                        {
+                            maxParams = val;
+                        }
                     }
                 }
 
@@ -193,17 +207,31 @@ public static class GeneratedApiBudgetGate
         {
             if (token.StartsWith("MEMBERS=", StringComparison.Ordinal))
             {
-                members = int.Parse(
-                    token.Substring("MEMBERS=".Length),
-                    CultureInfo.InvariantCulture
-                );
+                if (
+                    int.TryParse(
+                        token.Substring("MEMBERS=".Length),
+                        NumberStyles.Integer,
+                        CultureInfo.InvariantCulture,
+                        out int val
+                    )
+                )
+                {
+                    members = val;
+                }
             }
             else if (token.StartsWith("PARAMETERS=", StringComparison.Ordinal))
             {
-                parameters = int.Parse(
-                    token.Substring("PARAMETERS=".Length),
-                    CultureInfo.InvariantCulture
-                );
+                if (
+                    int.TryParse(
+                        token.Substring("PARAMETERS=".Length),
+                        NumberStyles.Integer,
+                        CultureInfo.InvariantCulture,
+                        out int val
+                    )
+                )
+                {
+                    parameters = val;
+                }
             }
         }
 
