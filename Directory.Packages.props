@@ -23,7 +23,7 @@
     -->
         <PackageVersion Include="Apache.Arrow" Version="23.0.0" />
         <PackageVersion Include="System.Memory" Version="4.6.3" />
-        <PackageVersion Include="Microsoft.Bcl.AsyncInterfaces" Version="8.0.0" />
+        <PackageVersion Include="Microsoft.Bcl.AsyncInterfaces" Version="10.0.12" />
 
         <!-- Test Framework & Coverage Dependencies -->
         <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
