@@ -16,6 +16,14 @@ The rule, the three surfaces and the author process are in
 
 <!-- Add new entries directly below this line, newest first. -->
 
+### 2026-10-07 — Promote `PublicAPI.Unshipped.txt` to `PublicAPI.Shipped.txt` (0.1 baseline) (#592)
+
+- **Surface:** package
+- **Semver:** additive-minor
+- **Issue:** [#592](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/592), part of tracker [#477](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/477), [#583](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/583)
+- **Change:** Promoted all 57 entries from `src/Parquet.SourceGenerator.Attributes/PublicAPI.Unshipped.txt` to `PublicAPI.Shipped.txt`, establishing the frozen 0.1 baseline of 101 public package signatures across all 16 public types. `PublicAPI.Unshipped.txt` is now empty (retaining `#nullable enable`).
+- **Rationale:** Prior to 0.1, new attributes, enums, options, and statistics members resided in `PublicAPI.Unshipped.txt` where evolutionary changes and trims could occur without breaking-change violations against a shipped baseline. With all 0.1 API contractions, trims (#584–#587), and classifications (#482, #589) completed, the entire public surface of `Parquet.SourceGenerator.Attributes` is formally shipped. Any subsequent modification to a member in `PublicAPI.Shipped.txt` will now be enforced as `breaking-major` under docs/18.
+
 ### 2026-10-06 — Emitted consumer API shape budget gate (#588)
 
 - **Surface:** generated-shape
