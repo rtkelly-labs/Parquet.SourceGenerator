@@ -113,7 +113,7 @@ static List<UserEvent> GetEvents() => events;
 static async IAsyncEnumerable<UserEvent> GetAsyncEventStream() { await Task.CompletedTask; yield break; }
 -->
 
-### 3. Writing Parquet Files
+### 3. Writing Parquet Files (Stable Core)
 
 ```csharp compile
 List<UserEvent> events = GetEvents();
@@ -134,7 +134,7 @@ await eventStream.WriteParquetAsync(
     new ParquetSerializerOptions { RowGroupSize = 10_000 });
 ```
 
-#### Writing from data that is already columnar
+#### Writing from data that is already columnar (Stable Core)
 
 If the caller already holds contiguous column buffers — Arrow arrays, a query engine's column
 vectors, pre-split `ReadOnlyMemory<T>` — there is no reason to materialise POCOs first. Flat models
@@ -192,7 +192,7 @@ GC modes, and the reasons the API is shaped this way are in
 [docs/12](docs/12-BUFFER-REUSE-AND-EXTRACTION-STRATEGIES.md#-6-direct-columnar-handoff--measured-issue-137).
 Models with struct, list or map members keep the row-oriented API only.
 
-### 4. Reading Parquet Files (Sequential & Multi-Core Parallel)
+### 4. Reading Parquet Files (Sequential & Multi-Core Parallel) (Stable Core)
 
 ```csharp compile
 using var stream = File.OpenRead("events.parquet");
@@ -271,7 +271,7 @@ loop body only. Lanes of a borrowed batch are not guaranteed to be array-backed 
 or a pin outliving the batch), and batches are not thread-safe. To keep data, copy each lane with `.ToArray()` into the
 `<Model>Batch` constructor.
 
-### 5. Row-Group Pruning with Min/Max Statistics
+### 5. Row-Group Pruning with Min/Max Statistics (Stable Core)
 
 `.Where(...)` on the read builder takes a predicate over the statistics Parquet records in the file
 footer, from either source and for every materializing or streaming shape. A row group the zone map rules out is never opened: no page read, no decompression,
@@ -310,7 +310,7 @@ The generated `<Model>RowGroupMetadata` struct exposes `RowGroupIndex`, `RowCoun
 (its constructor is `internal`); a predicate just reads it. Pruning is conservative: a row group
 whose statistics are incomplete is always read.
 
-### 6. Custom Configuration (`ParquetSerializerOptions`)
+### 6. Custom Configuration (`ParquetSerializerOptions`) (Stable Core)
 
 ```csharp compile
 var options = new ParquetSerializerOptions
@@ -400,7 +400,7 @@ To enable Native AOT in your application:
 
 ---
 
-## 🏹 Apache Arrow RecordBatch Ingestion (Experimental)
+## 🏹 Apache Arrow RecordBatch Ingestion (Optional Integration)
 
 > **Scope:** ingestion only (`RecordBatch` to Parquet), and only when your project references Apache.Arrow. Exporting Parquet to Arrow is not shipped.
 
@@ -445,7 +445,7 @@ OrderEventParquetExtensions.WriteParquetRowGroupAsync(writer, recordBatch);
 | **`DateTimeOffset`** | ❌ Unsupported | Parquet has no direct representation; use `DateTime` + offset column. |
 | **Positional Records** | ❌ Unsupported | Constructor with parameters reported as `PARQ008`. Use nominal records with `{ get; init; }`. |
 | **.NET Framework (net472)** | ✅ Supported via V5 | Use `Parquet.SourceGenerator.Legacy` for Parquet.Net 4.x/5.x support. |
-| **Apache Arrow ingestion** | 🧪 Experimental (v6 only) | Ingestion only (`RecordBatch` to Parquet); export to Arrow is not shipped. Emitted only when the consumer references Apache.Arrow. Flat models only; Native AOT exercised by the repository's published AOT harness. |
+| **Apache Arrow ingestion** | 🔗 Optional Integration (v6 only) | Ingestion only (`RecordBatch` to Parquet); export to Arrow is not shipped. Emitted only when the consumer references Apache.Arrow. Flat models only; Native AOT exercised by the repository's published AOT harness. |
 | **Flat-only schemas** | ✅ Configurable | Defaults to compound + flat; enforce flat-only schemas with `<ParquetGeneratorFlatOnly>true</ParquetGeneratorFlatOnly>`. |
 | **V5 generated API** | ✅ Declared core subset | V5 intentionally exposes flat read/write, batched write, row-group write, and schema; modern builder, filtering, parallel, streaming, column-batch, and Arrow members are v6-only. |
 

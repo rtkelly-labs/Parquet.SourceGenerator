@@ -47,6 +47,7 @@ string[] PlaceholderValues =
 string[] catalogueGlobs =
 {
     "src/api/seams.txt",
+    "src/api/emitted-api-budgets.txt",
     "PublicAPI.Unshipped.txt",
     "**/PublicAPI.Unshipped.txt",
 };

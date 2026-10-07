@@ -153,6 +153,15 @@ public sealed class GoldenCodeGenRegressionTests
     }
 
     [Fact]
+    public void GoldenMasterArrowRecordBatchModel()
+    {
+        GoldenEmission emission = VerifyAndPublish("ArrowOrderParquetExtensions.g.cs");
+        string generated = emission.Source;
+        generated.ShouldContain("WriteParquetRowGroupAsync");
+        generated.ShouldContain("global::Apache.Arrow.RecordBatch");
+    }
+
+    [Fact]
     public void EveryCorpusModelHasAUniqueFileName()
     {
         GoldenCorpus

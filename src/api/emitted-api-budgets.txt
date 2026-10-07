@@ -1,0 +1,17 @@
+# Emitted consumer API shape budgets.
+#
+# Governed by the derived-outputs gate (scripts/DerivedOutputs.cs) and CheckApiLedger.cs.
+# Raising any budget requires an entry in docs/api/LEDGER.md (surface: generated-shape).
+#
+# Model shape classifications:
+#   flat: ArrowOrder, OrderEvent, ScalarMetric
+#   sorted: SortedShipment
+#   compound: ListOrder, NestedOrder, PocoOrder
+#   legacy: LegacyRecord
+#
+# Format: <shape> MEMBERS=<max> PARAMETERS=<max>
+
+flat MEMBERS=40 PARAMETERS=36
+sorted MEMBERS=40 PARAMETERS=36
+compound MEMBERS=20 PARAMETERS=20
+legacy MEMBERS=10 PARAMETERS=15

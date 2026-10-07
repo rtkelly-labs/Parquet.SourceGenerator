@@ -48,6 +48,53 @@ internal static class ArrowBridgeEmitter
 
         builder.AppendLine($"public static partial class {extensionsClassName}");
         builder.AppendLine("{");
+        builder.AppendLine($"    /// <summary>");
+        builder.AppendLine(
+            $"    /// Writes one Apache Arrow <c>RecordBatch</c> as a single Parquet row group using the"
+        );
+        builder.AppendLine(
+            $"    /// <c>{model.ClassName}</c> schema. Columns are matched by name and validated strictly;"
+        );
+        builder.AppendLine(
+            "    /// fixed-width Arrow buffers are handed to the writer without a copy or an ArrayPool rental."
+        );
+        builder.AppendLine("    /// </summary>");
+        builder.AppendLine(
+            "    /// <remarks>Call it qualified — it is a plain static method, not an extension.</remarks>"
+        );
+        builder.AppendLine(
+            $"    /// <remarks>Requires Apache.Arrow {ArrowMappingComponent.SupportedArrowFloor} or later.</remarks>"
+        );
+        builder.AppendLine(
+            "    public static global::System.Threading.Tasks.Task WriteParquetRowGroupAsync("
+        );
+        builder.AppendLine("        global::Parquet.ParquetWriter writer,");
+        builder.AppendLine("        global::Apache.Arrow.RecordBatch batch,");
+        builder.AppendLine(
+            "        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,"
+        );
+        builder.AppendLine(
+            "        global::System.Threading.CancellationToken cancellationToken = default)"
+        );
+        builder.AppendLine("    {");
+        builder.AppendLine("#if NET6_0_OR_GREATER");
+        builder.AppendLine("        global::System.ArgumentNullException.ThrowIfNull(writer);");
+        builder.AppendLine("        global::System.ArgumentNullException.ThrowIfNull(batch);");
+        builder.AppendLine("#else");
+        builder.AppendLine(
+            "        if (writer is null) throw new global::System.ArgumentNullException(nameof(writer));"
+        );
+        builder.AppendLine(
+            "        if (batch is null) throw new global::System.ArgumentNullException(nameof(batch));"
+        );
+        builder.AppendLine("#endif");
+        builder.AppendLine(
+            "        return ArrowBridge.WriteParquetRowGroupAsync(writer, batch, options, cancellationToken);"
+        );
+        builder.AppendLine("    }");
+        builder.AppendLine();
+        builder.AppendLine("    private static class ArrowBridge");
+        builder.AppendLine("    {");
 
         bool needsEpoch = false;
         bool needsGuid = false;
@@ -66,16 +113,16 @@ internal static class ArrowBridgeEmitter
         if (needsEpoch)
         {
             builder.AppendLine(
-                "    // Unspecified kind on purpose: it is the kind DateOnly.ToDateTime produces on the"
+                "        // Unspecified kind on purpose: it is the kind DateOnly.ToDateTime produces on the"
             );
             builder.AppendLine(
-                "    // POCO write path, so both paths hand Parquet.Net identical DateTime values."
+                "        // POCO write path, so both paths hand Parquet.Net identical DateTime values."
             );
             builder.AppendLine(
-                "    private static readonly global::System.DateTime _arrowUnixEpoch ="
+                "        private static readonly global::System.DateTime _arrowUnixEpoch ="
             );
             builder.AppendLine(
-                "        new global::System.DateTime(1970, 1, 1, 0, 0, 0, global::System.DateTimeKind.Unspecified);"
+                "            new global::System.DateTime(1970, 1, 1, 0, 0, 0, global::System.DateTimeKind.Unspecified);"
             );
             builder.AppendLine();
         }
@@ -104,6 +151,7 @@ internal static class ArrowBridgeEmitter
             EmitDecimalHelper(builder);
         }
 
+        builder.AppendLine("    }");
         builder.AppendLine("}");
 
         return builder.ToString();
@@ -115,22 +163,6 @@ internal static class ArrowBridgeEmitter
 
     private static void EmitValidation(StringBuilder builder, TargetClassModel model)
     {
-        builder.AppendLine("    /// <summary>");
-        builder.AppendLine(
-            "    /// Validates an Arrow <c>RecordBatch</c> against the generated Parquet schema by field"
-        );
-        builder.AppendLine(
-            "    /// name, then by physical/logical type. Every offending field is reported at once — no"
-        );
-        builder.AppendLine("    /// column is silently coerced.");
-        builder.AppendLine("    /// </summary>");
-        builder.AppendLine("    private static void ValidateArrowRecordBatch(");
-        builder.AppendLine("        global::Apache.Arrow.RecordBatch batch)");
-        builder.AppendLine("    {");
-        builder.AppendLine(
-            "        global::System.Collections.Generic.List<string> errors = new global::System.Collections.Generic.List<string>();"
-        );
-
         for (int i = 0; i < model.Properties.Length; i++)
         {
             PropertyModel prop = model.Properties[i];
@@ -138,7 +170,9 @@ internal static class ArrowBridgeEmitter
             string name = EmittedText.Literal(prop.ParquetColumnName);
             string label = EmittedText.Literal(prop.ParquetColumnName + ": ");
 
-            builder.AppendLine();
+            builder.AppendLine(
+                $"        private static void ValidateArrowColumn_{i}(global::Apache.Arrow.RecordBatch batch, global::System.Collections.Generic.List<string> errors)"
+            );
             builder.AppendLine("        {");
             builder.AppendLine(
                 $"            int index = batch.Schema.GetFieldIndex({name}, global::System.StringComparer.Ordinal);"
@@ -252,19 +286,39 @@ internal static class ArrowBridgeEmitter
 
             builder.AppendLine("            }");
             builder.AppendLine("        }");
+            builder.AppendLine();
         }
 
-        builder.AppendLine();
-        builder.AppendLine("        if (errors.Count > 0)");
+        builder.AppendLine("        /// <summary>");
+        builder.AppendLine(
+            "        /// Validates an Arrow <c>RecordBatch</c> against the generated Parquet schema by field"
+        );
+        builder.AppendLine(
+            "        /// name, then by physical/logical type. Every offending field is reported at once — no"
+        );
+        builder.AppendLine("        /// column is silently coerced.");
+        builder.AppendLine("        /// </summary>");
+        builder.AppendLine("        internal static void ValidateArrowRecordBatch(");
+        builder.AppendLine("            global::Apache.Arrow.RecordBatch batch)");
         builder.AppendLine("        {");
-        builder.AppendLine("            throw new global::System.IO.InvalidDataException(");
+        builder.AppendLine(
+            "            global::System.Collections.Generic.List<string> errors = new global::System.Collections.Generic.List<string>();"
+        );
+        for (int i = 0; i < model.Properties.Length; i++)
+        {
+            builder.AppendLine($"            ValidateArrowColumn_{i}(batch, errors);");
+        }
+        builder.AppendLine();
+        builder.AppendLine("            if (errors.Count > 0)");
+        builder.AppendLine("            {");
+        builder.AppendLine("                throw new global::System.IO.InvalidDataException(");
         string typeLabel = EmittedText.Literal(model.ClassName);
         builder.AppendLine(
-            $"                \"Arrow RecordBatch does not match the generated Parquet schema for \" + {typeLabel} + \": \""
+            $"                    \"Arrow RecordBatch does not match the generated Parquet schema for \" + {typeLabel} + \": \""
         );
-        builder.AppendLine("                + string.Join(\" | \", errors));");
+        builder.AppendLine("                    + string.Join(\" | \", errors));");
+        builder.AppendLine("            }");
         builder.AppendLine("        }");
-        builder.AppendLine("    }");
     }
 
     /// <summary>
@@ -280,20 +334,20 @@ internal static class ArrowBridgeEmitter
     /// </summary>
     private static void EmitStructuralHelpers(StringBuilder builder, TargetClassModel model)
     {
-        builder.AppendLine("    private static int ArrowFieldOccurrences(");
-        builder.AppendLine("        global::Apache.Arrow.Schema schema,");
-        builder.AppendLine("        string name)");
-        builder.AppendLine("    {");
-        builder.AppendLine("        int count = 0;");
-        builder.AppendLine("        for (int i = 0; i < schema.FieldsList.Count; i++)");
+        builder.AppendLine("        private static int ArrowFieldOccurrences(");
+        builder.AppendLine("            global::Apache.Arrow.Schema schema,");
+        builder.AppendLine("            string name)");
         builder.AppendLine("        {");
+        builder.AppendLine("            int count = 0;");
+        builder.AppendLine("            for (int i = 0; i < schema.FieldsList.Count; i++)");
+        builder.AppendLine("            {");
         builder.AppendLine(
-            "            if (string.Equals(schema.FieldsList[i].Name, name, global::System.StringComparison.Ordinal)) count++;"
+            "                if (string.Equals(schema.FieldsList[i].Name, name, global::System.StringComparison.Ordinal)) count++;"
         );
-        builder.AppendLine("        }");
+        builder.AppendLine("            }");
         builder.AppendLine();
-        builder.AppendLine("        return count;");
-        builder.AppendLine("    }");
+        builder.AppendLine("            return count;");
+        builder.AppendLine("        }");
 
         bool hasRequired = false;
         for (int i = 0; i < model.Properties.Length; i++)
@@ -321,73 +375,77 @@ internal static class ArrowBridgeEmitter
         }
 
         builder.AppendLine();
-        builder.AppendLine("    /// <summary>");
+        builder.AppendLine("        /// <summary>");
         builder.AppendLine(
-            "    /// Whether a Utf8/Binary column's offsets are non-decreasing and stay inside its value"
+            "        /// Whether a Utf8/Binary column's offsets are non-decreasing and stay inside its value"
         );
         builder.AppendLine(
-            "    /// buffer, so that slicing a row can neither throw nor read another row's bytes."
+            "        /// buffer, so that slicing a row can neither throw nor read another row's bytes."
         );
-        builder.AppendLine("    /// </summary>");
+        builder.AppendLine("        /// </summary>");
         builder.AppendLine(
-            "    private static bool ArrowOffsetsSound(global::Apache.Arrow.BinaryArray array)"
+            "        private static bool ArrowOffsetsSound(global::Apache.Arrow.BinaryArray array)"
         );
-        builder.AppendLine("    {");
-        builder.AppendLine("        long slots = (long)array.Offset + array.Length + 1;");
-        builder.AppendLine(
-            "        if (array.ValueOffsetsBuffer.Length < slots * sizeof(int)) return false;"
-        );
-        builder.AppendLine(
-            "        global::System.ReadOnlySpan<int> offsets = array.ValueOffsets;"
-        );
-        builder.AppendLine("        int valuesLength = array.ValueBuffer.Length;");
-        builder.AppendLine("        int previous = offsets[0];");
-        builder.AppendLine("        if (previous < 0 || previous > valuesLength) return false;");
-        builder.AppendLine("        for (int k = 1; k < offsets.Length; k++)");
         builder.AppendLine("        {");
+        builder.AppendLine("            long slots = (long)array.Offset + array.Length + 1;");
         builder.AppendLine(
-            "            if (offsets[k] < previous || offsets[k] > valuesLength) return false;"
+            "            if (array.ValueOffsetsBuffer.Length < slots * sizeof(int)) return false;"
         );
-        builder.AppendLine("            previous = offsets[k];");
-        builder.AppendLine("        }");
+        builder.AppendLine(
+            "            global::System.ReadOnlySpan<int> offsets = array.ValueOffsets;"
+        );
+        builder.AppendLine("            int valuesLength = array.ValueBuffer.Length;");
+        builder.AppendLine("            int previous = offsets[0];");
+        builder.AppendLine(
+            "            if (previous < 0 || previous > valuesLength) return false;"
+        );
+        builder.AppendLine("            for (int k = 1; k < offsets.Length; k++)");
+        builder.AppendLine("            {");
+        builder.AppendLine(
+            "                if (offsets[k] < previous || offsets[k] > valuesLength) return false;"
+        );
+        builder.AppendLine("                previous = offsets[k];");
+        builder.AppendLine("            }");
         builder.AppendLine();
-        builder.AppendLine("        return true;");
-        builder.AppendLine("    }");
+        builder.AppendLine("            return true;");
+        builder.AppendLine("        }");
     }
 
     private static void EmitNullCountHelper(StringBuilder builder)
     {
         builder.AppendLine();
-        builder.AppendLine("    /// <summary>");
+        builder.AppendLine("        /// <summary>");
         builder.AppendLine(
-            "    /// Whether a column's declared null count matches the unset bits of its validity"
+            "        /// Whether a column's declared null count matches the unset bits of its validity"
         );
         builder.AppendLine(
-            "    /// bitmap. A negative count means not yet computed, which Apache.Arrow derives from"
+            "        /// bitmap. A negative count means not yet computed, which Apache.Arrow derives from"
         );
-        builder.AppendLine("    /// the bitmap itself.");
-        builder.AppendLine("    /// </summary>");
+        builder.AppendLine("        /// the bitmap itself.");
+        builder.AppendLine("        /// </summary>");
         builder.AppendLine(
-            "    private static bool ArrowNullCountAgrees(global::Apache.Arrow.IArrowArray column)"
+            "        private static bool ArrowNullCountAgrees(global::Apache.Arrow.IArrowArray column)"
         );
-        builder.AppendLine("    {");
-        builder.AppendLine("        global::Apache.Arrow.ArrayData data = column.Data;");
-        builder.AppendLine(
-            "        if (data.NullCount < 0 || data.Buffers.Length == 0 || data.Buffers[0].IsEmpty) return true;"
-        );
-        builder.AppendLine("        long end = (long)data.Offset + data.Length;");
-        builder.AppendLine("        global::System.ReadOnlySpan<byte> map = data.Buffers[0].Span;");
-        builder.AppendLine("        if (map.Length < (end + 7) / 8) return false;");
-        builder.AppendLine("        long unset = 0;");
-        builder.AppendLine("        for (long i = data.Offset; i < end; i++)");
         builder.AppendLine("        {");
+        builder.AppendLine("            global::Apache.Arrow.ArrayData data = column.Data;");
         builder.AppendLine(
-            "            if ((map[(int)(i >> 3)] & (1 << (int)(i & 7))) == 0) unset++;"
+            "            if (data.NullCount < 0 || data.Buffers.Length == 0 || data.Buffers[0].IsEmpty) return true;"
         );
-        builder.AppendLine("        }");
+        builder.AppendLine("            long end = (long)data.Offset + data.Length;");
+        builder.AppendLine(
+            "            global::System.ReadOnlySpan<byte> map = data.Buffers[0].Span;"
+        );
+        builder.AppendLine("            if (map.Length < (end + 7) / 8) return false;");
+        builder.AppendLine("            long unset = 0;");
+        builder.AppendLine("            for (long i = data.Offset; i < end; i++)");
+        builder.AppendLine("            {");
+        builder.AppendLine(
+            "                if ((map[(int)(i >> 3)] & (1 << (int)(i & 7))) == 0) unset++;"
+        );
+        builder.AppendLine("            }");
         builder.AppendLine();
-        builder.AppendLine("        return unset == data.NullCount;");
-        builder.AppendLine("    }");
+        builder.AppendLine("            return unset == data.NullCount;");
+        builder.AppendLine("        }");
     }
 
     // ──────────────────────────────────────────────────────────
@@ -396,41 +454,22 @@ internal static class ArrowBridgeEmitter
 
     private static void EmitWriteRowGroup(StringBuilder builder, TargetClassModel model)
     {
-        builder.AppendLine("    /// <summary>");
         builder.AppendLine(
-            $"    /// Writes one Apache Arrow <c>RecordBatch</c> as a single Parquet row group using the"
-        );
-        builder.AppendLine(
-            $"    /// <c>{model.ClassName}</c> schema. Columns are matched by name and validated strictly;"
-        );
-        builder.AppendLine(
-            "    /// fixed-width Arrow buffers are handed to the writer without a copy or an ArrayPool rental."
-        );
-        builder.AppendLine("    /// </summary>");
-        builder.AppendLine(
-            "    /// <remarks>Call it qualified — it is a plain static method, not an extension.</remarks>"
-        );
-        builder.AppendLine(
-            $"    /// <remarks>Requires Apache.Arrow {ArrowMappingComponent.SupportedArrowFloor} or later.</remarks>"
-        );
-        builder.AppendLine(
-            "    public static async global::System.Threading.Tasks.Task WriteParquetRowGroupAsync("
+            "        internal static async global::System.Threading.Tasks.Task WriteParquetRowGroupAsync("
         );
         // Deliberately NOT an extension method. RecordBatch carries no generic parameter, so an
         // extension overload would collide across every [ParquetSerializable] type in scope — the
         // POCO overload is disambiguated by IReadOnlyCollection<T>, this one could not be. Callers
         // qualify it: FooParquetExtensions.WriteParquetRowGroupAsync(writer, batch).
-        builder.AppendLine("        global::Parquet.ParquetWriter writer,");
-        builder.AppendLine("        global::Apache.Arrow.RecordBatch batch,");
+        builder.AppendLine("            global::Parquet.ParquetWriter writer,");
+        builder.AppendLine("            global::Apache.Arrow.RecordBatch batch,");
         builder.AppendLine(
-            "        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,"
+            "            global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,"
         );
         builder.AppendLine(
-            "        global::System.Threading.CancellationToken cancellationToken = default)"
+            "            global::System.Threading.CancellationToken cancellationToken = default)"
         );
-        builder.AppendLine("    {");
-        builder.AppendLine("        global::System.ArgumentNullException.ThrowIfNull(writer);");
-        builder.AppendLine("        global::System.ArgumentNullException.ThrowIfNull(batch);");
+        builder.AppendLine("        {");
         builder.AppendLine();
         builder.AppendLine(
             "        // Row-group granularity is the unit of this overload; compression and the other"
@@ -722,7 +761,7 @@ internal static class ArrowBridgeEmitter
         builder.AppendLine("                            }");
         builder.AppendLine("#if NET6_0_OR_GREATER");
         builder.AppendLine(
-            $"                            int written = global::System.Text.Encoding.UTF8.GetChars({arr}.GetBytes(row), chars_{slot}.AsSpan(pos));"
+            $"                            int written = global::System.Text.Encoding.UTF8.GetChars({arr}.GetBytes(row), global::System.MemoryExtensions.AsSpan(chars_{slot}, pos));"
         );
         builder.AppendLine("#else");
         builder.AppendLine($"                            string text = {arr}.GetString(row);");

@@ -208,12 +208,17 @@ Compatibility means equivalent schema meaning and logical values. It does not re
 files, identical page boundaries, identical statistics encoding, or identical metadata ordering across
 independent writers.
 
-## Apache Arrow RecordBatch Ingestion (Experimental, #177)
+## Apache Arrow RecordBatch Ingestion (Optional Integration)
 
 **Scope.** This is ingestion only: an `Apache.Arrow.RecordBatch` is written to Parquet. Export (reading
 Parquet into Arrow) is not shipped and is not listed as complete anywhere; the export issue #178 was
 closed as superseded by #267, which is also closed (doc 47 section 7 keeps export a non-goal until its
 ownership and performance contract is ready).
+
+**Classification.** Classified as **Optional Integration** (stable for 0.1, modern backend only).
+There is no preview tier for 0.1. The bridge emits conditionally when the consumer compilation references
+`Apache.Arrow`. It takes a `ParquetWriter` by design because Arrow batches represent individual Parquet row
+groups in streaming pipelines where the caller controls writer configuration and lifecycle.
 
 When — and only when — the consumer compilation references **Apache.Arrow**, the generator emits one
 extra file per `[ParquetSerializable]` type:

@@ -21,7 +21,7 @@ deliberate.
 
 | # | Surface | What it is | Catalogue | Gate | Enforced by |
 |:--|:---|:---|:---|:---|:---|
-| 1 | **Emitted consumer API** | Everything the emitters write into a consumer's own compilation. Exists in no shipped assembly. | none — each golden model's `.api.txt` is derived in CI, not checked in | review | the "Emitted public API" section of the derived-output PR comment (`PARQAPI001` retired) |
+| 1 | **Emitted consumer API** | Everything the emitters write into a consumer's own compilation. Exists in no shipped assembly. | `src/api/emitted-api-budgets.txt` (budgets) | shape budget gate + PR review diff | `scripts/DerivedOutputs.cs` & `GeneratedApiBudgetGateTests` (budget gate); sticky derived PR comment (review diff) |
 | 2 | **Shipped package API** | `public` members of `Parquet.SourceGenerator.Attributes`. (The generator assemblies ship only as analyzers and have no public surface; their types are `internal` since #461.) | `PublicAPI.Shipped.txt` / `PublicAPI.Unshipped.txt` | `RS0016` | `Microsoft.CodeAnalysis.PublicApiAnalyzers` (pre-existing; unchanged) |
 | 3 | **Internal seams** | Members in `src/` widened past `private` so another component can call them. | `src/api/seams.txt` | `PARQAPI002` | `InternalSeamGateAnalyzer` (build **error**) |
 
@@ -106,33 +106,57 @@ Each gate enforces the half of the rule it can actually see.
 
 Neither half is redundant and neither can do the other's job.
 
-## The emitted surface: reviewed, not catalogued
+## The emitted surface: shape budgets and review diffs
 
-`PARQAPI001` used to apply the same two halves to the emitted surface: an analyzer compared each
+`PARQAPI001` used to apply catalogue comparison to the emitted surface: an analyzer compared each
 checked-in golden `.g.cs` with its checked-in `.api.txt`, and `CheckApiLedger.cs` demanded a ledger
 entry whenever an `.api.txt` changed. Both halves depended on those files being checked in. When
-the golden output became a derived CI artifact
-there was nothing left for either to compare, so `PARQAPI001` and its analyzer were deleted — the
-ID is retired and will not be reused — and `CheckApiLedger.cs` no longer looks at `*.api.txt`.
+the golden output became a derived CI artifact (`artifacts/golden`), there was nothing left for
+an analyzer to compare, so `PARQAPI001` was retired.
 
-What replaced them is the **"Emitted public API"** section of the sticky derived-output comment the
-`derived` CI job posts on every pull request. It is the base-to-head diff of every golden model's
-`.api.txt` and `.api.shape.txt`, rendered from the same string as the emitted source, expanded at
-the top of the comment. The reviewer's job is:
+To prevent emitted surface bloat from regressing silently (#459, #588), two complementary controls govern the emitted surface:
 
-1. **If the section is empty**, the pull request changed no emitted signature, whatever the size of
-   the "Emitted code" diff below it.
-2. **If it is not**, every added, removed or changed line must be one the pull request says it
-   intends. An unexplained line is a defect in the pull request — ask for it to be explained or
-   removed, exactly as the old gate would have.
-3. **For a deliberate `generated-shape` or `breaking-major` change**, the ledger is still the place
-   to keep the reasoning; entries with `**Surface:** emitted` remain valid, and the buckets below
-   still describe them. CI no longer requires one.
+1. **The Shape Budget Gate (`src/api/emitted-api-budgets.txt`)**:
+   Enforced by `scripts/DerivedOutputs.cs` and unit-tested by `GeneratedApiBudgetGateTests`. Emitted code
+   generation must satisfy hard ceilings on public `MEMBERS` and `PARAMETERS` per model category:
+   - `flat` and `sorted` models: at most **40** members, at most **36** parameter slots.
+   - `compound` models: at most **20** members, at most **20** parameter slots.
+   - `legacy` models: at most **10** members, at most **15** parameter slots.
+   Raising any budget ceiling in `src/api/emitted-api-budgets.txt` is governed by `CheckApiLedger.cs`
+   and requires a corresponding `docs/api/LEDGER.md` entry (`surface: generated-shape`).
+   The gate fails closed if 0 models are examined (positive control requirement).
 
-The pull-request template carries this as a checkbox. This is a weaker guarantee than a build
-error, stated rather than hidden: a reviewer who does not read the section can let a change
-through. It was accepted because the old guarantee cost a refresh commit on every emitter change,
-and because the diff the reviewer reads is the same diff the gate used to demand they read.
+2. **The Review Diff**:
+   The sticky derived-output comment posted by CI contains the base-to-head diff of every golden model's
+   `.api.txt` and `.api.shape.txt`. Reviewers check:
+   - If empty, no emitted signature changed.
+   - If non-empty, every line change must match the pull request's stated intent.
+
+## Public Stability Classifications (#482)
+
+Every public package type and generated capability carries an explicit stability classification.
+There is **no preview tier** for 0.1:
+
+| Component | Scope | Stability | Description |
+|:---|:---|:---:|:---|
+| `[ParquetSerializable]` | Package attribute | **Stable Core** | Marks partial class/record/struct for source generation. |
+| `[ParquetColumn]` | Package attribute | **Stable Core** | Configures column name, order, and encoding hints. |
+| `[ParquetSortKey]` | Package attribute | **Stable Core** | Marks sorted columns for footer statistics zone mapping. |
+| `ParquetSerializerOptions` | Package class | **Stable Core** | Configures compression, row group sizing, and concurrency. |
+| `ParquetColumnStatistics<T>` | Package struct | **Stable Core** | Row-group zone map filter statistics; constructor hidden with `[EditorBrowsable(Never)]`. |
+| Modern POCO Reads/Writes | Generated extensions | **Stable Core** | `WriteParquetAsync`, `ReadParquetAsync` (`T[]`, `List<T>`, `IAsyncEnumerable<T>`). |
+| Modern Fluent Reader & Pruning | Generated reader | **Stable Core** | `<Model>Parquet.From(...).Where(...).ToArrayAsync()`. |
+| Columnar Batch Reads | Generated reader | **Stable Core** | `<Model>ParquetReader.Batches()` / `<Model>Batch` (modern backend only). |
+| Apache Arrow Ingestion | Generated extensions | **Optional Integration** | `WriteParquetRowGroupAsync(writer, batch)` (modern backend only, conditional on `Apache.Arrow` reference). |
+| Legacy V5 Backend Reads/Writes | Legacy package | **Stable Classic Core** | `WriteParquetAsync` and `ReadParquetAsync` targeting classic Parquet.Net 4.x/5.x. |
+
+### Apache Arrow Ingestion (#589, #482)
+
+Arrow ingestion is classified as **Optional Integration** (stable for 0.1, modern backend only).
+It emits conditionally when the consumer references `Apache.Arrow` and takes `ParquetWriter` by design
+because Arrow batches correspond to individual Parquet row groups in streaming pipelines where the
+caller manages the writer lifecycle and compression settings. Arrow export (Parquet to Arrow) is not
+shipped and remains independent.
 
 ## The buckets
 
@@ -143,13 +167,11 @@ Every ledger entry carries exactly one.
 | `additive-minor` | A new member that breaks no existing caller. `0.1.0` → `0.2.0` after 1.0. |
 | `breaking-major` | A removal, a rename, or a change to a parameter or return type. |
 | `internal` | A seam. Invisible to consumers; recorded because cross-component coupling is a design decision. |
-| `generated-shape` | The emitted surface changed shape for every model at once — a new emitted member class, a naming-grammar change, a feature profile. Distinct from `additive-minor` because it multiplies across every `[ParquetSerializable]` type in every consumer. |
+| `generated-shape` | The emitted surface changed shape for every model at once — a new emitted member class, a naming-grammar change, an emitted budget increase. Distinct from `additive-minor` because it multiplies across every `[ParquetSerializable]` type in every consumer. |
 
 ### Pre-1.0 stance
 
-Feature-level changes are governed as generated-shape changes. The default remains
-`Level2CompoundPreview`; consumers can pin `Level1Flat` or opt into `Level3ModernCSharp` through the
-shared MSBuild/assembly configuration channel documented in [Configuration & Feature Levels](../getting-started/configuration.md).
+Flat-only configuration is supported via the MSBuild property `<ParquetGeneratorFlatOnly>true</ParquetGeneratorFlatOnly>`.
 
 `0.0.x` permits breaking changes without a major bump; the pre-1.0 release-cadence
 policy says so, and that is not changing here. The bucket
