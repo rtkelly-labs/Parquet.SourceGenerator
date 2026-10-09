@@ -33,7 +33,7 @@ the migration list; each row's detail is in the entries below and in `docs/api/L
 | `WriteParquetBatchedAsync` | Folded into `WriteParquetAsync(stream, options)` (#512) | #512 |
 | `ParquetGeneratorFeatureLevel` and `ParquetGeneratorOptionsAttribute` | Removed; use `<ParquetGeneratorFlatOnly>true</ParquetGeneratorFlatOnly>` in MSBuild if flat-only behavior is required | #587 |
 | legacy backend parity (nested, Arrow, batches) and its migration table | **pending** (#604) | |
-| baseline: `PublicAPI.Unshipped.txt` promoted to `Shipped.txt` | **pending** (#592) | |
+| baseline: `PublicAPI.Unshipped.txt` promoted to `Shipped.txt` | 101 public package signatures across all 13 public types shipped for 0.1 | #592 |
 
 ### Added
 - **`ParquetSerializerOptions.MaxAllocationBytes`, a byte budget for what a read allocates** (#361), default
