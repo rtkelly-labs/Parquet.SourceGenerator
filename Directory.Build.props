@@ -44,8 +44,8 @@
         <Authors>Ryan Kelly</Authors>
         <Copyright>Copyright (c) 2022-2026 Ryan Kelly</Copyright>
         <PackageLicenseFile>LICENSE</PackageLicenseFile>
-        <PackageProjectUrl>https://github.com/rtkelly13/Parquet.SourceGenerator</PackageProjectUrl>
-        <RepositoryUrl>https://github.com/rtkelly13/Parquet.SourceGenerator.git</RepositoryUrl>
+        <PackageProjectUrl>https://github.com/rtkelly-labs/Parquet.SourceGenerator</PackageProjectUrl>
+        <RepositoryUrl>https://github.com/rtkelly-labs/Parquet.SourceGenerator.git</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
         <PackageTags>parquet;source-generator;roslyn;aot;performance;serialization;dotnet</PackageTags>
         <PackageReadmeFile>PACKAGE_README.md</PackageReadmeFile>
