@@ -1,13 +1,13 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/rtkelly13/Parquet.SourceGenerator/main/docs/assets/logo.svg" width="220" alt="Parquet.SourceGenerator Logo" />
+  <img src="https://raw.githubusercontent.com/rtkelly-labs/Parquet.SourceGenerator/main/docs/assets/logo.svg" width="220" alt="Parquet.SourceGenerator Logo" />
 </p>
 
 # Parquet.SourceGenerator
 
-[![Build & E2E Status](https://github.com/rtkelly13/Parquet.SourceGenerator/actions/workflows/ci.yml/badge.svg)](https://github.com/rtkelly13/Parquet.SourceGenerator/actions/workflows/ci.yml)
+[![Build & E2E Status](https://github.com/rtkelly-labs/Parquet.SourceGenerator/actions/workflows/ci.yml/badge.svg)](https://github.com/rtkelly-labs/Parquet.SourceGenerator/actions/workflows/ci.yml)
 [![Documentation](https://img.shields.io/badge/docs-docs.ryankelly.dev-blue.svg)](https://docs.ryankelly.dev/parquet-sourcegenerator)
 [![NuGet](https://img.shields.io/nuget/v/Parquet.SourceGenerator.svg)](https://www.nuget.org/packages/Parquet.SourceGenerator)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/rtkelly-labs/Parquet.SourceGenerator/blob/main/LICENSE)
 
 A high-performance, zero-reflection C# Roslyn source generator that emits strongly-typed Parquet serializers and deserializers at compile time, targeting [Parquet.Net](https://github.com/aloneguid/parquet-dotnet) low-level columnar primitives.
 
