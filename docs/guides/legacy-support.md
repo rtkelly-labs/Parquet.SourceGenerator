@@ -136,6 +136,7 @@ from `LegacyBehaviourDriver.IsKnownFailure`; never skipped.
 
 | Behaviour | Why | Test |
 |:--|:--|:--|
+| LZ4, Brotli and Zstd compression on .NET Framework (net472) | Parquet.Net 4.25 compresses these through IronCompress's native library, which the .NET Framework test host does not load (`NotSupportedException`, "native: False"). An AnyCPU .NET Framework application is expected to behave the same way. Gzip, Snappy and no compression are managed and pass on net472; all six codecs pass on net8.0. Whether a `win-x64` runtime identifier makes the native library load has not been verified. | `CodecBehaviourTests` (every LZ4/Brotli/Zstd case, net472 only) |
 | A zero-length `byte[]` value round-trips | Parquet.Net 4.25 writes it, but its plain decoder throws `IndexOutOfRangeException` reading the column back, required or optional; reproduced without generated code. Upstream, see `UPSTREAM_DEPENDENCY_LIMITATIONS.md`. | `TypeMatrixBehaviourTests.EmptyBinaryValueRoundTrips` |
 
 **Coverage.** The `Parquet.SourceGenerator.Legacy` row of the coverage report measures the emitter

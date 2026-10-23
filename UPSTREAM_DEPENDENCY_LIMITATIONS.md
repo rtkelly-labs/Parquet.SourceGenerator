@@ -65,6 +65,15 @@ Unexpected TimeUnit` when writing any unit but milliseconds (reproduced directly
 netstandard2.0 assembly). The legacy backend therefore supports `[ParquetTimestamp(Microseconds)]`
 on net8.0+ only, and below that emits an `#error` naming the member (#597).
 
+## Parquet.Net 4.25.0 LZ4, Brotli And Zstd Need A Native Library On .NET Framework
+
+On net472, Parquet.Net 4.25.0 compresses LZ4, Brotli and Zstd through IronCompress 1.5.2, whose
+codecs for these live in a native library shipped only under `runtimes/<rid>/native`. A .NET Framework
+test host (and an AnyCPU .NET Framework application, which resolves no runtime identifier) does not
+load it, so the write throws `NotSupportedException: No compression codec for ... is available on
+this platform (... native: False)`. Gzip, Snappy and uncompressed writes work. The legacy suite lists
+these as known failures on net472 (#597).
+
 ## Parquet.Net 4.25.0 Does Not Record Its Dictionary Pages
 
 Parquet.Net 4.25.0 dictionary-encodes string columns but writes column metadata that lists only
