@@ -36,6 +36,16 @@ the migration list; each row's detail is in the entries below and in `docs/api/L
 | baseline: `PublicAPI.Unshipped.txt` promoted to `Shipped.txt` | 101 public package signatures across all 13 public types shipped for 0.1 | #592 |
 
 ### Added
+- **`[ParquetColumn(FieldId = n)]` writes a Parquet field ID** on the column's schema element (Parquet.Net 6
+  backend; the Legacy package reports `PARQ023`, since Parquet.Net 4.x/5.x has no field IDs). Apache Iceberg and other
+  readers that resolve columns by ID can then adopt generated files without a name mapping. Negative, the
+  default, writes none, so existing models are unchanged. An ID declared by two columns of one schema, nested
+  leaves included, is an error (`PARQ024`).
+- **`[ParquetTimestamp(Microseconds, AdjustedToUtc = false)]` writes a local timestamp**:
+  `TIMESTAMP(MICROS, isAdjustedToUTC=false)`, Iceberg's `timestamp` as opposed to `timestamptz`. It is emitted
+  through `DateTimeFormat.Timestamp`, because Parquet.Net ignores `isAdjustedToUTC` for `DateAndTimeMicros`
+  and writes that as the always-UTC `TIMESTAMP_MICROS` converted type. The default (`true`) keeps today's output. The Legacy package reports `PARQ023` for `false`:
+  Parquet.Net before 4.25 has no `DateTimeFormat.Timestamp`.
 - **`ParquetSerializerOptions.MaxAllocationBytes`, a byte budget for what a read allocates** (#361), default
   256 MiB per row group. `MaxAllocationValues` bounds a count, so a file of about 1 KB declaring ten
   million rows reserved roughly a gigabyte of pooled buffers before a page was read. The generated
@@ -305,6 +315,8 @@ the migration list; each row's detail is in the entries below and in `docs/api/L
   only for code that referenced the Attributes helpers directly.
 
 ### Fixed
+- **`DateOnly` is written as INT32 `DATE` again**, not INT96. INT96 round-tripped in .NET, but other readers
+  (pyarrow, Spark) saw a timestamp, and Apache Iceberg rejects INT96.
 - **Arrow scope is stated plainly** (#590). The READMEs, `docs/14`, `docs/19` and `docs/47` say that only Arrow
   ingestion (`RecordBatch` to Parquet, when Apache.Arrow is referenced) ships; export to Arrow does not, and
   `docs/19` no longer lists the closed #178 as open work.
