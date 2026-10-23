@@ -79,9 +79,23 @@ pointer files and failed, and Stryker carried on with "12 tests are failing".
 `MutationSummaryGateTests` covers each of these failure cases. `MutationWorkflowStepTests`
 runs the plan step and the partition step in bash against a fake `dotnet`.
 
+## Known gap: Stryker's safe mode in `ReportIneligibleSortKey`
+
+One mutation in `TargetParser.ReportIneligibleSortKey` produces code that does not compile
+(CS0165, `reason` used before it is assigned). When that happens Stryker cannot tell which
+mutant caused it, so it drops every mutation in that method and reports them as
+`CompileError` ("Safe Mode"). Those mutants leave the denominator, so the method is not
+measured at all. Restructuring the method so every mutant compiles would close the gap; it is
+a generator change and is not part of #668.
+
 ## Rebalancing the partitions
 
-Each partition job has a 100-minute budget, and its Stryker step gets 85 minutes. Most of that
+Each partition job has a 100-minute budget, and its Stryker step gets 85 minutes. In the
+first complete dispatch (#668) the slowest partitions were `generator-rest` (550 mutants, 84
+minutes), the middle third of `CodeEmitter.cs` (914 mutants, 67 minutes) and
+`ArrowBridgeEmitter.cs` (1042 mutants, 43 minutes). The cost per mutant depends on how many
+tests cover it, not only on the count: the parser and the shared helpers are covered by
+almost every test. Most of that
 time goes to the mutants: each test session starts a new test host, and the generator's
 mutants are covered by many Roslyn-compiling tests. The fixed cost of a job is roughly the
 setup, the Debug build of the solution, Stryker's initial test run and its coverage capture.
