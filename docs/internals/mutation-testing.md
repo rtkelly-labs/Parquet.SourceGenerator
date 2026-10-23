@@ -99,15 +99,13 @@ a generator change and is not part of #668.
 
 ## Rebalancing the partitions
 
-Each partition job has a 100-minute budget, and its Stryker step gets 85 minutes. In the
-first complete dispatch (#668) the slowest partitions were `generator-rest` (550 mutants, 84
-minutes), the middle third of `CodeEmitter.cs` (914 mutants, 67 minutes) and
-`ArrowBridgeEmitter.cs` (1042 mutants, 43 minutes). The cost per mutant depends on how many
-tests cover it, not only on the count: the parser and the shared helpers are covered by
-almost every test. Most of that
-time goes to the mutants: each test session starts a new test host, and the generator's
-mutants are covered by many Roslyn-compiling tests. The fixed cost of a job is roughly the
-setup, the Debug build of the solution, Stryker's initial test run and its coverage capture.
+Each partition job has a 100-minute budget, and its Stryker step gets 85 minutes. The cost
+per mutant depends on how many tests cover it, not only on the count: the parser and the shared
+helpers are covered by almost every test. In the first complete dispatch (#668), the slowest
+Stryker steps were `ArrowBridgeEmitter.cs` (1036 mutants, 84 minutes, since split in two) and
+`columnar-batch` (656 mutants, 58 minutes). Before the heap limit the same `arrow` partition
+took 43 minutes, so the limit slows some partitions: watch the slowest jobs after changing it.
+
 The summary lists how many mutants each partition tested. When a partition's job gets close to
 its budget, split its globs, or add a line range, and keep one `rest` partition per project.
 

@@ -95,10 +95,28 @@
       ]
     },
     {
-      "name": "arrow",
+      "name": "arrow-1",
       "project": "Parquet.SourceGenerator.csproj",
       "mutate": [
-        "**/Emitter/ArrowBridgeEmitter.cs"
+        {
+          "file": "src/Parquet.SourceGenerator/Emitter/ArrowBridgeEmitter.cs",
+          "lines": [
+            1,
+            539
+          ]
+        }
+      ]
+    },
+    {
+      "name": "arrow-2",
+      "project": "Parquet.SourceGenerator.csproj",
+      "mutate": [
+        {
+          "file": "src/Parquet.SourceGenerator/Emitter/ArrowBridgeEmitter.cs",
+          "lines": [
+            540
+          ]
+        }
       ]
     },
     {
