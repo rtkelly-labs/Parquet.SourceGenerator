@@ -46,6 +46,14 @@ jobs:
             8.0.x
             10.0.x
 
+      - name: Restore local tools
+        run: dotnet tool restore --disable-parallel || dotnet tool restore --disable-parallel
+
+      # Paket-managed projects (docs/architecture/adrs/0004-paket-pilot.md). Strict: fails when
+      # paket.dependencies and paket.lock disagree.
+      - name: Restore Paket dependencies (strict)
+        run: dotnet paket restore --fail-on-checks
+
       - name: Restore solution dependencies
         run: dotnet restore Parquet.SourceGenerator.slnx --locked-mode
 

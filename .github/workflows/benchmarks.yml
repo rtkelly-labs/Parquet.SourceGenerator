@@ -179,10 +179,22 @@ jobs:
           # and start none (#568). The push step authenticates explicitly instead.
           persist-credentials: false
 
-      - name: Setup .NET 8 SDK
+      # .NET 10 is for Paket (a net10.0 local tool), not the benchmarks: the step that runs them
+      # pins the runtime to .NET 8 with DOTNET_ROLL_FORWARD.
+      - name: Setup .NET SDKs
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Restore local tools
+        run: dotnet tool restore --disable-parallel || dotnet tool restore --disable-parallel
+
+      # The benchmark project is Paket-managed (docs/architecture/adrs/0004-paket-pilot.md).
+      # Strict: fails when paket.dependencies and paket.lock disagree.
+      - name: Restore Paket dependencies (strict)
+        run: dotnet paket restore --fail-on-checks
 
       - name: Restore dependencies
         run: dotnet restore benchmarks/Parquet.SourceGenerator.Benchmarks/Parquet.SourceGenerator.Benchmarks.csproj --locked-mode
@@ -192,6 +204,9 @@ jobs:
 
       - name: Execute BenchmarkDotNet Suite
         env:
+          # The job installs .NET 10 for Paket; without this the project (RollForward LatestMajor)
+          # would run the headline suite on it.
+          DOTNET_ROLL_FORWARD: Minor
           FILTER: ${{ steps.pr_info.outputs.filter }}
           JOB_FLAG: ${{ steps.pr_info.outputs.job_flag }}
           PARAMS_FLAG: ${{ steps.pr_info.outputs.params_flag }}
@@ -320,10 +335,22 @@ jobs:
           ref: ${{ github.event.inputs.target_branch || github.ref_name }}
           lfs: true
 
-      - name: Setup .NET 8 SDK
+      # .NET 10 is for Paket (a net10.0 local tool), not the benchmarks: the step that runs them
+      # pins the runtime to .NET 8 with DOTNET_ROLL_FORWARD.
+      - name: Setup .NET SDKs
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Restore local tools
+        run: dotnet tool restore --disable-parallel || dotnet tool restore --disable-parallel
+
+      # The benchmark project is Paket-managed (docs/architecture/adrs/0004-paket-pilot.md).
+      # Strict: fails when paket.dependencies and paket.lock disagree.
+      - name: Restore Paket dependencies (strict)
+        run: dotnet paket restore --fail-on-checks
 
       - name: Restore dependencies
         run: dotnet restore benchmarks/Parquet.SourceGenerator.Benchmarks/Parquet.SourceGenerator.Benchmarks.csproj --locked-mode

@@ -27,7 +27,22 @@ dotnet build Parquet.SourceGenerator.slnx --configuration Release
 
 ### Changing a dependency
 
-Every project in the solution except the two Native AOT ones carries a committed `packages.lock.json`, and CI restores in locked mode, so a changed dependency graph fails the build instead of resolving silently (#394). After editing `Directory.Packages.props` or a `PackageReference`, run `dotnet restore Parquet.SourceGenerator.slnx --force-evaluate` and commit the changed lock files with the change. A Dependabot update that bumps a version fails the locked restore (`NU1004`) until the lock files are regenerated the same way.
+Every project in the solution except the two Native AOT ones and the Paket-managed one (below) carries a committed `packages.lock.json`, and CI restores in locked mode, so a changed dependency graph fails the build instead of resolving silently (#394). After editing `Directory.Packages.props` or a `PackageReference`, run `dotnet restore Parquet.SourceGenerator.slnx --force-evaluate` and commit the changed lock files with the change. A Dependabot update that bumps a version fails the locked restore (`NU1004`) until the lock files are regenerated the same way.
+
+#### Paket-managed projects (pilot)
+
+`benchmarks/Parquet.SourceGenerator.Benchmarks` takes its packages from [Paket](https://fsprojects.github.io/Paket/), not from `Directory.Packages.props`: its `paket.references` names the packages, the root `paket.dependencies` holds their version ranges, and the root `paket.lock` holds the exact versions ([ADR 0004](docs/architecture/adrs/0004-paket-pilot.md)). Paket is a local tool, so run `dotnet tool restore --disable-parallel` first. Then:
+
+```bash
+dotnet paket outdated                  # what an update would take, inside the ranges
+dotnet paket update <package>          # move one package (and what it needs) within its range
+dotnet paket install                   # after editing paket.dependencies or a paket.references
+dotnet paket restore --fail-on-checks --force  # CI's check: fails if paket.dependencies and paket.lock disagree
+```
+
+CI runs `dotnet paket restore --fail-on-checks` on a fresh checkout. Locally add `--force`: once a restore has succeeded, the cache in the ignored `paket-files/` short-circuits the check and it exits 0 even when the two files disagree.
+
+Commit `paket.lock` (and `paket.dependencies` or `paket.references` if you changed them) with the change. Widening a range, for example taking a new major version, is an edit to `paket.dependencies` followed by `dotnet paket update <package>`. Dependabot does not read Paket, so it never opens pull requests for these packages; the weekly `paket-outdated` workflow keeps one issue labelled `paket-outdated` listing what is out of date.
 
 ### 2. Run Test Suite
 ```bash
