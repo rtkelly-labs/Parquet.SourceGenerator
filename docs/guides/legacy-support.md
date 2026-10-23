@@ -51,18 +51,24 @@ upstream change that would remove it are recorded in
 
 ## Initial allowlist
 
+The checked-in [`src/api/legacy-parity-allowlist.txt`](../../src/api/legacy-parity-allowlist.txt)
+is the authority, one line per differing `.api.txt` line per golden model; the tables below
+summarise its sections.
+
 ### Permanent (modern-only by decision)
 
 | Capability | Why | Decision |
 |:---|:---|:---|
-| `<Model>ParquetReader.Batches()` / `ColumnBatch` | Batch reading is part of the **stable modern API** (net8+). It is the zero-POCO read path whose point is caller-visible pooled column buffers. The v4 `DataColumn` API allocates each column itself, so a legacy `Batches()` would have the same shape without the benefit. The legacy backend does not emit it at all. It is absent, not a member that throws, so multi-target callers get a compile-time error and guard it with `#if NET8_0_OR_GREATER` rather than a runtime failure. | Owner decision, 2026-09-24 (#490) |
+| `<Model>ParquetReader.AsBatches()` (renamed from `Batches()` by #507) | Batch reading is part of the **stable modern API** (net8+). It is the zero-POCO read path whose point is caller-visible pooled column buffers. The v4 `DataColumn` API allocates each column itself, so a legacy `Batches()` would have the same shape without the benefit. The legacy backend does not emit it at all. It is absent, not a member that throws, so multi-target callers get a compile-time error and guard it with `#if NET8_0_OR_GREATER` rather than a runtime failure. | Owner decision, 2026-09-24 (#490) |
 
 ### Temporary (gaps to close)
 
 | Capability | Why the legacy backend lacks it today | Tracking |
 |:---|:---|:---|
 | Nested types (structs, lists, maps) | The legacy emitter is flat-only. Parquet.Net 4.x can represent repeated and group columns, so this is emitter work, not a platform limit. | #176, [Nested Types Guide](./nested-types.md) |
-| `ReadOnlyMemory<byte>` / `ReadOnlyMemory<char>` members (PARQ011) | The v4 `DataColumn` API has no `ReadOnlyMemory` column representation, so the classic parser rejects these today. They can be mapped onto `byte[]` / `string` columns at one copy per value on write and read. That is emitter work, recorded in [Known Limitations](../reference/known-limitations.md). | #494 |
+| `ReadOnlyMemory<byte>` / `ReadOnlyMemory<char>` members (PARQ011) | The v4 `DataColumn` API has no `ReadOnlyMemory` column representation, so the classic parser rejects these today. They can be mapped onto `byte[]` / `string` columns at one copy per value on write and read. That is emitter work, recorded in [Known Limitations](../reference/known-limitations.md). No golden model has such a member, so this gap has no gate entry yet. | #494 |
+| Builder reader: `<Model>Parquet.From(...)`, `<Model>ParquetReader` (`WithOptions`, `Where`, `Parallel`, `ToArrayAsync`, `AsAsyncEnumerable`), `<Model>RowGroupMetadata` | Not yet ported to the v4 column I/O. | #494 |
+| `<Model>Batch` columnar write and `IAsyncEnumerable<T>` write | Not yet ported to the v4 column I/O. | #495 |
 | Arrow `RecordBatch` bridge | Not yet built for v4. Apache.Arrow supports `netstandard2.0`, so it is possible. | #490 |
 
 ### Legacy-only members
@@ -80,18 +86,39 @@ batched writes.
 
 ## Enforcement
 
-- **API parity gate (#493).** The same model is generated through both backends. After normalising
-  the extension class name, the `.api.txt` lines are diffed, and any difference not in the
-  allowlist fails. The allowlist file marks each entry temporary or permanent. Only temporary
-  entries fail when they stop differing.
-- **Shared behavioural suite (#493).** The round-trip, reader and pruning tests run against both
-  backends from one test source.
-- **Multi-target consumer (#493).** One test project with `TargetFrameworks` of `net472;net8.0`
-  builds the same calling source against both backends.
+- **API parity gate (#493).** `BackendParityGateTests` runs every golden model through both real
+  generators, renders each emitted surface with the same `.api.txt` renderer the derived outputs
+  use, normalises the namespace and the extension class name (`<Model>ParquetLegacyExtensions`
+  becomes `<Model>ParquetExtensions`), and diffs the lines. Every difference must be an entry in
+  [`src/api/legacy-parity-allowlist.txt`](../../src/api/legacy-parity-allowlist.txt), under a
+  section that names its reason and tracking issue and marks it temporary or permanent:
+  - an unlisted difference fails, so a new gap cannot land silently;
+  - a temporary entry that no longer differs fails, so the list can only shrink and each parity
+    change removes its entries in the same pull request;
+  - a permanent entry fails if the legacy backend starts emitting the member, because the decision
+    is that it is **absent** from legacy, never present-and-throwing;
+  - a model the legacy generator emits nothing for is one `modern-only <Model>: *` entry (today the
+    three nested golden models, #176).
 
-`BackendCompatibilityPolicyTests` currently asserts the opposite: that no modern-only member
-appears in a legacy baseline. It is retired or inverted in the same PR that introduces the parity
-gate. Until then it continues to describe the current state accurately.
+  The gate fails on zero models and asserts how many it examined. Its negative controls (an
+  injected member, a real difference removed from the list, a stale entry) are tests in the same
+  class. The modern side is checked equal to the published golden `.api.txt`, so the gate judges
+  the surface reviewers see.
+- **Multi-target consumer (#493).** `test/PackageConsumptionMultiTarget` targets `net472;net8.0`:
+  net472 references `Parquet.SourceGenerator.Legacy` and Parquet.Net 4.25, net8.0 references
+  `Parquet.SourceGenerator` and Parquet.Net 6.x. Its calling source outside `#if` compiles against
+  both. Today that shared part is the `IEnumerable<T>` `WriteParquetAsync` and
+  `ParquetSerializerOptions`, the only surface at parity; the read and `AsBatches()` are behind
+  `#if NET8_0_OR_GREATER`, each marked with its allowlist section. When a parity change removes
+  those entries, the call moves out of its `#if` in the same pull request. The `test` job builds
+  both targets and runs net8.0; `net472-consumer` runs both on Windows.
+- **Shared behavioural suite (#493, item 2).** Not built yet: running the round-trip, reader and
+  pruning tests against both backends from one test source is still open, and overlaps the
+  executed legacy test project (#597).
+
+`BackendCompatibilityPolicyTests` used to assert the opposite of parity: that the classic surface
+was exactly the declared #246 core. That assertion was retired with the parity gate, which fails on
+any unlisted legacy member as it did and also on any modern member legacy lacks without an entry.
 
 ## End state: one package
 

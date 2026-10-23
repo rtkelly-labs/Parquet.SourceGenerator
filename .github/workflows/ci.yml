@@ -396,6 +396,24 @@ jobs:
             -p:GeneratorPackageVersion="$version" \
             -p:RestorePackagesPath="$RUNNER_TEMP/consumption-packages-legacy-net472"
 
+      # #493: one project targeting net472;net8.0 compiles the same calling source against the
+      # legacy package (net472, Parquet.Net 4.25) and the modern one (net8.0, Parquet.Net 6.x).
+      # Both targets are compiled here and net8.0 is executed; net472 is executed by the
+      # net472-consumer job on Windows. The shared calling code covers only what is at parity; the
+      # rest is behind #if and listed in src/api/legacy-parity-allowlist.txt.
+      - name: Verify the net472;net8.0 Multi-Target Consumer
+        run: |
+          set -euo pipefail
+          version=$(ls artifacts/Parquet.SourceGenerator.[0-9]*.nupkg \
+            | sed -E 's/.*Parquet\.SourceGenerator\.([0-9][^/]*)\.nupkg/\1/')
+          project=test/PackageConsumptionMultiTarget/PackageConsumptionMultiTarget.csproj
+          dotnet build "$project" --configuration Release \
+            -p:GeneratorPackageVersion="$version" \
+            -p:RestorePackagesPath="$RUNNER_TEMP/consumption-packages-multi-target"
+          dotnet run --project "$project" --framework net8.0 --configuration Release --no-build \
+            -p:GeneratorPackageVersion="$version" \
+            -p:RestorePackagesPath="$RUNNER_TEMP/consumption-packages-multi-target"
+
       - name: Upload Compatibility Matrix Report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -744,12 +762,14 @@ jobs:
             8.0.x
             10.0.x
 
-      - name: Pack the Attributes and Legacy packages
+      - name: Pack the Attributes, Legacy and modern packages
         run: |
           set -euo pipefail
           dotnet pack src/Parquet.SourceGenerator.Attributes/Parquet.SourceGenerator.Attributes.csproj \
             --configuration Release --output artifacts -p:Version=0.0.0-net472.1
           dotnet pack src/Parquet.SourceGenerator.Legacy/Parquet.SourceGenerator.Legacy.csproj \
+            --configuration Release --output artifacts -p:Version=0.0.0-net472.1
+          dotnet pack src/Parquet.SourceGenerator/Parquet.SourceGenerator.csproj \
             --configuration Release --output artifacts -p:Version=0.0.0-net472.1
           ls artifacts
 
@@ -783,6 +803,18 @@ jobs:
           "${net8[@]}" -- --read-interop "$dir/net472.parquet" classic/net472
           "${net8[@]}" -- --write-interop "$dir/net8.parquet"
           "${net472[@]}" -- --read-interop "$dir/net8.parquet" classic/net8.0
+
+      # #493: the multi-target consumer's shared calling source, executed on both runtimes. On
+      # net472 it runs the legacy backend on the .NET Framework runtime; on net8.0 the modern one.
+      - name: Run the net472;net8.0 multi-target consumer on both runtimes
+        run: |
+          set -euo pipefail
+          project=test/PackageConsumptionMultiTarget/PackageConsumptionMultiTarget.csproj
+          for tfm in net472 net8.0; do
+            dotnet run --project "$project" --framework "$tfm" --configuration Release \
+              -p:GeneratorPackageVersion=0.0.0-net472.1 \
+              -p:RestorePackagesPath="$RUNNER_TEMP/consumption-packages-multi-target"
+          done
 
   build:
     name: build

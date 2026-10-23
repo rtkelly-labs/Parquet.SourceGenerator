@@ -1,0 +1,10 @@
+<Project>
+    <!--
+    Simulates an external consumer restoring the generator packages from the local nupkg feed.
+    Central Package Management is off so -p:GeneratorPackageVersion behaves as it would for an
+    end-user project.
+  -->
+    <PropertyGroup>
+        <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    </PropertyGroup>
+</Project>

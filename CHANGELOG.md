@@ -44,6 +44,14 @@ the migration list; each row's detail is in the entries below and in `docs/api/L
 - **Diagnostics for abstract, `ref struct` and file-local targets (PARQ020, PARQ021, PARQ022).** Each shape passed every
   declaration check and then failed to compile inside the generated file (`CS0144`, `CS0306`/`CS8345`, `CS9051`). Each
   now reports one diagnostic at the declaration and emits nothing for the type; other targets are unaffected (#402).
+- **CI gate: legacy/modern emitted API parity, with an allowlist that can only shrink** (#493). Every golden
+  model is generated through both backends and the normalised `.api.txt` lines are diffed against
+  `src/api/legacy-parity-allowlist.txt`: an unlisted difference fails, an entry that no longer differs fails,
+  and a permanent modern-only entry (`AsBatches()`) fails if the legacy backend starts emitting it. The initial
+  list records today's gap (builder reader #494, columnar and `IAsyncEnumerable<T>` writes #495, nested models
+  #176, the Arrow bridge #490). A new `net472;net8.0` consumer (`test/PackageConsumptionMultiTarget`) compiles
+  one calling source against both packages and runs it on .NET Framework and .NET 8; its shared code is the
+  part at parity today. `BackendCompatibilityPolicyTests` no longer pins the classic surface to the #246 core.
 - **CI gate: every `src/` analyzer runs on the emitted code, and any finding fails** (`analysis/`,
   `scripts/GeneratedCodeAnalysis.cs`, `docs/50-GENERATED-CODE-ANALYSIS.md`, #553). The golden
   models' emitted source is compiled bare (no implicit usings) against both backends with
