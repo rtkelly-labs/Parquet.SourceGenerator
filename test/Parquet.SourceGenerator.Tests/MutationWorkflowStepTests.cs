@@ -114,6 +114,24 @@ public sealed class MutationWorkflowStepTests : IDisposable
     }
 
     [Fact]
+    public async Task AStrykerRunStoppedByAFailingInitialTestRunFailsTheStepWithTheReasonAsync()
+    {
+        ToolsAvailable().ShouldBeTrue("bash and jq are required to run the workflow step");
+
+        // break-on-initial-test-failure: Stryker exits 1 and prints no reason.
+        ScriptRun run = await RunPartitionAsync(
+            "emitter",
+            "Gen.csproj",
+            writesReport: false,
+            strykerExitCode: 1
+        );
+
+        run.ExitCode.ShouldBe(1, run.Describe());
+        run.Stdout.ShouldContain("Stryker exited with 1");
+        run.Stdout.ShouldContain("stryker-logs-emitter");
+    }
+
+    [Fact]
     public async Task AnUndeclaredPartitionFailsBeforeStrykerRunsAsync()
     {
         ToolsAvailable().ShouldBeTrue("bash and jq are required to run the workflow step");
@@ -180,13 +198,19 @@ public sealed class MutationWorkflowStepTests : IDisposable
     private static List<string> MutateGlobs(ScriptRun run) =>
         run.StrykerArgs.Where((_, i) => i > 0 && run.StrykerArgs[i - 1] == "--mutate").ToList();
 
-    private Task<ScriptRun> RunPartitionAsync(string partition, string project, bool writesReport)
+    private Task<ScriptRun> RunPartitionAsync(
+        string partition,
+        string project,
+        bool writesReport,
+        int strykerExitCode = 0
+    )
     {
         return RunStepAsync(
             PartitionStep,
             Partitions,
             new Dictionary<string, string> { ["PARTITION"] = partition, ["PROJECT"] = project },
-            writesReport
+            writesReport,
+            strykerExitCode
         );
     }
 
@@ -194,7 +218,8 @@ public sealed class MutationWorkflowStepTests : IDisposable
         string stepName,
         string partitions,
         Dictionary<string, string> environment,
-        bool writesReport = true
+        bool writesReport = true,
+        int strykerExitCode = 0
     )
     {
         string script = StepScript(stepName, ReadWorkflow());
@@ -219,7 +244,7 @@ public sealed class MutationWorkflowStepTests : IDisposable
                 + writes
                 + "    prev=\"$a\"\n"
                 + "  done\n"
-                + "  return 0\n"
+                + $"  return {strykerExitCode}\n"
                 + "}\n"
         );
 

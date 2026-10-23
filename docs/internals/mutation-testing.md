@@ -68,7 +68,8 @@ failed` issue.
 A partition job fails before it reaches Stryker when the benchmark datasets are not real
 Parquet files. Stryker itself stops when its initial test run has any failing test
 (`break-on-initial-test-failure`). A score measured against a broken baseline is wrong for
-every mutant those tests cover. Until #668 this happened every night: the checkout did not
+every mutant those tests cover. Stryker exits without printing the reason, so a failed
+partition job uploads its Stryker log as `stryker-logs-<name>`, which names the failing tests. Until #668 this happened every night: the checkout did not
 fetch Git LFS objects, so the 12 tests that read `benchmarks/data/*.parquet` read 131-byte
 pointer files and failed, and Stryker carried on with "12 tests are failing".
 
