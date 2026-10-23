@@ -293,4 +293,39 @@ internal static class DiagnosticDescriptors
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true
     );
+
+    /// <summary>
+    /// PARQ023: The member sets a column option the Parquet.Net 4.x/5.x backend cannot write.
+    /// </summary>
+    /// <remarks>
+    /// Reported only by the classic (v4/v5) backend. <c>FieldId</c> needs <c>DataField.FieldId</c>,
+    /// which 4.x/5.x do not have; <c>AdjustedToUtc = false</c> needs <c>DateTimeFormat.Timestamp</c>
+    /// and <c>DateTimeTimeUnit</c>, which only 4.25 onwards have. Rejecting the member, rather than
+    /// dropping the option, keeps a column from silently losing its ID or becoming UTC-adjusted.
+    /// </remarks>
+    public static readonly DiagnosticDescriptor ColumnOptionUnsupportedOnClassicApi = new(
+        id: "PARQ023",
+        title: "Column option is not supported by the Parquet.Net 4.x/5.x backend",
+        messageFormat: "The member '{0}' on type '{1}' sets {2}, which the Parquet.Net 4.x/5.x backend cannot write. Use the Parquet.SourceGenerator package instead, or remove the option",
+        category: "ParquetSourceGenerator",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
+
+    /// <summary>
+    /// PARQ024: Two columns of one schema declare the same Parquet field ID.
+    /// </summary>
+    /// <remarks>
+    /// A field ID names exactly one column of the schema; readers that resolve columns by ID, such
+    /// as Apache Iceberg, cannot tell two columns with the same ID apart. Reported once per
+    /// duplicated ID, naming every column (by its dotted path) that declares it.
+    /// </remarks>
+    public static readonly DiagnosticDescriptor DuplicateFieldId = new(
+        id: "PARQ024",
+        title: "Duplicate Parquet field ID",
+        messageFormat: "The Parquet field ID {0} is declared by more than one column of type '{1}' ({2}). Field IDs must be unique across the schema",
+        category: "ParquetSourceGenerator",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
 }
