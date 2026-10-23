@@ -363,6 +363,7 @@ Full details on every diagnostic rule (`PARQ001` to `PARQ016`), with examples an
 - `PARQ012`–`PARQ014`: Cyclic or too-deep compound types, and an ineligible `[ParquetSortKey]`
 - `PARQ016`: Colliding generated type names (`PARQ015` retired)
 - `PARQ023`: A column option (`FieldId`, `AdjustedToUtc = false`) the classic backend cannot write
+- `PARQ024`: The same Parquet field ID declared by more than one column
 
 ---
 

@@ -311,4 +311,21 @@ internal static class DiagnosticDescriptors
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true
     );
+
+    /// <summary>
+    /// PARQ024: Two columns of one schema declare the same Parquet field ID.
+    /// </summary>
+    /// <remarks>
+    /// A field ID names exactly one column of the schema; readers that resolve columns by ID, such
+    /// as Apache Iceberg, cannot tell two columns with the same ID apart. Reported once per
+    /// duplicated ID, naming every column (by its dotted path) that declares it.
+    /// </remarks>
+    public static readonly DiagnosticDescriptor DuplicateFieldId = new(
+        id: "PARQ024",
+        title: "Duplicate Parquet field ID",
+        messageFormat: "The Parquet field ID {0} is declared by more than one column of type '{1}' ({2}). Field IDs must be unique across the schema",
+        category: "ParquetSourceGenerator",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
 }

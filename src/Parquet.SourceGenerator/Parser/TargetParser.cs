@@ -342,6 +342,9 @@ internal static class TargetParser
 
         CollectMembers(typeSymbol, scope, sink);
 
+        // Rule PARQ024: a field ID names one column of the whole schema, nested leaves included.
+        ReportDuplicateFieldIds(sink.Properties, className, fallbackLocation, diagnostics);
+
         // Rule PARQ003: Warning if no public serializable properties found. Suppressed when a
         // member was rejected above — "this type has no serializable members" is misleading when the
         // real answer is "its members were rejected", and PARQ006/PARQ007 already say why.
@@ -2207,6 +2210,59 @@ internal static class TargetParser
         "System.ReadOnlyMemory<byte>",
         "System.ReadOnlyMemory<char>",
     };
+
+    /// <summary>
+    /// Reports PARQ024 for each <c>[ParquetColumn(FieldId = n)]</c> value that more than one column
+    /// of the schema declares. Readers that resolve columns by ID (Apache Iceberg among them)
+    /// require IDs to be unique across the schema, so the walk covers struct children, list
+    /// elements and map values as well as top-level members.
+    /// </summary>
+    private static void ReportDuplicateFieldIds(
+        IEnumerable<PropertyModel> properties,
+        string className,
+        Location location,
+        List<DiagnosticInfo> diagnostics
+    )
+    {
+        var columnsById = new Dictionary<int, List<string>>();
+        var pending = new Stack<(PropertyModel Model, string Path)>(
+            properties.Select(p => (p, p.ParquetColumnName))
+        );
+        while (pending.Count > 0)
+        {
+            (PropertyModel model, string path) = pending.Pop();
+            if (model.FieldId is int id)
+            {
+                if (!columnsById.TryGetValue(id, out List<string>? columns))
+                    columnsById[id] = columns = [];
+                columns.Add(path);
+            }
+            foreach (PropertyModel child in model.Children)
+                pending.Push((child, path + "." + child.ParquetColumnName));
+            if (model.Element is { } element)
+                pending.Push((element, path + ".element"));
+            if (model.MapValue is { } value)
+                pending.Push((value, path + ".value"));
+        }
+
+        foreach (KeyValuePair<int, List<string>> entry in columnsById.OrderBy(e => e.Key))
+        {
+            if (entry.Value.Count < 2)
+                continue;
+            diagnostics.Add(
+                new DiagnosticInfo(
+                    DiagnosticDescriptors.DuplicateFieldId,
+                    location,
+                    new[]
+                    {
+                        entry.Key.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                        className,
+                        string.Join(", ", entry.Value.OrderBy(c => c, StringComparer.Ordinal)),
+                    }
+                )
+            );
+        }
+    }
 
     /// <summary>
     /// The diagnostic the classic (4.x/5.x) backend reports for a member it cannot carry, or null.

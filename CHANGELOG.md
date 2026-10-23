@@ -39,7 +39,8 @@ the migration list; each row's detail is in the entries below and in `docs/api/L
 - **`[ParquetColumn(FieldId = n)]` writes a Parquet field ID** on the column's schema element (Parquet.Net 6
   backend; the Legacy package reports `PARQ023`, since Parquet.Net 4.x/5.x has no field IDs). Apache Iceberg and other
   readers that resolve columns by ID can then adopt generated files without a name mapping. Negative, the
-  default, writes none, so existing models are unchanged.
+  default, writes none, so existing models are unchanged. An ID declared by two columns of one schema, nested
+  leaves included, is an error (`PARQ024`).
 - **`[ParquetTimestamp(Microseconds, AdjustedToUtc = false)]` writes a local timestamp**:
   `TIMESTAMP(MICROS, isAdjustedToUTC=false)`, Iceberg's `timestamp` as opposed to `timestamptz`. It is emitted
   through `DateTimeFormat.Timestamp`, because Parquet.Net ignores `isAdjustedToUTC` for `DateAndTimeMicros`

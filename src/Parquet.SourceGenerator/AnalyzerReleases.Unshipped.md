@@ -10,3 +10,4 @@ PARQ020 | ParquetSourceGenerator | Error | AbstractTypeNotSupported
 PARQ021 | ParquetSourceGenerator | Error | RefStructNotSupported
 PARQ022 | ParquetSourceGenerator | Error | FileLocalTypeNotSupported
 PARQ023 | ParquetSourceGenerator | Error | ColumnOptionUnsupportedOnClassicApi
+PARQ024 | ParquetSourceGenerator | Error | DuplicateFieldId
