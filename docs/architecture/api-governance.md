@@ -88,10 +88,13 @@ that fires on every performance commit is a gate that gets suppressed. The deriv
 that property for the emitted surface: those changes leave its "Emitted public API" section empty.
 
 A model-specific surface claim in `GoldenCodeGenRegressionTests` (a `ShouldContain` /
-`ShouldNotContain` on the emitted source) still fails the test run when a change breaks it, and
-`BackendCompatibilityPolicyTests` still holds the classic backend to its declared core surface
-([Compatibility Matrix](../reference/compatibility-matrix.md)). Those are behavioural claims about specific members, not a
-catalogue.
+`ShouldNotContain` on the emitted source) still fails the test run when a change breaks it. Those
+are behavioural claims about specific members, not a catalogue.
+
+The one emitted-surface comparison that is checked in is the legacy/modern parity allowlist
+(`src/api/legacy-parity-allowlist.txt`, #493). `BackendParityGateTests` renders each golden model's
+`.api.txt` through both generators and requires every difference between them to be listed, and
+every listed entry to still differ ([Legacy Support § Enforcement](../guides/legacy-support.md#enforcement)).
 
 ### Division of labour between the build and CI
 

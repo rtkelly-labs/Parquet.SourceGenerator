@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <!--
+    Deliberately NOT part of Parquet.SourceGenerator.slnx: it restores the generator packages a CI
+    run has just packed into ../../artifacts.
+
+    The multi-target consumer of #493 (docs/guides/legacy-support.md § Enforcement). One project,
+    one calling source, two backends: net472 gets Parquet.SourceGenerator.Legacy over Parquet.Net
+    4.25, net8.0 gets Parquet.SourceGenerator over Parquet.Net 6.x. The calling code in Program.cs
+    that sits outside `#if` compiles against both, which is the whole claim of #490. It covers only
+    the subset that is at parity today; everything else is behind `#if NET8_0_OR_GREATER` and is a
+    listed difference in src/api/legacy-parity-allowlist.txt. As #494/#495 shrink the allowlist,
+    the calls move out of the `#if`.
+  -->
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFrameworks>net472;net8.0</TargetFrameworks>
+        <Nullable>enable</Nullable>
+        <IsPackable>false</IsPackable>
+        <RootNamespace>PackageConsumptionMultiTarget</RootNamespace>
+        <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+        <!-- net472 defaults to C# 7.3, which the generated code (and Program.cs) outgrow. -->
+        <LangVersion>latest</LangVersion>
+    </PropertyGroup>
+
+    <ItemGroup Condition="'$(TargetFramework)' == 'net472'">
+        <PackageReference
+            Include="Parquet.SourceGenerator.Legacy"
+            Version="$(GeneratorPackageVersion)"
+        />
+        <PackageReference Include="Parquet.Net" Version="4.25.0" />
+        <!-- Lets a Linux runner compile the net472 target; running it needs Windows. -->
+        <PackageReference
+            Include="Microsoft.NETFramework.ReferenceAssemblies"
+            Version="1.0.3"
+            PrivateAssets="all"
+        />
+    </ItemGroup>
+
+    <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
+        <PackageReference Include="Parquet.SourceGenerator" Version="$(GeneratorPackageVersion)" />
+        <PackageReference Include="Parquet.Net" Version="6.1.0" />
+    </ItemGroup>
+</Project>

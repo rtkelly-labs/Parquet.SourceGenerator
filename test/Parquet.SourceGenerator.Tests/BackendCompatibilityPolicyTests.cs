@@ -7,11 +7,16 @@ using Xunit;
 namespace Parquet.SourceGenerator.Tests;
 
 /// <summary>
-/// Enforces the declared-subset policy from issue #246: the classic backend remains a stable core
-/// compatibility surface while modern-only features are allowed to grow in the v6 backend.
-/// Checked against the signature-only API of every <see cref="GoldenCorpus"/> model, rendered
-/// from the live emitter output.
+/// Backend-specific surface claims, checked against the signature-only API of every
+/// <see cref="GoldenCorpus"/> model, rendered from the live emitter output.
 /// </summary>
+/// <remarks>
+/// The declared-subset assertion from issue #246 (the classic surface is exactly a fixed core) was
+/// retired by #493: #490 replaced that policy with parity, and every difference between the two
+/// backends is now held by <see cref="BackendParityGateTests"/> against
+/// <c>src/api/legacy-parity-allowlist.txt</c>, which fails on any unlisted legacy member as the
+/// old assertion did, and also on any modern member the legacy backend lacks without an entry.
+/// </remarks>
 public sealed class BackendCompatibilityPolicyTests
 {
     private static IEnumerable<GoldenEmission> Classic => GoldenCorpus.All.Where(IsClassic);
@@ -20,38 +25,6 @@ public sealed class BackendCompatibilityPolicyTests
 
     private static bool IsClassic(GoldenEmission emission) =>
         emission.FileName.EndsWith("LegacyExtensions.g.cs", StringComparison.Ordinal);
-
-    private static readonly HashSet<string> ClassicCoreSignatures = new(StringComparer.Ordinal)
-    {
-        "static ClassicExtensions.ReadParquetArrayAsync(System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<T[]>",
-        "static ClassicExtensions.ReadParquetAsync(System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<System.Collections.Generic.List<T>>",
-        "static ClassicExtensions.WriteParquetAsync(this System.Collections.Generic.IEnumerable<T> items, System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task",
-    };
-
-    [Fact]
-    public void EveryClassicBaselineContainsOnlyTheDeclaredCoreSurface()
-    {
-        GoldenEmission[] classic = Classic.ToArray();
-        classic.Length.ShouldBeGreaterThan(0, "At least one classic model must be checked.");
-
-        foreach (GoldenEmission emission in classic)
-        {
-            string[] signatures = ReadMembers(emission).Select(NormalizeClassicSignature).ToArray();
-
-            signatures
-                .Except(ClassicCoreSignatures, StringComparer.Ordinal)
-                .ShouldBeEmpty(
-                    $"The classic backend API of {emission.FileName} contains a signature "
-                        + "outside the declared core surface. A new member or overload requires an "
-                        + "explicit compatibility-policy decision in docs/reference/compatibility-matrix.md."
-                );
-
-            foreach (string required in ClassicCoreSignatures)
-            {
-                signatures.ShouldContain(required, $"Missing from {emission.FileName}");
-            }
-        }
-    }
 
     [Fact]
     public void ClassicRowGroupWriterIsNotPublicSurface()
@@ -68,15 +41,6 @@ public sealed class BackendCompatibilityPolicyTests
     }
 
     [Fact]
-    public void ModernOnlyOverloadWithAClassicMemberNameIsRejected()
-    {
-        const string modernStreamingOverload =
-            "static SampleDomain.Models.LegacyRecordParquetLegacyExtensions.ReadParquetAsync(System.Collections.Generic.IAsyncEnumerable<LegacyRecord> items) -> System.Threading.Tasks.Task";
-
-        ClassicCoreSignatures.ShouldNotContain(NormalizeClassicSignature(modernStreamingOverload));
-    }
-
-    [Fact]
     public void ModernBaselinesRetainTheModernOnlyCapabilities()
     {
         string[] lines = Modern.SelectMany(ReadMembers).ToArray();
@@ -89,8 +53,8 @@ public sealed class BackendCompatibilityPolicyTests
 
     /// <summary>
     /// #480: the builder is the only modern read surface. The flat <c>ReadParquet*Async</c>
-    /// methods are gone from every modern model's API, while the classic backend — which has no
-    /// builder — keeps its flat reads as its declared subset (checked above).
+    /// methods are gone from every modern model's API. The classic backend, which has no builder
+    /// yet, keeps its flat reads as temporary legacy-only parity allowlist entries (#494).
     /// </summary>
     [Fact]
     public void ModernBaselinesExposeNoFlatReadMethods()
@@ -130,38 +94,4 @@ public sealed class BackendCompatibilityPolicyTests
                 && line.Contains(" -> ", StringComparison.Ordinal)
             )
             .ToArray();
-
-    private static string NormalizeClassicSignature(string signature)
-    {
-        const string NamespacePrefix = "SampleDomain.Models.";
-        const string ExtensionSuffix = "ParquetLegacyExtensions";
-        const string ExtensionMemberSeparator = ExtensionSuffix + ".";
-
-        int ownerStart = signature.IndexOf(NamespacePrefix, StringComparison.Ordinal);
-        if (ownerStart < 0)
-        {
-            return signature;
-        }
-
-        int ownerEnd = signature.IndexOf(
-            ExtensionMemberSeparator,
-            ownerStart,
-            StringComparison.Ordinal
-        );
-        if (ownerEnd < 0)
-        {
-            return signature;
-        }
-
-        int modelStart = ownerStart + NamespacePrefix.Length;
-        string modelName = signature.Substring(modelStart, ownerEnd - modelStart);
-        string ownerName = signature.Substring(
-            ownerStart,
-            ownerEnd + ExtensionSuffix.Length - ownerStart
-        );
-
-        return signature
-            .Replace(ownerName, "ClassicExtensions", StringComparison.Ordinal)
-            .Replace(modelName, "T", StringComparison.Ordinal);
-    }
 }

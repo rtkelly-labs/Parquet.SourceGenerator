@@ -92,6 +92,10 @@
             Include="..\..\tools\Parquet.SourceGenerator.ApiGates\GeneratedApiBudgetGate.cs"
             Link="GeneratedApiBudgetGate.cs"
         />
+        <Compile
+            Include="..\..\tools\Parquet.SourceGenerator.ApiGates\BackendParityGate.cs"
+            Link="BackendParityGate.cs"
+        />
         <AdditionalFiles Include="BannedSymbols.txt" />
     </ItemGroup>
 </Project>
