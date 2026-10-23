@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -8,7 +9,14 @@ using System.Text.RegularExpressions;
 // Modes:
 //   --restore <dir>
 //       Downloads the pinned toolchain described by test/data/apache-conformance.json into <dir>
-//       and verifies every SHA-256 (existing files with matching hashes are kept).
+//       and verifies every SHA-256 (existing files with matching hashes are kept, so a cached
+//       tools dir costs no network). Each artifact is fetched from the manifest's ordered
+//       "mirrors" list: every round tries each mirror in turn, and failed rounds are retried with
+//       exponential backoff. Bytes are written only after they match the pinned SHA-256, whichever
+//       mirror served them. When every source fails, one ::error:: line per artifact names the
+//       artifact, every URL tried and its outcome, and the exit code is 1.
+//       --attempts <n>           rounds over the mirror list per artifact (default 3)
+//       --retry-delay-ms <ms>    backoff before round 2; doubles each round (default 2000)
 //   verify (default)
 //       --tools-dir <dir>        directory holding the restored toolchain (required)
 //       --java <path>            java launcher; falls back to PARQUET_APACHE_CONFORMANCE_JAVA,
@@ -24,7 +32,6 @@ using System.Text.RegularExpressions;
 bool restoreMode = Array.IndexOf(args, "--restore") >= 0;
 string toolManifestPath = Option(args, "--tool-manifest") ?? "test/data/apache-conformance.json";
 using JsonDocument toolManifest = JsonDocument.Parse(File.ReadAllText(toolManifestPath));
-string repository = toolManifest.RootElement.GetProperty("repository").GetString()!;
 JsonElement[] artifacts = toolManifest
     .RootElement.GetProperty("artifacts")
     .EnumerateArray()
@@ -34,8 +41,7 @@ if (restoreMode)
 {
     string toolsDir = RequiredOption(args, "--restore");
     Directory.CreateDirectory(toolsDir);
-    RestoreToolchain(toolsDir);
-    return 0;
+    return RestoreToolchain(toolsDir);
 }
 
 string toolsDirVerify = RequiredOption(args, "--tools-dir");
@@ -180,16 +186,25 @@ foreach (JsonElement fixture in manifestFixtures)
         $"{relativePath}: created-by metadata must match manifest '{expectedCreatedBy}'"
     );
 
-    long rows = long.Parse(fixture.GetProperty("rowCount").ToString()!.Trim('"'));
-    int groups = int.Parse(fixture.GetProperty("rowGroupCount").ToString()!.Trim('"'));
-    int columns = int.Parse(fixture.GetProperty("columnCount").ToString()!.Trim('"'));
+    long rows = long.Parse(
+        fixture.GetProperty("rowCount").ToString()!.Trim('"'),
+        CultureInfo.InvariantCulture
+    );
+    int groups = int.Parse(
+        fixture.GetProperty("rowGroupCount").ToString()!.Trim('"'),
+        CultureInfo.InvariantCulture
+    );
+    int columns = int.Parse(
+        fixture.GetProperty("columnCount").ToString()!.Trim('"'),
+        CultureInfo.InvariantCulture
+    );
 
     int observedGroups = Regex
         .Matches(meta, @"^Row group \d+:\s+count:", RegexOptions.Multiline)
         .Count;
     long observedRows = Regex
         .Matches(meta, @"^Row group \d+:\s+count:\s+(\d+)", RegexOptions.Multiline)
-        .Sum(match => long.Parse(match.Groups[1].Value));
+        .Sum(match => long.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture));
     Check(
         observedGroups == groups,
         $"{relativePath}: row group count expected {groups}, observed {observedGroups}"
@@ -362,32 +377,148 @@ Console.WriteLine(
 );
 return failures.Count == 0 ? 0 : 1;
 
-void RestoreToolchain(string directory)
+int RestoreToolchain(string directory)
 {
-    using var http = new HttpClient();
+    string[] mirrors = ReadMirrors(toolManifest.RootElement);
+    int attempts = int.Parse(Option(args, "--attempts") ?? "3", CultureInfo.InvariantCulture);
+    int baseDelayMs = int.Parse(
+        Option(args, "--retry-delay-ms") ?? "2000",
+        CultureInfo.InvariantCulture
+    );
+    if (attempts < 1 || baseDelayMs < 0)
+    {
+        throw new ArgumentException("--attempts must be >= 1 and --retry-delay-ms >= 0.");
+    }
+
+    using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
+    int failed = 0;
     foreach (JsonElement artifact in artifacts)
     {
         string file = artifact.GetProperty("file").GetString()!;
         string path = artifact.GetProperty("path").GetString()!;
         string sha256 = artifact.GetProperty("sha256").GetString()!;
         string destination = Path.Combine(directory, file);
-        if (File.Exists(destination) && ComputeSha256(destination) == sha256)
+        if (
+            File.Exists(destination)
+            && string.Equals(ComputeSha256(destination), sha256, StringComparison.OrdinalIgnoreCase)
+        )
         {
             Console.WriteLine($"up to date: {file}");
             continue;
         }
-        Console.WriteLine($"downloading: {file}");
-        byte[] bytes = http.GetByteArrayAsync($"{repository}/{path}").GetAwaiter().GetResult();
-        string actual = Convert.ToHexString(SHA256.HashData(bytes));
-        if (!string.Equals(actual, sha256, StringComparison.OrdinalIgnoreCase))
+
+        var tried = new List<string>();
+        bool restored = false;
+        for (int round = 1; round <= attempts && !restored; round++)
         {
-            throw new InvalidOperationException(
-                $"{file}: downloaded bytes do not match pinned SHA-256"
+            if (round > 1)
+            {
+                int delay = baseDelayMs * (1 << Math.Min(round - 2, 10));
+                Console.WriteLine($"retrying {file} in {delay} ms (round {round}/{attempts})");
+                Thread.Sleep(delay);
+            }
+            foreach (string mirror in mirrors)
+            {
+                string url = $"{mirror.TrimEnd('/')}/{path}";
+                Console.WriteLine($"downloading: {file} from {url}");
+                string outcome = TryDownload(http, url, destination, sha256);
+                tried.Add($"{url} -> {outcome} (round {round})");
+                if (outcome == "OK")
+                {
+                    Console.WriteLine($"verified: {file} sha256 {sha256.ToLowerInvariant()}");
+                    restored = true;
+                    break;
+                }
+                Console.WriteLine($"  failed: {outcome}");
+            }
+        }
+
+        if (!restored)
+        {
+            failed++;
+            // One workflow command per artifact; the message must stay on one line.
+            Console.WriteLine(
+                $"::error title=Apache conformance tool restore failed::{file} ({path}) could not be restored from any of {mirrors.Length} mirror(s) in {attempts} round(s). Tried: {string.Join("; ", tried)}"
             );
         }
-        File.WriteAllBytes(destination, bytes);
-        Console.WriteLine($"verified: {file} sha256 {actual.ToLowerInvariant()}");
     }
+
+    if (failed > 0)
+    {
+        Console.WriteLine(
+            $"Apache conformance tool restore FAILED: {failed} of {artifacts.Length} artifacts could not be restored with a matching SHA-256."
+        );
+        return 1;
+    }
+    Console.WriteLine(
+        $"Apache conformance tool restore OK: {artifacts.Length} artifacts verified."
+    );
+    return 0;
+}
+
+// Downloads url into a temporary file beside destination and moves it into place only when its
+// SHA-256 matches the pin. Returns "OK" or a one-line description of the failure.
+static string TryDownload(HttpClient http, string url, string destination, string sha256)
+{
+    string partial = destination + ".partial";
+    try
+    {
+        using HttpResponseMessage response = http.Send(
+            new HttpRequestMessage(HttpMethod.Get, url),
+            HttpCompletionOption.ResponseHeadersRead
+        );
+        if (!response.IsSuccessStatusCode)
+        {
+            return $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}";
+        }
+
+        string actual;
+        using (Stream body = response.Content.ReadAsStream())
+        using (FileStream output = File.Create(partial))
+        using (var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256))
+        {
+            byte[] buffer = new byte[81920];
+            int read;
+            while ((read = body.Read(buffer, 0, buffer.Length)) > 0)
+            {
+                hash.AppendData(buffer, 0, read);
+                output.Write(buffer, 0, read);
+            }
+            actual = Convert.ToHexString(hash.GetHashAndReset());
+        }
+
+        if (!string.Equals(actual, sha256, StringComparison.OrdinalIgnoreCase))
+        {
+            return $"SHA-256 mismatch: got {actual.ToLowerInvariant()}, pinned {sha256.ToLowerInvariant()}";
+        }
+        File.Move(partial, destination, overwrite: true);
+        return "OK";
+    }
+    catch (Exception ex) when (ex is HttpRequestException or IOException or TaskCanceledException)
+    {
+        return $"{ex.GetType().Name}: {ex.Message.ReplaceLineEndings(" ")}";
+    }
+    finally
+    {
+        if (File.Exists(partial))
+        {
+            File.Delete(partial);
+        }
+    }
+}
+
+static string[] ReadMirrors(JsonElement manifest)
+{
+    string[] mirrors = manifest.TryGetProperty("mirrors", out JsonElement list)
+        ? list.EnumerateArray().Select(m => m.GetString()!).ToArray()
+        : [];
+    if (mirrors.Length == 0)
+    {
+        throw new InvalidOperationException(
+            "The tool manifest lists no mirrors; restore needs at least one repository URL."
+        );
+    }
+    return mirrors;
 }
 
 void VerifyArtifactSha(string directory, JsonElement artifact)
