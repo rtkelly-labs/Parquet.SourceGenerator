@@ -1,3 +1,4 @@
+using System;
 using System.Text;
 using Parquet.SourceGenerator.Models;
 
@@ -13,43 +14,18 @@ internal static class SchemaComponent
     /// </summary>
     public static string BoolLiteral(bool value) => value ? "true" : "false";
 
-    private static bool IsMicrosecondTimestamp(PropertyModel prop) =>
+    /// <summary>
+    /// Whether a <c>DateTime</c> member is declared with microsecond precision.
+    /// </summary>
+    public static bool IsMicrosecondTimestamp(PropertyModel prop) =>
         prop.TimestampUnit == "1" || prop.TimestampUnit?.Contains("Microseconds") == true;
 
     /// <summary>
     /// Generates compile-time ParquetSchema DataField instantiation code.
     /// </summary>
-    public static string GetFieldCreationExpression(PropertyModel prop) =>
-        GetFieldCreationExpression(prop, classicApi: false);
-
-    /// <summary>
-    /// Generates compile-time ParquetSchema DataField instantiation code for the given API level.
-    /// </summary>
-    /// <param name="prop">The member.</param>
-    /// <param name="classicApi">
-    /// True for the Parquet.Net 4.x/5.x backend, whose time fields differ from 6.x: 4.25 has no
-    /// <c>TimeDataField</c>/<c>TimeUnitPrecision</c> (its <c>TimeSpanDataField</c> columns carry
-    /// <c>TimeSpan</c> values directly, and it reads every TIME column back as one), and its
-    /// <c>DateTimeFormat.DateAndTimeMicros</c> exists only in the net8.0 build (#597; see
-    /// <see cref="EmitSchema"/>).
-    /// </param>
-    public static string GetFieldCreationExpression(PropertyModel prop, bool classicApi)
+    public static string GetFieldCreationExpression(PropertyModel prop)
     {
         string name = EmittedText.Literal(prop.ParquetColumnName);
-
-        if (classicApi)
-        {
-            string nullable = BoolLiteral(prop.IsNullable);
-            switch (prop.Kind)
-            {
-                case PropertyKind.TimeSpan:
-                    return $"new global::Parquet.Schema.TimeSpanDataField({name}, global::Parquet.Schema.TimeSpanFormat.MilliSeconds, isNullable: {nullable})";
-                // 4.25 reads a TIME column back as a TimeSpan field whatever wrote it, so the
-                // classic backend carries TimeOnly as a TimeSpan of TIME_MICROS (the same file).
-                case PropertyKind.TimeOnly:
-                    return $"new global::Parquet.Schema.TimeSpanDataField({name}, global::Parquet.Schema.TimeSpanFormat.MicroSeconds, isNullable: {nullable})";
-            }
-        }
 
         return prop.Kind switch
         {
@@ -105,10 +81,17 @@ internal static class SchemaComponent
     /// <summary>
     /// Emits compile-time ParquetSchema definition.
     /// </summary>
+    /// <param name="builder">The builder.</param>
+    /// <param name="model">The model.</param>
+    /// <param name="fieldOverride">
+    /// A backend's own lines for a field (given the member and its trailing comma), or null to use
+    /// <see cref="GetFieldCreationExpression"/>. The classic backend uses it for the fields Parquet.Net
+    /// 4.x spells differently (#597).
+    /// </param>
     public static void EmitSchema(
         StringBuilder builder,
         TargetClassModel model,
-        bool classicApi = false
+        Func<PropertyModel, string, string?>? fieldOverride = null
     )
     {
         builder.AppendLine("    /// <summary>");
@@ -124,26 +107,14 @@ internal static class SchemaComponent
         {
             PropertyModel prop = model.Properties[i];
             string comma = i < model.Properties.Length - 1 ? "," : "";
-            if (classicApi && prop.Kind == PropertyKind.DateTime && IsMicrosecondTimestamp(prop))
+            string? lines = fieldOverride?.Invoke(prop, comma);
+            if (lines is not null)
             {
-                // Only Parquet.Net 4.25's net8.0 build, which a net8.0+ consumer resolves, can write
-                // a microsecond timestamp: the other builds lack DateAndTimeMicros, and their
-                // Timestamp field throws "Unexpected TimeUnit" for any unit but milliseconds (#597).
-                // Below net8.0 the member is a compile error that says so, rather than generated
-                // code that fails to compile on a missing enum member or fails at write time.
-                builder.AppendLine("#if NET8_0_OR_GREATER");
-                builder.AppendLine(
-                    $"        new global::Parquet.Schema.DateTimeDataField({EmittedText.Literal(prop.ParquetColumnName)}, global::Parquet.Schema.DateTimeFormat.DateAndTimeMicros, isNullable: {BoolLiteral(prop.IsNullable)}){comma}"
-                );
-                builder.AppendLine("#else");
-                builder.AppendLine(
-                    $"#error Parquet.SourceGenerator.Legacy: [ParquetTimestamp(Microseconds)] on '{model.ClassName}.{prop.Name}' needs net8.0 or later: Parquet.Net 4.25's netstandard2.0 and net6.0 builds cannot write microsecond timestamps. Use millisecond precision on this target."
-                );
-                builder.AppendLine("#endif");
+                builder.Append(lines);
                 continue;
             }
 
-            builder.AppendLine($"        {GetFieldCreationExpression(prop, classicApi)}{comma}");
+            builder.AppendLine($"        {GetFieldCreationExpression(prop)}{comma}");
         }
 
         builder.AppendLine("    );");

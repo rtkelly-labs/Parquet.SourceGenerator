@@ -139,12 +139,17 @@ from `LegacyBehaviourDriver.IsKnownFailure`; never skipped.
 | LZ4, Brotli and Zstd compression on .NET Framework (net472) | Parquet.Net 4.25 compresses these through IronCompress's native library, which the .NET Framework test host does not load (`NotSupportedException`, "native: False"). An AnyCPU .NET Framework application is expected to behave the same way. Gzip, Snappy and no compression are managed and pass on net472; all six codecs pass on net8.0. Whether a `win-x64` runtime identifier makes the native library load has not been verified. | `CodecBehaviourTests` (every LZ4/Brotli/Zstd case, net472 only) |
 | A zero-length `byte[]` value round-trips | Parquet.Net 4.25 writes it, but its plain decoder throws `IndexOutOfRangeException` reading the column back, required or optional; reproduced without generated code. Upstream, see `UPSTREAM_DEPENDENCY_LIMITATIONS.md`. | `TypeMatrixBehaviourTests.EmptyBinaryValueRoundTrips` |
 
-**Coverage.** The `Parquet.SourceGenerator.Legacy` row of the coverage report measures the emitter
-as the main test project calls it in process; the generator under this suite runs inside the
-compiler, so the suite does not move that row. What the suite executes is the generated code in its
-own assembly, which `coverlet.runsettings` excludes. Measured locally with the test assembly
-included (net8.0, #597): 72.2% of lines and 56.4% of branches across the seven generated legacy
-serializers, 86.6% / 70.7% for the 50-column type-matrix model.
+**Coverage.** Under this suite the legacy generator runs inside the compiler, where no coverage
+collector sees it, so the suite's own run cannot count toward the `Parquet.SourceGenerator.Legacy`
+row of the coverage report. `LegacyGeneratorMatrixTests` in the main test project therefore runs the
+legacy generator in process over the same model sources (net8.0 and net472 preprocessor symbols), and
+that is what counts the generator work behind the suite. Measured locally (#597): 76.18% of lines and
+56.58% of branches, against 76.20% / 54.58% on main. Line coverage is flat because the row's
+denominator is mostly modern-only shared components that the legacy assembly links but never calls.
+The generated code the suite executes is in its own test assembly, which `coverlet.runsettings`
+excludes. Measured with that assembly included (net8.0) it reaches 72.2% of lines and 56.4% of
+branches across the seven generated legacy serializers, and 86.6% / 70.7% for the 50-column
+type-matrix model.
 
 ## End state: one package
 
