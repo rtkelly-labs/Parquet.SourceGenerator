@@ -24,7 +24,7 @@ The rule, the three surfaces and the author process are in
 - **Change:** Added `ParquetColumnAttribute.FieldId` (default -1, no ID written) and
   `ParquetTimestampAttribute.AdjustedToUtc` (default true, today's annotation). The emitter writes
   `DataField.FieldId` and `isAdjustedToUTC: false` only when a member sets them, so the output for
-  existing models does not change. Separately, `DateOnly` columns are written as INT32 DATE again
+  existing models does not change. The Legacy (4.x/5.x) backend rejects both with the new `PARQ023`. Separately, `DateOnly` columns are written as INT32 DATE again
   (main had regressed to INT96).
 - **Rationale:** Apache Iceberg resolves Parquet columns by field ID and distinguishes `timestamp`
   (local) from `timestamptz` (UTC-adjusted). Without these, generated files can join an Iceberg table

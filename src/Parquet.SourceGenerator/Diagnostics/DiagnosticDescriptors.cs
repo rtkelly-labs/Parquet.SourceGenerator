@@ -293,4 +293,22 @@ internal static class DiagnosticDescriptors
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true
     );
+
+    /// <summary>
+    /// PARQ023: The member sets a column option the Parquet.Net 4.x/5.x backend cannot write.
+    /// </summary>
+    /// <remarks>
+    /// Reported only by the classic (v4/v5) backend. <c>FieldId</c> needs <c>DataField.FieldId</c>,
+    /// which 4.x/5.x do not have; <c>AdjustedToUtc = false</c> needs <c>DateTimeFormat.Timestamp</c>
+    /// and <c>DateTimeTimeUnit</c>, which only 4.25 onwards have. Rejecting the member, rather than
+    /// dropping the option, keeps a column from silently losing its ID or becoming UTC-adjusted.
+    /// </remarks>
+    public static readonly DiagnosticDescriptor ColumnOptionUnsupportedOnClassicApi = new(
+        id: "PARQ023",
+        title: "Column option is not supported by the Parquet.Net 4.x/5.x backend",
+        messageFormat: "The member '{0}' on type '{1}' sets {2}, which the Parquet.Net 4.x/5.x backend cannot write. Use the Parquet.SourceGenerator package instead, or remove the option",
+        category: "ParquetSourceGenerator",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true
+    );
 }

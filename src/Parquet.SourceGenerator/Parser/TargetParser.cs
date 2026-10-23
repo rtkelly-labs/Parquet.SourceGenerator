@@ -1073,6 +1073,29 @@ internal static class TargetParser
             return;
         }
 
+        // Rule PARQ023: column options the 4.x/5.x API cannot express. Dropping them would write a
+        // column without its field ID, or a local timestamp annotated as UTC, with nothing to say so.
+        if (scope.ApiLevel == ParquetApiLevel.V4)
+        {
+            string? option =
+                column.FieldId is not null ? "[ParquetColumn(FieldId = ...)]"
+                : !ReadTimestampAdjustedToUtc(member)
+                    ? "[ParquetTimestamp(..., AdjustedToUtc = false)]"
+                : null;
+            if (option is not null)
+            {
+                scope.Diagnostics.Add(
+                    new DiagnosticInfo(
+                        DiagnosticDescriptors.ColumnOptionUnsupportedOnClassicApi,
+                        memberLocation,
+                        new[] { member.Name, scope.ClassName, option }
+                    )
+                );
+                sink.RejectedAnyMember = true;
+                return;
+            }
+        }
+
         // Rule PARQ007: the read path materialises through an object initializer, so every
         // column needs a reachable setter. Without this the failure was CS0200/CS0191 reported
         // against generated source, with nothing pointing at the declaration responsible.

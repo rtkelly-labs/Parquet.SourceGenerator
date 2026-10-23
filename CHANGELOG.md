@@ -37,13 +37,14 @@ the migration list; each row's detail is in the entries below and in `docs/api/L
 
 ### Added
 - **`[ParquetColumn(FieldId = n)]` writes a Parquet field ID** on the column's schema element (Parquet.Net 6
-  backend; Parquet.Net 4.x has no field IDs, so the Legacy package does not write it). Apache Iceberg and other
+  backend; the Legacy package reports `PARQ023`, since Parquet.Net 4.x/5.x has no field IDs). Apache Iceberg and other
   readers that resolve columns by ID can then adopt generated files without a name mapping. Negative, the
   default, writes none, so existing models are unchanged.
 - **`[ParquetTimestamp(Microseconds, AdjustedToUtc = false)]` writes a local timestamp**:
   `TIMESTAMP(MICROS, isAdjustedToUTC=false)`, Iceberg's `timestamp` as opposed to `timestamptz`. It is emitted
   through `DateTimeFormat.Timestamp`, because Parquet.Net ignores `isAdjustedToUTC` for `DateAndTimeMicros`
-  and writes that as the always-UTC `TIMESTAMP_MICROS` converted type. The default (`true`) keeps today's output.
+  and writes that as the always-UTC `TIMESTAMP_MICROS` converted type. The default (`true`) keeps today's output. The Legacy package reports `PARQ023` for `false`:
+  Parquet.Net before 4.25 has no `DateTimeFormat.Timestamp`.
 - **`ParquetSerializerOptions.MaxAllocationBytes`, a byte budget for what a read allocates** (#361), default
   256 MiB per row group. `MaxAllocationValues` bounds a count, so a file of about 1 KB declaring ten
   million rows reserved roughly a gigabyte of pooled buffers before a page was read. The generated

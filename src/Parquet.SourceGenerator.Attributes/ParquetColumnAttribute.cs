@@ -70,7 +70,8 @@ public sealed class ParquetColumnAttribute : Attribute
     /// Table formats such as Apache Iceberg resolve columns by this ID rather than by name, so a
     /// column keeps its identity across renames. Negative (the default) writes no field ID. Only
     /// leaf columns carry one: Parquet.Net does not write field IDs on group nodes. Written by the
-    /// Parquet.Net 6 backend; the Legacy package (Parquet.Net 4.x has no field IDs) does not write it.
+    /// Parquet.Net 6 backend; the Legacy package rejects it (PARQ023), since Parquet.Net 4.x/5.x has
+    /// no field IDs.
     /// </summary>
     public int FieldId { get; set; } = -1;
 }

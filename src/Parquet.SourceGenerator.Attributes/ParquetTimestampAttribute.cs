@@ -51,7 +51,7 @@ public sealed class ParquetTimestampAttribute : Attribute
     /// Gets or sets whether a microsecond timestamp is annotated <c>isAdjustedToUTC</c>. True (the
     /// default) marks an instant, such as Iceberg's <c>timestamptz</c>. False marks a local wall-clock
     /// value, such as Iceberg's <c>timestamp</c>. The stored microseconds are the same either way;
-    /// only the annotation readers see differs.
+    /// only the annotation readers see differs. False is rejected by the Legacy package (PARQ023).
     /// </summary>
     public bool AdjustedToUtc { get; set; } = true;
 }

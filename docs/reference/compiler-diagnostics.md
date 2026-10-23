@@ -28,6 +28,7 @@ This document details all diagnostic codes, their severity, rationale, and remed
 | **[`PARQ020`](#parq020-abstract-type-not-supported)** | **Error** | Abstract type not supported | Target type is abstract. |
 | **[`PARQ021`](#parq021-ref-struct-not-supported)** | **Error** | Ref struct not supported | Target type is a `ref struct`. |
 | **[`PARQ022`](#parq022-file-local-type-not-supported)** | **Error** | File-local type not supported | Target type is declared with the `file` modifier, or nested in one. |
+| **[`PARQ023`](#parq023-column-option-unsupported-on-classic-api)** | **Error** | Column option unsupported on classic API | A member sets `FieldId` or `AdjustedToUtc = false`, which the 4.x/5.x backend cannot write. |
 
 ---
 
@@ -245,6 +246,14 @@ This document details all diagnostic codes, their severity, rationale, and remed
 - **Cause**: `[ParquetSerializable]` is declared on a type with the `file` modifier, or on a type nested inside one.
 - **Why**: Generated code is emitted into a different file and names the target in public signatures, which a file-local type cannot be (`CS9051`). Two file-local targets of the same name in one namespace also used to share a generated hint name.
 - **Remediation**: Remove the `file` modifier.
+
+---
+
+### PARQ023: Column Option Unsupported on Classic API
+- **Severity**: Error *(Parquet.SourceGenerator.Legacy only)*
+- **Cause**: A member sets `[ParquetColumn(FieldId = n)]` or `[ParquetTimestamp(..., AdjustedToUtc = false)]`, and the project uses the `Parquet.SourceGenerator.Legacy` package.
+- **Why**: Parquet.Net 4.x/5.x has no `DataField.FieldId`, and only 4.25 onwards has the `DateTimeFormat.Timestamp` form that carries `isAdjustedToUTC = false`. Ignoring the option would write the column without its ID, or mark a local timestamp as UTC, without telling you.
+- **Remediation**: Use the main `Parquet.SourceGenerator` package (Parquet.Net 6), or remove the option.
 
 ---
 

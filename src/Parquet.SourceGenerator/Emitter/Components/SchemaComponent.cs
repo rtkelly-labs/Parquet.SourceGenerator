@@ -16,16 +16,12 @@ internal static class SchemaComponent
     /// <summary>
     /// Generates compile-time ParquetSchema DataField instantiation code.
     /// </summary>
-    /// <param name="prop">The member's model.</param>
-    /// <param name="writeFieldIds">
-    /// Whether to set <c>DataField.FieldId</c> from <c>[ParquetColumn(FieldId = n)]</c>. Parquet.Net 6
-    /// has the property; 4.x does not, so the legacy backend passes false.
-    /// </param>
-    public static string GetFieldCreationExpression(
-        PropertyModel prop,
-        bool writeFieldIds = true
-    ) =>
-        writeFieldIds && prop.FieldId is int fieldId
+    /// <remarks>
+    /// <c>FieldId</c> and a local timestamp use Parquet.Net APIs the 4.x/5.x line lacks; the classic
+    /// parser rejects members that set them (PARQ023), so they only reach this for the v6 backend.
+    /// </remarks>
+    public static string GetFieldCreationExpression(PropertyModel prop) =>
+        prop.FieldId is int fieldId
             ? $"{GetFieldConstructorExpression(prop)} {{ FieldId = {fieldId} }}"
             : GetFieldConstructorExpression(prop);
 
@@ -101,11 +97,7 @@ internal static class SchemaComponent
     /// <summary>
     /// Emits compile-time ParquetSchema definition.
     /// </summary>
-    public static void EmitSchema(
-        StringBuilder builder,
-        TargetClassModel model,
-        bool writeFieldIds = true
-    )
+    public static void EmitSchema(StringBuilder builder, TargetClassModel model)
     {
         builder.AppendLine("    /// <summary>");
         builder.AppendLine(
@@ -120,7 +112,7 @@ internal static class SchemaComponent
         {
             PropertyModel prop = model.Properties[i];
             string comma = i < model.Properties.Length - 1 ? "," : "";
-            builder.AppendLine($"        {GetFieldCreationExpression(prop, writeFieldIds)}{comma}");
+            builder.AppendLine($"        {GetFieldCreationExpression(prop)}{comma}");
         }
 
         builder.AppendLine("    );");
