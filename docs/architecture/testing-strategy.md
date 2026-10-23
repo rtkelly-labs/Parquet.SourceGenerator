@@ -147,6 +147,34 @@ send the reader at a different, valid page. The fuzzer found both. Those cases t
 termination and bounded allocation. Detecting them needs CRC verification in Parquet.Net, not
 anything the generator can do — see `UPSTREAM_DEPENDENCY_LIMITATIONS.md`.
 
+### Hostile read paths
+
+`Security/HostileReadPathTests` checks every read limit on every read route (#607). The matrix is
+limit x shape x route:
+
+- **Limits** are the `ParquetSerializerOptions` properties. A property is either a limit with cells
+  or listed as not bounding file input, with the reason. A new option that is neither fails the test.
+- **Shapes** are a flat model, a list model and a struct model.
+- **Routes** are read by reflection from each generated `<Model>ParquetReader`: every source
+  (`From(Stream)`, `From(ReadOnlyMemory<byte>)`) x every ordering of `Where` and `Parallel` x every
+  terminal (`ToArrayAsync`, `AsAsyncEnumerable`, `AsBatches`). Combinations the reader rejects by
+  design are asserted to throw `NotSupportedException`.
+
+A new terminal on any generated reader fails the "examined" assertion until a shape that has it is
+in the matrix.
+
+Each cell sets one limit just below what a small valid fixture needs and leaves every other option
+at its default. It then asserts the exact `InvalidDataException` message for that limit, under the
+same timeout and allocation-ceiling harness as the corrupted-file tests. Each cell has a negative
+control: the same file and route with that limit relaxed must read every row. A cell can therefore
+only pass because of the guard it names.
+
+The same routes also run the footer corruptions from `HostileParquetTests`: a wrong physical type and
+column-chunk offsets or sizes that are out of bounds, negative, zero or overlapping. Each is read with
+default options and must raise its own message. The untampered fixture must read on every route.
+Definition-level corruptions are still covered on `ToArrayAsync` only. The legacy backend's matrix
+is #597.
+
 ---
 
 ## 4. Native AOT & Trimming Verification
