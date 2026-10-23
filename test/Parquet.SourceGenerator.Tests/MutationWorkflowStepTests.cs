@@ -11,14 +11,28 @@ using IOFile = System.IO.File;
 namespace Parquet.SourceGenerator.Tests;
 
 /// <summary>
-/// Runs the Stryker steps of <c>mutation.yml</c> in bash against a fake <c>dotnet</c>. The nightly
-/// failed 20 of 20 times because <c>before=$(ls -1d StrykerOutput/*/ | sort)</c> exits non-zero on
-/// a fresh runner (no <c>StrykerOutput/</c> yet) and <c>pipefail</c> carries that into the
-/// assignment, so the step died before Stryker started (#575). Reproducing the shell is the only
-/// way to know the step now survives a fresh runner; Stryker itself is not run.
+/// Runs the shell steps of <c>mutation.yml</c> in bash against a fake <c>dotnet</c>. The nightly
+/// failed 20 of 20 times on a shell fault no one could see without running the step (#575), and
+/// since #668 the sweep is split into the partitions of <c>stryker-partitions.json</c>, so the
+/// glob plumbing between that file and Stryker is shell too. Stryker itself is not run: the fake
+/// records its arguments and writes (or does not write) the report.
 /// </summary>
 public sealed class MutationWorkflowStepTests : IDisposable
 {
+    private const string PartitionStep = "Stryker — run this partition";
+    private const string PlanStep = "Build the partition matrix";
+
+    private const string Partitions = """
+        {
+          "partitions": [
+            { "name": "parser", "project": "Gen.csproj", "mutate": ["**/Parser/**/*.cs", "**/Big.cs{1..10}"] },
+            { "name": "emitter", "project": "Gen.csproj", "mutate": ["**/Emitter/*.cs"] },
+            { "name": "gen-rest", "project": "Gen.csproj", "rest": true },
+            { "name": "attrs", "project": "Attrs.csproj", "rest": true }
+          ]
+        }
+        """;
+
     private readonly string _dir = Path.Combine(
         Path.GetTempPath(),
         "parquet-mutation-step-" + Guid.NewGuid().ToString("N")
@@ -38,97 +52,181 @@ public sealed class MutationWorkflowStepTests : IDisposable
         }
     }
 
-    [Theory]
-    [InlineData("Stryker — the generator (parser + emitters)", "GENERATOR_REPORT")]
-    [InlineData("Stryker — shipped runtime helpers (Attributes)", "ATTRIBUTES_REPORT")]
-    public async Task TheStrykerStepSurvivesAFreshRunnerWithNoOutputDirectoryAsync(
-        string stepName,
-        string reportVariable
-    )
+    [Fact]
+    public async Task APartitionHandsExactlyItsOwnGlobsToStrykerAsync()
     {
-        BashAvailable().ShouldBeTrue("bash is required to run the workflow step");
+        ToolsAvailable().ShouldBeTrue("bash and jq are required to run the workflow step");
 
-        ScriptRun run = await RunStepAsync(stepName, seedPreviousOutput: false, stryker: "creates");
+        ScriptRun run = await RunPartitionAsync("parser", "Gen.csproj", writesReport: true);
 
         run.ExitCode.ShouldBe(0, run.Describe());
-        run.EnvFile.ShouldContain(
-            $"{reportVariable}=StrykerOutput/2026-10-02.04-30-00//reports/mutation-report.json"
-        );
-    }
-
-    [Theory]
-    [InlineData("Stryker — the generator (parser + emitters)", "GENERATOR_REPORT")]
-    [InlineData("Stryker — shipped runtime helpers (Attributes)", "ATTRIBUTES_REPORT")]
-    public async Task TheStrykerStepReportsOnlyTheDirectoryThisRunCreatedAsync(
-        string stepName,
-        string reportVariable
-    )
-    {
-        BashAvailable().ShouldBeTrue("bash is required to run the workflow step");
-
-        ScriptRun run = await RunStepAsync(stepName, seedPreviousOutput: true, stryker: "creates");
-
-        run.ExitCode.ShouldBe(0, run.Describe());
-        run.EnvFile.ShouldContain($"{reportVariable}=StrykerOutput/2026-10-02.04-30-00//reports");
-        run.EnvFile.ShouldNotContain("2026-10-01");
+        run.StrykerArgs.ShouldBe([
+            "tool",
+            "run",
+            "dotnet-stryker",
+            "--",
+            "-p",
+            "Gen.csproj",
+            "--output",
+            Path.Combine(run.WorkDir, "StrykerOutput", "parser"),
+            "--log-to-file",
+            "--mutate",
+            "**/Parser/**/*.cs",
+            "--mutate",
+            "**/Big.cs{1..10}",
+        ]);
     }
 
     [Fact]
-    public async Task AStrykerRunThatCreatesNoOutputFailsTheStepWithAClearMessageAsync()
+    public async Task TheRestPartitionMutatesEverythingTheProjectsOtherPartitionsLeaveAsync()
     {
-        BashAvailable().ShouldBeTrue("bash is required to run the workflow step");
+        ToolsAvailable().ShouldBeTrue("bash and jq are required to run the workflow step");
 
-        ScriptRun run = await RunStepAsync(
-            "Stryker — the generator (parser + emitters)",
-            seedPreviousOutput: false,
-            stryker: "creates-nothing"
-        );
+        ScriptRun run = await RunPartitionAsync("gen-rest", "Gen.csproj", writesReport: true);
+
+        run.ExitCode.ShouldBe(0, run.Describe());
+        MutateGlobs(run)
+            .ShouldBe(["**/*.cs", "!**/Parser/**/*.cs", "!**/Big.cs{1..10}", "!**/Emitter/*.cs"]);
+    }
+
+    [Fact]
+    public async Task ARestPartitionIgnoresOtherProjectsGlobsAsync()
+    {
+        ToolsAvailable().ShouldBeTrue("bash and jq are required to run the workflow step");
+
+        ScriptRun run = await RunPartitionAsync("attrs", "Attrs.csproj", writesReport: true);
+
+        run.ExitCode.ShouldBe(0, run.Describe());
+        MutateGlobs(run).ShouldBe(["**/*.cs"]);
+    }
+
+    [Fact]
+    public async Task AStrykerRunThatWritesNoReportFailsTheStepWithAClearMessageAsync()
+    {
+        ToolsAvailable().ShouldBeTrue("bash and jq are required to run the workflow step");
+
+        ScriptRun run = await RunPartitionAsync("emitter", "Gen.csproj", writesReport: false);
 
         run.ExitCode.ShouldNotBe(0, run.Describe());
-        run.Stdout.ShouldContain("Stryker finished without creating a new StrykerOutput directory");
-        run.EnvFile.ShouldBeEmpty();
+        run.Stdout.ShouldContain(
+            "Stryker finished without writing StrykerOutput/emitter/reports/mutation-report.json"
+        );
+    }
+
+    [Fact]
+    public async Task AnUndeclaredPartitionFailsBeforeStrykerRunsAsync()
+    {
+        ToolsAvailable().ShouldBeTrue("bash and jq are required to run the workflow step");
+
+        ScriptRun run = await RunPartitionAsync("no-such", "Gen.csproj", writesReport: true);
+
+        run.ExitCode.ShouldNotBe(0, run.Describe());
+        run.Stdout.ShouldContain("Partition 'no-such' has no --mutate globs");
+        run.StrykerArgs.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task ThePlanTurnsTheRealPartitionFileIntoTheMatrixAsync()
+    {
+        ToolsAvailable().ShouldBeTrue("bash and jq are required to run the workflow step");
+        string real = IOFile.ReadAllText(
+            Path.Combine(FindRepositoryRoot(), "stryker-partitions.json")
+        );
+
+        ScriptRun run = await RunStepAsync(PlanStep, real, new Dictionary<string, string>());
+
+        run.ExitCode.ShouldBe(0, run.Describe());
+        run.Output.ShouldStartWith("matrix={\"include\":[{\"name\":\"");
+        run.Output.ShouldContain("\"name\":\"generator-rest\"");
+        run.Output.ShouldContain("\"name\":\"attributes\"");
+    }
+
+    [Theory]
+    [InlineData(true)] // two partitions named alike: the summary could not tell their reports apart
+    [InlineData(false)] // no `rest` partition: a file no glob claims would never be mutated
+    public async Task ThePlanRejectsAPartitionFileThatCouldLeaveGapsOrDoubleCountAsync(
+        bool duplicateName
+    )
+    {
+        ToolsAvailable().ShouldBeTrue("bash and jq are required to run the workflow step");
+        string secondName = duplicateName ? "parser" : "emitter";
+        string last = duplicateName
+            ? """{ "name": "gen-rest", "project": "Gen.csproj", "rest": true }"""
+            : """{ "name": "gen-rest", "project": "Gen.csproj", "mutate": ["**/X.cs"] }""";
+        string file = $$"""
+            { "partitions": [
+              { "name": "parser", "project": "Gen.csproj", "mutate": ["**/A.cs"] },
+              { "name": "{{secondName}}", "project": "Gen.csproj", "mutate": ["**/B.cs"] },
+              {{last}}
+            ] }
+            """;
+
+        ScriptRun run = await RunStepAsync(PlanStep, file, new Dictionary<string, string>());
+
+        run.ExitCode.ShouldNotBe(0, run.Describe());
+        run.Stdout.ShouldContain("invalid partition list");
+        run.Output.ShouldBeEmpty();
     }
 
     [Fact]
     public void TheStepsAreFoundByNameSoTheTestsCannotPassByExtractingNothing()
     {
         string workflow = ReadWorkflow();
-        StepScript("Stryker — the generator (parser + emitters)", workflow)
-            .ShouldContain("dotnet tool run dotnet-stryker");
-        StepScript("Stryker — shipped runtime helpers (Attributes)", workflow)
-            .ShouldContain("dotnet tool run dotnet-stryker");
+        StepScript(PartitionStep, workflow).ShouldContain("dotnet tool run dotnet-stryker");
+        StepScript(PlanStep, workflow).ShouldContain("stryker-partitions.json");
         Should.Throw<InvalidOperationException>(() => StepScript("No such step", workflow));
+    }
+
+    private static List<string> MutateGlobs(ScriptRun run) =>
+        run.StrykerArgs.Where((_, i) => i > 0 && run.StrykerArgs[i - 1] == "--mutate").ToList();
+
+    private Task<ScriptRun> RunPartitionAsync(string partition, string project, bool writesReport)
+    {
+        return RunStepAsync(
+            PartitionStep,
+            Partitions,
+            new Dictionary<string, string> { ["PARTITION"] = partition, ["PROJECT"] = project },
+            writesReport
+        );
     }
 
     private async Task<ScriptRun> RunStepAsync(
         string stepName,
-        bool seedPreviousOutput,
-        string stryker
+        string partitions,
+        Dictionary<string, string> environment,
+        bool writesReport = true
     )
     {
         string script = StepScript(stepName, ReadWorkflow());
         string work = Path.Combine(_dir, Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(work);
+        await IOFile.WriteAllTextAsync(Path.Combine(work, "stryker-partitions.json"), partitions);
 
         // The fake `dotnet`, defined as a function that bash loads from BASH_ENV (so no executable
-        // bit is needed): `dotnet tool run dotnet-stryker ...` creates the timestamped output
-        // directory the real tool creates, or nothing at all.
-        string creates =
-            stryker == "creates"
-                ? "mkdir -p StrykerOutput/2026-10-02.04-30-00/reports && echo '{}' > StrykerOutput/2026-10-02.04-30-00/reports/mutation-report.json\n"
-                : string.Empty;
+        // bit is needed): it records its arguments one per line and, like Stryker, writes the
+        // report under the --output directory, or writes nothing at all.
+        string argsFile = Path.Combine(work, "stryker-args");
+        string writes = writesReport
+            ? "    if [ \"$prev\" = \"--output\" ]; then mkdir -p \"$a/reports\" && echo '{}' > \"$a/reports/mutation-report.json\"; fi\n"
+            : string.Empty;
         string fakeDotnet = Path.Combine(work, "fake-dotnet.sh");
-        await IOFile.WriteAllTextAsync(fakeDotnet, "dotnet() {\n" + creates + "return 0\n}\n");
-
-        if (seedPreviousOutput)
-        {
-            Directory.CreateDirectory(Path.Combine(work, "StrykerOutput", "2026-10-01.04-30-00"));
-        }
+        await IOFile.WriteAllTextAsync(
+            fakeDotnet,
+            "dotnet() {\n"
+                + "  local prev=\"\"\n"
+                + "  for a in \"$@\"; do\n"
+                + $"    printf '%s\\n' \"$a\" >> '{argsFile}'\n"
+                + writes
+                + "    prev=\"$a\"\n"
+                + "  done\n"
+                + "  return 0\n"
+                + "}\n"
+        );
 
         string scriptPath = Path.Combine(work, "step.sh");
         await IOFile.WriteAllTextAsync(scriptPath, script);
-        string envFile = Path.Combine(work, "github-env");
-        await IOFile.WriteAllTextAsync(envFile, string.Empty);
+        string outputFile = Path.Combine(work, "github-output");
+        await IOFile.WriteAllTextAsync(outputFile, string.Empty);
 
         // GitHub's default `run` shell for bash is `bash --noprofile --norc -eo pipefail {0}`.
         var psi = new ProcessStartInfo("bash")
@@ -146,7 +244,11 @@ public sealed class MutationWorkflowStepTests : IDisposable
         }
 
         psi.Environment["BASH_ENV"] = fakeDotnet;
-        psi.Environment["GITHUB_ENV"] = envFile;
+        psi.Environment["GITHUB_OUTPUT"] = outputFile;
+        foreach ((string key, string value) in environment)
+        {
+            psi.Environment[key] = value;
+        }
 
         using Process process = Process.Start(psi)!;
         Task<string> stdout = process.StandardOutput.ReadToEndAsync();
@@ -156,7 +258,9 @@ public sealed class MutationWorkflowStepTests : IDisposable
             process.ExitCode,
             await stdout,
             await stderr,
-            await IOFile.ReadAllTextAsync(envFile)
+            await IOFile.ReadAllTextAsync(outputFile),
+            IOFile.Exists(argsFile) ? (await IOFile.ReadAllLinesAsync(argsFile)).ToList() : [],
+            work
         );
     }
 
@@ -201,18 +305,22 @@ public sealed class MutationWorkflowStepTests : IDisposable
             .ReadAllText(Path.Combine(FindRepositoryRoot(), ".github", "workflows", "mutation.yml"))
             .Replace("\r\n", "\n");
 
-    private static bool BashAvailable()
+    private static bool ToolsAvailable() => Runs("bash") && Runs("jq");
+
+    private static bool Runs(string tool)
     {
         try
         {
             using Process? process = Process.Start(
-                new ProcessStartInfo("bash", "--version")
+                new ProcessStartInfo(tool, "--version")
                 {
                     RedirectStandardOutput = true,
+                    RedirectStandardError = true,
                     UseShellExecute = false,
                 }
             );
             process!.StandardOutput.ReadToEnd();
+            process.StandardError.ReadToEnd();
             process.WaitForExit();
             return process.ExitCode == 0;
         }
@@ -242,8 +350,16 @@ public sealed class MutationWorkflowStepTests : IDisposable
         throw new DirectoryNotFoundException("Could not find the repository root.");
     }
 
-    private sealed record ScriptRun(int ExitCode, string Stdout, string Stderr, string EnvFile)
+    private sealed record ScriptRun(
+        int ExitCode,
+        string Stdout,
+        string Stderr,
+        string Output,
+        List<string> StrykerArgs,
+        string WorkDir
+    )
     {
-        public string Describe() => $"Stdout:\n{Stdout}\nStderr:\n{Stderr}\nGITHUB_ENV:\n{EnvFile}";
+        public string Describe() =>
+            $"Stdout:\n{Stdout}\nStderr:\n{Stderr}\nGITHUB_OUTPUT:\n{Output}\nStryker args:\n{string.Join('\n', StrykerArgs)}";
     }
 }

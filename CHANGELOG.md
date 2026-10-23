@@ -111,7 +111,7 @@ the migration list; each row's detail is in the entries below and in `docs/api/L
   call-site count rides in the baseline header.
 - **Mutation testing for the behavioural suite** (`stryker-config.json`,
   `.github/workflows/mutation.yml`, `scripts/MutationSummary.cs`,
-  `docs/26-MUTATION-TESTING.md`, layer 4 of #251). Stryker.NET runs nightly and answers the
+  `docs/internals/mutation-testing.md`, layer 4 of #251). Stryker.NET runs nightly and answers the
   question coverage cannot: would a test notice if a line were *wrong*? The defining decision
   is what it leaves out — the golden-file, API-baseline, metrics-baseline and IL-shape suites
   are excluded, because they assert the *text/shape* of emitted output and would "kill" every
@@ -305,6 +305,15 @@ the migration list; each row's detail is in the entries below and in `docs/api/L
   only for code that referenced the Attributes helpers directly.
 
 ### Fixed
+- **The nightly mutation sweep finishes and reports the whole generator** (#668). It failed every night: the
+  checkout did not fetch the Git LFS benchmark datasets, so 12 dataset tests failed Stryker's initial run, and one
+  run over all 9358 generator mutants timed out at 100 minutes before writing any report. The checkout now fetches
+  LFS objects, a partition job checks the datasets are real Parquet files, and Stryker stops when its initial run has
+  a failing test. The sweep is split into the partitions of `stryker-partitions.json`, one job each, and
+  `scripts/MutationSummary.cs` merges their reports. The merge fails the run when a partition has no report, tested
+  nothing, or tested a mutant another partition also tested, so an incomplete sweep is never published as a score.
+  The summary also read Stryker's report with the wrong property names, so it would have reported 0 mutants.
+  Still report-only: there is no floor.
 - **Arrow scope is stated plainly** (#590). The READMEs, `docs/14`, `docs/19` and `docs/47` say that only Arrow
   ingestion (`RecordBatch` to Parquet, when Apache.Arrow is referenced) ships; export to Arrow does not, and
   `docs/19` no longer lists the closed #178 as open work.
