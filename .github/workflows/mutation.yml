@@ -127,6 +127,12 @@ jobs:
         env:
           PARTITION: ${{ matrix.name }}
           PROJECT: ${{ matrix.project }}
+          # Caps the managed heap of every .NET process this step starts (Stryker, the build and
+          # the four test hosts) at 3 GiB. A mutant that makes generated code allocate without
+          # bound then fails its own test host with OutOfMemoryException instead of exhausting
+          # the 16 GB runner. The columnar-batch partition lost its runner ("received a shutdown
+          # signal") 12.5 minutes into mutant testing in two dispatches (#668).
+          DOTNET_GCHeapHardLimit: '0xC0000000'
         run: |
           set -euo pipefail
           # The --mutate globs of this partition. A `rest` partition mutates every file of its

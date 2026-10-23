@@ -79,6 +79,15 @@ pointer files and failed, and Stryker carried on with "12 tests are failing".
 `MutationSummaryGateTests` covers each of these failure cases. `MutationWorkflowStepTests`
 runs the plan step and the partition step in bash against a fake `dotnet`.
 
+## Runaway mutants
+
+The Stryker step sets `DOTNET_GCHeapHardLimit` to 3 GiB for every .NET process it starts. A
+mutant that makes the generated code allocate without bound (a mutated length or loop bound in
+a batch builder, for example) then runs its own test host out of memory, rather than the whole
+16 GB runner. Before the limit, the `columnar-batch` partition lost its runner ("The runner has
+received a shutdown signal", exit 143) about 12.5 minutes into mutant testing, in two
+dispatches running in a row, while every other partition finished.
+
 ## Known gap: Stryker's safe mode in `ReportIneligibleSortKey`
 
 One mutation in `TargetParser.ReportIneligibleSortKey` produces code that does not compile
