@@ -52,6 +52,7 @@ public static class TypeMatrixData
         new(9999, 12, 31, 23, 59, 59, 999, DateTimeKind.Utc),
     ];
 
+#if NET8_0_OR_GREATER
     private static readonly DateTime[] MicroDateTimes =
     [
         new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc),
@@ -59,6 +60,7 @@ public static class TypeMatrixData
         new DateTime(1900, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddTicks(10),
         new DateTime(2262, 4, 11, 23, 47, 16, DateTimeKind.Utc),
     ];
+#endif
 
     private static readonly TimeSpan[] TimeSpans =
     [
@@ -213,7 +215,9 @@ public static class TypeMatrixData
                     DecimalNarrow = Pick(i, NarrowDecimals),
                     DateTime = Pick(i, DateTimes),
                     DateTimeOpt = nil ? null : Pick(i + 1, DateTimes),
+#if NET8_0_OR_GREATER
                     DateTimeMicros = Pick(i, MicroDateTimes),
+#endif
                     TimeSpan = Pick(i, TimeSpans),
                     TimeSpanOpt = nil ? null : Pick(i + 1, TimeSpans),
                     GuidValue = Pick(i, Guids),
@@ -284,7 +288,9 @@ public static class TypeMatrixData
                 DecimalValue = r.DecimalValue,
                 DecimalNarrow = r.DecimalNarrow,
                 DateTime = r.DateTime,
+#if NET8_0_OR_GREATER
                 DateTimeMicros = r.DateTimeMicros,
+#endif
                 TimeSpan = r.TimeSpan,
                 GuidValue = r.GuidValue,
                 StringValue = r.StringValue,
@@ -369,7 +375,6 @@ public static class TypeMatrixData
             new("decimal_18_4", r => r.DecimalNarrow, r => r.DecimalNarrow),
             new("datetime", r => r.DateTime, r => r.DateTime),
             new("datetime_opt", r => r.DateTimeOpt, null),
-            new("datetime_micros", r => r.DateTimeMicros, r => r.DateTimeMicros),
             new("timespan", r => r.TimeSpan, r => r.TimeSpan),
             new("timespan_opt", r => r.TimeSpanOpt, null),
             new("guid", r => r.GuidValue, r => r.GuidValue),
@@ -387,6 +392,9 @@ public static class TypeMatrixData
             new("interval", r => r.Interval, r => r.Interval),
             new("interval_opt", r => r.IntervalOpt, null),
         };
+#if NET8_0_OR_GREATER
+        columns.Add(new("datetime_micros", r => r.DateTimeMicros, r => r.DateTimeMicros));
+#endif
 #if NET6_0_OR_GREATER
         columns.Add(new("dateonly", r => r.DateOnly, r => r.DateOnly));
         columns.Add(new("dateonly_opt", r => r.DateOnlyOpt, null));

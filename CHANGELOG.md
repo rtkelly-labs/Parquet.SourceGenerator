@@ -317,8 +317,10 @@ the migration list; each row's detail is in the entries below and in `docs/api/L
   (#597). The legacy emitter used Parquet.Net 6's `TimeDataField`/`TimeUnitPrecision`, which 4.25 does
   not have, and `DateTimeFormat.DateAndTimeMicros`, which 4.25 has only in its net8.0 build, so such a
   model's generated code did not compile. These columns are now `TimeSpanDataField` (TIME_MILLIS for
-  `TimeSpan`, TIME_MICROS for `TimeOnly`, checked to lie within one day on read) and, below net8.0, a
-  microsecond `Timestamp` field. Modern output is unchanged.
+  `TimeSpan`, TIME_MICROS for `TimeOnly`, checked to lie within one day on read). A microsecond
+  `DateTime` works on net8.0+; below it the generated code is now a `#error` naming the member, because
+  Parquet.Net 4.25's netstandard2.0 and net6.0 builds cannot write microsecond timestamps at all.
+  Modern output is unchanged.
 - **Legacy backend: `MaxDictionaryEntries` applies to files Parquet.Net 4.25 writes** (#597). The legacy
   reader only looked for a dictionary page when the column metadata declared a dictionary encoding,
   which 4.25 never records (and a hostile file need not), so the limit was skipped. It now reads the
