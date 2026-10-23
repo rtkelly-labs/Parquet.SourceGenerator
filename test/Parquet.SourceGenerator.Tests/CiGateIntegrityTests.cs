@@ -376,6 +376,7 @@ public sealed class CiGateIntegrityTests
         );
         string code = CommentLine.Replace(workflow.Replace("\r\n", "\n"), string.Empty);
         string job = JobBlock(code, "lock-files");
+        string push = JobBlock(code, "push");
 
         // pull_request: the workflow and the code come from the pull request, never with the base
         // branch's secrets, and the job is gated on Dependabot having opened and pushed it.
@@ -391,7 +392,27 @@ public sealed class CiGateIntegrityTests
             .IsMatch(code, @"^permissions:\n  contents: read\n(?!  )", Options, RegexTimeout)
             .ShouldBeTrue("workflow-level permissions must be contents: read and nothing else");
         job.ShouldNotContain("permissions:");
+        push.ShouldNotContain("permissions:");
         job.ShouldContain("persist-credentials: false");
+        push.ShouldContain("persist-credentials: false");
+
+        // The restore runs MSBuild targets from the updated packages, so it lives on a runner that
+        // never sees the token: lock-files hands over only an artifact, and push runs no dotnet at
+        // all and disables git hooks before it commits with the token in scope.
+        job.ShouldNotContain("secrets.");
+        job.ShouldContain("actions/upload-artifact@");
+        Regex
+            .IsMatch(push, @"^    needs:\s*lock-files\s*$", Options, RegexTimeout)
+            .ShouldBeTrue("push must need lock-files");
+        push.ShouldContain("actions/download-artifact@");
+        push.ShouldNotContain("setup-dotnet");
+        Regex
+            .IsMatch(push, @"^[ \t]*(?:-[ \t]+)?(?:run:[ \t]+)?dotnet\b", Options, RegexTimeout)
+            .ShouldBeFalse("the push job must not run dotnet");
+        push.ShouldContain("secrets.WORKFLOW_PR_TOKEN");
+        push.ShouldContain("core.hooksPath /dev/null");
+        push.ShouldContain("--no-verify");
+        push.ShouldContain("git ls-files --error-unmatch");
 
         // The token appears once, in the push step, which comes after every restore.
         Regex.Count(code, "secrets\\.", Options, RegexTimeout).ShouldBe(1);
@@ -402,7 +423,9 @@ public sealed class CiGateIntegrityTests
 
         // Only lock files are committed, and the push is never forced.
         job.ShouldContain("refusing to push");
-        Match[] pushes = Regex.Matches(job, @"^\s*git push\b.*$", Options, RegexTimeout).ToArray();
+        push.ShouldContain("refusing to push");
+        Regex.IsMatch(job, @"^\s*git push\b", Options, RegexTimeout).ShouldBeFalse();
+        Match[] pushes = Regex.Matches(push, @"^\s*git push\b.*$", Options, RegexTimeout).ToArray();
         pushes.Length.ShouldBe(1);
         pushes[0].Value.ShouldNotContain(" -f");
         pushes[0].Value.ShouldNotContain("--force");
