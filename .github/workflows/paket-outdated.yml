@@ -4,7 +4,7 @@ name: Paket Outdated Report
 # docs/architecture/adrs/0004-paket-pilot.md) this weekly report is what says an update exists. It
 # keeps ONE tracking issue, found by the `paket-outdated` label: opened or updated while
 # `paket outdated` finds a newer version inside the ranges in paket.dependencies (what
-# `dotnet paket update` would take), closed once it finds none. Newer versions outside the ranges
+# `dotnet tool run paket update` would take), closed once it finds none. Newer versions outside the ranges
 # (a major bump, a Roslyn line change) are listed for information only; taking one is a deliberate
 # edit of paket.dependencies.
 #
@@ -53,8 +53,8 @@ jobs:
         run: |
           set -euo pipefail
           # A failing Paket run fails the job; it must not read as "nothing outdated".
-          dotnet paket outdated > "$RUNNER_TEMP/within.txt"
-          dotnet paket outdated --ignore-constraints > "$RUNNER_TEMP/beyond.txt"
+          dotnet tool run paket outdated > "$RUNNER_TEMP/within.txt"
+          dotnet tool run paket outdated --ignore-constraints > "$RUNNER_TEMP/beyond.txt"
           if grep -q 'Outdated packages found' "$RUNNER_TEMP/within.txt"; then
             outdated=true
           elif grep -q 'No outdated packages found' "$RUNNER_TEMP/within.txt"; then
@@ -67,7 +67,7 @@ jobs:
           {
             echo "## Inside the ranges in paket.dependencies"
             echo
-            echo "Take these with \`dotnet paket update <package>\` (or \`dotnet paket update\` for all), then commit paket.lock."
+            echo "Take these with \`dotnet tool run paket update <package>\` (or \`dotnet tool run paket update\` for all), then commit paket.lock."
             echo
             echo '```'
             grep -v -e '^Paket version' -e '^Total time taken' "$RUNNER_TEMP/within.txt"
@@ -112,7 +112,7 @@ jobs:
           gh label create "$label" --color 0E8A16 --description "Weekly paket outdated report (ADR 0004)" >/dev/null 2>&1 || true
           existing=$(gh issue list --state open --label "$label" --json number --jq '.[0].number // empty')
           {
-            echo "Weekly \`dotnet paket outdated\` for the Paket-managed projects ([run]($RUN_URL)). This issue is updated in place each week and closed by the workflow once nothing inside the ranges is outdated. See docs/architecture/adrs/0004-paket-pilot.md."
+            echo "Weekly \`dotnet tool run paket outdated\` for the Paket-managed projects ([run]($RUN_URL)). This issue is updated in place each week and closed by the workflow once nothing inside the ranges is outdated. See docs/architecture/adrs/0004-paket-pilot.md."
             echo
             printf '%s\n' "$REPORT"
           } > "$RUNNER_TEMP/body.md"

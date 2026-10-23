@@ -100,7 +100,7 @@ jobs:
       # the local tools, and runs before the solution restore, which calls Paket for the
       # Paket-managed projects.
       - name: Restore Paket dependencies (strict)
-        run: dotnet paket restore --fail-on-checks
+        run: dotnet tool run paket restore --fail-on-checks
 
       - name: Restore solution dependencies
         run: dotnet restore Parquet.SourceGenerator.slnx --locked-mode
@@ -470,7 +470,7 @@ jobs:
         run: dotnet tool restore --disable-parallel || dotnet tool restore --disable-parallel
 
       - name: Restore Paket dependencies (strict)
-        run: dotnet paket restore --fail-on-checks
+        run: dotnet tool run paket restore --fail-on-checks
 
       - name: Restore dependencies
         run: dotnet restore Parquet.SourceGenerator.slnx --locked-mode

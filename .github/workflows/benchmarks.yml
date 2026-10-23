@@ -194,7 +194,7 @@ jobs:
       # The benchmark project is Paket-managed (docs/architecture/adrs/0004-paket-pilot.md).
       # Strict: fails when paket.dependencies and paket.lock disagree.
       - name: Restore Paket dependencies (strict)
-        run: dotnet paket restore --fail-on-checks
+        run: dotnet tool run paket restore --fail-on-checks
 
       - name: Restore dependencies
         run: dotnet restore benchmarks/Parquet.SourceGenerator.Benchmarks/Parquet.SourceGenerator.Benchmarks.csproj --locked-mode
@@ -350,7 +350,7 @@ jobs:
       # The benchmark project is Paket-managed (docs/architecture/adrs/0004-paket-pilot.md).
       # Strict: fails when paket.dependencies and paket.lock disagree.
       - name: Restore Paket dependencies (strict)
-        run: dotnet paket restore --fail-on-checks
+        run: dotnet tool run paket restore --fail-on-checks
 
       - name: Restore dependencies
         run: dotnet restore benchmarks/Parquet.SourceGenerator.Benchmarks/Parquet.SourceGenerator.Benchmarks.csproj --locked-mode

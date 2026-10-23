@@ -488,7 +488,7 @@ public sealed class CiGateIntegrityTests
     );
 
     private static readonly Regex StrictPaketRestoreStep = new(
-        @"^\s*(?:-\s+)?run:\s+dotnet paket restore --fail-on-checks\s*$",
+        @"^\s*(?:-\s+)?run:\s+dotnet tool run paket restore --fail-on-checks\s*$",
         Options,
         RegexTimeout
     );
@@ -505,7 +505,7 @@ public sealed class CiGateIntegrityTests
     {
         // ADR 0004: plain `paket restore` exits 0 when paket.dependencies and paket.lock disagree,
         // and the solution restore calls Paket for the Paket-managed projects without the check.
-        // So every job that restores runs `dotnet paket restore --fail-on-checks` first, after the
+        // So every job that restores runs `dotnet tool run paket restore --fail-on-checks` first, after the
         // local tools (Paket is one) are restored.
         string root = FindRepositoryRoot();
         string[] files = EnumerateYaml(
@@ -543,7 +543,7 @@ public sealed class CiGateIntegrityTests
                   # retry for dotnet/sdk #53783
                   dotnet tool restore --disable-parallel || dotnet tool restore --disable-parallel
               - name: Restore Paket dependencies (strict)
-                run: dotnet paket restore --fail-on-checks
+                run: dotnet tool run paket restore --fail-on-checks
               - name: Restore solution dependencies
                 run: dotnet restore Parquet.SourceGenerator.slnx --locked-mode
         """;
@@ -560,27 +560,32 @@ public sealed class CiGateIntegrityTests
     [Theory]
     // The step removed.
     [InlineData(
-        "      - name: Restore Paket dependencies (strict)\n        run: dotnet paket restore --fail-on-checks\n",
+        "      - name: Restore Paket dependencies (strict)\n        run: dotnet tool run paket restore --fail-on-checks\n",
         ""
     )]
     // Without the switch, drift between paket.dependencies and paket.lock exits 0.
-    [InlineData("run: dotnet paket restore --fail-on-checks", "run: dotnet paket restore")]
+    [InlineData("run: dotnet tool run paket restore --fail-on-checks", "run: dotnet tool run paket restore")]
+    // The `dotnet paket` shorthand: AGENTS.md rule 10 requires `dotnet tool run <command>`.
+    [InlineData(
+        "run: dotnet tool run paket restore --fail-on-checks",
+        "run: dotnet paket restore --fail-on-checks"
+    )]
     // Commented out.
     [InlineData(
-        "        run: dotnet paket restore --fail-on-checks",
-        "        # run: dotnet paket restore --fail-on-checks"
+        "        run: dotnet tool run paket restore --fail-on-checks",
+        "        # run: dotnet tool run paket restore --fail-on-checks"
     )]
     // Echoed rather than run.
     [InlineData(
-        "run: dotnet paket restore --fail-on-checks",
-        "run: echo dotnet paket restore --fail-on-checks"
+        "run: dotnet tool run paket restore --fail-on-checks",
+        "run: echo dotnet tool run paket restore --fail-on-checks"
     )]
     // After the restore it was meant to guard (the two commands swapped).
     [InlineData(
-        "run: dotnet paket restore --fail-on-checks\n      - name: Restore solution dependencies\n        run: dotnet restore Parquet.SourceGenerator.slnx --locked-mode",
-        "run: dotnet restore Parquet.SourceGenerator.slnx --locked-mode\n      - name: Restore solution dependencies\n        run: dotnet paket restore --fail-on-checks"
+        "run: dotnet tool run paket restore --fail-on-checks\n      - name: Restore solution dependencies\n        run: dotnet restore Parquet.SourceGenerator.slnx --locked-mode",
+        "run: dotnet restore Parquet.SourceGenerator.slnx --locked-mode\n      - name: Restore solution dependencies\n        run: dotnet tool run paket restore --fail-on-checks"
     )]
-    // Before the local tools exist, so `dotnet paket` is not there to run.
+    // Before the local tools exist, so `dotnet tool run paket` is not there to run.
     [InlineData(
         "          dotnet tool restore --disable-parallel || dotnet tool restore --disable-parallel",
         "          echo no tools"
@@ -615,7 +620,7 @@ public sealed class CiGateIntegrityTests
         problems.ShouldNotBeEmpty();
     }
 
-    // Per job: every `dotnet restore` step must come after a `dotnet paket restore
+    // Per job: every `dotnet restore` step must come after a `dotnet tool run paket restore
     // --fail-on-checks` step, which must come after `dotnet tool restore`. Comment lines do not
     // count. Returns how many restores were examined and what is wrong.
     private static (int Examined, List<string> Problems) PaketRestoreProblems(string workflow)
@@ -640,13 +645,13 @@ public sealed class CiGateIntegrityTests
                 if (!paket.Success || paket.Index > restore.Index)
                 {
                     problems.Add(
-                        $"job {id}: `dotnet restore` without a `dotnet paket restore --fail-on-checks` step before it"
+                        $"job {id}: `dotnet restore` without a `dotnet tool run paket restore --fail-on-checks` step before it"
                     );
                 }
                 else if (!tools.Success || tools.Index > paket.Index)
                 {
                     problems.Add(
-                        $"job {id}: `dotnet paket restore` runs before `dotnet tool restore`"
+                        $"job {id}: `dotnet tool run paket restore` runs before `dotnet tool restore`"
                     );
                 }
             }

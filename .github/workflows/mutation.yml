@@ -61,7 +61,7 @@ jobs:
       # Paket-managed projects (docs/architecture/adrs/0004-paket-pilot.md). Strict: fails when
       # paket.dependencies and paket.lock disagree.
       - name: Restore Paket dependencies (strict)
-        run: dotnet paket restore --fail-on-checks
+        run: dotnet tool run paket restore --fail-on-checks
 
       - name: Restore solution dependencies
         run: dotnet restore Parquet.SourceGenerator.slnx --locked-mode
