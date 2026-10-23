@@ -175,6 +175,14 @@ default options and must raise its own message. The untampered fixture must read
 Definition-level corruptions are still covered on `ToArrayAsync` only. The legacy backend's matrix
 is #597.
 
+`MaxDictionaryEntries` also runs on every route against footers that hide the dictionary while the
+dictionary page stays in the file: one with the dictionary encodings removed from every chunk's
+`encodings` list (what Parquet.Net 4.25 writes, and what a hostile file can do), and one that also
+points the deprecated `file_offset` past the chunk. Each must be rejected by the guard naming a
+column that really starts with a dictionary page, and must read every row with the limit relaxed.
+Before the guard read the first page header of every chunk, all 58 of these cells read the file
+without complaint.
+
 ---
 
 ## 4. Native AOT & Trimming Verification

@@ -6,6 +6,7 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Runtime.ExceptionServices;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Parquet;
@@ -40,6 +41,11 @@ namespace Parquet.SourceGenerator.Tests.Security;
 /// <para>
 /// The footer corruptions of <see cref="HostileParquetTests"/> run over the same routes with default
 /// options; their negative control is the untampered fixture reading on every route.
+/// </para>
+/// <para>
+/// <see cref="ParquetSerializerOptions.MaxDictionaryEntries"/> also runs over every route on footers
+/// that hide the dictionary page from the encodings list (<see cref="HiddenDictionaries"/>), with
+/// the same relaxed-limit negative control.
 /// </para>
 /// <para>
 /// Modern backend only. The legacy backend's hostile matrix belongs to #597.
@@ -667,6 +673,253 @@ public sealed class HostileReadPathTests
         outcome.Exception.ShouldBeOfType<NotSupportedException>($"{shapeName} x {routeId}");
     }
 
+    // ---------------------------------------------------------------- undeclared dictionaries
+
+    /// <summary>
+    /// A footer that hides a chunk's dictionary page while the page itself stays in the file. The
+    /// guard used to run only for a chunk whose <c>ColumnMetaData.encodings</c> listed a dictionary
+    /// encoding, but Parquet.Net reads a dictionary page wherever a chunk's first page is one,
+    /// whatever the footer declares. Parquet.Net 4.25 never records the encoding, and a hostile file
+    /// can simply leave it out. Neither Parquet.Net 4.25 nor 6 records a dictionary page offset (the
+    /// chunk starts at its data page offset, which is the dictionary page), and Parquet.Net locates
+    /// the chunk from the page offsets alone, ignoring the deprecated <c>file_offset</c>.
+    /// </summary>
+    private sealed record HiddenDictionary(string Name, Action<Parquet.Meta.ColumnChunk> Hide);
+
+    private static readonly HiddenDictionary[] HiddenDictionaries =
+    [
+        new("encoding-undeclared", chunk => StripDictionaryEncodings(chunk.MetaData!)),
+        new(
+            "file-offset-at-chunk-end",
+            chunk =>
+            {
+                StripDictionaryEncodings(chunk.MetaData!);
+                // Where parquet-mr and Arrow put it (the spec calls it the offset of the column
+                // metadata): past the chunk, not at its first page.
+                chunk.FileOffset =
+                    chunk.MetaData!.DataPageOffset + chunk.MetaData.TotalCompressedSize;
+            }
+        ),
+    ];
+
+    private static void StripDictionaryEncodings(Parquet.Meta.ColumnMetaData column) =>
+        column.Encodings.RemoveAll(IsDictionaryEncoding);
+
+    private static bool IsDictionaryEncoding(Parquet.Meta.Encoding encoding) =>
+        encoding is Parquet.Meta.Encoding.RLE_DICTIONARY or Parquet.Meta.Encoding.PLAIN_DICTIONARY;
+
+    private static async Task<byte[]> HideDictionariesAsync(Shape shape, HiddenDictionary hidden) =>
+        await HostileParquetTests.RewriteColumnMetadataAsync(
+            await shape.BytesAsync(),
+            (metadata, _) =>
+            {
+                foreach (Parquet.Meta.RowGroup group in metadata.RowGroups)
+                foreach (Parquet.Meta.ColumnChunk chunk in group.Columns)
+                {
+                    hidden.Hide(chunk);
+                }
+            }
+        );
+
+    private static HiddenDictionary HiddenDictionaryNamed(string name) =>
+        HiddenDictionaries.Single(h => h.Name == name);
+
+    public static TheoryData<string, string, string> HiddenDictionaryCells
+    {
+        get
+        {
+            var data = new TheoryData<string, string, string>();
+            foreach (HiddenDictionary hidden in HiddenDictionaries)
+            foreach (Shape shape in Shapes)
+            foreach (
+                Route route in RoutesOf(SurfaceOf(shape.Model)).Where(r => !r.IsRejectedByDesign)
+            )
+            {
+                data.Add(hidden.Name, shape.Name, route.Id);
+            }
+
+            return data;
+        }
+    }
+
+    /// <summary>
+    /// <see cref="ParquetSerializerOptions.MaxDictionaryEntries"/> is enforced from the dictionary
+    /// page header itself, so a footer that does not declare the dictionary cannot switch it off.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(HiddenDictionaryCells))]
+    public async Task DictionaryLimitIsEnforcedWhenTheFooterHidesTheDictionary(
+        string hiddenName,
+        string shapeName,
+        string routeId
+    )
+    {
+        Limit limit = LimitNamed(nameof(ParquetSerializerOptions.MaxDictionaryEntries));
+        Shape shape = ShapeNamed(shapeName);
+        long tight = limit.Tight(shape);
+        byte[] hostile = await HideDictionariesAsync(shape, HiddenDictionaryNamed(hiddenName));
+
+        Outcome outcome = await RunAsync(
+            shape,
+            Route.Parse(routeId),
+            OptionsWith(limit.Name, tight),
+            hostile
+        );
+        string cell = $"{limit.Name} x {hiddenName} x {shapeName} x {routeId}";
+        AssertBounded(cell, outcome);
+        outcome.Exception.ShouldNotBeNull(
+            $"{cell}: the read succeeded with {limit.Name} = {tight}; a dictionary the footer does not declare is not bounded on this route."
+        );
+        outcome
+            .Exception.GetType()
+            .ShouldBe(
+                typeof(InvalidDataException),
+                $"{cell}: expected the documented InvalidDataException, got {outcome.Exception}"
+            );
+        outcome.Exception.Message.ShouldMatch(
+            string.Format(CultureInfo.InvariantCulture, limit.Message, tight),
+            $"{cell}: rejected, but not by the {limit.Name} guard."
+        );
+
+        // The guard must name a column whose chunk really starts with a dictionary page, not one
+        // whose header lookup strayed into a neighbouring chunk's dictionary.
+        string column = Regex
+            .Match(outcome.Exception.Message, "Dictionary column '([^']+)'")
+            .Groups[1]
+            .Value;
+        (await DictionaryColumnsOfAsync(hostile)).ShouldContain(
+            column,
+            $"{cell}: {outcome.Exception.Message}"
+        );
+    }
+
+    /// <summary>
+    /// The leaf names of the chunks whose first page is a dictionary page. The guard names the
+    /// member, whose case can differ from the column's (<c>Payload</c>, <c>payload</c>).
+    /// </summary>
+    private static async Task<HashSet<string>> DictionaryColumnsOfAsync(byte[] file)
+    {
+        using var stream = new MemoryStream(file, writable: false);
+        await using ParquetReader reader = await ParquetReader.CreateAsync(stream);
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (Parquet.Meta.RowGroup group in reader.Metadata!.RowGroups)
+        foreach (Parquet.Meta.ColumnChunk chunk in group.Columns)
+        {
+            Parquet.Meta.ColumnMetaData column = chunk.MetaData!;
+            if (
+                ReadPageHeader(file, column.DataPageOffset).Type
+                == Parquet.Meta.PageType.DICTIONARY_PAGE
+            )
+            {
+                names.Add(column.PathInSchema[^1]);
+            }
+        }
+
+        return names;
+    }
+
+    /// <summary>
+    /// The negative control: the same rewritten file and route with the limit relaxed reads every
+    /// row, so the footer rewrite left a readable file and the rejection above was the guard's.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(HiddenDictionaryCells))]
+    public async Task RelaxingTheDictionaryLimitAdmitsTheHiddenDictionaryFile(
+        string hiddenName,
+        string shapeName,
+        string routeId
+    )
+    {
+        string limit = nameof(ParquetSerializerOptions.MaxDictionaryEntries);
+        Shape shape = ShapeNamed(shapeName);
+        byte[] hostile = await HideDictionariesAsync(shape, HiddenDictionaryNamed(hiddenName));
+
+        Outcome outcome = await RunAsync(
+            shape,
+            Route.Parse(routeId),
+            OptionsWith(limit, Relaxed(limit)),
+            hostile
+        );
+        string cell = $"{limit} relaxed x {hiddenName} x {shapeName} x {routeId}";
+        AssertBounded(cell, outcome);
+        outcome.Exception.ShouldBeNull($"{cell}: the rewritten fixture is not otherwise readable.");
+        outcome.Rows.ShouldBe(TotalRows, $"{cell}: rows read");
+    }
+
+    /// <summary>
+    /// The rewritten fixtures really hide the dictionary: no chunk declares a dictionary encoding or
+    /// a dictionary page offset, yet every row group still has a chunk whose first page, where
+    /// Parquet.Net starts reading, is a dictionary page with more entries than the tight limit.
+    /// </summary>
+    [Theory]
+    [InlineData("encoding-undeclared", "flat")]
+    [InlineData("encoding-undeclared", "list")]
+    [InlineData("encoding-undeclared", "struct")]
+    [InlineData("file-offset-at-chunk-end", "flat")]
+    [InlineData("file-offset-at-chunk-end", "list")]
+    [InlineData("file-offset-at-chunk-end", "struct")]
+    public async Task HiddenDictionaryFixtureHidesADictionaryPage(
+        string hiddenName,
+        string shapeName
+    )
+    {
+        Shape shape = ShapeNamed(shapeName);
+        byte[] hostile = await HideDictionariesAsync(shape, HiddenDictionaryNamed(hiddenName));
+        using var stream = new MemoryStream(hostile, writable: false);
+        await using ParquetReader reader = await ParquetReader.CreateAsync(stream);
+        long tight = LimitNamed(nameof(ParquetSerializerOptions.MaxDictionaryEntries)).Tight(shape);
+
+        reader.Metadata!.RowGroups.Count.ShouldBe(RowGroups);
+        foreach (Parquet.Meta.RowGroup group in reader.Metadata.RowGroups)
+        {
+            int dictionaryChunks = 0;
+            foreach (Parquet.Meta.ColumnChunk chunk in group.Columns)
+            {
+                Parquet.Meta.ColumnMetaData column = chunk.MetaData!;
+                column.Encodings.ShouldNotContain(e => IsDictionaryEncoding(e));
+                column.DictionaryPageOffset.ShouldBeNull();
+                if (hiddenName == "file-offset-at-chunk-end")
+                {
+                    chunk.FileOffset.ShouldNotBe(column.DataPageOffset);
+                }
+
+                Parquet.Meta.PageHeader first = ReadPageHeader(hostile, column.DataPageOffset);
+                if (first.Type == Parquet.Meta.PageType.DICTIONARY_PAGE)
+                {
+                    first.DictionaryPageHeader!.NumValues.ShouldBeGreaterThan((int)tight);
+                    dictionaryChunks++;
+                }
+            }
+
+            dictionaryChunks.ShouldBeGreaterThan(0, $"{hiddenName} x {shapeName}");
+        }
+    }
+
+    /// <summary>Parquet.Net's own page-header parser, which is internal.</summary>
+    private static Parquet.Meta.PageHeader ReadPageHeader(byte[] file, long offset)
+    {
+        using var stream = new MemoryStream(file, writable: false) { Position = offset };
+        Type protocol = typeof(ParquetReader).Assembly.GetType(
+            "Parquet.Meta.Proto.ThriftCompactProtocolReader",
+            throwOnError: true
+        )!;
+        object reader = Activator.CreateInstance(
+            protocol,
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+            binder: null,
+            args: [stream],
+            culture: CultureInfo.InvariantCulture
+        )!;
+        return (Parquet.Meta.PageHeader)Invoke(
+            typeof(Parquet.Meta.PageHeader).GetMethod(
+                "Read",
+                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic
+            )!,
+            null,
+            reader
+        );
+    }
+
     // ---------------------------------------------------------------- completeness ("examined N")
 
     [Fact]
@@ -830,6 +1083,7 @@ public sealed class HostileReadPathTests
         RouteCells.Count.ShouldBe(supported);
         Cells.Count.ShouldBe(Limits.Length * supported);
         CorruptionCells.Count.ShouldBe(Corruptions.Length * supported);
+        HiddenDictionaryCells.Count.ShouldBe(HiddenDictionaries.Length * supported);
         RejectedRoutes.Count.ShouldBe(rejected);
         rejected.ShouldBeGreaterThan(0);
     }
