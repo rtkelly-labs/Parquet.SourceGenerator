@@ -49,7 +49,7 @@ jobs:
         run: dotnet tool restore --disable-parallel || dotnet tool restore --disable-parallel
 
       - name: Restore Paket dependencies (strict)
-        run: dotnet paket restore --fail-on-checks
+        run: dotnet tool run paket restore --fail-on-checks
 
       # Writes obj/project.assets.json for every project, which is what the NuGet detectors read.
       - name: Restore solution dependencies

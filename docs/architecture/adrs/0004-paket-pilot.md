@@ -34,7 +34,7 @@ From a spike with Paket 11.0.1 on a scratch copy of this repository's dependency
   lock; a bare version is a pin.
 - **Updates.** `paket outdated` and `paket update` work, and `paket update` rewrote the lock
   correctly for several target frameworks.
-- **Strict restore.** `dotnet paket restore --fail-on-checks` exits 1 when `paket.dependencies` and
+- **Strict restore.** `dotnet tool run paket restore --fail-on-checks` exits 1 when `paket.dependencies` and
   `paket.lock` are out of sync. Plain `paket restore` exits 0 and silently ignores the drift, and so
   does the restore that MSBuild runs through `Paket.Restore.targets`. CI must therefore run the
   strict form explicitly.
@@ -93,7 +93,7 @@ moves with the test projects' group.
 ### Locking and CI
 
 Every job that restores the solution or the benchmark project runs `dotnet tool restore`, then
-`dotnet paket restore --fail-on-checks`, then `dotnet restore ... --locked-mode`: `ci.yml` (`test`,
+`dotnet tool run paket restore --fail-on-checks`, then `dotnet restore ... --locked-mode`: `ci.yml` (`test`,
 `derived`), `benchmarks.yml` (both jobs), `fuzz.yml`, `metrics-oracle.yml`, `mutation.yml`,
 `release.yml` and `dependency-submission.yml`. In `ci.yml`'s `test` job the tool restore moved
 up, ahead of the solution restore, which now calls Paket. `CiGateIntegrityTests` enforces both
@@ -102,7 +102,7 @@ halves:
 - every solution project has exactly one of `packages.lock.json` or `paket.references` (the Native
   AOT projects have neither), and a project with `paket.references` imports
   `Paket.Restore.targets`;
-- in every workflow job, each `dotnet restore` comes after a `dotnet paket restore
+- in every workflow job, each `dotnet restore` comes after a `dotnet tool run paket restore
   --fail-on-checks` step, which comes after `dotnet tool restore`.
 
 `benchmarks.yml` installed only .NET 8 before. It now installs .NET 10 for Paket, and the headline
@@ -114,7 +114,7 @@ benchmarks themselves stay on .NET 8.
 Dependabot keeps `nuget` on: it still covers every other project. It does not read Paket, so it no
 longer sees the benchmark project's packages. In its place, `paket-outdated.yml` runs weekly (and
 on dispatch) and keeps one issue labelled `paket-outdated`. The issue is open while
-`dotnet paket outdated` finds a newer version inside the ranges (what `dotnet paket update` would
+`dotnet tool run paket outdated` finds a newer version inside the ranges (what `dotnet tool run paket update` would
 take) and is closed by the workflow once it finds none. Newer versions outside the ranges, from
 `--ignore-constraints`, are listed for information; taking one is a deliberate range edit. The job
 that runs Paket has a read-only token; the job with `issues: write` runs no repository code.
@@ -161,7 +161,7 @@ previous state.
 
 ## Verification
 
-- `dotnet tool restore --disable-parallel`, `dotnet paket restore --fail-on-checks` and
+- `dotnet tool restore --disable-parallel`, `dotnet tool run paket restore --fail-on-checks` and
   `dotnet restore Parquet.SourceGenerator.slnx --locked-mode` pass; no other lock file changes.
 - Release builds of the benchmark and test projects with `-warnaserror`: 0 warnings, 0 errors.
 - `project.assets.json` of the benchmark project: 40 of 40 libraries identical before and after.
