@@ -564,7 +564,10 @@ public sealed class CiGateIntegrityTests
         ""
     )]
     // Without the switch, drift between paket.dependencies and paket.lock exits 0.
-    [InlineData("run: dotnet tool run paket restore --fail-on-checks", "run: dotnet tool run paket restore")]
+    [InlineData(
+        "run: dotnet tool run paket restore --fail-on-checks",
+        "run: dotnet tool run paket restore"
+    )]
     // The `dotnet paket` shorthand: AGENTS.md rule 10 requires `dotnet tool run <command>`.
     [InlineData(
         "run: dotnet tool run paket restore --fail-on-checks",
