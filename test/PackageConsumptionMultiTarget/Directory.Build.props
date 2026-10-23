@@ -1,0 +1,7 @@
+<Project>
+    <!--
+    Intentionally empty, and intentionally NOT importing the repository's root
+    Directory.Build.props: this project compiles the way an external multi-targeting consumer's
+    project would.
+  -->
+</Project>

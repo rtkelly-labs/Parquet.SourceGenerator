@@ -1,0 +1,198 @@
+# Legacy/modern emitted API parity allowlist (#493, docs/guides/legacy-support.md § Enforcement).
+#
+# BackendParityGateTests runs every golden model through both generators, renders each emitted
+# surface with the .api.txt renderer, normalises the namespace and the extension class name
+# (<Model>ParquetLegacyExtensions -> <Model>ParquetExtensions), and diffs the lines. Every
+# difference must be listed here, and every entry here must still be a difference:
+#
+#   - A difference that is not listed fails the gate. Close the gap; do not add a line here
+#     without a section that names the reason and the tracking issue.
+#   - An entry that no longer differs fails the gate. Remove it in the change that closes the gap.
+#     The list can only shrink.
+#   - A [permanent] entry is a recorded owner decision that the member is modern-only. It also fails
+#     if the legacy backend starts emitting the member: absent, never present-and-throwing.
+#
+# Grammar:
+#   [temporary #N] reason          starts a section of gaps to close, tracked by issue #N
+#   [permanent #N] reason          starts a section of modern-only members by decision
+#   modern-only <Model>: <line>    the modern backend emits <line> and the legacy one does not
+#   legacy-only <Model>: <line>    the legacy backend emits <line> and the modern one does not
+#   modern-only <Model>: *         the legacy backend emits nothing for <Model> at all
+#
+# Lines are the normalised .api.txt lines, so a failing run prints each unlisted difference in
+# exactly this form.
+
+[permanent #490] Batch reading (AsBatches) is modern-only by owner decision (2026-09-24): its point is caller-visible pooled column buffers, which the v4 DataColumn API cannot provide. The legacy backend must not emit it at all, so multi-target callers guard it with #if NET8_0_OR_GREATER.
+modern-only ArrowOrder: ArrowOrderParquetReader.AsBatches(System.Threading.CancellationToken cancellationToken = default) -> System.Collections.Generic.IAsyncEnumerable<ArrowOrderBatch>
+modern-only LegacyRecord: LegacyRecordParquetReader.AsBatches(System.Threading.CancellationToken cancellationToken = default) -> System.Collections.Generic.IAsyncEnumerable<LegacyRecordBatch>
+modern-only OrderEvent: OrderEventParquetReader.AsBatches(System.Threading.CancellationToken cancellationToken = default) -> System.Collections.Generic.IAsyncEnumerable<OrderEventBatch>
+modern-only ScalarMetric: ScalarMetricParquetReader.AsBatches(System.Threading.CancellationToken cancellationToken = default) -> System.Collections.Generic.IAsyncEnumerable<ScalarMetricBatch>
+modern-only SortedShipment: SortedShipmentParquetReader.AsBatches(System.Threading.CancellationToken cancellationToken = default) -> System.Collections.Generic.IAsyncEnumerable<SortedShipmentBatch>
+
+[temporary #494] The legacy backend has no builder reader yet: no <Model>Parquet.From(...) over a Stream or ReadOnlyMemory<byte>, no <Model>ParquetReader (WithOptions, Where, Parallel, ToArrayAsync, AsAsyncEnumerable) and no <Model>RowGroupMetadata for pruning.
+modern-only ArrowOrder: ArrowOrderParquet
+modern-only ArrowOrder: ArrowOrderParquetReader
+modern-only ArrowOrder: ArrowOrderParquetReader.AsAsyncEnumerable(System.Threading.CancellationToken cancellationToken = default) -> System.Collections.Generic.IAsyncEnumerable<ArrowOrder>
+modern-only ArrowOrder: ArrowOrderParquetReader.Parallel() -> ArrowOrderParquetReader
+modern-only ArrowOrder: ArrowOrderParquetReader.ToArrayAsync(System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<ArrowOrder[]>
+modern-only ArrowOrder: ArrowOrderParquetReader.Where(System.Func<ArrowOrderRowGroupMetadata, bool> predicate) -> ArrowOrderParquetReader
+modern-only ArrowOrder: ArrowOrderParquetReader.WithOptions(Parquet.SourceGenerator.ParquetSerializerOptions options) -> ArrowOrderParquetReader
+modern-only ArrowOrder: ArrowOrderRowGroupMetadata
+modern-only ArrowOrder: ArrowOrderRowGroupMetadata.HasStatistics.get -> bool
+modern-only ArrowOrder: ArrowOrderRowGroupMetadata.Id.get -> Parquet.SourceGenerator.ParquetColumnStatistics<int>
+modern-only ArrowOrder: ArrowOrderRowGroupMetadata.Name.get -> Parquet.SourceGenerator.ParquetColumnStatistics<string>
+modern-only ArrowOrder: ArrowOrderRowGroupMetadata.RowCount.get -> long
+modern-only ArrowOrder: ArrowOrderRowGroupMetadata.RowGroupIndex.get -> int
+modern-only ArrowOrder: ArrowOrderRowGroupMetadata.Score.get -> Parquet.SourceGenerator.ParquetColumnStatistics<double>
+modern-only ArrowOrder: static ArrowOrderParquet.From(System.IO.Stream stream) -> ArrowOrderParquetReader
+modern-only ArrowOrder: static ArrowOrderParquet.From(System.ReadOnlyMemory<byte> parquetBytes) -> ArrowOrderParquetReader
+modern-only LegacyRecord: LegacyRecordParquet
+modern-only LegacyRecord: LegacyRecordParquetReader
+modern-only LegacyRecord: LegacyRecordParquetReader.AsAsyncEnumerable(System.Threading.CancellationToken cancellationToken = default) -> System.Collections.Generic.IAsyncEnumerable<LegacyRecord>
+modern-only LegacyRecord: LegacyRecordParquetReader.Parallel() -> LegacyRecordParquetReader
+modern-only LegacyRecord: LegacyRecordParquetReader.ToArrayAsync(System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<LegacyRecord[]>
+modern-only LegacyRecord: LegacyRecordParquetReader.Where(System.Func<LegacyRecordRowGroupMetadata, bool> predicate) -> LegacyRecordParquetReader
+modern-only LegacyRecord: LegacyRecordParquetReader.WithOptions(Parquet.SourceGenerator.ParquetSerializerOptions options) -> LegacyRecordParquetReader
+modern-only LegacyRecord: LegacyRecordRowGroupMetadata
+modern-only LegacyRecord: LegacyRecordRowGroupMetadata.Description.get -> Parquet.SourceGenerator.ParquetColumnStatistics<string>
+modern-only LegacyRecord: LegacyRecordRowGroupMetadata.HasStatistics.get -> bool
+modern-only LegacyRecord: LegacyRecordRowGroupMetadata.Id.get -> Parquet.SourceGenerator.ParquetColumnStatistics<int>
+modern-only LegacyRecord: LegacyRecordRowGroupMetadata.RowCount.get -> long
+modern-only LegacyRecord: LegacyRecordRowGroupMetadata.RowGroupIndex.get -> int
+modern-only LegacyRecord: static LegacyRecordParquet.From(System.IO.Stream stream) -> LegacyRecordParquetReader
+modern-only LegacyRecord: static LegacyRecordParquet.From(System.ReadOnlyMemory<byte> parquetBytes) -> LegacyRecordParquetReader
+modern-only OrderEvent: OrderEventParquet
+modern-only OrderEvent: OrderEventParquetReader
+modern-only OrderEvent: OrderEventParquetReader.AsAsyncEnumerable(System.Threading.CancellationToken cancellationToken = default) -> System.Collections.Generic.IAsyncEnumerable<OrderEvent>
+modern-only OrderEvent: OrderEventParquetReader.Parallel() -> OrderEventParquetReader
+modern-only OrderEvent: OrderEventParquetReader.ToArrayAsync(System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<OrderEvent[]>
+modern-only OrderEvent: OrderEventParquetReader.Where(System.Func<OrderEventRowGroupMetadata, bool> predicate) -> OrderEventParquetReader
+modern-only OrderEvent: OrderEventParquetReader.WithOptions(Parquet.SourceGenerator.ParquetSerializerOptions options) -> OrderEventParquetReader
+modern-only OrderEvent: OrderEventRowGroupMetadata
+modern-only OrderEvent: OrderEventRowGroupMetadata.HasStatistics.get -> bool
+modern-only OrderEvent: OrderEventRowGroupMetadata.Id.get -> Parquet.SourceGenerator.ParquetColumnStatistics<int>
+modern-only OrderEvent: OrderEventRowGroupMetadata.Name.get -> Parquet.SourceGenerator.ParquetColumnStatistics<string>
+modern-only OrderEvent: OrderEventRowGroupMetadata.RowCount.get -> long
+modern-only OrderEvent: OrderEventRowGroupMetadata.RowGroupIndex.get -> int
+modern-only OrderEvent: OrderEventRowGroupMetadata.Score.get -> Parquet.SourceGenerator.ParquetColumnStatistics<double>
+modern-only OrderEvent: static OrderEventParquet.From(System.IO.Stream stream) -> OrderEventParquetReader
+modern-only OrderEvent: static OrderEventParquet.From(System.ReadOnlyMemory<byte> parquetBytes) -> OrderEventParquetReader
+modern-only ScalarMetric: ScalarMetricParquet
+modern-only ScalarMetric: ScalarMetricParquetReader
+modern-only ScalarMetric: ScalarMetricParquetReader.AsAsyncEnumerable(System.Threading.CancellationToken cancellationToken = default) -> System.Collections.Generic.IAsyncEnumerable<ScalarMetric>
+modern-only ScalarMetric: ScalarMetricParquetReader.Parallel() -> ScalarMetricParquetReader
+modern-only ScalarMetric: ScalarMetricParquetReader.ToArrayAsync(System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<ScalarMetric[]>
+modern-only ScalarMetric: ScalarMetricParquetReader.Where(System.Func<ScalarMetricRowGroupMetadata, bool> predicate) -> ScalarMetricParquetReader
+modern-only ScalarMetric: ScalarMetricParquetReader.WithOptions(Parquet.SourceGenerator.ParquetSerializerOptions options) -> ScalarMetricParquetReader
+modern-only ScalarMetric: ScalarMetricRowGroupMetadata
+modern-only ScalarMetric: ScalarMetricRowGroupMetadata.FloatVal.get -> Parquet.SourceGenerator.ParquetColumnStatistics<float>
+modern-only ScalarMetric: ScalarMetricRowGroupMetadata.HasStatistics.get -> bool
+modern-only ScalarMetric: ScalarMetricRowGroupMetadata.RowCount.get -> long
+modern-only ScalarMetric: ScalarMetricRowGroupMetadata.RowGroupIndex.get -> int
+modern-only ScalarMetric: ScalarMetricRowGroupMetadata.RowId.get -> Parquet.SourceGenerator.ParquetColumnStatistics<long>
+modern-only ScalarMetric: ScalarMetricRowGroupMetadata.ShortNum.get -> Parquet.SourceGenerator.ParquetColumnStatistics<short>
+modern-only ScalarMetric: ScalarMetricRowGroupMetadata.TinyNum.get -> Parquet.SourceGenerator.ParquetColumnStatistics<byte>
+modern-only ScalarMetric: static ScalarMetricParquet.From(System.IO.Stream stream) -> ScalarMetricParquetReader
+modern-only ScalarMetric: static ScalarMetricParquet.From(System.ReadOnlyMemory<byte> parquetBytes) -> ScalarMetricParquetReader
+modern-only SortedShipment: SortedShipmentParquet
+modern-only SortedShipment: SortedShipmentParquetReader
+modern-only SortedShipment: SortedShipmentParquetReader.AsAsyncEnumerable(System.Threading.CancellationToken cancellationToken = default) -> System.Collections.Generic.IAsyncEnumerable<SortedShipment>
+modern-only SortedShipment: SortedShipmentParquetReader.Parallel() -> SortedShipmentParquetReader
+modern-only SortedShipment: SortedShipmentParquetReader.ToArrayAsync(System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<SortedShipment[]>
+modern-only SortedShipment: SortedShipmentParquetReader.Where(System.Func<SortedShipmentRowGroupMetadata, bool> predicate) -> SortedShipmentParquetReader
+modern-only SortedShipment: SortedShipmentParquetReader.WithOptions(Parquet.SourceGenerator.ParquetSerializerOptions options) -> SortedShipmentParquetReader
+modern-only SortedShipment: SortedShipmentRowGroupMetadata
+modern-only SortedShipment: SortedShipmentRowGroupMetadata.Carrier.get -> Parquet.SourceGenerator.ParquetColumnStatistics<string>
+modern-only SortedShipment: SortedShipmentRowGroupMetadata.HasStatistics.get -> bool
+modern-only SortedShipment: SortedShipmentRowGroupMetadata.RowCount.get -> long
+modern-only SortedShipment: SortedShipmentRowGroupMetadata.RowGroupIndex.get -> int
+modern-only SortedShipment: SortedShipmentRowGroupMetadata.Sequence.get -> Parquet.SourceGenerator.ParquetColumnStatistics<long>
+modern-only SortedShipment: SortedShipmentRowGroupMetadata.WeightGrams.get -> Parquet.SourceGenerator.ParquetColumnStatistics<int>
+modern-only SortedShipment: static SortedShipmentParquet.From(System.IO.Stream stream) -> SortedShipmentParquetReader
+modern-only SortedShipment: static SortedShipmentParquet.From(System.ReadOnlyMemory<byte> parquetBytes) -> SortedShipmentParquetReader
+
+[temporary #494] The legacy-only flat ReadParquetAsync / ReadParquetArrayAsync reads. The modern emitter removed them in favour of the builder (#480); they are removed from legacy when its builder lands, not kept as a second read surface.
+legacy-only ArrowOrder: static ArrowOrderParquetExtensions.ReadParquetArrayAsync(System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<ArrowOrder[]>
+legacy-only ArrowOrder: static ArrowOrderParquetExtensions.ReadParquetAsync(System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<System.Collections.Generic.List<ArrowOrder>>
+legacy-only LegacyRecord: static LegacyRecordParquetExtensions.ReadParquetArrayAsync(System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<LegacyRecord[]>
+legacy-only LegacyRecord: static LegacyRecordParquetExtensions.ReadParquetAsync(System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<System.Collections.Generic.List<LegacyRecord>>
+legacy-only OrderEvent: static OrderEventParquetExtensions.ReadParquetArrayAsync(System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<OrderEvent[]>
+legacy-only OrderEvent: static OrderEventParquetExtensions.ReadParquetAsync(System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<System.Collections.Generic.List<OrderEvent>>
+legacy-only ScalarMetric: static ScalarMetricParquetExtensions.ReadParquetArrayAsync(System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<ScalarMetric[]>
+legacy-only ScalarMetric: static ScalarMetricParquetExtensions.ReadParquetAsync(System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<System.Collections.Generic.List<ScalarMetric>>
+legacy-only SortedShipment: static SortedShipmentParquetExtensions.ReadParquetArrayAsync(System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<SortedShipment[]>
+legacy-only SortedShipment: static SortedShipmentParquetExtensions.ReadParquetAsync(System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<System.Collections.Generic.List<SortedShipment>>
+
+[temporary #495] The legacy backend has no <Model>Batch columnar write (the type, its members and WriteParquetAsync(this <Model>Batch)) and no IAsyncEnumerable<T> write.
+modern-only ArrowOrder: ArrowOrderBatch
+modern-only ArrowOrder: ArrowOrderBatch.ArrowOrderBatch(int rowCount, System.ReadOnlyMemory<int> id, System.ReadOnlyMemory<System.ReadOnlyMemory<char>?> name, System.ReadOnlyMemory<double> score, System.ReadOnlyMemory<decimal> price, System.ReadOnlyMemory<System.DateTime> createdAt, System.ReadOnlyMemory<int> duration, System.ReadOnlyMemory<System.Guid> correlationId, System.ReadOnlyMemory<System.ReadOnlyMemory<byte>?> payload) -> void
+modern-only ArrowOrder: ArrowOrderBatch.CorrelationId.get -> System.ReadOnlyMemory<System.Guid>
+modern-only ArrowOrder: ArrowOrderBatch.CreatedAt.get -> System.ReadOnlyMemory<System.DateTime>
+modern-only ArrowOrder: ArrowOrderBatch.Duration.get -> System.ReadOnlyMemory<int>
+modern-only ArrowOrder: ArrowOrderBatch.Id.get -> System.ReadOnlyMemory<int>
+modern-only ArrowOrder: ArrowOrderBatch.Name.get -> System.ReadOnlyMemory<System.ReadOnlyMemory<char>?>
+modern-only ArrowOrder: ArrowOrderBatch.Payload.get -> System.ReadOnlyMemory<System.ReadOnlyMemory<byte>?>
+modern-only ArrowOrder: ArrowOrderBatch.Price.get -> System.ReadOnlyMemory<decimal>
+modern-only ArrowOrder: ArrowOrderBatch.RowCount.get -> int
+modern-only ArrowOrder: ArrowOrderBatch.Score.get -> System.ReadOnlyMemory<double>
+modern-only ArrowOrder: static ArrowOrderParquetExtensions.WriteParquetAsync(this ArrowOrderBatch batch, System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task
+modern-only ArrowOrder: static ArrowOrderParquetExtensions.WriteParquetAsync(this System.Collections.Generic.IAsyncEnumerable<ArrowOrder> items, System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task
+modern-only LegacyRecord: LegacyRecordBatch
+modern-only LegacyRecord: LegacyRecordBatch.Description.get -> System.ReadOnlyMemory<System.ReadOnlyMemory<char>?>
+modern-only LegacyRecord: LegacyRecordBatch.Id.get -> System.ReadOnlyMemory<int>
+modern-only LegacyRecord: LegacyRecordBatch.LegacyRecordBatch(int rowCount, System.ReadOnlyMemory<int> id, System.ReadOnlyMemory<System.ReadOnlyMemory<char>?> description, System.ReadOnlyMemory<System.ReadOnlyMemory<byte>?> rawData, System.ReadOnlyMemory<int> level) -> void
+modern-only LegacyRecord: LegacyRecordBatch.Level.get -> System.ReadOnlyMemory<int>
+modern-only LegacyRecord: LegacyRecordBatch.RawData.get -> System.ReadOnlyMemory<System.ReadOnlyMemory<byte>?>
+modern-only LegacyRecord: LegacyRecordBatch.RowCount.get -> int
+modern-only LegacyRecord: static LegacyRecordParquetExtensions.WriteParquetAsync(this LegacyRecordBatch batch, System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task
+modern-only LegacyRecord: static LegacyRecordParquetExtensions.WriteParquetAsync(this System.Collections.Generic.IAsyncEnumerable<LegacyRecord> items, System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task
+modern-only OrderEvent: OrderEventBatch
+modern-only OrderEvent: OrderEventBatch.CorrelationId.get -> System.ReadOnlyMemory<System.Guid>
+modern-only OrderEvent: OrderEventBatch.CreatedAt.get -> System.ReadOnlyMemory<System.DateTime>
+modern-only OrderEvent: OrderEventBatch.Duration.get -> System.ReadOnlyMemory<int>
+modern-only OrderEvent: OrderEventBatch.FillOptionalGuidNullable(System.Span<System.Guid?> destination) -> void
+modern-only OrderEvent: OrderEventBatch.Id.get -> System.ReadOnlyMemory<int>
+modern-only OrderEvent: OrderEventBatch.Name.get -> System.ReadOnlyMemory<System.ReadOnlyMemory<char>?>
+modern-only OrderEvent: OrderEventBatch.OptionalGuid.get -> System.ReadOnlyMemory<System.Guid>
+modern-only OrderEvent: OrderEventBatch.OptionalGuidDefinitionLevels.get -> System.ReadOnlyMemory<int>
+modern-only OrderEvent: OrderEventBatch.OrderEventBatch(int rowCount, System.ReadOnlyMemory<int> id, System.ReadOnlyMemory<System.ReadOnlyMemory<char>?> name, System.ReadOnlyMemory<double> score, System.ReadOnlyMemory<decimal> price, System.ReadOnlyMemory<System.DateTime> createdAt, System.ReadOnlyMemory<int> duration, System.ReadOnlyMemory<System.Guid> correlationId, System.ReadOnlyMemory<System.Guid> optionalGuid, System.ReadOnlyMemory<int> optionalGuidDefinitionLevels, System.ReadOnlyMemory<System.ReadOnlyMemory<byte>?> payload) -> void
+modern-only OrderEvent: OrderEventBatch.Payload.get -> System.ReadOnlyMemory<System.ReadOnlyMemory<byte>?>
+modern-only OrderEvent: OrderEventBatch.Price.get -> System.ReadOnlyMemory<decimal>
+modern-only OrderEvent: OrderEventBatch.RowCount.get -> int
+modern-only OrderEvent: OrderEventBatch.Score.get -> System.ReadOnlyMemory<double>
+modern-only OrderEvent: static OrderEventParquetExtensions.WriteParquetAsync(this OrderEventBatch batch, System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task
+modern-only OrderEvent: static OrderEventParquetExtensions.WriteParquetAsync(this System.Collections.Generic.IAsyncEnumerable<OrderEvent> items, System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task
+modern-only ScalarMetric: ScalarMetricBatch
+modern-only ScalarMetric: ScalarMetricBatch.FillNullableFlagNullable(System.Span<bool?> destination) -> void
+modern-only ScalarMetric: ScalarMetricBatch.FillOptionalStatusNullable(System.Span<int?> destination) -> void
+modern-only ScalarMetric: ScalarMetricBatch.Flag.get -> System.ReadOnlyMemory<bool>
+modern-only ScalarMetric: ScalarMetricBatch.FloatVal.get -> System.ReadOnlyMemory<float>
+modern-only ScalarMetric: ScalarMetricBatch.NullableFlag.get -> System.ReadOnlyMemory<bool>
+modern-only ScalarMetric: ScalarMetricBatch.NullableFlagDefinitionLevels.get -> System.ReadOnlyMemory<int>
+modern-only ScalarMetric: ScalarMetricBatch.OptionalStatus.get -> System.ReadOnlyMemory<int>
+modern-only ScalarMetric: ScalarMetricBatch.OptionalStatusDefinitionLevels.get -> System.ReadOnlyMemory<int>
+modern-only ScalarMetric: ScalarMetricBatch.RowCount.get -> int
+modern-only ScalarMetric: ScalarMetricBatch.RowId.get -> System.ReadOnlyMemory<long>
+modern-only ScalarMetric: ScalarMetricBatch.ScalarMetricBatch(int rowCount, System.ReadOnlyMemory<long> rowId, System.ReadOnlyMemory<bool> flag, System.ReadOnlyMemory<bool> nullableFlag, System.ReadOnlyMemory<int> nullableFlagDefinitionLevels, System.ReadOnlyMemory<int> statusCode, System.ReadOnlyMemory<int> optionalStatus, System.ReadOnlyMemory<int> optionalStatusDefinitionLevels, System.ReadOnlyMemory<byte> tinyNum, System.ReadOnlyMemory<short> shortNum, System.ReadOnlyMemory<float> floatVal) -> void
+modern-only ScalarMetric: ScalarMetricBatch.ShortNum.get -> System.ReadOnlyMemory<short>
+modern-only ScalarMetric: ScalarMetricBatch.StatusCode.get -> System.ReadOnlyMemory<int>
+modern-only ScalarMetric: ScalarMetricBatch.TinyNum.get -> System.ReadOnlyMemory<byte>
+modern-only ScalarMetric: static ScalarMetricParquetExtensions.WriteParquetAsync(this ScalarMetricBatch batch, System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task
+modern-only ScalarMetric: static ScalarMetricParquetExtensions.WriteParquetAsync(this System.Collections.Generic.IAsyncEnumerable<ScalarMetric> items, System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task
+modern-only SortedShipment: SortedShipmentBatch
+modern-only SortedShipment: SortedShipmentBatch.Carrier.get -> System.ReadOnlyMemory<System.ReadOnlyMemory<char>?>
+modern-only SortedShipment: SortedShipmentBatch.RowCount.get -> int
+modern-only SortedShipment: SortedShipmentBatch.Sequence.get -> System.ReadOnlyMemory<long>
+modern-only SortedShipment: SortedShipmentBatch.ShippedAt.get -> System.ReadOnlyMemory<System.DateTime>
+modern-only SortedShipment: SortedShipmentBatch.SortedShipmentBatch(int rowCount, System.ReadOnlyMemory<long> sequence, System.ReadOnlyMemory<System.DateTime> shippedAt, System.ReadOnlyMemory<int> weightGrams, System.ReadOnlyMemory<System.ReadOnlyMemory<char>?> carrier) -> void
+modern-only SortedShipment: SortedShipmentBatch.WeightGrams.get -> System.ReadOnlyMemory<int>
+modern-only SortedShipment: static SortedShipmentParquetExtensions.WriteParquetAsync(this SortedShipmentBatch batch, System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task
+modern-only SortedShipment: static SortedShipmentParquetExtensions.WriteParquetAsync(this System.Collections.Generic.IAsyncEnumerable<SortedShipment> items, System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task
+
+[temporary #176] The legacy emitter is flat-only and emits nothing for a model with nested structs, lists or lists of POCOs. Parquet.Net 4.x can represent repeated and group columns, so this is emitter work.
+modern-only ListOrder: *
+modern-only NestedOrder: *
+modern-only PocoOrder: *
+
+[temporary #490] The Arrow RecordBatch bridge is not built for v4 yet. Apache.Arrow supports netstandard2.0, so it is possible.
+modern-only ArrowOrder: static ArrowOrderParquetExtensions.WriteParquetRowGroupAsync(Parquet.ParquetWriter writer, Apache.Arrow.RecordBatch batch, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task
