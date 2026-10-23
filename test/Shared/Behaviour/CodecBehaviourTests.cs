@@ -111,6 +111,16 @@ public sealed class CodecBehaviourTests
         };
 
         using var stream = new MemoryStream();
+        if (
+            await IsKnownUnavailableAsync(
+                codec,
+                () => BehaviourDriver.WriteAsync(rows, stream, options)
+            )
+        )
+        {
+            return;
+        }
+
         await BehaviourDriver.WriteAsync(rows, stream, options);
         byte[] bytes = stream.ToArray();
 
@@ -139,6 +149,16 @@ public sealed class CodecBehaviourTests
         };
 
         using var stream = new MemoryStream();
+        if (
+            await IsKnownUnavailableAsync(
+                codec,
+                () => BehaviourDriver.WriteAsync(rows, stream, options)
+            )
+        )
+        {
+            return;
+        }
+
         await BehaviourDriver.WriteAsync(rows, stream, options);
         byte[] bytes = stream.ToArray();
 
@@ -164,6 +184,30 @@ public sealed class CodecBehaviourTests
             read[i].Value.ShouldBe(rows[i].Value);
             TypeMatrixData.ValuesEqual(rows[i].Payload, read[i].Payload).ShouldBeTrue($"row {i}");
         }
+    }
+
+    /// <summary>
+    /// When the backend lists <paramref name="codec"/> as unavailable on this runtime
+    /// (<see cref="KnownFailures.CodecUnavailable"/>), asserts the write still refuses it with
+    /// <see cref="NotSupportedException"/> and returns true; a write that now succeeds fails the test
+    /// so the entry is removed. Otherwise returns false without writing.
+    /// </summary>
+    private static async Task<bool> IsKnownUnavailableAsync(
+        ParquetCompressionMethod codec,
+        Func<Task> write
+    )
+    {
+        if (!BehaviourDriver.IsKnownFailure(KnownFailures.CodecUnavailable(codec)))
+        {
+            return false;
+        }
+
+        await Should.ThrowAsync<NotSupportedException>(
+            write,
+            $"{BehaviourDriver.Backend()} lists {codec} as unavailable on this runtime but the "
+                + "write now succeeds: remove it from the driver's known failures."
+        );
+        return true;
     }
 
     /// <summary>

@@ -21,8 +21,27 @@ internal static partial class BehaviourDriver
     /// <c>byte[]</c> value, but its plain decoder throws <c>IndexOutOfRangeException</c> reading the
     /// column back, required or optional (reproduced against Parquet.Net 4.25 directly, without
     /// generated code). Upstream; recorded in UPSTREAM_DEPENDENCY_LIMITATIONS.md.
+    /// <para>
+    /// <see cref="KnownFailures.CodecUnavailable"/> for LZ4, Brotli and Zstd on .NET Framework:
+    /// Parquet.Net 4.25 compresses them through IronCompress's native library, which a .NET
+    /// Framework test host (like an AnyCPU .NET Framework app) does not load: IronCompress throws
+    /// <c>NotSupportedException</c> ("native: False"). Gzip, Snappy and None are managed and work.
+    /// </para>
     /// </remarks>
-    public static partial bool IsKnownFailure(string id) => id == KnownFailures.EmptyBinaryValue;
+    public static partial bool IsKnownFailure(string id) =>
+        id == KnownFailures.EmptyBinaryValue || IsUnavailableCodec(id);
+
+    private static bool IsUnavailableCodec(string id)
+    {
+#if NETFRAMEWORK
+        return id == KnownFailures.CodecUnavailable(ParquetCompressionMethod.Lz4)
+            || id == KnownFailures.CodecUnavailable(ParquetCompressionMethod.Brotli)
+            || id == KnownFailures.CodecUnavailable(ParquetCompressionMethod.Zstd);
+#else
+        _ = id;
+        return false;
+#endif
+    }
 
     public static partial Task WriteAsync(
         IReadOnlyList<TypeMatrixRow> rows,
