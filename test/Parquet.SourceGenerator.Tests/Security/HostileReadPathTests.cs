@@ -274,6 +274,17 @@ public sealed class HostileReadPathTests
             "outside the file data bounds"
         ),
         new(
+            // Parquet.Net skips a zero offset and would start at the dictionary page; the bounds
+            // check rejects the chunk before the dictionary-entry lookup runs.
+            "data-offset-zero",
+            (m, _) =>
+            {
+                First(m).DictionaryPageOffset = First(m).DataPageOffset;
+                First(m).DataPageOffset = 0;
+            },
+            "outside the file data bounds"
+        ),
+        new(
             "offset-in-footer",
             (m, footerStart) => First(m).DataPageOffset = footerStart,
             "outside the file data bounds"
