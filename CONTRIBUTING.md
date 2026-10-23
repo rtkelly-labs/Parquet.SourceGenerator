@@ -7,7 +7,7 @@ Thank you for your interest in contributing to **Parquet.SourceGenerator**! This
 ## 🛠️ Development Setup
 
 ### Prerequisites
-- [.NET 8.0 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) or higher
+- [.NET 8.0 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) or higher, plus the [.NET 10 runtime](https://dotnet.microsoft.com/download/dotnet/10.0) (or SDK): the Paket local tool targets `net10.0`, and restoring the solution runs it for the Paket-managed benchmark project ([ADR 0004](docs/architecture/adrs/0004-paket-pilot.md))
 - Python 3.11+ with [`uv`](https://github.com/astral-sh/uv) (for PyArrow cross-engine test dataset generation)
 
 ### Clone
@@ -31,7 +31,7 @@ Every project in the solution except the two Native AOT ones and the Paket-manag
 
 #### Paket-managed projects (pilot)
 
-`benchmarks/Parquet.SourceGenerator.Benchmarks` takes its packages from [Paket](https://fsprojects.github.io/Paket/), not from `Directory.Packages.props`: its `paket.references` names the packages, the root `paket.dependencies` holds their version ranges, and the root `paket.lock` holds the exact versions ([ADR 0004](docs/architecture/adrs/0004-paket-pilot.md)). Paket is a local tool, so run `dotnet tool restore --disable-parallel` first. Then:
+`benchmarks/Parquet.SourceGenerator.Benchmarks` takes its packages from [Paket](https://fsprojects.github.io/Paket/), not from `Directory.Packages.props`: its `paket.references` names the packages, the root `paket.dependencies` holds their version ranges, and the root `paket.lock` holds the exact versions ([ADR 0004](docs/architecture/adrs/0004-paket-pilot.md)). Paket is a local tool that targets `net10.0` (see Prerequisites), so run `dotnet tool restore --disable-parallel` first. Then:
 
 ```bash
 dotnet tool run paket outdated                  # what an update would take, inside the ranges
