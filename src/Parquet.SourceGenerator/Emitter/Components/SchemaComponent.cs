@@ -23,7 +23,16 @@ internal static class SchemaComponent
     /// <summary>
     /// Generates compile-time ParquetSchema DataField instantiation code.
     /// </summary>
-    public static string GetFieldCreationExpression(PropertyModel prop)
+    /// <remarks>
+    /// <c>FieldId</c> and a local timestamp use Parquet.Net APIs the 4.x/5.x line lacks; the classic
+    /// parser rejects members that set them (PARQ023), so they only reach this for the v6 backend.
+    /// </remarks>
+    public static string GetFieldCreationExpression(PropertyModel prop) =>
+        prop.FieldId is int fieldId
+            ? $"{GetFieldConstructorExpression(prop)} {{ FieldId = {fieldId} }}"
+            : GetFieldConstructorExpression(prop);
+
+    private static string GetFieldConstructorExpression(PropertyModel prop)
     {
         string name = EmittedText.Literal(prop.ParquetColumnName);
 
@@ -36,14 +45,23 @@ internal static class SchemaComponent
             PropertyKind.Decimal =>
                 $"new global::Parquet.Schema.DecimalDataField({name}, 38, 18, isNullable: {BoolLiteral(prop.IsNullable)})",
 
+            PropertyKind.DateTime
+                when IsMicrosecondTimestamp(prop) && !prop.TimestampAdjustedToUtc =>
+            // DateTimeFormat.Timestamp, not DateAndTimeMicros: Parquet.Net writes the latter as the
+            // legacy TIMESTAMP_MICROS converted type, which always means UTC-adjusted and ignores
+            // isAdjustedToUTC. Timestamp writes the logical type, which carries the flag.
+            $"new global::Parquet.Schema.DateTimeDataField({name}, global::Parquet.Schema.DateTimeFormat.Timestamp, isAdjustedToUTC: false, unit: global::Parquet.Schema.DateTimeTimeUnit.Micros, isNullable: {BoolLiteral(prop.IsNullable)})",
+
             PropertyKind.DateTime when IsMicrosecondTimestamp(prop) =>
                 $"new global::Parquet.Schema.DateTimeDataField({name}, global::Parquet.Schema.DateTimeFormat.DateAndTimeMicros, isNullable: {BoolLiteral(prop.IsNullable)})",
 
             PropertyKind.DateTime =>
                 $"new global::Parquet.Schema.DateTimeDataField({name}, global::Parquet.Schema.DateTimeFormat.Impala, isNullable: {BoolLiteral(prop.IsNullable)})",
 
+            // INT32 DATE, the column every reader expects for a calendar date. INT96 (Impala) here
+            // round-tripped in .NET but other readers saw a timestamp, and Iceberg rejects INT96.
             PropertyKind.DateOnly =>
-                $"new global::Parquet.Schema.DateTimeDataField({name}, global::Parquet.Schema.DateTimeFormat.Impala, isNullable: {BoolLiteral(prop.IsNullable)})",
+                $"new global::Parquet.Schema.DateTimeDataField({name}, global::Parquet.Schema.DateTimeFormat.Date, isNullable: {BoolLiteral(prop.IsNullable)})",
 
             PropertyKind.TimeSpan =>
                 $"new global::Parquet.Schema.TimeDataField({name}, global::Parquet.Schema.TimeUnitPrecision.Millis, isNullable: {BoolLiteral(prop.IsNullable)})",

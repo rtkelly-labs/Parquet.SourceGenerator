@@ -36,6 +36,16 @@ the migration list; each row's detail is in the entries below and in `docs/api/L
 | baseline: `PublicAPI.Unshipped.txt` promoted to `Shipped.txt` | 101 public package signatures across all 13 public types shipped for 0.1 | #592 |
 
 ### Added
+- **`[ParquetColumn(FieldId = n)]` writes a Parquet field ID** on the column's schema element (Parquet.Net 6
+  backend; the Legacy package reports `PARQ023`, since Parquet.Net 4.x/5.x has no field IDs). Apache Iceberg and other
+  readers that resolve columns by ID can then adopt generated files without a name mapping. Negative, the
+  default, writes none, so existing models are unchanged. An ID declared by two columns of one schema, nested
+  leaves included, is an error (`PARQ024`).
+- **`[ParquetTimestamp(Microseconds, AdjustedToUtc = false)]` writes a local timestamp**:
+  `TIMESTAMP(MICROS, isAdjustedToUTC=false)`, Iceberg's `timestamp` as opposed to `timestamptz`. It is emitted
+  through `DateTimeFormat.Timestamp`, because Parquet.Net ignores `isAdjustedToUTC` for `DateAndTimeMicros`
+  and writes that as the always-UTC `TIMESTAMP_MICROS` converted type. The default (`true`) keeps today's output. The Legacy package reports `PARQ023` for `false`:
+  Parquet.Net before 4.25 has no `DateTimeFormat.Timestamp`.
 - **An executed test suite for the legacy backend** (`test/Parquet.SourceGenerator.Legacy.Tests`, #597).
   It runs the generated legacy code against Parquet.Net 4.25.0 on net8.0 (the `test` job) and net472
   (the Windows `net472-consumer` job): a type matrix over every legacy-supported flat type, required and
@@ -313,6 +323,8 @@ the migration list; each row's detail is in the entries below and in `docs/api/L
   only for code that referenced the Attributes helpers directly.
 
 ### Fixed
+- **`DateOnly` is written as INT32 `DATE` again**, not INT96. INT96 round-tripped in .NET, but other readers
+  (pyarrow, Spark) saw a timestamp, and Apache Iceberg rejects INT96.
 - **Legacy backend: `TimeSpan`, `TimeOnly` and microsecond `DateTime` members compile and round-trip**
   (#597). The legacy emitter used Parquet.Net 6's `TimeDataField`/`TimeUnitPrecision`, which 4.25 does
   not have, and `DateTimeFormat.DateAndTimeMicros`, which 4.25 has only in its net8.0 build, so such a
