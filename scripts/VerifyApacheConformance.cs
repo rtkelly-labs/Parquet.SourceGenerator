@@ -21,6 +21,9 @@ using CliWrap.Buffered;
 //       artifact, every URL tried and its outcome, and the exit code is 1.
 //       --attempts <n>           rounds over the mirror list per artifact (default 3)
 //       --retry-delay-ms <ms>    backoff before round 2; doubles each round (default 2000)
+//       --download-timeout-seconds <s>
+//                                deadline for one download, headers AND body (default 300); a
+//                                mirror that stalls mid-body counts as a failed attempt
 //   verify (default)
 //       --tools-dir <dir>        directory holding the restored toolchain (required)
 //       --java <path>            java launcher; falls back to PARQUET_APACHE_CONFORMANCE_JAVA,
@@ -389,12 +392,21 @@ int RestoreToolchain(string directory)
         Option(args, "--retry-delay-ms") ?? "2000",
         CultureInfo.InvariantCulture
     );
-    if (attempts < 1 || baseDelayMs < 0)
+    int timeoutSeconds = int.Parse(
+        Option(args, "--download-timeout-seconds") ?? "300",
+        CultureInfo.InvariantCulture
+    );
+    if (attempts < 1 || baseDelayMs < 0 || timeoutSeconds < 1)
     {
-        throw new ArgumentException("--attempts must be >= 1 and --retry-delay-ms >= 0.");
+        throw new ArgumentException(
+            "--attempts and --download-timeout-seconds must be >= 1 and --retry-delay-ms >= 0."
+        );
     }
+    var downloadTimeout = TimeSpan.FromSeconds(timeoutSeconds);
 
-    using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
+    // HttpClient.Timeout stops applying once ResponseHeadersRead returns, so the per-download
+    // deadline in TryDownload is what bounds the body; this one is disabled to keep a single owner.
+    using var http = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
     int failed = 0;
     foreach (JsonElement artifact in artifacts)
     {
@@ -425,7 +437,7 @@ int RestoreToolchain(string directory)
             {
                 string url = $"{mirror.TrimEnd('/')}/{path}";
                 Console.WriteLine($"downloading: {file} from {url}");
-                string outcome = TryDownload(http, url, destination, sha256);
+                string outcome = TryDownload(http, url, destination, sha256, downloadTimeout);
                 tried.Add($"{url} -> {outcome} (round {round})");
                 if (outcome == "OK")
                 {
@@ -461,15 +473,24 @@ int RestoreToolchain(string directory)
 }
 
 // Downloads url into a temporary file beside destination and moves it into place only when its
-// SHA-256 matches the pin. Returns "OK" or a one-line description of the failure.
-static string TryDownload(HttpClient http, string url, string destination, string sha256)
+// SHA-256 matches the pin. Returns "OK" or a one-line description of the failure. The timeout
+// covers the whole download: a mirror that sends headers and then stalls must not hang the job.
+static string TryDownload(
+    HttpClient http,
+    string url,
+    string destination,
+    string sha256,
+    TimeSpan timeout
+)
 {
     string partial = destination + ".partial";
+    using var deadline = new CancellationTokenSource(timeout);
     try
     {
         using HttpResponseMessage response = http.Send(
             new HttpRequestMessage(HttpMethod.Get, url),
-            HttpCompletionOption.ResponseHeadersRead
+            HttpCompletionOption.ResponseHeadersRead,
+            deadline.Token
         );
         if (!response.IsSuccessStatusCode)
         {
@@ -477,13 +498,17 @@ static string TryDownload(HttpClient http, string url, string destination, strin
         }
 
         string actual;
-        using (Stream body = response.Content.ReadAsStream())
+        using (Stream body = response.Content.ReadAsStream(deadline.Token))
         using (FileStream output = File.Create(partial))
         using (var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256))
         {
             byte[] buffer = new byte[81920];
             int read;
-            while ((read = body.Read(buffer, 0, buffer.Length)) > 0)
+            // Stream.Read ignores cancellation; ReadAsync on the response stream honours it.
+            while (
+                (read = body.ReadAsync(buffer, deadline.Token).AsTask().GetAwaiter().GetResult())
+                > 0
+            )
             {
                 hash.AppendData(buffer, 0, read);
                 output.Write(buffer, 0, read);
@@ -498,7 +523,11 @@ static string TryDownload(HttpClient http, string url, string destination, strin
         File.Move(partial, destination, overwrite: true);
         return "OK";
     }
-    catch (Exception ex) when (ex is HttpRequestException or IOException or TaskCanceledException)
+    catch (OperationCanceledException) when (deadline.IsCancellationRequested)
+    {
+        return $"timed out after {timeout.TotalSeconds:0} s";
+    }
+    catch (Exception ex) when (ex is HttpRequestException or IOException)
     {
         return $"{ex.GetType().Name}: {ex.Message.ReplaceLineEndings(" ")}";
     }

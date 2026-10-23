@@ -25,6 +25,9 @@ public sealed class ApacheConformanceRestoreTests : IDisposable
     private const string ArtifactPath = "org/example/tool/1.0/tool-1.0.jar";
 
     private static readonly byte[] ArtifactBytes = "pinned conformance tool bytes"u8.ToArray();
+
+    // Sentinel body: the server sends 200 headers and half the bytes, then never finishes.
+    private static readonly byte[] StallBody = [];
     private static readonly string ArtifactSha = Convert
         .ToHexString(SHA256.HashData(ArtifactBytes))
         .ToLowerInvariant();
@@ -51,6 +54,28 @@ public sealed class ApacheConformanceRestoreTests : IDisposable
         result.Stdout.ShouldContain("HTTP 404");
         result.Stdout.ShouldContain($"verified: {ArtifactFile}");
         result.Stdout.ShouldContain("restore OK: 1 artifacts verified");
+        global::System.IO.File.ReadAllBytes(ToolPath()).ShouldBe(ArtifactBytes);
+        _requests.ToArray().ShouldBe([$"a/{ArtifactPath}", $"b/{ArtifactPath}"]);
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task AMirrorThatStallsMidBodyTimesOutAndFallsBackAsync()
+    {
+        // HttpClient.Timeout does not cover a body read after ResponseHeadersRead, so without the
+        // per-download deadline this restore would hang on mirror "a" until the CI job timeout.
+        // The outer bound turns a regression into a failure rather than a hung test run.
+        ApacheConformanceGateTests.ScriptResult result = await RestoreAsync(
+                (mirror, _) => mirror == "a" ? (200, StallBody) : (200, ArtifactBytes),
+                ArtifactSha,
+                "--download-timeout-seconds",
+                "2"
+            )
+            .WaitAsync(TimeSpan.FromSeconds(90));
+
+        result.ExitCode.ShouldBe(0, Describe(result));
+        result.Stdout.ShouldContain("timed out after 2 s");
+        result.Stdout.ShouldContain($"verified: {ArtifactFile}");
         global::System.IO.File.ReadAllBytes(ToolPath()).ShouldBe(ArtifactBytes);
         _requests.ToArray().ShouldBe([$"a/{ArtifactPath}", $"b/{ArtifactPath}"]);
     }
@@ -168,7 +193,8 @@ public sealed class ApacheConformanceRestoreTests : IDisposable
 
     private async Task<ApacheConformanceGateTests.ScriptResult> RestoreAsync(
         Func<string, string, (int Status, byte[]? Body)> respond,
-        string pinnedSha
+        string pinnedSha,
+        params string[] extraArgs
     )
     {
         int port = FreeLoopbackPort();
@@ -194,8 +220,8 @@ public sealed class ApacheConformanceRestoreTests : IDisposable
 
         try
         {
-            return await ApacheConformanceGateTests.RunScriptAsync(
-                ApacheConformanceGateTests.FindRepoRoot(),
+            string[] scriptArgs =
+            [
                 "--tool-manifest",
                 manifest,
                 "--restore",
@@ -203,7 +229,12 @@ public sealed class ApacheConformanceRestoreTests : IDisposable
                 "--attempts",
                 "2",
                 "--retry-delay-ms",
-                "10"
+                "10",
+                .. extraArgs,
+            ];
+            return await ApacheConformanceGateTests.RunScriptAsync(
+                ApacheConformanceGateTests.FindRepoRoot(),
+                scriptArgs
             );
         }
         finally
@@ -240,6 +271,12 @@ public sealed class ApacheConformanceRestoreTests : IDisposable
 
             (int status, byte[]? body) =
                 artifactPath == ArtifactPath ? respond(mirror, artifactPath) : (404, null);
+            if (ReferenceEquals(body, StallBody))
+            {
+                // Answered off the accept loop so the stalled connection cannot block the next mirror.
+                _ = StallAsync(context, stop);
+                continue;
+            }
             context.Response.StatusCode = status;
             if (body is not null)
             {
@@ -247,6 +284,34 @@ public sealed class ApacheConformanceRestoreTests : IDisposable
                 await context.Response.OutputStream.WriteAsync(body, stop);
             }
             context.Response.Close();
+        }
+    }
+
+    private static async Task StallAsync(HttpListenerContext context, CancellationToken stop)
+    {
+        try
+        {
+            context.Response.StatusCode = 200;
+            context.Response.ContentLength64 = ArtifactBytes.Length;
+            await context.Response.OutputStream.WriteAsync(
+                ArtifactBytes.AsMemory(0, ArtifactBytes.Length / 2),
+                stop
+            );
+            await context.Response.OutputStream.FlushAsync(stop);
+            await Task.Delay(Timeout.Infinite, stop);
+        }
+        catch (Exception ex)
+            when (ex
+                    is OperationCanceledException
+                        or HttpListenerException
+                        or ObjectDisposedException
+            )
+        {
+            // The listener stopped or the client gave up; either way the stall has served its purpose.
+        }
+        finally
+        {
+            context.Response.Abort();
         }
     }
 
