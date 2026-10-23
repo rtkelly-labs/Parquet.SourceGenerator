@@ -57,13 +57,26 @@
       ]
     },
     {
-      "name": "emitter-2",
+      "name": "emitter-2a",
       "project": "Parquet.SourceGenerator.csproj",
       "mutate": [
         {
           "file": "src/Parquet.SourceGenerator/Emitter/CodeEmitter.cs",
           "lines": [
             744,
+            1107
+          ]
+        }
+      ]
+    },
+    {
+      "name": "emitter-2b",
+      "project": "Parquet.SourceGenerator.csproj",
+      "mutate": [
+        {
+          "file": "src/Parquet.SourceGenerator/Emitter/CodeEmitter.cs",
+          "lines": [
+            1108,
             1596
           ]
         }
@@ -147,6 +160,15 @@
         "**/Emitter/Components/AllocationBudgetComponent.cs",
         "**/Emitter/Components/BatchValidationComponent.cs",
         "**/Emitter/Components/EmittedText.cs"
+      ]
+    },
+    {
+      "name": "emitter-helpers",
+      "project": "Parquet.SourceGenerator.csproj",
+      "mutate": [
+        "**/Emitter/ColumnHelpersComponent.cs",
+        "**/Emitter/ReadBudget.cs",
+        "**/ParquetIncrementalGenerator.cs"
       ]
     },
     {
