@@ -89,6 +89,58 @@ public sealed class CompoundModelParsingTests
             """;
 
     [Fact]
+    public void DuplicateFieldIdsAcrossTheSchemaTriggerPARQ024()
+    {
+        // A nested leaf shares the field ID space with top-level columns.
+        const string nested = """
+            [ParquetSerializable]
+            public partial class Geo
+            {
+                [ParquetColumn(FieldId = 3)] public double? Lat { get; init; }
+            }
+            """;
+        var (result, _) = Parse(
+            Row(
+                """
+                [ParquetColumn(FieldId = 3)] public string? Name { get; init; }
+                [ParquetColumn(FieldId = 4)] public string? Note { get; init; }
+                public Geo? At { get; init; }
+                """,
+                nested
+            ),
+            "App.Row"
+        );
+
+        var diagnostic = result.Diagnostics.ShouldHaveSingleItem();
+        diagnostic.Descriptor.Id.ShouldBe(DiagnosticDescriptors.DuplicateFieldId.Id);
+        diagnostic
+            .ToDiagnostic()
+            .GetMessage(System.Globalization.CultureInfo.InvariantCulture)
+            .ShouldContain("field ID 3");
+        diagnostic
+            .ToDiagnostic()
+            .GetMessage(System.Globalization.CultureInfo.InvariantCulture)
+            .ShouldContain("At.Lat, Name");
+    }
+
+    [Fact]
+    public void UniqueFieldIdsAreAccepted()
+    {
+        var (result, _) = Parse(
+            Row(
+                """
+                [ParquetColumn(FieldId = 3)] public string? Name { get; init; }
+                [ParquetColumn(FieldId = 4)] public string? Note { get; init; }
+                """
+            ),
+            "App.Row"
+        );
+
+        result.Diagnostics.ShouldBeEmpty();
+        result.Model!.Properties.Select(p => p.FieldId).ShouldBe(new int?[] { null, 3, 4 });
+    }
+
+    [Fact]
     public void StructMemberExpandsToChildModels()
     {
         var (result, _) = Parse(Row("public Address Ship { get; init; }"), "App.Row");
