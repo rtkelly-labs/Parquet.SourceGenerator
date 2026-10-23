@@ -122,7 +122,10 @@ legacy reader to apply to until #494.
   `TimeUnitPrecision`, which 4.25 does not have, and `DateTimeFormat.DateAndTimeMicros`, which
   4.25 has only in its net8.0 build. The legacy backend now writes `TimeSpanDataField` columns
   (TIME_MILLIS for `TimeSpan`, TIME_MICROS for `TimeOnly`, read back as `TimeSpan` and checked to
-  lie within one day) and, below net8.0, a microsecond `Timestamp` field.
+  lie within one day). A microsecond `DateTime` compiles and round-trips on net8.0+. Below net8.0
+  it is a deliberate `#error` naming the member: Parquet.Net 4.25's netstandard2.0 and net6.0 builds
+  have no `DateAndTimeMicros`, and their `Timestamp` field throws "Unexpected TimeUnit" for any unit
+  but milliseconds (a permanent platform limit of 4.25 on .NET Framework).
 - `MaxDictionaryEntries` was never applied to files Parquet.Net 4.25 writes. The legacy reader only
   looked for a dictionary page when the column metadata declared a dictionary encoding, and 4.25
   writes its dictionary page without declaring one, so the check also trusted a hostile file's

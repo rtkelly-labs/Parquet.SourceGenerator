@@ -57,6 +57,14 @@ with that exception rather than `InvalidDataException`. Listed as a known failur
 backend (`TypeMatrixBehaviourTests.EmptyBinaryValueRoundTrips`, #597): the test asserts it still
 fails, so a fixed Parquet.Net turns it red until the entry is removed.
 
+## Parquet.Net 4.25.0 Writes Microsecond Timestamps Only In Its net8.0 Build
+
+`DateTimeFormat.DateAndTimeMicros` exists only in Parquet.Net 4.25.0's net8.0 assembly, and the
+`DateTimeFormat.Timestamp` field of its netstandard2.0 and net6.0 assemblies throws `ParquetException:
+Unexpected TimeUnit` when writing any unit but milliseconds (reproduced directly against the
+netstandard2.0 assembly). The legacy backend therefore supports `[ParquetTimestamp(Microseconds)]`
+on net8.0+ only, and below that emits an `#error` naming the member (#597).
+
 ## Parquet.Net 4.25.0 Does Not Record Its Dictionary Pages
 
 Parquet.Net 4.25.0 dictionary-encodes string columns but writes column metadata that lists only

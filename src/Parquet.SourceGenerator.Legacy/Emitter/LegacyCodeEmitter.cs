@@ -53,7 +53,7 @@ internal static class LegacyCodeEmitter
 
         if (model.Properties.Length > 0)
         {
-            EmitSchemaHelpers(builder);
+            EmitSchemaHelpers(builder, model);
             builder.AppendLine();
         }
 
@@ -63,12 +63,6 @@ internal static class LegacyCodeEmitter
         if (model.Properties.Length > 0)
         {
             EmitValidateReader(builder, model);
-            builder.AppendLine();
-        }
-
-        if (HasTimeOnlyProperty(model))
-        {
-            PropertyMappingComponent.EmitReadClassicTimeOnlyHelper(builder);
             builder.AppendLine();
         }
 
@@ -134,8 +128,14 @@ internal static class LegacyCodeEmitter
         SchemaComponent.EmitResolveSchemaField(builder, usePath: true);
     }
 
-    private static void EmitSchemaHelpers(StringBuilder builder)
+    private static void EmitSchemaHelpers(StringBuilder builder, TargetClassModel model)
     {
+        if (HasTimeOnlyProperty(model))
+        {
+            PropertyMappingComponent.EmitReadClassicTimeOnlyHelper(builder);
+            builder.AppendLine();
+        }
+
         EmitResolveSchemaField(builder);
         builder.AppendLine();
         SchemaComponent.EmitValidatePhysicalType(builder);

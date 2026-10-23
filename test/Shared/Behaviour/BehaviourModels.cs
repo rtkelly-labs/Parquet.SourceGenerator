@@ -126,9 +126,12 @@ public sealed partial class TypeMatrixRow
     [ParquetColumn("datetime_opt")]
     public DateTime? DateTimeOpt { get; set; }
 
+#if NET8_0_OR_GREATER
+    // The legacy backend writes microsecond timestamps only on net8.0+ (a compile error below).
     [ParquetColumn("datetime_micros")]
     [ParquetTimestamp(ParquetTimestampUnit.Microseconds)]
     public DateTime DateTimeMicros { get; set; }
+#endif
 
     [ParquetColumn("timespan")]
     public TimeSpan TimeSpan { get; set; }
@@ -246,9 +249,12 @@ public sealed partial class TypeMatrixRequiredOnly
     [ParquetColumn("datetime")]
     public DateTime DateTime { get; set; }
 
+#if NET8_0_OR_GREATER
+    // The legacy backend writes microsecond timestamps only on net8.0+ (a compile error below).
     [ParquetColumn("datetime_micros")]
     [ParquetTimestamp(ParquetTimestampUnit.Microseconds)]
     public DateTime DateTimeMicros { get; set; }
+#endif
 
     [ParquetColumn("timespan")]
     public TimeSpan TimeSpan { get; set; }

@@ -223,7 +223,7 @@ main test project against the modern backend) and a legacy hostile-input matrix 
 | `float`, `float?` | ✅ Verified (`TestDataIntegration`) | ✅ Full terminal coverage | ✅ Verified | ✅ Exercised | ✅ Executed |
 | `double`, `double?` | ✅ Verified (`TestDataIntegration`) | ✅ Full terminal coverage | ✅ Verified | ✅ Exercised | ✅ Executed |
 | `decimal`, `decimal?` (custom prec/scale) | ✅ Verified (TPC-H LineItem & Fixtures) | ✅ Full terminal coverage | ✅ Verified | ✅ Exercised | ✅ Executed |
-| `DateTime`, `DateTime?` (Millis/Micros) | ✅ Verified (`TestDataIntegration`) | ✅ Full terminal coverage | ✅ Verified | ✅ Exercised | ✅ Executed (#597: the microsecond unit did not compile below net8.0 before it) |
+| `DateTime`, `DateTime?` (Millis/Micros) | ✅ Verified (`TestDataIntegration`) | ✅ Full terminal coverage | ✅ Verified | ✅ Exercised | ✅ Executed (#597; the microsecond unit is net8.0-only on legacy, a compile-time `#error` below it) |
 | `TimeSpan`, `TimeSpan?` (Millis/Micros) | ✅ Verified (`TestDataIntegration`) | ✅ Full terminal coverage | ✅ Verified | ✅ Exercised | ✅ Executed (#597: did not compile before it) |
 | `DateOnly`, `DateOnly?` (Date32) | ✅ Verified (`TestDataIntegration`) | ✅ Full terminal coverage | ✅ Verified | ✅ Exercised | ✅ Executed on net8.0 (#597; the type does not exist on net472) |
 | `TimeOnly`, `TimeOnly?` (Time32/64) | ✅ Verified (`TestDataIntegration`) | ✅ Full terminal coverage | ✅ Verified | ✅ Exercised | ✅ Executed on net8.0 (#597: did not compile before it; the type does not exist on net472) |

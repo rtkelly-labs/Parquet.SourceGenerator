@@ -14,7 +14,8 @@ namespace Parquet.SourceGenerator.Legacy.Tests;
 /// legacy emitter emitted the Parquet.Net 6 time fields (<c>TimeDataField</c>,
 /// <c>TimeUnitPrecision</c>) and, on every build but net8.0, <c>DateAndTimeMicros</c>, none of
 /// which exist in Parquet.Net 4.25: a model with a <c>TimeSpan</c>, <c>TimeOnly</c> or
-/// microsecond <c>DateTime</c> member did not compile. The type matrix proves the values round-trip;
+/// microsecond <c>DateTime</c> member did not compile. Microsecond timestamps stay net8.0-only
+/// (a deliberate <c>#error</c> below it): 4.25's other builds cannot write them. The type matrix proves the values round-trip;
 /// this pins the annotations another reader relies on.
 /// </summary>
 public sealed class LegacyTimeColumnTests
@@ -33,16 +34,13 @@ public sealed class LegacyTimeColumnTests
         timespan.Type.ShouldBe(PhysicalType.INT32);
         timespan.ConvertedType.ShouldBe(ConvertedType.TIME_MILLIS);
 
+#if NET8_0_OR_GREATER
         SchemaElement micros = Column("datetime_micros");
         micros.Type.ShouldBe(PhysicalType.INT64);
-#if NET8_0_OR_GREATER
         micros.ConvertedType.ShouldBe(ConvertedType.TIMESTAMP_MICROS);
         SchemaElement timeonly = Column("timeonly");
         timeonly.Type.ShouldBe(PhysicalType.INT64);
         timeonly.ConvertedType.ShouldBe(ConvertedType.TIME_MICROS);
-#else
-        micros.LogicalType!.TIMESTAMP!.IsAdjustedToUTC.ShouldBeTrue();
-        micros.LogicalType.TIMESTAMP.Unit.MICROS.ShouldNotBeNull();
 #endif
     }
 }
