@@ -53,7 +53,7 @@ internal static class LegacyCodeEmitter
 
         if (model.Properties.Length > 0)
         {
-            EmitSchemaHelpers(builder);
+            EmitSchemaHelpers(builder, model);
             builder.AppendLine();
         }
 
@@ -115,7 +115,7 @@ internal static class LegacyCodeEmitter
 
     private static void EmitSchema(StringBuilder builder, TargetClassModel model)
     {
-        SchemaComponent.EmitSchema(builder, model);
+        SchemaComponent.EmitSchema(builder, model, ClassicTimeField);
     }
 
     private static void EmitStaticFields(StringBuilder builder, TargetClassModel model)
@@ -128,8 +128,14 @@ internal static class LegacyCodeEmitter
         SchemaComponent.EmitResolveSchemaField(builder, usePath: true);
     }
 
-    private static void EmitSchemaHelpers(StringBuilder builder)
+    private static void EmitSchemaHelpers(StringBuilder builder, TargetClassModel model)
     {
+        if (HasTimeOnlyProperty(model))
+        {
+            EmitReadClassicTimeOnlyHelper(builder);
+            builder.AppendLine();
+        }
+
         EmitResolveSchemaField(builder);
         builder.AppendLine();
         SchemaComponent.EmitValidatePhysicalType(builder);
@@ -187,21 +193,28 @@ internal static class LegacyCodeEmitter
             "        global::Parquet.SourceGenerator.ParquetSerializerOptions options)"
         );
         builder.AppendLine("    {");
+        // The chunk's first page is read whatever the metadata says. Parquet.Net 4.25 writes a
+        // dictionary page without recording it (its column metadata lists RLE, BIT_PACKED and PLAIN
+        // and has no dictionary_page_offset), so gating on the declared encodings skipped the limit
+        // for every file 4.25 writes, and for any hostile file that leaves the encoding out (#597).
+        // ReadDictionaryPageHeader returns null when the first page is not a dictionary page.
         builder.AppendLine("        var metadata = groupReader.GetMetadata(field).MetaData;");
-        builder.AppendLine("        bool dictionaryEncoded = false;");
-        builder.AppendLine("        foreach (var encoding in metadata.Encodings)");
+        builder.AppendLine("        if (metadata is null || !stream.CanSeek) return;");
+        builder.AppendLine(
+            "        long offset = metadata.DictionaryPageOffset ?? metadata.DataPageOffset;"
+        );
+        builder.AppendLine("        if (offset < 0) return;");
+        builder.AppendLine("        int? dictionaryEntries;");
+        builder.AppendLine("        long savedPosition = stream.Position;");
+        builder.AppendLine("        try");
         builder.AppendLine("        {");
-        builder.AppendLine(
-            "            if (encoding == global::Parquet.Meta.Encoding.PLAIN_DICTIONARY || encoding == global::Parquet.Meta.Encoding.RLE_DICTIONARY)"
-        );
-        builder.AppendLine("            {");
-        builder.AppendLine("                dictionaryEncoded = true;");
-        builder.AppendLine("                break;");
-        builder.AppendLine("            }");
+        builder.AppendLine("            stream.Position = offset;");
+        builder.AppendLine("            dictionaryEntries = ReadDictionaryPageHeader(stream);");
         builder.AppendLine("        }");
-        builder.AppendLine(
-            "        int? dictionaryEntries = dictionaryEncoded ? ReadDictionaryEntryCount(groupReader, stream, field) : null;"
-        );
+        builder.AppendLine("        finally");
+        builder.AppendLine("        {");
+        builder.AppendLine("            stream.Position = savedPosition;");
+        builder.AppendLine("        }");
         builder.AppendLine(
             "        if (dictionaryEntries.HasValue && dictionaryEntries.Value > options.MaxDictionaryEntries)"
         );
@@ -580,7 +593,8 @@ internal static class LegacyCodeEmitter
                 indexVar: "k",
                 bufferPrefix: "colArray_",
                 indent: "            ",
-                useMemoryForTextAndBinary: false
+                useMemoryForTextAndBinary: false,
+                writeOverride: ClassicTimeWrite
             );
 
             builder.AppendLine("        }");
@@ -897,7 +911,8 @@ internal static class LegacyCodeEmitter
             rowCountVar: "groupRows",
             indexVar: "k",
             bufferPrefix: "data_",
-            indent: "                    "
+            indent: "                    ",
+            readOverride: ClassicTimeRead
         );
         builder.AppendLine("                    currentOffset += groupRows;");
         builder.AppendLine("                }");
@@ -926,6 +941,10 @@ internal static class LegacyCodeEmitter
             PropertyKind.DateOnly => prop.IsNullable
                 ? "global::System.DateTime?"
                 : "global::System.DateTime",
+            // Parquet.Net 4.x/5.x reads TIME columns as TimeSpan; see SchemaComponent.
+            PropertyKind.TimeOnly => prop.IsNullable
+                ? "global::System.TimeSpan?"
+                : "global::System.TimeSpan",
             _ => IsReferenceTypeColumn(prop) ? prop.TypeName.TrimEnd('?') : prop.TypeName,
         };
     }
@@ -949,6 +968,114 @@ internal static class LegacyCodeEmitter
     private static bool IsReferenceTypeColumn(PropertyModel prop)
     {
         return BufferPoolComponent.IsReferenceTypeBuffer(prop);
+    }
+
+    // ──────────────────────────────────────────────────────────
+    //  TIME COLUMNS (#597)
+    // ──────────────────────────────────────────────────────────
+    //
+    // Parquet.Net 4.25 has none of Parquet.Net 6's TimeDataField / TimeUnitPrecision: its
+    // TimeSpanDataField columns carry TimeSpan values directly, and it reads every TIME column back
+    // as a TimeSpan field whatever wrote it, so TimeOnly is carried as a TimeSpan of TIME_MICROS.
+    // DateTimeFormat.DateAndTimeMicros exists only in its net8.0 build, and the Timestamp field of
+    // the other builds throws "Unexpected TimeUnit" for any unit but milliseconds.
+
+    /// <summary>
+    /// The classic schema field lines for the members Parquet.Net 4.25 spells differently, or null
+    /// for the shared field expression.
+    /// </summary>
+    private static string? ClassicTimeField(PropertyModel prop, string comma)
+    {
+        string name = EmittedText.Literal(prop.ParquetColumnName);
+        string nullable = SchemaComponent.BoolLiteral(prop.IsNullable);
+        var lines = new StringBuilder();
+        switch (prop.Kind)
+        {
+            case PropertyKind.TimeSpan:
+                lines.AppendLine(
+                    $"        new global::Parquet.Schema.TimeSpanDataField({name}, global::Parquet.Schema.TimeSpanFormat.MilliSeconds, isNullable: {nullable}){comma}"
+                );
+                return lines.ToString();
+            case PropertyKind.TimeOnly:
+                lines.AppendLine(
+                    $"        new global::Parquet.Schema.TimeSpanDataField({name}, global::Parquet.Schema.TimeSpanFormat.MicroSeconds, isNullable: {nullable}){comma}"
+                );
+                return lines.ToString();
+            case PropertyKind.DateTime when SchemaComponent.IsMicrosecondTimestamp(prop):
+                // Below net8.0 the member is a compile error that says why, rather than generated
+                // code that fails on a missing enum member or at write time.
+                lines.AppendLine("#if NET8_0_OR_GREATER");
+                lines.AppendLine(
+                    $"        new global::Parquet.Schema.DateTimeDataField({name}, global::Parquet.Schema.DateTimeFormat.DateAndTimeMicros, isNullable: {nullable}){comma}"
+                );
+                lines.AppendLine("#else");
+                lines.AppendLine(
+                    $"#error Parquet.SourceGenerator.Legacy: [ParquetTimestamp(Microseconds)] on '{prop.Name}' needs net8.0 or later: Parquet.Net 4.25's netstandard2.0 and net6.0 builds cannot write microsecond timestamps. Use millisecond precision on this target."
+                );
+                lines.AppendLine("#endif");
+                return lines.ToString();
+            default:
+                return null;
+        }
+    }
+
+    /// <summary>The classic write conversion for time members, or null for the shared one.</summary>
+    private static string? ClassicTimeWrite(PropertyModel prop, string value) =>
+        prop.Kind switch
+        {
+            PropertyKind.TimeSpan => value,
+            PropertyKind.TimeOnly when prop.IsNullable =>
+                $"{value} is null ? (global::System.TimeSpan?)null : {value}.Value.ToTimeSpan()",
+            PropertyKind.TimeOnly => $"{value}.ToTimeSpan()",
+            _ => null,
+        };
+
+    /// <summary>The classic read conversion for time members, or null for the shared one.</summary>
+    private static string? ClassicTimeRead(PropertyModel prop, string value) =>
+        prop.Kind switch
+        {
+            PropertyKind.TimeSpan => value,
+            PropertyKind.TimeOnly when prop.IsNullable =>
+                $"{value} is null ? (global::System.TimeOnly?)null : ReadClassicTimeOnly({value}.Value)",
+            PropertyKind.TimeOnly => $"ReadClassicTimeOnly({value})",
+            _ => null,
+        };
+
+    /// <summary>
+    /// Emits <c>ReadClassicTimeOnly</c>: a file-controlled TIME value outside one day is refused as
+    /// invalid data rather than surfacing as <c>ArgumentOutOfRangeException</c> from
+    /// <c>TimeOnly</c>'s constructor.
+    /// </summary>
+    private static void EmitReadClassicTimeOnlyHelper(StringBuilder builder)
+    {
+        builder.AppendLine(
+            "    private static global::System.TimeOnly ReadClassicTimeOnly(global::System.TimeSpan time)"
+        );
+        builder.AppendLine("    {");
+        builder.AppendLine(
+            "        if (time.Ticks < 0 || time.Ticks >= global::System.TimeSpan.TicksPerDay)"
+        );
+        builder.AppendLine("        {");
+        builder.AppendLine(
+            "            throw new global::System.IO.InvalidDataException($\"TIME value {time} is outside one day.\");"
+        );
+        builder.AppendLine("        }");
+        builder.AppendLine();
+        builder.AppendLine("        return new global::System.TimeOnly(time.Ticks);");
+        builder.AppendLine("    }");
+    }
+
+    private static bool HasTimeOnlyProperty(TargetClassModel model)
+    {
+        foreach (PropertyModel prop in model.Properties)
+        {
+            if (prop.Kind == PropertyKind.TimeOnly)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool IsStringColumn(PropertyModel prop) =>

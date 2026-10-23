@@ -62,6 +62,40 @@ internal static class ColumnHelpersComponent
     private static bool AnyNullable(LeafColumn[] columns, NullableReadShape shape) =>
         columns.Any(c => IsFlatNullable(c) && GetNullableReadShape(c.Leaf) == shape);
 
+    /// <summary>
+    /// Emits <c>ReadDictionaryEntryCount</c>, which locates a chunk's dictionary page from its
+    /// metadata. Modern only: the classic backend reads the first page header of every chunk instead,
+    /// because Parquet.Net 4.25 does not record its dictionary pages (#597).
+    /// </summary>
+    public static void EmitDictionaryEntryCountReader(StringBuilder builder)
+    {
+        builder.AppendLine("    private static int? ReadDictionaryEntryCount(");
+        builder.AppendLine("        global::Parquet.ParquetRowGroupReader groupReader,");
+        builder.AppendLine("        global::System.IO.Stream stream,");
+        builder.AppendLine("        global::Parquet.Schema.DataField field)");
+        builder.AppendLine("    {");
+        builder.AppendLine("        var metadata = groupReader.GetMetadata(field);");
+        builder.AppendLine(
+            "        long? offset = metadata?.MetaData?.DictionaryPageOffset ?? metadata?.FileOffset;"
+        );
+        builder.AppendLine(
+            "        if (!offset.HasValue || offset.Value < 0 || !stream.CanSeek) return null;"
+        );
+        builder.AppendLine();
+        builder.AppendLine("        long savedPosition = stream.Position;");
+        builder.AppendLine("        try");
+        builder.AppendLine("        {");
+        builder.AppendLine("            stream.Position = offset.Value;");
+        builder.AppendLine("            return ReadDictionaryPageHeader(stream);");
+        builder.AppendLine("        }");
+        builder.AppendLine("        finally");
+        builder.AppendLine("        {");
+        builder.AppendLine("            stream.Position = savedPosition;");
+        builder.AppendLine("        }");
+        builder.AppendLine("    }");
+        builder.AppendLine();
+    }
+
     /// <summary>Emits every helper the model's columns call. Nothing is emitted for unused ones.</summary>
     public static void EmitHelpers(StringBuilder builder, TargetClassModel model)
     {

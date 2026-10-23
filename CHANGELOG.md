@@ -46,6 +46,14 @@ the migration list; each row's detail is in the entries below and in `docs/api/L
   through `DateTimeFormat.Timestamp`, because Parquet.Net ignores `isAdjustedToUTC` for `DateAndTimeMicros`
   and writes that as the always-UTC `TIMESTAMP_MICROS` converted type. The default (`true`) keeps today's output. The Legacy package reports `PARQ023` for `false`:
   Parquet.Net before 4.25 has no `DateTimeFormat.Timestamp`.
+- **An executed test suite for the legacy backend** (`test/Parquet.SourceGenerator.Legacy.Tests`, #597).
+  It runs the generated legacy code against Parquet.Net 4.25.0 on net8.0 (the `test` job) and net472
+  (the Windows `net472-consumer` job): a type matrix over every legacy-supported flat type, required and
+  optional, a codec matrix over all six codecs and four levels that checks the codec recorded in the
+  footer, and a hostile-input matrix that exercises every legacy `Max*` limit. The type and codec
+  matrices live in `test/Shared/Behaviour` and also run against the modern backend through a per-backend
+  driver, the skeleton the parity work (#494, #495) extends. `VerifyRequiredTestExecution.cs` requires
+  both legacy reports, so a run that loses the project or executes no tests fails.
 - **`ParquetSerializerOptions.MaxAllocationBytes`, a byte budget for what a read allocates** (#361), default
   256 MiB per row group. `MaxAllocationValues` bounds a count, so a file of about 1 KB declaring ten
   million rows reserved roughly a gigabyte of pooled buffers before a page was read. The generated
@@ -317,6 +325,18 @@ the migration list; each row's detail is in the entries below and in `docs/api/L
 ### Fixed
 - **`DateOnly` is written as INT32 `DATE` again**, not INT96. INT96 round-tripped in .NET, but other readers
   (pyarrow, Spark) saw a timestamp, and Apache Iceberg rejects INT96.
+- **Legacy backend: `TimeSpan`, `TimeOnly` and microsecond `DateTime` members compile and round-trip**
+  (#597). The legacy emitter used Parquet.Net 6's `TimeDataField`/`TimeUnitPrecision`, which 4.25 does
+  not have, and `DateTimeFormat.DateAndTimeMicros`, which 4.25 has only in its net8.0 build, so such a
+  model's generated code did not compile. These columns are now `TimeSpanDataField` (TIME_MILLIS for
+  `TimeSpan`, TIME_MICROS for `TimeOnly`, checked to lie within one day on read). A microsecond
+  `DateTime` works on net8.0+; below it the generated code is now a `#error` naming the member, because
+  Parquet.Net 4.25's netstandard2.0 and net6.0 builds cannot write microsecond timestamps at all.
+  Modern output is unchanged.
+- **Legacy backend: `MaxDictionaryEntries` applies to files Parquet.Net 4.25 writes** (#597). The legacy
+  reader only looked for a dictionary page when the column metadata declared a dictionary encoding,
+  which 4.25 never records (and a hostile file need not), so the limit was skipped. It now reads the
+  first page header of each column chunk.
 - **Arrow scope is stated plainly** (#590). The READMEs, `docs/14`, `docs/19` and `docs/47` say that only Arrow
   ingestion (`RecordBatch` to Parquet, when Apache.Arrow is referenced) ships; export to Arrow does not, and
   `docs/19` no longer lists the closed #178 as open work.

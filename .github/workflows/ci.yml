@@ -722,13 +722,15 @@ jobs:
   # builds and nothing about running it (#565); this job executes the consumer on a real .NET
   # Framework runtime (windows-latest): write, read, compression, batching and schema evolution
   # scenarios, the blocked-SynchronizationContext round trip, and a file hand-off with net8.0 in both
-  # directions. It is part of the `build` aggregate and has no path filter, so a change outside src/
-  # cannot skip it and then leave a required check satisfied by absence. It builds its own two
+  # directions. It also runs the legacy test suite (test/Parquet.SourceGenerator.Legacy.Tests) on
+  # net472 and verifies that run's report (#597). It is part of the `build` aggregate and has no
+  # path filter, so a change outside src/ cannot skip it and then leave a required check satisfied
+  # by absence. It builds its own two
   # packages because artifacts do not cross jobs without extra steps.
   net472-consumer:
     name: net472-consumer
     runs-on: windows-latest
-    timeout-minutes: 25
+    timeout-minutes: 40
     defaults:
       run:
         shell: bash
@@ -783,6 +785,25 @@ jobs:
           "${net8[@]}" -- --read-interop "$dir/net472.parquet" classic/net472
           "${net8[@]}" -- --write-interop "$dir/net8.parquet"
           "${net472[@]}" -- --read-interop "$dir/net8.parquet" classic/net8.0
+
+      # The legacy backend's executed test suite (#597) on .NET Framework: the shared type and codec
+      # matrices (test/Shared/Behaviour) and the legacy hostile-input matrix, run by the .NET
+      # Framework test host against Parquet.Net 4.25. The `test` job runs the same project on
+      # net8.0; on Linux its net472 target is compiled, never run.
+      - name: Restore the legacy test suite
+        run: dotnet restore test/Parquet.SourceGenerator.Legacy.Tests/Parquet.SourceGenerator.Legacy.Tests.csproj --locked-mode
+
+      - name: Run the legacy test suite on .NET Framework 4.7.2
+        run: |
+          set -euo pipefail
+          dotnet test test/Parquet.SourceGenerator.Legacy.Tests/Parquet.SourceGenerator.Legacy.Tests.csproj \
+            --framework net472 --configuration Release --no-restore \
+            --logger "trx;LogFileName=ci-net472.trx"
+
+      # The report must name the legacy suites with nonzero total = executed = passed, so a run that
+      # lost the project, its net472 target or every test fails here rather than passing on nothing.
+      - name: Verify the legacy suite executed on .NET Framework 4.7.2
+        run: dotnet run scripts/VerifyRequiredTestExecution.cs -- --net472
 
   build:
     name: build
