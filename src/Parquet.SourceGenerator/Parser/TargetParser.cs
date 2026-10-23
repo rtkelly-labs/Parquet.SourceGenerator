@@ -1056,44 +1056,23 @@ internal static class TargetParser
             return;
         }
 
-        // Rule PARQ011: the type has a representation in Parquet.Net 6 but not in the 4.x/5.x
-        // API. Reported separately from PARQ006 because the answer is different: the member is
-        // fine, the backend is not, and the fix is to use the v6 package rather than to change
-        // the type.
-        if (scope.ApiLevel == ParquetApiLevel.V4 && !IsSupportedOnClassicApi(underlyingType))
+        // Rules PARQ011 and PARQ023: what the 4.x/5.x API cannot represent or write.
+        if (
+            scope.ApiLevel == ParquetApiLevel.V4
+            && ClassicApiRejection(
+                member,
+                memberType,
+                underlyingType,
+                column,
+                scope.ClassName,
+                memberLocation
+            )
+                is DiagnosticInfo rejection
+        )
         {
-            scope.Diagnostics.Add(
-                new DiagnosticInfo(
-                    DiagnosticDescriptors.TypeUnsupportedOnClassicApi,
-                    memberLocation,
-                    new[] { member.Name, memberType.ToDisplayString(), scope.ClassName }
-                )
-            );
+            scope.Diagnostics.Add(rejection);
             sink.RejectedAnyMember = true;
             return;
-        }
-
-        // Rule PARQ023: column options the 4.x/5.x API cannot express. Dropping them would write a
-        // column without its field ID, or a local timestamp annotated as UTC, with nothing to say so.
-        if (scope.ApiLevel == ParquetApiLevel.V4)
-        {
-            string? option =
-                column.FieldId is not null ? "[ParquetColumn(FieldId = ...)]"
-                : !ReadTimestampAdjustedToUtc(member)
-                    ? "[ParquetTimestamp(..., AdjustedToUtc = false)]"
-                : null;
-            if (option is not null)
-            {
-                scope.Diagnostics.Add(
-                    new DiagnosticInfo(
-                        DiagnosticDescriptors.ColumnOptionUnsupportedOnClassicApi,
-                        memberLocation,
-                        new[] { member.Name, scope.ClassName, option }
-                    )
-                );
-                sink.RejectedAnyMember = true;
-                return;
-            }
         }
 
         // Rule PARQ007: the read path materialises through an object initializer, so every
@@ -2228,6 +2207,45 @@ internal static class TargetParser
         "System.ReadOnlyMemory<byte>",
         "System.ReadOnlyMemory<char>",
     };
+
+    /// <summary>
+    /// The diagnostic the classic (4.x/5.x) backend reports for a member it cannot carry, or null.
+    /// PARQ011: the type has a representation in Parquet.Net 6 but not in the 4.x/5.x API —
+    /// reported separately from PARQ006 because the member is fine and the backend is not, so the
+    /// fix is the v6 package rather than a different type. PARQ023: a column option the 4.x/5.x API
+    /// cannot write; dropping it would write the column without its field ID, or a local timestamp
+    /// annotated as UTC, with nothing to say so.
+    /// </summary>
+    private static DiagnosticInfo? ClassicApiRejection(
+        ISymbol member,
+        ITypeSymbol memberType,
+        ITypeSymbol underlyingType,
+        ColumnOptions column,
+        string className,
+        Location location
+    )
+    {
+        if (!IsSupportedOnClassicApi(underlyingType))
+        {
+            return new DiagnosticInfo(
+                DiagnosticDescriptors.TypeUnsupportedOnClassicApi,
+                location,
+                new[] { member.Name, memberType.ToDisplayString(), className }
+            );
+        }
+
+        string? option =
+            column.FieldId is not null ? "[ParquetColumn(FieldId = ...)]"
+            : !ReadTimestampAdjustedToUtc(member) ? "[ParquetTimestamp(..., AdjustedToUtc = false)]"
+            : null;
+        return option is null
+            ? null
+            : new DiagnosticInfo(
+                DiagnosticDescriptors.ColumnOptionUnsupportedOnClassicApi,
+                location,
+                new[] { member.Name, className, option }
+            );
+    }
 
     /// <summary>
     /// Whether a member type has a column representation in the Parquet.Net 4.x/5.x API.
