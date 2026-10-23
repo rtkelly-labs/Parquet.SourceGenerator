@@ -343,12 +343,8 @@ public sealed class CiGateIntegrityTests
     public void EveryRestoreOfALockedProjectInTheWorkflowsRunsInLockedMode()
     {
         string root = FindRepositoryRoot();
-        Regex restore = new(
-            @"^\s*run:\s+dotnet restore (?<target>\S+)(?<rest>[^\n]*)$",
-            Options,
-            RegexTimeout
-        );
         int examined = 0;
+        var problems = new List<string>();
         foreach (
             string file in EnumerateYaml(
                 Path.Combine(root, ".github", "workflows"),
@@ -357,18 +353,164 @@ public sealed class CiGateIntegrityTests
             )
         )
         {
-            foreach (Match m in restore.Matches(IOFile.ReadAllText(file).Replace("\r\n", "\n")))
+            (int count, List<string> found) = RestoreProblems(
+                Path.GetFileName(file),
+                IOFile.ReadAllText(file)
+            );
+            examined += count;
+            problems.AddRange(found);
+        }
+
+        problems.ShouldBeEmpty();
+        examined.ShouldBeGreaterThanOrEqualTo(10, "the workflow scan examined too few restores");
+    }
+
+    [Fact]
+    public void TheLockFileRefreshWorkflowRunsOnlyForDependabotAndKeepsItsTokenOutOfTheRestore()
+    {
+        string workflow = Read(
+            FindRepositoryRoot(),
+            ".github",
+            "workflows",
+            LockFileRefreshWorkflow
+        );
+        string code = CommentLine.Replace(workflow.Replace("\r\n", "\n"), string.Empty);
+        string job = JobBlock(code, "lock-files");
+
+        // pull_request: the workflow and the code come from the pull request, never with the base
+        // branch's secrets, and the job is gated on Dependabot having opened and pushed it.
+        code.ShouldContain("pull_request:");
+        code.ShouldNotContain("pull_request_target");
+        code.ShouldNotContain("workflow_run");
+        job.ShouldContain("github.actor == 'dependabot[bot]'");
+        job.ShouldContain("github.event.pull_request.user.login == 'dependabot[bot]'");
+        job.ShouldContain("github.event.pull_request.head.repo.full_name == github.repository");
+
+        // GITHUB_TOKEN stays read-only; the push uses WORKFLOW_PR_TOKEN so CI runs on it (#568).
+        Regex
+            .IsMatch(code, @"^permissions:\n  contents: read\n(?!  )", Options, RegexTimeout)
+            .ShouldBeTrue("workflow-level permissions must be contents: read and nothing else");
+        job.ShouldNotContain("permissions:");
+        job.ShouldContain("persist-credentials: false");
+
+        // The token appears once, in the push step, which comes after every restore.
+        Regex.Count(code, "secrets\\.", Options, RegexTimeout).ShouldBe(1);
+        int token = code.IndexOf("secrets.WORKFLOW_PR_TOKEN", StringComparison.Ordinal);
+        MatchCollection restores = RestoreCommand.Matches(code);
+        restores.Count.ShouldBe(2, "expected the regenerating restore and the locked check");
+        token.ShouldBeGreaterThan(restores[^1].Index, "no restore may run with the token in scope");
+
+        // Only lock files are committed, and the push is never forced.
+        job.ShouldContain("refusing to push");
+        Match[] pushes = Regex.Matches(job, @"^\s*git push\b.*$", Options, RegexTimeout).ToArray();
+        pushes.Length.ShouldBe(1);
+        pushes[0].Value.ShouldNotContain(" -f");
+        pushes[0].Value.ShouldNotContain("--force");
+        pushes[0].Value.ShouldNotContain("+");
+    }
+
+    // The one workflow allowed to restore without --locked-mode: it regenerates the lock files on
+    // Dependabot pull requests, and must prove them with a locked restore before pushing.
+    private const string LockFileRefreshWorkflow = "dependabot-lockfiles.yml";
+
+    // Every `dotnet restore` command line, whether it is a one-line `run:` or a line inside a
+    // `run: |` block. Comment lines are removed first.
+    private static readonly Regex RestoreCommand = new(
+        @"^[ \t]*(?:-[ \t]+)?(?:run:[ \t]+)?dotnet restore (?<target>\S+)(?<rest>[^\n]*)$",
+        Options,
+        RegexTimeout
+    );
+
+    private static (int Examined, List<string> Problems) RestoreProblems(
+        string fileName,
+        string yaml
+    )
+    {
+        string text = CommentLine.Replace(yaml.Replace("\r\n", "\n"), string.Empty);
+        var problems = new List<string>();
+        MatchCollection restores = RestoreCommand.Matches(text);
+        foreach (Match m in restores)
+        {
+            string target = m.Groups["target"].Value;
+            string rest = m.Groups["rest"].Value;
+            if (rest.Contains("--locked-mode", StringComparison.Ordinal))
             {
-                examined++;
-                m.Groups["rest"]
-                    .Value.ShouldContain(
-                        "--locked-mode",
-                        customMessage: $"{Path.GetFileName(file)}: dotnet restore {m.Groups["target"].Value}"
-                    );
+                continue;
+            }
+
+            bool refresh =
+                string.Equals(fileName, LockFileRefreshWorkflow, StringComparison.Ordinal)
+                && rest.Contains("--force-evaluate", StringComparison.Ordinal);
+            if (!refresh)
+            {
+                problems.Add($"{fileName}: dotnet restore {target} without --locked-mode");
+                continue;
+            }
+
+            bool verified = restores.Any(v =>
+                v.Index > m.Index
+                && string.Equals(v.Groups["target"].Value, target, StringComparison.Ordinal)
+                && v.Groups["rest"].Value.Contains("--locked-mode", StringComparison.Ordinal)
+            );
+            if (!verified)
+            {
+                problems.Add(
+                    $"{fileName}: the regenerated lock files for {target} are never checked by a later --locked-mode restore"
+                );
             }
         }
 
-        examined.ShouldBeGreaterThanOrEqualTo(8, "the workflow scan examined too few restores");
+        return (restores.Count, problems);
+    }
+
+    private const string RefreshShape = """
+              - name: Regenerate
+                run: |
+                  set -euo pipefail
+                  dotnet restore Parquet.SourceGenerator.slnx --force-evaluate
+              - name: Verify
+                run: dotnet restore Parquet.SourceGenerator.slnx --locked-mode
+        """;
+
+    [Fact]
+    public void TheRestoreRuleAcceptsTheRefreshWorkflowShape()
+    {
+        (int examined, List<string> problems) = RestoreProblems(
+            LockFileRefreshWorkflow,
+            RefreshShape
+        );
+
+        examined.ShouldBe(2);
+        problems.ShouldBeEmpty();
+    }
+
+    [Theory]
+    // A force-evaluated restore anywhere else rewrites the lock files CI is meant to check.
+    [InlineData("ci.yml", "run: dotnet restore Parquet.SourceGenerator.slnx --force-evaluate")]
+    // A restore inside a `run: |` block counts too (the one-line-only scan missed these).
+    [InlineData("ci.yml", "run: |\n  set -e\n  dotnet restore Parquet.SourceGenerator.slnx\n")]
+    [InlineData("ci.yml", "- run: dotnet restore Parquet.SourceGenerator.slnx")]
+    // The refresh workflow must check what it regenerated before it pushes.
+    [InlineData(
+        LockFileRefreshWorkflow,
+        "run: dotnet restore Parquet.SourceGenerator.slnx --force-evaluate"
+    )]
+    [InlineData(
+        LockFileRefreshWorkflow,
+        "run: dotnet restore Parquet.SourceGenerator.slnx --locked-mode\nrun: dotnet restore Parquet.SourceGenerator.slnx --force-evaluate"
+    )]
+    [InlineData(
+        LockFileRefreshWorkflow,
+        "run: dotnet restore Parquet.SourceGenerator.slnx --force-evaluate\nrun: dotnet restore other.csproj --locked-mode"
+    )]
+    // Even there, a plain restore is not allowed.
+    [InlineData(LockFileRefreshWorkflow, "run: dotnet restore Parquet.SourceGenerator.slnx")]
+    public void TheRestoreRuleRejectsUnlockedRestores(string fileName, string yaml)
+    {
+        (int examined, List<string> problems) = RestoreProblems(fileName, yaml);
+
+        examined.ShouldBeGreaterThan(0);
+        problems.ShouldNotBeEmpty();
     }
 
     [Fact]
