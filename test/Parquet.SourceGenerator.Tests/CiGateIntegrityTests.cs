@@ -312,7 +312,7 @@ public sealed class CiGateIntegrityTests
     ];
 
     [Fact]
-    public void EveryProjectInTheSolutionHasALockFileExceptTheNativeAotOnes()
+    public void EveryProjectInTheSolutionHasALockFileOrIsPaketManagedExceptTheNativeAotOnes()
     {
         string root = FindRepositoryRoot();
         string[] projects = Regex
@@ -326,17 +326,127 @@ public sealed class CiGateIntegrityTests
             .ToArray();
 
         projects.Length.ShouldBeGreaterThan(8, "the solution scan examined too few projects");
+        var problems = new List<string>();
+        var locked = new List<string>();
+        var paketManaged = new List<string>();
         foreach (string project in projects)
         {
             string name = Path.GetFileNameWithoutExtension(project);
-            bool expected = !ProjectsWithoutLockFile.Contains(name);
-            string lockFile = Path.Combine(
-                root,
-                Path.GetDirectoryName(project)!,
-                "packages.lock.json"
+            string directory = Path.Combine(root, Path.GetDirectoryName(project)!);
+            bool hasLockFile = IOFile.Exists(Path.Combine(directory, "packages.lock.json"));
+            bool hasPaketReferences = IOFile.Exists(Path.Combine(directory, "paket.references"));
+            if (hasLockFile)
+            {
+                locked.Add(name);
+            }
+            else if (hasPaketReferences)
+            {
+                paketManaged.Add(name);
+            }
+
+            problems.AddRange(
+                LockProblems(
+                    name,
+                    ProjectsWithoutLockFile.Contains(name),
+                    hasLockFile,
+                    hasPaketReferences,
+                    IOFile.ReadAllText(Path.Combine(root, project))
+                )
             );
-            IOFile.Exists(lockFile).ShouldBe(expected, $"{name}: packages.lock.json");
         }
+
+        problems.ShouldBeEmpty();
+        // Both kinds were examined: the NuGet-locked majority and the Paket pilot (ADR 0004).
+        locked.Count.ShouldBeGreaterThan(5, "the solution scan found too few locked projects");
+        paketManaged.ShouldContain("Parquet.SourceGenerator.Benchmarks");
+        IOFile.Exists(Path.Combine(root, "paket.lock")).ShouldBeTrue("paket.lock is committed");
+    }
+
+    private const string PaketImport =
+        """<Import Project="..\..\.paket\Paket.Restore.targets" />""";
+
+    [Fact]
+    public void TheLockRuleAcceptsALockedProjectAPaketManagedProjectAndTheNativeAotOnes()
+    {
+        LockProblems("Locked", false, true, false, "<Project />").ShouldBeEmpty();
+        LockProblems("Paket", false, false, true, PaketImport).ShouldBeEmpty();
+        LockProblems("Aot", true, false, false, "<Project />").ShouldBeEmpty();
+    }
+
+    [Theory]
+    // Neither lock: the restore would resolve whatever the feed holds today.
+    [InlineData(false, false, false, "<Project />")]
+    // A deleted paket.references: the project is no longer locked by anything.
+    [InlineData(false, false, false, PaketImport)]
+    // Both: two sources of truth for one project.
+    [InlineData(false, true, true, PaketImport)]
+    // paket.references that nothing reads: Paket.Restore.targets is not imported.
+    [InlineData(false, false, true, "<Project />")]
+    // An import in a comment is not an import.
+    [InlineData(false, false, true, "<!-- " + PaketImport + " -->")]
+    // A Native AOT project must not gain a lock it cannot keep on a second platform.
+    [InlineData(true, true, false, "<Project />")]
+    public void TheLockRuleRejectsAProjectThatNothingLocks(
+        bool nativeAot,
+        bool hasLockFile,
+        bool hasPaketReferences,
+        string csproj
+    ) =>
+        LockProblems("Fixture", nativeAot, hasLockFile, hasPaketReferences, csproj)
+            .ShouldNotBeEmpty();
+
+    // A project is locked by its packages.lock.json (NuGet) or by paket.lock through its
+    // paket.references (ADR 0004), never by both and never by neither. A Paket-managed project
+    // must import Paket.Restore.targets, or its paket.references is inert.
+    private static List<string> LockProblems(
+        string name,
+        bool nativeAot,
+        bool hasLockFile,
+        bool hasPaketReferences,
+        string csproj
+    )
+    {
+        var problems = new List<string>();
+        if (nativeAot)
+        {
+            if (hasLockFile || hasPaketReferences)
+            {
+                problems.Add($"{name}: a Native AOT project carries no lock (#394)");
+            }
+
+            return problems;
+        }
+
+        if (hasLockFile == hasPaketReferences)
+        {
+            problems.Add(
+                hasLockFile
+                    ? $"{name}: has both packages.lock.json and paket.references"
+                    : $"{name}: has neither packages.lock.json nor paket.references"
+            );
+        }
+
+        string code = Regex.Replace(
+            csproj,
+            "<!--.*?-->",
+            string.Empty,
+            RegexOptions.Singleline | RegexOptions.CultureInvariant,
+            RegexTimeout
+        );
+        if (
+            hasPaketReferences
+            && !Regex.IsMatch(
+                code,
+                @"<Import\s+Project=""[^""]*\.paket[\\/]Paket\.Restore\.targets""",
+                RegexOptions.CultureInvariant,
+                RegexTimeout
+            )
+        )
+        {
+            problems.Add($"{name}: paket.references but no Paket.Restore.targets import");
+        }
+
+        return problems;
     }
 
     [Fact]
@@ -369,6 +479,180 @@ public sealed class CiGateIntegrityTests
         }
 
         examined.ShouldBeGreaterThanOrEqualTo(8, "the workflow scan examined too few restores");
+    }
+
+    private static readonly Regex RestoreStep = new(
+        @"^\s*(?:-\s+)?run:\s+dotnet restore\b",
+        Options,
+        RegexTimeout
+    );
+
+    private static readonly Regex StrictPaketRestoreStep = new(
+        @"^\s*(?:-\s+)?run:\s+dotnet paket restore --fail-on-checks\s*$",
+        Options,
+        RegexTimeout
+    );
+
+    // `run: dotnet tool restore ...`, or the same command on a line of a `run: |` block.
+    private static readonly Regex ToolRestoreLine = new(
+        @"^\s*(?:(?:-\s+)?run:\s+)?dotnet tool restore\b",
+        Options,
+        RegexTimeout
+    );
+
+    [Fact]
+    public void EveryJobThatRestoresTheSolutionFirstRunsTheStrictPaketRestore()
+    {
+        // ADR 0004: plain `paket restore` exits 0 when paket.dependencies and paket.lock disagree,
+        // and the solution restore calls Paket for the Paket-managed projects without the check.
+        // So every job that restores runs `dotnet paket restore --fail-on-checks` first, after the
+        // local tools (Paket is one) are restored.
+        string root = FindRepositoryRoot();
+        string[] files = EnumerateYaml(
+                Path.Combine(root, ".github", "workflows"),
+                "*",
+                SearchOption.TopDirectoryOnly
+            )
+            .ToArray();
+        files.ShouldContain(f => f.EndsWith("ci.yml", StringComparison.Ordinal));
+
+        var problems = new List<string>();
+        int examined = 0;
+        foreach (string file in files)
+        {
+            (int restores, List<string> found) = PaketRestoreProblems(
+                IOFile.ReadAllText(file).Replace("\r\n", "\n")
+            );
+            examined += restores;
+            problems.AddRange(found.Select(p => $"{Path.GetFileName(file)}: {p}"));
+        }
+
+        // ci.yml (test, derived), benchmarks.yml (two jobs), fuzz, metrics-oracle, mutation, release.
+        examined.ShouldBeGreaterThanOrEqualTo(8, "the workflow scan examined too few restores");
+        problems.ShouldBeEmpty();
+    }
+
+    private const string GoodPaketJob = """
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - name: Restore local tools
+                run: |
+                  # retry for dotnet/sdk #53783
+                  dotnet tool restore --disable-parallel || dotnet tool restore --disable-parallel
+              - name: Restore Paket dependencies (strict)
+                run: dotnet paket restore --fail-on-checks
+              - name: Restore solution dependencies
+                run: dotnet restore Parquet.SourceGenerator.slnx --locked-mode
+        """;
+
+    [Fact]
+    public void ThePaketRestoreRuleAcceptsTheShapeTheWorkflowsUse()
+    {
+        (int examined, List<string> problems) = PaketRestoreProblems(GoodPaketJob);
+
+        examined.ShouldBe(1);
+        problems.ShouldBeEmpty();
+    }
+
+    [Theory]
+    // The step removed.
+    [InlineData(
+        "      - name: Restore Paket dependencies (strict)\n        run: dotnet paket restore --fail-on-checks\n",
+        ""
+    )]
+    // Without the switch, drift between paket.dependencies and paket.lock exits 0.
+    [InlineData("run: dotnet paket restore --fail-on-checks", "run: dotnet paket restore")]
+    // Commented out.
+    [InlineData(
+        "        run: dotnet paket restore --fail-on-checks",
+        "        # run: dotnet paket restore --fail-on-checks"
+    )]
+    // Echoed rather than run.
+    [InlineData(
+        "run: dotnet paket restore --fail-on-checks",
+        "run: echo dotnet paket restore --fail-on-checks"
+    )]
+    // After the restore it was meant to guard (the two commands swapped).
+    [InlineData(
+        "run: dotnet paket restore --fail-on-checks\n      - name: Restore solution dependencies\n        run: dotnet restore Parquet.SourceGenerator.slnx --locked-mode",
+        "run: dotnet restore Parquet.SourceGenerator.slnx --locked-mode\n      - name: Restore solution dependencies\n        run: dotnet paket restore --fail-on-checks"
+    )]
+    // Before the local tools exist, so `dotnet paket` is not there to run.
+    [InlineData(
+        "          dotnet tool restore --disable-parallel || dotnet tool restore --disable-parallel",
+        "          echo no tools"
+    )]
+    public void ThePaketRestoreRuleRejectsAJobWithoutAStrictPaketRestoreFirst(
+        string original,
+        string broken
+    )
+    {
+        string mutated = GoodPaketJob.Replace(original, broken, StringComparison.Ordinal);
+        mutated.ShouldNotBe(GoodPaketJob);
+
+        (int examined, List<string> problems) = PaketRestoreProblems(mutated);
+
+        examined.ShouldBe(1);
+        problems.ShouldNotBeEmpty();
+    }
+
+    [Fact]
+    public void ThePaketRestoreRuleRejectsAStrictRestoreThatOnlyAnotherJobRuns()
+    {
+        string split = GoodPaketJob.Replace(
+            "      - name: Restore solution dependencies\n",
+            "  other:\n    runs-on: ubuntu-latest\n    steps:\n      - name: Restore solution dependencies\n",
+            StringComparison.Ordinal
+        );
+        split.ShouldNotBe(GoodPaketJob);
+
+        (int examined, List<string> problems) = PaketRestoreProblems(split);
+
+        examined.ShouldBe(1);
+        problems.ShouldNotBeEmpty();
+    }
+
+    // Per job: every `dotnet restore` step must come after a `dotnet paket restore
+    // --fail-on-checks` step, which must come after `dotnet tool restore`. Comment lines do not
+    // count. Returns how many restores were examined and what is wrong.
+    private static (int Examined, List<string> Problems) PaketRestoreProblems(string workflow)
+    {
+        var problems = new List<string>();
+        int examined = 0;
+        string jobs = JobsSection(workflow);
+        MatchCollection keys = JobKey.Matches(jobs);
+        for (int i = 0; i < keys.Count; i++)
+        {
+            int end = i + 1 < keys.Count ? keys[i + 1].Index : jobs.Length;
+            string job = CommentLine.Replace(
+                jobs.Substring(keys[i].Index, end - keys[i].Index),
+                string.Empty
+            );
+            string id = keys[i].Groups["id"].Value;
+            Match paket = StrictPaketRestoreStep.Match(job);
+            Match tools = ToolRestoreLine.Match(job);
+            foreach (Match restore in RestoreStep.Matches(job))
+            {
+                examined++;
+                if (!paket.Success || paket.Index > restore.Index)
+                {
+                    problems.Add(
+                        $"job {id}: `dotnet restore` without a `dotnet paket restore --fail-on-checks` step before it"
+                    );
+                }
+                else if (!tools.Success || tools.Index > paket.Index)
+                {
+                    problems.Add(
+                        $"job {id}: `dotnet paket restore` runs before `dotnet tool restore`"
+                    );
+                }
+            }
+        }
+
+        return (examined, problems);
     }
 
     [Fact]

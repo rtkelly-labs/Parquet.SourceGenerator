@@ -126,6 +126,7 @@ The documentation is organized into four distinct sections:
     - [ADR 0001: Roslyn Generator Tooling Evaluation](./architecture/adrs/0001-generator-tooling-evaluation.md)
     - [ADR 0002: Architectural Peer Study: Protobuf & Serialization Engines](./architecture/adrs/0002-peer-study-protobuf.md)
     - [ADR 0003: SonarAnalyzer.CSharp Removal & Permissive Replacement](./architecture/adrs/0003-sonar-removal.md)
+    - [ADR 0004: Paket Pilot for NuGet Dependency Management](./architecture/adrs/0004-paket-pilot.md)
 
 ---
 
