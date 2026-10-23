@@ -27,6 +27,7 @@ public sealed class MutationWorkflowStepTests : IDisposable
           "partitions": [
             { "name": "parser", "project": "Gen.csproj", "mutate": ["**/Parser/**/*.cs", "**/Big.cs{1..10}"] },
             { "name": "emitter", "project": "Gen.csproj", "mutate": ["**/Emitter/*.cs"] },
+            { "name": "ranged", "project": "Gen.csproj", "mutate": [{ "file": "src/Big.cs", "lines": [2, 3] }] },
             { "name": "gen-rest", "project": "Gen.csproj", "rest": true },
             { "name": "attrs", "project": "Attrs.csproj", "rest": true }
           ]
@@ -78,6 +79,19 @@ public sealed class MutationWorkflowStepTests : IDisposable
     }
 
     [Fact]
+    public async Task ALineRangeBecomesTheCharacterSpanStrykerExpectsAsync()
+    {
+        ToolsAvailable().ShouldBeTrue("bash and jq are required to run the workflow step");
+
+        // src/Big.cs is "a\nbé\ncc\nd\n": line 2 starts at character 2, line 4 at character 8.
+        // Stryker reads {a..b} as characters, so lines 2 to 3 are {2..8}, counting é as one.
+        ScriptRun run = await RunPartitionAsync("ranged", "Gen.csproj", writesReport: true);
+
+        run.ExitCode.ShouldBe(0, run.Describe());
+        MutateGlobs(run).ShouldBe(["**/src/Big.cs{2..8}"]);
+    }
+
+    [Fact]
     public async Task TheRestPartitionMutatesEverythingTheProjectsOtherPartitionsLeaveAsync()
     {
         ToolsAvailable().ShouldBeTrue("bash and jq are required to run the workflow step");
@@ -86,7 +100,13 @@ public sealed class MutationWorkflowStepTests : IDisposable
 
         run.ExitCode.ShouldBe(0, run.Describe());
         MutateGlobs(run)
-            .ShouldBe(["**/*.cs", "!**/Parser/**/*.cs", "!**/Big.cs{1..10}", "!**/Emitter/*.cs"]);
+            .ShouldBe([
+                "**/*.cs",
+                "!**/Parser/**/*.cs",
+                "!**/Big.cs{1..10}",
+                "!**/Emitter/*.cs",
+                "!**/src/Big.cs{2..8}",
+            ]);
     }
 
     [Fact]
@@ -226,6 +246,8 @@ public sealed class MutationWorkflowStepTests : IDisposable
         string work = Path.Combine(_dir, Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(work);
         await IOFile.WriteAllTextAsync(Path.Combine(work, "stryker-partitions.json"), partitions);
+        Directory.CreateDirectory(Path.Combine(work, "src"));
+        await IOFile.WriteAllTextAsync(Path.Combine(work, "src", "Big.cs"), "a\nbé\ncc\nd\n");
 
         // The fake `dotnet`, defined as a function that bash loads from BASH_ENV (so no executable
         // bit is needed): it records its arguments one per line and, like Stryker, writes the

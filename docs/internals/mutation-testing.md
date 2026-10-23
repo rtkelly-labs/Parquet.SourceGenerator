@@ -44,10 +44,13 @@ partitions listed in `stryker-partitions.json`:
    report, Stryker marks a mutant outside that partition's globs as `Ignored` with the reason
    "Removed by mutate filter". Every other status belongs to the partition that produced it.
 
-A pattern can be limited to a line range with `{start..end}`, for example
-`**/Parser/TargetParser.cs{1..891}`. That is how the two 2300-line files are split. Put
-boundaries between methods. A mutant that crosses a boundary (a block removal spanning both
-ranges) falls in neither range, so the `rest` partition picks it up.
+A partition can also mutate one line range of a file, written
+`{ "file": "src/Parquet.SourceGenerator/Parser/TargetParser.cs", "lines": [1, 891] }` (leave
+out the last line to mean the end of the file). That is how the two 2300-line files are split.
+Stryker's own `{a..b}` span counts characters, not lines, so the partition step converts the
+range from the file as checked out. A range keeps meaning the same lines when the code above it
+changes. Put boundaries between methods. A mutant that crosses a boundary (a block removal
+spanning both ranges) is in neither range, so the `rest` partition picks it up.
 
 ### When the run fails
 

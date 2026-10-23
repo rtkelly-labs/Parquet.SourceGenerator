@@ -131,12 +131,33 @@ jobs:
           set -euo pipefail
           # The --mutate globs of this partition. A `rest` partition mutates every file of its
           # project minus the globs of the project's other partitions, so no file is left out.
-          globs=$(jq -r --arg name "$PARTITION" '
+          # A {"file", "lines"} entry is one line range of one file. Stryker's {a..b} span is in
+          # characters, not lines, so the range is converted here from the file as checked out;
+          # jq counts code points, which match Roslyn's UTF-16 positions for these BMP-only files.
+          sources=$(mktemp)
+          echo '{}' > "$sources"
+          for f in $(jq -r '[.partitions[].mutate[]? | objects | .file] | unique[]' stryker-partitions.json); do
+            if [ ! -f "$f" ]; then
+              echo "::error file=stryker-partitions.json::A line range names $f, which does not exist"
+              exit 1
+            fi
+            jq -Rs --arg path "$f" --slurpfile acc "$sources" '$acc[0] + {($path): .}' "$f" > "$sources.next"
+            mv "$sources.next" "$sources"
+          done
+          globs=$(jq -r --arg name "$PARTITION" --slurpfile src "$sources" '
+            def offset($text; $line): $text | split("\n")[:($line - 1)] | map(length + 1) | add // 0;
+            def glob:
+              if type == "string" then .
+              else .file as $f | $src[0][$f] as $text
+                | "**/\($f){\(offset($text; .lines[0]))..\(if .lines[1] then offset($text; .lines[1] + 1) else ($text | length) end)}"
+              end;
             (.partitions[] | select(.name == $name)) as $p
             | if $p.rest == true
-              then "**/*.cs", (.partitions[] | select(.project == $p.project and .name != $name) | .mutate[]? | "!" + .)
-              else $p.mutate[]
+              then "**/*.cs", (.partitions[] | select(.project == $p.project and .name != $name) | .mutate[]? | "!" + glob)
+              else $p.mutate[] | glob
               end' stryker-partitions.json)
+          echo "Stryker --mutate patterns for $PARTITION:"
+          printf '  %s\n' "$globs"
           if [ -z "$globs" ]; then
             echo "::error::Partition '$PARTITION' has no --mutate globs in stryker-partitions.json"
             exit 1
