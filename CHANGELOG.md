@@ -313,7 +313,8 @@ the migration list; each row's detail is in the entries below and in `docs/api/L
   `scripts/MutationSummary.cs` merges their reports. The merge fails the run when a partition has no report, tested
   nothing, or tested a mutant another partition also tested, so an incomplete sweep is never published as a score.
   The summary also read Stryker's report with the wrong property names, so it would have reported 0 mutants.
-  Still report-only: there is no floor.
+  Each partition caps the managed heap of its processes at 3 GiB, so a runaway mutant fails its own test host
+  instead of taking down the runner. Still report-only: there is no floor.
 - **Arrow scope is stated plainly** (#590). The READMEs, `docs/14`, `docs/19` and `docs/47` say that only Arrow
   ingestion (`RecordBatch` to Parquet, when Apache.Arrow is referenced) ships; export to Arrow does not, and
   `docs/19` no longer lists the closed #178 as open work.

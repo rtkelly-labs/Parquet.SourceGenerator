@@ -58,7 +58,9 @@ public sealed class MutationSummaryGateTests : IDisposable
         ScriptResult result = await RunAsync();
 
         result.ExitCode.ShouldBe(0, result.Describe());
-        result.Stdout.ShouldContain("Mutation score **66.7%** — 2 detected / 3 tested");
+        result.Stdout.ShouldContain(
+            "Mutation score **66.7%** — 2 detected (2 killed, 0 timed out) / 3 tested"
+        );
         result.Stdout.ShouldContain("Merged from 2 of 2 partition report(s)");
         result.Stdout.ShouldContain("| `src/Gen/A.cs` | 1 |");
         result.Stdout.ShouldNotContain("Incomplete report");
