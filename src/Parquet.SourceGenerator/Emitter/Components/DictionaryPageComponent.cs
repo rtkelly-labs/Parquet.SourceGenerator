@@ -10,53 +10,11 @@ namespace Parquet.SourceGenerator.Emitter.Components;
 internal static class DictionaryPageComponent
 {
     /// <summary>
-    /// Emits the dictionary page-header readers.
+    /// Emits the dictionary page-header readers. The modern backend pairs them with
+    /// <c>ColumnHelpersComponent.EmitDictionaryEntryCountReader</c>; the classic backend finds the
+    /// first page of a chunk itself (see <c>LegacyCodeEmitter</c>).
     /// </summary>
-    /// <param name="builder">The builder.</param>
-    /// <param name="includeEntryCountReader">
-    /// False for the classic backend, which finds the first page of a chunk itself (see
-    /// <c>LegacyCodeEmitter</c>) and would otherwise carry an unused <c>ReadDictionaryEntryCount</c>.
-    /// </param>
-    public static void EmitHelpers(StringBuilder builder, bool includeEntryCountReader = true)
-    {
-        if (includeEntryCountReader)
-        {
-            EmitEntryCountReader(builder);
-        }
-
-        EmitPageHeaderReaders(builder);
-    }
-
-    private static void EmitEntryCountReader(StringBuilder builder)
-    {
-        builder.AppendLine("    private static int? ReadDictionaryEntryCount(");
-        builder.AppendLine("        global::Parquet.ParquetRowGroupReader groupReader,");
-        builder.AppendLine("        global::System.IO.Stream stream,");
-        builder.AppendLine("        global::Parquet.Schema.DataField field)");
-        builder.AppendLine("    {");
-        builder.AppendLine("        var metadata = groupReader.GetMetadata(field);");
-        builder.AppendLine(
-            "        long? offset = metadata?.MetaData?.DictionaryPageOffset ?? metadata?.FileOffset;"
-        );
-        builder.AppendLine(
-            "        if (!offset.HasValue || offset.Value < 0 || !stream.CanSeek) return null;"
-        );
-        builder.AppendLine();
-        builder.AppendLine("        long savedPosition = stream.Position;");
-        builder.AppendLine("        try");
-        builder.AppendLine("        {");
-        builder.AppendLine("            stream.Position = offset.Value;");
-        builder.AppendLine("            return ReadDictionaryPageHeader(stream);");
-        builder.AppendLine("        }");
-        builder.AppendLine("        finally");
-        builder.AppendLine("        {");
-        builder.AppendLine("            stream.Position = savedPosition;");
-        builder.AppendLine("        }");
-        builder.AppendLine("    }");
-        builder.AppendLine();
-    }
-
-    private static void EmitPageHeaderReaders(StringBuilder builder)
+    public static void EmitHelpers(StringBuilder builder)
     {
         builder.AppendLine(
             "    private static int? ReadDictionaryPageHeader(global::System.IO.Stream stream)"

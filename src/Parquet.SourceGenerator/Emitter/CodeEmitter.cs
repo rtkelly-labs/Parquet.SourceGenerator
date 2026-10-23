@@ -183,6 +183,7 @@ internal static class CodeEmitter
         SchemaComponent.EmitValidatePhysicalType(builder, invariantPath: true);
         builder.AppendLine();
         SchemaComponent.EmitValidateColumnChunkBounds(builder);
+        ColumnHelpersComponent.EmitDictionaryEntryCountReader(builder);
         DictionaryPageComponent.EmitHelpers(builder);
     }
 

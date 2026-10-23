@@ -1,3 +1,4 @@
+using System;
 using System.Text;
 using Parquet.SourceGenerator.Models;
 
@@ -89,7 +90,7 @@ internal static class PropertyMappingComponent
         string indexVar = "i",
         string bufferPrefix = "buffer_",
         string indent = "                ",
-        bool classicApi = false
+        Func<PropertyModel, string, string?>? readOverride = null
     )
     {
         if (IsSingleFieldBlittableStruct(model))
@@ -141,7 +142,7 @@ internal static class PropertyMappingComponent
                 indexVar,
                 bufferPrefix: bufferPrefix,
                 indent: indent + "    ",
-                classicApi: classicApi
+                readOverride: readOverride
             );
             builder.AppendLine($"{indent}}}");
         }
@@ -150,32 +151,12 @@ internal static class PropertyMappingComponent
     /// <summary>
     /// The expression that converts a model member into its column/buffer representation (handling enum conversions).
     /// </summary>
-    /// <param name="prop">The member.</param>
-    /// <param name="valueExpression">The expression that reads the member.</param>
-    /// <param name="useMemoryForTextAndBinary">Whether text and binary columns are memory lanes.</param>
-    /// <param name="classicApi">
-    /// True for the Parquet.Net 4.x/5.x backend, whose <c>TimeSpan</c> and <c>TimeOnly</c> columns
-    /// are <c>TimeSpan</c> columns rather than integer milliseconds or microseconds.
-    /// </param>
     public static string GetWriteExpression(
         PropertyModel prop,
         string valueExpression,
-        bool useMemoryForTextAndBinary = true,
-        bool classicApi = false
+        bool useMemoryForTextAndBinary = true
     )
     {
-        if (classicApi && prop.Kind == PropertyKind.TimeSpan)
-        {
-            return valueExpression;
-        }
-
-        if (classicApi && prop.Kind == PropertyKind.TimeOnly)
-        {
-            return prop.IsNullable
-                ? $"{valueExpression} is null ? (global::System.TimeSpan?)null : {valueExpression}.Value.ToTimeSpan()"
-                : $"{valueExpression}.ToTimeSpan()";
-        }
-
         if (useMemoryForTextAndBinary)
         {
             if (prop.Kind == PropertyKind.Primitive && prop.TypeName.Contains("string"))
@@ -228,27 +209,8 @@ internal static class PropertyMappingComponent
     /// <summary>
     /// The expression that converts a column/buffer value back into the model member's type (handling enum conversions).
     /// </summary>
-    /// <param name="prop">The member.</param>
-    /// <param name="valueExpression">The expression that reads the column value.</param>
-    /// <param name="classicApi">True for the Parquet.Net 4.x/5.x backend (see <see cref="GetWriteExpression"/>).</param>
-    public static string GetReadExpression(
-        PropertyModel prop,
-        string valueExpression,
-        bool classicApi = false
-    )
+    public static string GetReadExpression(PropertyModel prop, string valueExpression)
     {
-        if (classicApi && prop.Kind == PropertyKind.TimeSpan)
-        {
-            return valueExpression;
-        }
-
-        if (classicApi && prop.Kind == PropertyKind.TimeOnly)
-        {
-            return prop.IsNullable
-                ? $"{valueExpression} is null ? (global::System.TimeOnly?)null : ReadClassicTimeOnly({valueExpression}.Value)"
-                : $"ReadClassicTimeOnly({valueExpression})";
-        }
-
         if (prop.Kind == PropertyKind.Enum)
         {
             return prop.IsNullable
@@ -301,7 +263,7 @@ internal static class PropertyMappingComponent
         string indexVar,
         string bufferPrefix = "buffer_",
         string indent = "                ",
-        bool classicApi = false
+        Func<PropertyModel, string, string?>? readOverride = null
     )
     {
         string targetSlot = string.IsNullOrEmpty(offsetExpr)
@@ -314,7 +276,8 @@ internal static class PropertyMappingComponent
         for (int i = 0; i < model.Properties.Length; i++)
         {
             PropertyModel prop = model.Properties[i];
-            string readExpr = GetReadExpression(prop, $"{bufferPrefix}{i}[{indexVar}]", classicApi);
+            string value = $"{bufferPrefix}{i}[{indexVar}]";
+            string readExpr = readOverride?.Invoke(prop, value) ?? GetReadExpression(prop, value);
             builder.AppendLine($"{indent}    {EmittedText.Ident(prop.Name)} = {readExpr},");
         }
 
@@ -333,18 +296,16 @@ internal static class PropertyMappingComponent
         string bufferPrefix = "buffer_",
         string indent = "                    ",
         bool useMemoryForTextAndBinary = true,
-        bool classicApi = false
+        Func<PropertyModel, string, string?>? writeOverride = null
     )
     {
         for (int p = 0; p < model.Properties.Length; p++)
         {
             PropertyModel prop = model.Properties[p];
-            string writeExpr = GetWriteExpression(
-                prop,
-                $"{itemVar}.{EmittedText.Ident(prop.Name)}",
-                useMemoryForTextAndBinary,
-                classicApi
-            );
+            string member = $"{itemVar}.{EmittedText.Ident(prop.Name)}";
+            string writeExpr =
+                writeOverride?.Invoke(prop, member)
+                ?? GetWriteExpression(prop, member, useMemoryForTextAndBinary);
             builder.AppendLine($"{indent}{bufferPrefix}{p}[{indexVar}] = {writeExpr};");
         }
     }
@@ -353,8 +314,8 @@ internal static class PropertyMappingComponent
     /// Emits <c>ReadTimeOnly</c>, which builds a <c>TimeOnly</c> from a file-controlled
     /// <c>TIME_MICROS</c> value. Unchecked, an out-of-range value throws
     /// <c>ArgumentOutOfRangeException</c>, and one that wraps on the multiply yields a wrong time of day
-    /// with no error (#371). The classic backend's column is a <c>TimeSpan[]</c>; it uses
-    /// <see cref="EmitReadClassicTimeOnlyHelper"/> instead.
+    /// with no error (#371). The classic backend's column is a <c>TimeSpan[]</c> and it emits its
+    /// own check (<c>LegacyCodeEmitter</c>), so only the modern emitter emits this one.
     /// </summary>
     public static void EmitReadTimeOnlyHelper(StringBuilder builder)
     {
@@ -368,31 +329,6 @@ internal static class PropertyMappingComponent
         builder.AppendLine("        }");
         builder.AppendLine();
         builder.AppendLine("        return new global::System.TimeOnly(micros * 10L);");
-        builder.AppendLine("    }");
-    }
-
-    /// <summary>
-    /// Emits <c>ReadClassicTimeOnly</c>, the classic backend's counterpart of <c>ReadTimeOnly</c>:
-    /// Parquet.Net 4.x/5.x hands a TIME column over as <c>TimeSpan</c>, and a file-controlled value
-    /// outside one day is refused as invalid data rather than surfacing as
-    /// <c>ArgumentOutOfRangeException</c> from <c>TimeOnly.FromTimeSpan</c>.
-    /// </summary>
-    public static void EmitReadClassicTimeOnlyHelper(StringBuilder builder)
-    {
-        builder.AppendLine(
-            "    private static global::System.TimeOnly ReadClassicTimeOnly(global::System.TimeSpan time)"
-        );
-        builder.AppendLine("    {");
-        builder.AppendLine(
-            "        if (time.Ticks < 0 || time.Ticks >= global::System.TimeSpan.TicksPerDay)"
-        );
-        builder.AppendLine("        {");
-        builder.AppendLine(
-            "            throw new global::System.IO.InvalidDataException($\"TIME value {time} is outside one day.\");"
-        );
-        builder.AppendLine("        }");
-        builder.AppendLine();
-        builder.AppendLine("        return new global::System.TimeOnly(time.Ticks);");
         builder.AppendLine("    }");
     }
 }

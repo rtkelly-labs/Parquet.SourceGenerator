@@ -251,7 +251,7 @@ public class LegacyEmitterTests
         code.ShouldContain("#if NET8_0_OR_GREATER");
         code.ShouldContain("global::Parquet.Schema.DateTimeFormat.DateAndTimeMicros");
         code.ShouldContain(
-            "#error Parquet.SourceGenerator.Legacy: [ParquetTimestamp(Microseconds)] on 'TestModel.Stamp' needs net8.0 or later"
+            "#error Parquet.SourceGenerator.Legacy: [ParquetTimestamp(Microseconds)] on 'Stamp' needs net8.0 or later"
         );
         code.ShouldContain("colArray_0[k] = item.Span;");
         code.ShouldContain(
