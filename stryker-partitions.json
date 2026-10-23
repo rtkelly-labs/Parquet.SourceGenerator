@@ -1,0 +1,113 @@
+{
+  "description": "Partitions of the nightly mutation sweep (#668). One Stryker run over all 9358 generator mutants does not fit a job, so mutation.yml runs one matrix job per partition and MutationSummary.cs merges the reports. Globs are Stryker --mutate patterns; {a..b} limits a pattern to lines a to b of the file. A partition with \"rest\": true mutates every file of its project that no other partition of that project claims, so a new source file is always mutated somewhere. MutationSummary.cs fails when a partition's report is missing, covers no mutant, or claims a mutant another partition also tested. See docs/internals/mutation-testing.md before changing the split.",
+  "projects": {
+    "Parquet.SourceGenerator.csproj": "Parquet.SourceGenerator (parser + emitters)",
+    "Parquet.SourceGenerator.Attributes.csproj": "Parquet.SourceGenerator.Attributes (shipped helpers)"
+  },
+  "partitions": [
+    {
+      "name": "parser-1",
+      "project": "Parquet.SourceGenerator.csproj",
+      "mutate": ["**/Parser/TargetParser.cs{1..891}"]
+    },
+    {
+      "name": "parser-2",
+      "project": "Parquet.SourceGenerator.csproj",
+      "mutate": ["**/Parser/TargetParser.cs{892..1586}"]
+    },
+    {
+      "name": "parser-3",
+      "project": "Parquet.SourceGenerator.csproj",
+      "mutate": ["**/Parser/TargetParser.cs{1587..99999}"]
+    },
+    {
+      "name": "emitter-1",
+      "project": "Parquet.SourceGenerator.csproj",
+      "mutate": ["**/Emitter/CodeEmitter.cs{1..743}"]
+    },
+    {
+      "name": "emitter-2",
+      "project": "Parquet.SourceGenerator.csproj",
+      "mutate": ["**/Emitter/CodeEmitter.cs{744..1596}"]
+    },
+    {
+      "name": "emitter-3",
+      "project": "Parquet.SourceGenerator.csproj",
+      "mutate": ["**/Emitter/CodeEmitter.cs{1597..99999}"]
+    },
+    {
+      "name": "arrow",
+      "project": "Parquet.SourceGenerator.csproj",
+      "mutate": ["**/Emitter/ArrowBridgeEmitter.cs"]
+    },
+    {
+      "name": "columnar-batch",
+      "project": "Parquet.SourceGenerator.csproj",
+      "mutate": ["**/Emitter/Columnar/ColumnarBatchComponent.cs"]
+    },
+    {
+      "name": "columnar-read",
+      "project": "Parquet.SourceGenerator.csproj",
+      "mutate": [
+        "**/Emitter/Columnar/BatchReadComponent.cs",
+        "**/Emitter/ReadBuilderComponent.cs"
+      ]
+    },
+    {
+      "name": "compound-mapping",
+      "project": "Parquet.SourceGenerator.csproj",
+      "mutate": [
+        "**/Emitter/Compound/CompoundMapping.cs",
+        "**/Emitter/Compound/CompoundSchema.cs"
+      ]
+    },
+    {
+      "name": "compound-columns",
+      "project": "Parquet.SourceGenerator.csproj",
+      "mutate": [
+        "**/Emitter/Compound/CompoundBuffers.cs",
+        "**/Emitter/Compound/LeafColumns.cs",
+        "**/Emitter/RowGroupPruningComponent.cs"
+      ]
+    },
+    {
+      "name": "components-schema",
+      "project": "Parquet.SourceGenerator.csproj",
+      "mutate": [
+        "**/Emitter/Components/SchemaComponent.cs",
+        "**/Emitter/Components/ArrowMappingComponent.cs"
+      ]
+    },
+    {
+      "name": "components-guards",
+      "project": "Parquet.SourceGenerator.csproj",
+      "mutate": [
+        "**/Emitter/Components/DecompressionGuardComponent.cs",
+        "**/Emitter/Components/DictionaryPageComponent.cs",
+        "**/Emitter/Components/RowGroupLayoutComponent.cs"
+      ]
+    },
+    {
+      "name": "components-buffers",
+      "project": "Parquet.SourceGenerator.csproj",
+      "mutate": [
+        "**/Emitter/Components/StringDeduplicatorComponent.cs",
+        "**/Emitter/Components/PropertyMappingComponent.cs",
+        "**/Emitter/Components/BufferPoolComponent.cs",
+        "**/Emitter/Components/AllocationBudgetComponent.cs",
+        "**/Emitter/Components/BatchValidationComponent.cs",
+        "**/Emitter/Components/EmittedText.cs"
+      ]
+    },
+    {
+      "name": "generator-rest",
+      "project": "Parquet.SourceGenerator.csproj",
+      "rest": true
+    },
+    {
+      "name": "attributes",
+      "project": "Parquet.SourceGenerator.Attributes.csproj",
+      "rest": true
+    }
+  ]
+}

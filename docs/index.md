@@ -122,7 +122,10 @@ The documentation is organized into four distinct sections:
 10. **[Memory Triage Runbook](./internals/runbooks/memory-triage.md)**
     - Runbook for SOS memory inspection, Large Object Heap analysis, and `dotnet-dump` triage.
 
-11. **Architectural Decision Records (ADRs)**
+11. **[Mutation Testing](./internals/mutation-testing.md)**
+    - What the nightly Stryker score measures, how the sweep is partitioned and merged, and when it fails.
+
+12. **Architectural Decision Records (ADRs)**
     - [ADR 0001: Roslyn Generator Tooling Evaluation](./architecture/adrs/0001-generator-tooling-evaluation.md)
     - [ADR 0002: Architectural Peer Study: Protobuf & Serialization Engines](./architecture/adrs/0002-peer-study-protobuf.md)
     - [ADR 0003: SonarAnalyzer.CSharp Removal & Permissive Replacement](./architecture/adrs/0003-sonar-removal.md)
