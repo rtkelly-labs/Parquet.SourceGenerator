@@ -115,7 +115,8 @@ internal static class LegacyCodeEmitter
 
     private static void EmitSchema(StringBuilder builder, TargetClassModel model)
     {
-        SchemaComponent.EmitSchema(builder, model);
+        // Parquet.Net 4.x has no DataField.FieldId, so [ParquetColumn(FieldId = n)] is not written here.
+        SchemaComponent.EmitSchema(builder, model, writeFieldIds: false);
     }
 
     private static void EmitStaticFields(StringBuilder builder, TargetClassModel model)

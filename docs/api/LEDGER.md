@@ -16,6 +16,21 @@ The rule, the three surfaces and the author process are in
 
 <!-- Add new entries directly below this line, newest first. -->
 
+### 2026-10-23 — Iceberg-ready columns: field IDs, local timestamps, INT32 dates
+
+- **Surface:** package
+- **Semver:** additive-minor
+- **Issue:** not yet filed — proposed from the Apache Iceberg interop study (iceberg-dotnet `docs/parquet-sourcegenerator.md`)
+- **Change:** Added `ParquetColumnAttribute.FieldId` (default -1, no ID written) and
+  `ParquetTimestampAttribute.AdjustedToUtc` (default true, today's annotation). The emitter writes
+  `DataField.FieldId` and `isAdjustedToUTC: false` only when a member sets them, so the output for
+  existing models does not change. Separately, `DateOnly` columns are written as INT32 DATE again
+  (main had regressed to INT96).
+- **Rationale:** Apache Iceberg resolves Parquet columns by field ID and distinguishes `timestamp`
+  (local) from `timestamptz` (UTC-adjusted). Without these, generated files can join an Iceberg table
+  only through a name mapping, and only as `timestamptz`. INT96 is deprecated in Parquet and
+  rejected by Iceberg, and pyarrow reads an INT96 "date" as a datetime.
+
 ### 2026-10-07 — Promote `PublicAPI.Unshipped.txt` to `PublicAPI.Shipped.txt` (0.1 baseline) (#592)
 
 - **Surface:** package

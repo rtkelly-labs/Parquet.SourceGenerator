@@ -774,7 +774,8 @@ internal static class TargetParser
         int Order,
         bool Deduplicate,
         ColumnEncoding Encoding,
-        bool IsSortKey
+        bool IsSortKey,
+        int? FieldId
     );
 
     /// <summary>
@@ -1148,6 +1149,7 @@ internal static class TargetParser
         int order = -1;
         bool deduplicate = false;
         ColumnEncoding encoding = ColumnEncoding.Default;
+        int? fieldId = null;
 
         if (columnAttr is not null)
         {
@@ -1173,6 +1175,8 @@ internal static class TargetParser
                     deduplicate = dedupe;
                 else if (namedArg.Key == "Encoding" && namedArg.Value.Value is int encodingInt)
                     encoding = (ColumnEncoding)encodingInt;
+                else if (namedArg.Key == "FieldId" && namedArg.Value.Value is int id && id >= 0)
+                    fieldId = id;
             }
         }
 
@@ -1213,7 +1217,7 @@ internal static class TargetParser
         // per eligible column whether or not anything looks them up.
         bool isSortKey = HasAttribute(member, SortKeyFullNames, SortKeyShortNames);
 
-        return new ColumnOptions(columnName, order, deduplicate, encoding, isSortKey);
+        return new ColumnOptions(columnName, order, deduplicate, encoding, isSortKey, fieldId);
     }
 
     private static (int? Precision, int? Scale) ReadDecimalOptions(
@@ -1266,6 +1270,29 @@ internal static class TargetParser
             return timestampAttr.ConstructorArguments[0].Value?.ToString();
 
         return null;
+    }
+
+    /// <summary>
+    /// <c>[ParquetTimestamp(..., AdjustedToUtc = false)]</c>: a local (wall-clock) timestamp. Absent
+    /// or true keeps the UTC-adjusted annotation every earlier release wrote.
+    /// </summary>
+    private static bool ReadTimestampAdjustedToUtc(ISymbol member)
+    {
+        AttributeData? timestampAttr = FindAttribute(
+            member,
+            TimestampFullNames,
+            TimestampShortNames
+        );
+        if (timestampAttr is null)
+            return true;
+
+        foreach (KeyValuePair<string, TypedConstant> namedArg in timestampAttr.NamedArguments)
+        {
+            if (namedArg.Key == "AdjustedToUtc" && namedArg.Value.Value is bool adjusted)
+                return adjusted;
+        }
+
+        return true;
     }
 
     private static (ITypeSymbol UnderlyingType, bool IsNullable) UnwrapNullable(
@@ -1406,6 +1433,8 @@ internal static class TargetParser
         )
         {
             IsSortKey = column.IsSortKey,
+            FieldId = column.FieldId,
+            TimestampAdjustedToUtc = ReadTimestampAdjustedToUtc(member),
         };
     }
 
