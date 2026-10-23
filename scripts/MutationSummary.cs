@@ -298,7 +298,7 @@ static void AppendProject(
     sb.AppendLine();
     sb.AppendLine(
         $"Mutation score **{score.ToString("F1", CultureInfo.InvariantCulture)}%** — "
-            + $"{killed + timeout} detected / {tested} tested "
+            + $"{killed + timeout} detected ({killed} killed, {timeout} timed out) / {tested} tested "
             + $"({survived} survived, {noCoverage} not covered by any test; "
             + $"{total} generated; {compileError} compile-error, {ignored} ignored, {pending} pending excluded). "
             + $"Merged from {reported} of {declared} partition report(s)."

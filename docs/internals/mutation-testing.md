@@ -88,6 +88,18 @@ a batch builder, for example) then runs its own test host out of memory, rather 
 received a shutdown signal", exit 143) about 12.5 minutes into mutant testing, in two
 dispatches running in a row, while every other partition finished.
 
+## Known gap: the score moves between identical runs
+
+Two complete dispatches of the same code (#668) produced identical denominators: 9358 mutants
+generated, 8584 tested, 195 compile errors, 579 ignored and 265 not covered. They did not
+produce the same score. It was 85.0% in one and 80.3% in the other, because about 400 mutants
+moved between survived and detected, concentrated in `ColumnarBatchComponent.cs`,
+`CodeEmitter.cs` and `ArrowBridgeEmitter.cs`. The likely causes are Stryker's per-mutant
+timeouts, which count as detected and depend on runner speed, and test hosts that hit the heap
+limit. The summary now prints killed and timed-out mutants separately so the next runs can
+tell which. Until that is settled, read a change in the nightly number of less than about five
+points as noise.
+
 ## Known gap: Stryker's safe mode in `ReportIneligibleSortKey`
 
 One mutation in `TargetParser.ReportIneligibleSortKey` produces code that does not compile
