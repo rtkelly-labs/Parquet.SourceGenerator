@@ -30,6 +30,12 @@ The rule, the three surfaces and the author process are in
   (local) from `timestamptz` (UTC-adjusted). Without these, generated files can join an Iceberg table
   only through a name mapping, and only as `timestamptz`. INT96 is deprecated in Parquet and
   rejected by Iceberg, and pyarrow reads an INT96 "date" as a datetime.
+- **Alternatives considered:** *a separate `[ParquetFieldId(n)]` attribute*, rejected: the ID is a property of
+  the column binding, which `[ParquetColumn]` already owns, and a second attribute would allow two sources of
+  one column's identity. *An opt-in `Iceberg` profile that switches all three together*, deferred: each change
+  stands alone, and the profile (diagnostics for INT96, `TimeSpan` and unsigned members) can be layered on later.
+  *Writing local timestamps through `DateAndTimeMicros, isAdjustedToUTC: false`*, rejected after measuring:
+  Parquet.Net 6.1 drops the flag for that format.
 
 ### 2026-10-07 — Promote `PublicAPI.Unshipped.txt` to `PublicAPI.Shipped.txt` (0.1 baseline) (#592)
 
