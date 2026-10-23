@@ -27,7 +27,16 @@ dotnet build Parquet.SourceGenerator.slnx --configuration Release
 
 ### Changing a dependency
 
-Every project in the solution except the two Native AOT ones carries a committed `packages.lock.json`, and CI restores in locked mode, so a changed dependency graph fails the build instead of resolving silently (#394). After editing `Directory.Packages.props` or a `PackageReference`, run `dotnet restore Parquet.SourceGenerator.slnx --force-evaluate` and commit the changed lock files with the change. A Dependabot update that bumps a version fails the locked restore (`NU1004`) until the lock files are regenerated the same way.
+Every project in the solution except the two Native AOT ones carries a committed `packages.lock.json`, and CI restores in locked mode, so a changed dependency graph fails the build instead of resolving silently (#394). After editing `Directory.Packages.props` or a `PackageReference`, run `dotnet restore Parquet.SourceGenerator.slnx --force-evaluate` and commit the changed lock files with the change. Dependabot's NuGet pull requests need the same step: its updater writes only the `netstandard2.0` section of the multi-targeted `src/Parquet.SourceGenerator.Attributes/packages.lock.json`, so they fail the locked restore with `NU1004`. Check out the Dependabot branch, run the command above, and push the regenerated lock files to it:
+
+```bash
+git fetch origin <dependabot-branch> && git switch <dependabot-branch>
+dotnet restore Parquet.SourceGenerator.slnx --force-evaluate
+dotnet restore Parquet.SourceGenerator.slnx --locked-mode   # must now pass
+git commit -am "build(deps): regenerate NuGet lock files" && git push
+```
+
+Pushing to the branch stops Dependabot rebasing that pull request on its own; comment `@dependabot rebase` (then regenerate again) if it falls behind `main`.
 
 ### 2. Run Test Suite
 ```bash
