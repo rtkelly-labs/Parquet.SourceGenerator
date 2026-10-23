@@ -6,7 +6,7 @@ name: Mutation Testing (nightly)
 # runs here with the snapshot-style suites (golden models, API rendering, IL
 # shape) EXCLUDED, because those "kill" any mutation trivially and would report a
 # flattering lie. The exclusion and its reasoning live in stryker-config.json and
-# docs/26-MUTATION-TESTING.md; read them before touching the filter.
+# docs/internals/mutation-testing.md; read them before touching the filter.
 #
 # Reporting follows #189's lesson: a scheduled job that merely fails gets muted, so
 # this one never gates on the score. It maintains ONE PR (mutation/headline branch),
@@ -14,6 +14,12 @@ name: Mutation Testing (nightly)
 # are unset until the baseline number is established (issue AC: no floor picked in
 # advance). Runs nightly, never per-PR: a full mutation sweep is far too slow for
 # review feedback.
+#
+# #668: one Stryker run over the whole generator (9358 mutants) cannot finish inside a job, so
+# the sweep is split into the partitions declared in stryker-partitions.json, one matrix job
+# each, and the `summarize` job merges their reports. The run fails, loudly, when any partition
+# produced no report, tested nothing, or overlapped another: an incomplete sweep is never
+# published as a score.
 
 on:
   schedule:
@@ -26,21 +32,58 @@ permissions:
   contents: read
 
 concurrency:
-  group: mutation-nightly
+  group: mutation-nightly-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  mutate:
-    name: Stryker.NET over the behavioural suite
+  # Reads the partition list once, so the matrix and the summary's "every partition reported"
+  # check come from the same file.
+  plan:
+    name: Plan the partitions
     runs-on: ubuntu-latest
-    timeout-minutes: 150
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          # Checkout would otherwise persist a GITHUB_TOKEN Authorization header that wins over the
-          # token in the pr-bot remote below, making the push a GITHUB_TOKEN push that starts no
-          # workflows (#568). Nothing else in this job needs git credentials.
+          persist-credentials: false
+
+      - name: Build the partition matrix
+        id: plan
+        run: |
+          set -euo pipefail
+          # Every partition needs a unique name, a project and either globs or `rest`; exactly one
+          # `rest` partition per project keeps the partitions gap-free (it takes what others leave).
+          jq -e '
+            (.partitions | length) > 0
+            and ([.partitions[].name] | length) == ([.partitions[].name] | unique | length)
+            and all(.partitions[]; (.name | type) == "string" and (.project | type) == "string"
+                    and ((.rest == true) or ((.mutate | type) == "array" and (.mutate | length) > 0)))
+            and ([.partitions[] | select(.rest == true) | .project] | sort)
+                == ([.partitions[].project] | unique)
+          ' stryker-partitions.json >/dev/null \
+            || { echo "::error file=stryker-partitions.json::invalid partition list (see the checks in this step)"; exit 1; }
+          matrix=$(jq -c '{include: [.partitions[] | {name, project}]}' stryker-partitions.json)
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          jq -r '.partitions[] | "\(.name): \(.project)"' stryker-partitions.json
+
+  mutate:
+    name: Stryker (${{ matrix.name }})
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # The benchmark datasets are Git LFS objects. Without them the behavioural suite reads
+          # 131-byte pointer files, and the 12 dataset tests fail Stryker's initial run (#668).
+          lfs: true
           persist-credentials: false
 
       - name: Setup .NET SDK
@@ -54,82 +97,172 @@ jobs:
       # misattributes a package's commands on the first restore ("The command dotnet-stryker ...
       # is not contained in the package ... The commands contained are dotnet-inspect") and exits
       # non-zero; the second restore succeeds. Without the retry this job failed at this step on
-      # every nightly run, and since it only informs, nobody noticed (docs/51-CI-GATE-MATRIX.md).
+      # every nightly run, and since it only informs, nobody noticed (docs/internals/ci-gate-matrix.md).
       - name: Restore local tools
         run: dotnet tool restore --disable-parallel || dotnet tool restore --disable-parallel
 
       - name: Restore solution dependencies
         run: dotnet restore Parquet.SourceGenerator.slnx --locked-mode
 
-      - name: Build (Release, no generators-in-the-way of test discovery)
-        run: dotnet build Parquet.SourceGenerator.slnx --configuration Release --no-restore
-
-      - name: Stryker — the generator (parser + emitters)
+      # Fails in seconds with the cause, instead of minutes later as failing dataset tests.
+      - name: Verify the LFS datasets are real Parquet files
         run: |
           set -euo pipefail
-          # A fresh runner has no StrykerOutput/: ls then exits non-zero and pipefail would carry that into
-          # the assignment and kill the step before Stryker starts (#575). An empty list is correct.
-          before=$(ls -1d StrykerOutput/*/ 2>/dev/null | sort || true)
-          dotnet tool run dotnet-stryker -- \
-            -p Parquet.SourceGenerator.csproj \
-            --log-to-file
-          after=$(ls -1d StrykerOutput/*/ 2>/dev/null | sort || true)
-          newdir=$(comm -13 <(printf '%s\n' "$before") <(printf '%s\n' "$after") | head -1)
-          if [ -z "$newdir" ]; then
-            echo "::error::Stryker finished without creating a new StrykerOutput directory"
+          n=0
+          for f in benchmarks/data/*.parquet; do
+            [ -e "$f" ] || continue
+            if [ "$(head -c 4 "$f")" != "PAR1" ]; then
+              echo "::error file=$f::$f is not a Parquet file (a Git LFS pointer?). Check out with lfs: true."
+              exit 1
+            fi
+            n=$((n + 1))
+          done
+          if [ "$n" -eq 0 ]; then
+            echo "::error::No benchmarks/data/*.parquet found; the dataset tests would have nothing to read."
             exit 1
           fi
-          echo "GENERATOR_REPORT=$newdir/reports/mutation-report.json" >> "$GITHUB_ENV"
-        timeout-minutes: 100
+          echo "Verified $n LFS datasets."
 
-      - name: Stryker — shipped runtime helpers (Attributes)
+      - name: Stryker — run this partition
+        env:
+          PARTITION: ${{ matrix.name }}
+          PROJECT: ${{ matrix.project }}
+          # Caps the managed heap of every .NET process this step starts (Stryker, the build and
+          # the four test hosts) at 3 GiB. A mutant that makes generated code allocate without
+          # bound then fails its own test host with OutOfMemoryException instead of exhausting
+          # the 16 GB runner. The columnar-batch partition lost its runner ("received a shutdown
+          # signal") 12.5 minutes into mutant testing in two dispatches (#668).
+          DOTNET_GCHeapHardLimit: '0xC0000000'
         run: |
           set -euo pipefail
-          # A fresh runner has no StrykerOutput/: ls then exits non-zero and pipefail would carry that into
-          # the assignment and kill the step before Stryker starts (#575). An empty list is correct.
-          before=$(ls -1d StrykerOutput/*/ 2>/dev/null | sort || true)
-          dotnet tool run dotnet-stryker -- \
-            -p Parquet.SourceGenerator.Attributes.csproj \
-            --log-to-file
-          after=$(ls -1d StrykerOutput/*/ 2>/dev/null | sort || true)
-          newdir=$(comm -13 <(printf '%s\n' "$before") <(printf '%s\n' "$after") | head -1)
-          if [ -z "$newdir" ]; then
-            echo "::error::Stryker finished without creating a new StrykerOutput directory"
+          # The --mutate globs of this partition. A `rest` partition mutates every file of its
+          # project minus the globs of the project's other partitions, so no file is left out.
+          # A {"file", "lines"} entry is one line range of one file. Stryker's {a..b} span is in
+          # characters, not lines, so the range is converted here from the file as checked out;
+          # jq counts code points, which match Roslyn's UTF-16 positions for these BMP-only files.
+          sources=$(mktemp)
+          echo '{}' > "$sources"
+          for f in $(jq -r '[.partitions[].mutate[]? | objects | .file] | unique[]' stryker-partitions.json); do
+            if [ ! -f "$f" ]; then
+              echo "::error file=stryker-partitions.json::A line range names $f, which does not exist"
+              exit 1
+            fi
+            jq -Rs --arg path "$f" --slurpfile acc "$sources" '$acc[0] + {($path): .}' "$f" > "$sources.next"
+            mv "$sources.next" "$sources"
+          done
+          globs=$(jq -r --arg name "$PARTITION" --slurpfile src "$sources" '
+            def offset($text; $line): $text | split("\n")[:($line - 1)] | map(length + 1) | add // 0;
+            def glob:
+              if type == "string" then .
+              else .file as $f | $src[0][$f] as $text
+                | "**/\($f){\(offset($text; .lines[0]))..\(if .lines[1] then offset($text; .lines[1] + 1) else ($text | length) end)}"
+              end;
+            (.partitions[] | select(.name == $name)) as $p
+            | if $p.rest == true
+              then "**/*.cs", (.partitions[] | select(.project == $p.project and .name != $name) | .mutate[]? | "!" + glob)
+              else $p.mutate[] | glob
+              end' stryker-partitions.json)
+          echo "Stryker --mutate patterns for $PARTITION:"
+          printf '  %s\n' "$globs"
+          if [ -z "$globs" ]; then
+            echo "::error::Partition '$PARTITION' has no --mutate globs in stryker-partitions.json"
             exit 1
           fi
-          echo "ATTRIBUTES_REPORT=$newdir/reports/mutation-report.json" >> "$GITHUB_ENV"
-        timeout-minutes: 45
+          args=()
+          while IFS= read -r glob; do
+            args+=(--mutate "$glob")
+          done <<< "$globs"
+          out="$PWD/StrykerOutput/$PARTITION"
+          rm -rf "$out"
+          status=0
+          dotnet tool run dotnet-stryker -- -p "$PROJECT" --output "$out" --log-to-file "${args[@]}" || status=$?
+          if [ "$status" -ne 0 ]; then
+            # Stryker prints no reason when break-on-initial-test-failure stops it; the log does.
+            echo "::error::Stryker exited with $status. A failing test in its initial run stops it (break-on-initial-test-failure); the stryker-logs-$PARTITION artifact has the failing tests."
+            exit "$status"
+          fi
+          if [ ! -s "$out/reports/mutation-report.json" ]; then
+            echo "::error::Stryker finished without writing StrykerOutput/$PARTITION/reports/mutation-report.json"
+            exit 1
+          fi
+        timeout-minutes: 85
+
+      - name: Upload the Stryker logs of a failed partition
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: stryker-logs-${{ matrix.name }}
+          path: StrykerOutput/${{ matrix.name }}/logs/
+          if-no-files-found: ignore
+
+      - name: Upload the partition report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: stryker-report-${{ matrix.name }}
+          path: StrykerOutput/${{ matrix.name }}/reports/mutation-report.json
+          if-no-files-found: warn
+
+  summarize:
+    name: Merge the partition reports
+    needs: [plan, mutate]
+    # Runs when partitions failed too, so a missing report fails here by name, not just by a red job.
+    if: ${{ always() && needs.plan.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # Checkout would otherwise persist a GITHUB_TOKEN Authorization header that wins over the
+          # token in the pr-bot remote below, making the push a GITHUB_TOKEN push that starts no
+          # workflows (#568). Nothing else in this job needs git credentials.
+          persist-credentials: false
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Download the partition reports
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: stryker-report-*
+          path: stryker-reports
 
       - name: Summarize reports
         run: |
           set -euo pipefail
-          : > mutation-headline.md
+          status=0
           dotnet run scripts/MutationSummary.cs -- \
-            --report "$ATTRIBUTES_REPORT" \
-            --label "Parquet.SourceGenerator.Attributes (shipped helpers)" \
-            --out mutation-headline.md --append
-          dotnet run scripts/MutationSummary.cs -- \
-            --report "$GENERATOR_REPORT" \
-            --label "Parquet.SourceGenerator (parser + emitters)" \
-            --out mutation-headline.md --append
-          test -s mutation-headline.md
+            --partitions stryker-partitions.json \
+            --report-path "stryker-reports/stryker-report-{name}/mutation-report.json" \
+            --out mutation-headline.md || status=$?
+          if [ -f mutation-headline.md ]; then
+            cat mutation-headline.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit "$status"
 
       # The headline PR is opened and refreshed with WORKFLOW_PR_TOKEN, a fine-grained personal access
-      # token the owner creates (docs/51-CI-GATE-MATRIX.md, R11). A pull request opened with
+      # token the owner creates (docs/internals/ci-gate-matrix.md, R11). A pull request opened with
       # GITHUB_TOKEN starts no workflows, so it never receives the required checks and can never
       # merge, and a later push to its branch with GITHUB_TOKEN starts none either (#568). Without
       # the secret this step does nothing but say so; the score is in the job summary and the
       # `mutation-headline` artifact.
       - name: Refresh the mutation headline PR
+        # Only a complete sweep of the default branch is the record: a dispatch on a branch is a
+        # trial run, and a partition that failed after writing its report is not a clean result.
+        if: >-
+          ${{ needs.mutate.result == 'success'
+          && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
         env:
           PR_TOKEN: ${{ secrets.WORKFLOW_PR_TOKEN }}
           REPO: ${{ github.repository }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
-          cat mutation-headline.md >> "$GITHUB_STEP_SUMMARY"
           if [ -z "${PR_TOKEN:-}" ]; then
-            msg="WORKFLOW_PR_TOKEN is not configured, so the mutation headline pull request was not refreshed. A pull request opened with GITHUB_TOKEN gets no required checks and cannot merge (#568). The score is in this run's summary and in the mutation-headline artifact. See docs/51-CI-GATE-MATRIX.md (R11) for the secret to create."
+            msg="WORKFLOW_PR_TOKEN is not configured, so the mutation headline pull request was not refreshed. A pull request opened with GITHUB_TOKEN gets no required checks and cannot merge (#568). The score is in this run's summary and in the mutation-headline artifact. See docs/internals/ci-gate-matrix.md (R11) for the secret to create."
             echo "::notice title=Mutation headline PR not refreshed::$msg"
             echo "$msg" >> "$GITHUB_STEP_SUMMARY"
             exit 0
@@ -156,7 +289,7 @@ jobs:
             echo "# Mutation testing headline — latest nightly run"
             echo
             echo "Score computed over the behavioural suite only (snapshot-style tests"
-            echo "excluded — see docs/26-MUTATION-TESTING.md before reading a number)."
+            echo "excluded — see docs/internals/mutation-testing.md before reading a number)."
             echo
             echo "_Updated nightly from the [mutation workflow]($RUN_URL)._"
             echo
@@ -168,7 +301,7 @@ jobs:
           git push -f -u pr-bot "$branch"
           export GH_TOKEN="$PR_TOKEN"
           existing=$(gh pr list --repo "$REPO" --head "$branch" --state open --json number --jq '.[0].number // empty')
-          body="Nightly mutation score over the **behavioural suite only** — golden-file, API-baseline, metrics-baseline and IL-shape tests are deliberately excluded (they kill every mutation trivially; the score would be a flattering lie). Full reasoning: docs/26-MUTATION-TESTING.md. The floor is intentionally unset until this baseline is established (#261 AC); merge or close — this PR is a report, not a request."
+          body="Nightly mutation score over the **behavioural suite only** — golden-file, API-baseline, metrics-baseline and IL-shape tests are deliberately excluded (they kill every mutation trivially; the score would be a flattering lie). Full reasoning: docs/internals/mutation-testing.md. The floor is intentionally unset until this baseline is established (#261 AC); merge or close — this PR is a report, not a request."
           if [ -n "$existing" ]; then
             gh pr edit "$existing" --repo "$REPO" --body "$body"
           else
@@ -185,22 +318,18 @@ jobs:
           path: mutation-headline.md
           if-no-files-found: ignore
 
-      - name: Upload raw Stryker reports
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: stryker-reports
-          path: StrykerOutput/**/reports/*.json
-          if-no-files-found: warn
-
   # A scheduled gate that only turns red is muted by its own history (#564: this workflow failed
-  # unseen for weeks). When the job above fails, open one `area:ci` issue, or comment on the open
+  # unseen for weeks). When any job above fails, open one `area:ci` issue, or comment on the open
   # one. It is a separate job so the only job that runs repo code never holds `issues: write`,
   # and it needs no checkout. Same pattern as metrics-oracle.yml.
   notify-failure:
     name: Report scheduled failure
-    needs: mutate
-    if: ${{ always() && needs.mutate.result == 'failure' }}
+    needs: [plan, mutate, summarize]
+    # The default branch only: a failed trial dispatch on a branch is its author's to read.
+    if: >-
+      ${{ always()
+      && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+      && (needs.plan.result == 'failure' || needs.mutate.result == 'failure' || needs.summarize.result == 'failure') }}
     runs-on: ubuntu-latest
     permissions:
       issues: write

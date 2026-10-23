@@ -8,7 +8,7 @@
     "reporters": [
       "json"
     ],
-    "disable-bail": true,
+    "break-on-initial-test-failure": true,
     "concurrency": 4
   }
 }

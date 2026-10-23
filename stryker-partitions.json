@@ -1,0 +1,203 @@
+{
+  "description": "Partitions of the nightly mutation sweep (#668). One Stryker run over all 9358 generator mutants does not fit a job, so mutation.yml runs one matrix job per partition and MutationSummary.cs merges the reports. Strings are Stryker --mutate globs. A {\"file\", \"lines\": [first, last]} entry mutates only those lines of one file (omit last for the end of the file); the workflow converts it to the character span Stryker expects. A partition with \"rest\": true mutates every file of its project that no other partition of that project claims, so a new source file is always mutated somewhere. MutationSummary.cs fails when a partition's report is missing, covers no mutant, or claims a mutant another partition also tested. See docs/internals/mutation-testing.md before changing the split.",
+  "projects": {
+    "Parquet.SourceGenerator.csproj": "Parquet.SourceGenerator (parser + emitters)",
+    "Parquet.SourceGenerator.Attributes.csproj": "Parquet.SourceGenerator.Attributes (shipped helpers)"
+  },
+  "partitions": [
+    {
+      "name": "parser-1",
+      "project": "Parquet.SourceGenerator.csproj",
+      "mutate": [
+        {
+          "file": "src/Parquet.SourceGenerator/Parser/TargetParser.cs",
+          "lines": [
+            1,
+            891
+          ]
+        }
+      ]
+    },
+    {
+      "name": "parser-2",
+      "project": "Parquet.SourceGenerator.csproj",
+      "mutate": [
+        {
+          "file": "src/Parquet.SourceGenerator/Parser/TargetParser.cs",
+          "lines": [
+            892,
+            1586
+          ]
+        }
+      ]
+    },
+    {
+      "name": "parser-3",
+      "project": "Parquet.SourceGenerator.csproj",
+      "mutate": [
+        {
+          "file": "src/Parquet.SourceGenerator/Parser/TargetParser.cs",
+          "lines": [
+            1587
+          ]
+        }
+      ]
+    },
+    {
+      "name": "emitter-1",
+      "project": "Parquet.SourceGenerator.csproj",
+      "mutate": [
+        {
+          "file": "src/Parquet.SourceGenerator/Emitter/CodeEmitter.cs",
+          "lines": [
+            1,
+            743
+          ]
+        }
+      ]
+    },
+    {
+      "name": "emitter-2a",
+      "project": "Parquet.SourceGenerator.csproj",
+      "mutate": [
+        {
+          "file": "src/Parquet.SourceGenerator/Emitter/CodeEmitter.cs",
+          "lines": [
+            744,
+            1107
+          ]
+        }
+      ]
+    },
+    {
+      "name": "emitter-2b",
+      "project": "Parquet.SourceGenerator.csproj",
+      "mutate": [
+        {
+          "file": "src/Parquet.SourceGenerator/Emitter/CodeEmitter.cs",
+          "lines": [
+            1108,
+            1596
+          ]
+        }
+      ]
+    },
+    {
+      "name": "emitter-3",
+      "project": "Parquet.SourceGenerator.csproj",
+      "mutate": [
+        {
+          "file": "src/Parquet.SourceGenerator/Emitter/CodeEmitter.cs",
+          "lines": [
+            1597
+          ]
+        }
+      ]
+    },
+    {
+      "name": "arrow-1",
+      "project": "Parquet.SourceGenerator.csproj",
+      "mutate": [
+        {
+          "file": "src/Parquet.SourceGenerator/Emitter/ArrowBridgeEmitter.cs",
+          "lines": [
+            1,
+            539
+          ]
+        }
+      ]
+    },
+    {
+      "name": "arrow-2",
+      "project": "Parquet.SourceGenerator.csproj",
+      "mutate": [
+        {
+          "file": "src/Parquet.SourceGenerator/Emitter/ArrowBridgeEmitter.cs",
+          "lines": [
+            540
+          ]
+        }
+      ]
+    },
+    {
+      "name": "columnar-batch",
+      "project": "Parquet.SourceGenerator.csproj",
+      "mutate": [
+        "**/Emitter/Columnar/ColumnarBatchComponent.cs"
+      ]
+    },
+    {
+      "name": "columnar-read",
+      "project": "Parquet.SourceGenerator.csproj",
+      "mutate": [
+        "**/Emitter/Columnar/BatchReadComponent.cs",
+        "**/Emitter/ReadBuilderComponent.cs"
+      ]
+    },
+    {
+      "name": "compound-mapping",
+      "project": "Parquet.SourceGenerator.csproj",
+      "mutate": [
+        "**/Emitter/Compound/CompoundMapping.cs",
+        "**/Emitter/Compound/CompoundSchema.cs"
+      ]
+    },
+    {
+      "name": "compound-columns",
+      "project": "Parquet.SourceGenerator.csproj",
+      "mutate": [
+        "**/Emitter/Compound/CompoundBuffers.cs",
+        "**/Emitter/Compound/LeafColumns.cs",
+        "**/Emitter/RowGroupPruningComponent.cs"
+      ]
+    },
+    {
+      "name": "components-schema",
+      "project": "Parquet.SourceGenerator.csproj",
+      "mutate": [
+        "**/Emitter/Components/SchemaComponent.cs",
+        "**/Emitter/Components/ArrowMappingComponent.cs"
+      ]
+    },
+    {
+      "name": "components-guards",
+      "project": "Parquet.SourceGenerator.csproj",
+      "mutate": [
+        "**/Emitter/Components/DecompressionGuardComponent.cs",
+        "**/Emitter/Components/DictionaryPageComponent.cs",
+        "**/Emitter/Components/RowGroupLayoutComponent.cs"
+      ]
+    },
+    {
+      "name": "components-buffers",
+      "project": "Parquet.SourceGenerator.csproj",
+      "mutate": [
+        "**/Emitter/Components/StringDeduplicatorComponent.cs",
+        "**/Emitter/Components/PropertyMappingComponent.cs",
+        "**/Emitter/Components/BufferPoolComponent.cs",
+        "**/Emitter/Components/AllocationBudgetComponent.cs",
+        "**/Emitter/Components/BatchValidationComponent.cs",
+        "**/Emitter/Components/EmittedText.cs"
+      ]
+    },
+    {
+      "name": "emitter-helpers",
+      "project": "Parquet.SourceGenerator.csproj",
+      "mutate": [
+        "**/Emitter/ColumnHelpersComponent.cs",
+        "**/Emitter/ReadBudget.cs",
+        "**/ParquetIncrementalGenerator.cs"
+      ]
+    },
+    {
+      "name": "generator-rest",
+      "project": "Parquet.SourceGenerator.csproj",
+      "rest": true
+    },
+    {
+      "name": "attributes",
+      "project": "Parquet.SourceGenerator.Attributes.csproj",
+      "rest": true
+    }
+  ]
+}
