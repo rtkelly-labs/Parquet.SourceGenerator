@@ -1,0 +1,78 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <!--
+    The executed test suite for the legacy backend (#597). Parquet.SourceGenerator.Tests pins
+    Parquet.Net 6.x, and Parquet.Net 4.25 ships the same assembly name (`Parquet`), so the legacy
+    generator's output can only run in a project of its own.
+
+    It compiles test/Shared/Behaviour/** (the shared behavioural suite, also compiled into
+    Parquet.SourceGenerator.Tests against the modern backend) plus a thin driver
+    (LegacyBehaviourDriver.cs) that is the only file naming the legacy surface for the shared
+    models. The legacy-only hostile-input matrix lives in Hostile/.
+  -->
+    <PropertyGroup>
+        <TargetFrameworks>net8.0;net472</TargetFrameworks>
+        <IsPackable>false</IsPackable>
+        <IsTestProject>true</IsTestProject>
+        <RootNamespace>Parquet.SourceGenerator.Legacy.Tests</RootNamespace>
+        <!-- net472 defaults to C# 7.3; the generated code needs C# 8 or later (a permanent deviation). -->
+        <LangVersion>latest</LangVersion>
+        <!-- Keeps the emitted legacy source under obj/ for diagnosing a failure against it. -->
+        <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    </PropertyGroup>
+
+    <!--
+    A Linux or macOS runner can build the net472 target (reference assemblies below) but cannot run
+    it without Mono, so `dotnet test` over the solution would fail there. The net472 leg is executed
+    by ci.yml's Windows `net472-consumer` job instead; everywhere else it is compiled only.
+  -->
+    <PropertyGroup Condition="'$(TargetFramework)' == 'net472' And '$(OS)' != 'Windows_NT'">
+        <IsTestProject>false</IsTestProject>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.NET.Test.Sdk" />
+        <PackageReference Include="xunit" />
+        <PackageReference Include="xunit.runner.visualstudio">
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+            <PrivateAssets>all</PrivateAssets>
+        </PackageReference>
+        <PackageReference Include="coverlet.collector">
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+            <PrivateAssets>all</PrivateAssets>
+        </PackageReference>
+        <!-- The legacy support floor (4.25.0 is the last net472-capable Parquet.Net line). -->
+        <PackageReference Include="Parquet.Net" VersionOverride="4.25.0" />
+        <!--
+      Parquet.Net 4.25 reaches Snappier 1.1.6 through IronCompress 1.5.2, which carries
+      GHSA-pggp-6c3x-2xmx and fails the solution's vulnerable-package audit. A direct reference lifts
+      it to the version the modern backend already resolves; a central PackageVersion would instead
+      re-pin it in every other project's lock file.
+    -->
+        <PackageReference Include="Snappier" VersionOverride="1.3.1" />
+        <PackageReference Include="Shouldly" />
+    </ItemGroup>
+
+    <ItemGroup Condition="'$(TargetFramework)' == 'net472'">
+        <PackageReference
+            Include="Microsoft.NETFramework.ReferenceAssemblies"
+            PrivateAssets="all"
+        />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\src\Parquet.SourceGenerator.Attributes\Parquet.SourceGenerator.Attributes.csproj" />
+        <!-- Consumed exactly as a package consumer consumes it: an analyzer, never a compile reference. -->
+        <ProjectReference
+            Include="..\..\src\Parquet.SourceGenerator.Legacy\Parquet.SourceGenerator.Legacy.csproj"
+            OutputItemType="Analyzer"
+            ReferenceOutputAssembly="false"
+        />
+    </ItemGroup>
+
+    <ItemGroup>
+        <Compile
+            Include="..\Shared\Behaviour\**\*.cs"
+            Link="Behaviour\%(RecursiveDir)%(Filename)%(Extension)"
+        />
+    </ItemGroup>
+</Project>

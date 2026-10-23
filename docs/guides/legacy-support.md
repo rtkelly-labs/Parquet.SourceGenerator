@@ -84,14 +84,63 @@ batched writes.
   the extension class name, the `.api.txt` lines are diffed, and any difference not in the
   allowlist fails. The allowlist file marks each entry temporary or permanent. Only temporary
   entries fail when they stop differing.
-- **Shared behavioural suite (#493).** The round-trip, reader and pruning tests run against both
-  backends from one test source.
+- **Shared behavioural suite (#493, #597).** The round-trip, reader and pruning tests run against
+  both backends from one test source: `test/Shared/Behaviour` (see "Executed test suite" below).
 - **Multi-target consumer (#493).** One test project with `TargetFrameworks` of `net472;net8.0`
   builds the same calling source against both backends.
 
 `BackendCompatibilityPolicyTests` currently asserts the opposite: that no modern-only member
 appears in a legacy baseline. It is retired or inverted in the same PR that introduces the parity
 gate. Until then it continues to describe the current state accurately.
+
+## Executed test suite (#597)
+
+`test/Parquet.SourceGenerator.Legacy.Tests` runs the legacy generator's output against a real
+Parquet.Net 4.25.0, on net8.0 in the `test` job and on net472 in the Windows `net472-consumer` job.
+It has its own project because Parquet.Net 4.25 and 6.x both ship assembly `Parquet`.
+
+**Shared behavioural suite.** `test/Shared/Behaviour/**` is compiled into this project and into
+`Parquet.SourceGenerator.Tests`, so the same tests run against both backends. The tests never name
+generated code: they call `BehaviourDriver`, a partial class each project implements once
+(`LegacyBehaviourDriver.cs`, `Behaviour/ModernBehaviourDriver.cs`). A project that links the folder
+without implementing the driver does not compile. #494 and #495 grow the suite by adding models and
+driver members; the legacy renames touch only the legacy driver.
+
+| Matrix | What runs | Where |
+|:--|:--|:--|
+| Type | Every flat type the legacy backend supports (`bool` through `ulong`, `float`, `double`, `decimal` at the default and an explicit precision, `DateTime` at millisecond and microsecond units, `TimeSpan`, `Guid`, `string`, `byte[]`, `int`/`byte`/`long`-backed enums, `Interval`, and on net8.0 `DateOnly` and `TimeOnly`), required and optional, with edge values (minimum, maximum, NaN, infinities, non-ASCII text), through: several row groups, an empty input, a row group whose optional columns are all null, optional columns missing from the file, and a narrower model projecting the wide file | shared |
+| Codec | All six `ParquetCompressionMethod` values at every `ParquetCompressionLevel`, asserted by round trip and by the codec every column chunk records in the footer (never by a size ratio), plus the whole type matrix under each codec | shared |
+| Hostile input | Lying footers (#362: row counts of 2^31, 2^32, -1, above the limit and above the column), structural corruption (truncation, magic, footer length, zeroed or shifted metadata, a hole in the data), trailer and random bit flips, the seven malformed column-chunk bounds, physical and CLR type mismatches, a missing required column, a non-seekable stream, and every `Max*` limit the legacy reader applies (`MaxRowGroupCount`, `MaxAllocationValues`, `MaxAllocationBytes`, `MaxDictionaryEntries`, `MaxStringLengthBytes`, `MaxDecompressedPageSize`, `MaxDecompressionExpansionRatio`), each with an at-limit control | legacy only |
+
+`MaxNestingDepth` does not apply to the flat-only legacy reader; `MaxDegreeOfParallelism` has no
+legacy reader to apply to until #494.
+
+**Fixed by #597.** The suite found two defects, both fixed in the legacy emitter:
+
+- A model with a `TimeSpan`, `TimeOnly` or microsecond `DateTime` member produced generated code
+  that did not compile: the legacy emitter used Parquet.Net 6's `TimeDataField` and
+  `TimeUnitPrecision`, which 4.25 does not have, and `DateTimeFormat.DateAndTimeMicros`, which
+  4.25 has only in its net8.0 build. The legacy backend now writes `TimeSpanDataField` columns
+  (TIME_MILLIS for `TimeSpan`, TIME_MICROS for `TimeOnly`, read back as `TimeSpan` and checked to
+  lie within one day) and, below net8.0, a microsecond `Timestamp` field.
+- `MaxDictionaryEntries` was never applied to files Parquet.Net 4.25 writes. The legacy reader only
+  looked for a dictionary page when the column metadata declared a dictionary encoding, and 4.25
+  writes its dictionary page without declaring one, so the check also trusted a hostile file's
+  word. It now reads the first page header of each chunk.
+
+**Known failures.** Asserted to still fail, so a fix turns the test red until the entry is removed
+from `LegacyBehaviourDriver.IsKnownFailure`; never skipped.
+
+| Behaviour | Why | Test |
+|:--|:--|:--|
+| A zero-length `byte[]` value round-trips | Parquet.Net 4.25 writes it, but its plain decoder throws `IndexOutOfRangeException` reading the column back, required or optional; reproduced without generated code. Upstream, see `UPSTREAM_DEPENDENCY_LIMITATIONS.md`. | `TypeMatrixBehaviourTests.EmptyBinaryValueRoundTrips` |
+
+**Coverage.** The `Parquet.SourceGenerator.Legacy` row of the coverage report measures the emitter
+as the main test project calls it in process; the generator under this suite runs inside the
+compiler, so the suite does not move that row. What the suite executes is the generated code in its
+own assembly, which `coverlet.runsettings` excludes. Measured locally with the test assembly
+included (net8.0, #597): 72.2% of lines and 56.4% of branches across the seven generated legacy
+serializers, 86.6% / 70.7% for the 50-column type-matrix model.
 
 ## End state: one package
 

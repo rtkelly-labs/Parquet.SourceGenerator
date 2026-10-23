@@ -66,6 +66,12 @@ internal static class LegacyCodeEmitter
             builder.AppendLine();
         }
 
+        if (HasTimeOnlyProperty(model))
+        {
+            PropertyMappingComponent.EmitReadClassicTimeOnlyHelper(builder);
+            builder.AppendLine();
+        }
+
         if (StringDeduplicatorComponent.HasStringProperties(model))
         {
             StringDeduplicatorComponent.EmitStringDeduplicator(
@@ -115,7 +121,7 @@ internal static class LegacyCodeEmitter
 
     private static void EmitSchema(StringBuilder builder, TargetClassModel model)
     {
-        SchemaComponent.EmitSchema(builder, model);
+        SchemaComponent.EmitSchema(builder, model, classicApi: true);
     }
 
     private static void EmitStaticFields(StringBuilder builder, TargetClassModel model)
@@ -135,7 +141,7 @@ internal static class LegacyCodeEmitter
         SchemaComponent.EmitValidatePhysicalType(builder);
         builder.AppendLine();
         SchemaComponent.EmitValidateColumnChunkBounds(builder);
-        DictionaryPageComponent.EmitHelpers(builder);
+        DictionaryPageComponent.EmitHelpers(builder, includeEntryCountReader: false);
     }
 
     private static void EmitValidateReader(StringBuilder builder, TargetClassModel model)
@@ -187,21 +193,28 @@ internal static class LegacyCodeEmitter
             "        global::Parquet.SourceGenerator.ParquetSerializerOptions options)"
         );
         builder.AppendLine("    {");
+        // The chunk's first page is read whatever the metadata says. Parquet.Net 4.25 writes a
+        // dictionary page without recording it (its column metadata lists RLE, BIT_PACKED and PLAIN
+        // and has no dictionary_page_offset), so gating on the declared encodings skipped the limit
+        // for every file 4.25 writes, and for any hostile file that leaves the encoding out (#597).
+        // ReadDictionaryPageHeader returns null when the first page is not a dictionary page.
         builder.AppendLine("        var metadata = groupReader.GetMetadata(field).MetaData;");
-        builder.AppendLine("        bool dictionaryEncoded = false;");
-        builder.AppendLine("        foreach (var encoding in metadata.Encodings)");
+        builder.AppendLine("        if (metadata is null || !stream.CanSeek) return;");
+        builder.AppendLine(
+            "        long offset = metadata.DictionaryPageOffset ?? metadata.DataPageOffset;"
+        );
+        builder.AppendLine("        if (offset < 0) return;");
+        builder.AppendLine("        int? dictionaryEntries;");
+        builder.AppendLine("        long savedPosition = stream.Position;");
+        builder.AppendLine("        try");
         builder.AppendLine("        {");
-        builder.AppendLine(
-            "            if (encoding == global::Parquet.Meta.Encoding.PLAIN_DICTIONARY || encoding == global::Parquet.Meta.Encoding.RLE_DICTIONARY)"
-        );
-        builder.AppendLine("            {");
-        builder.AppendLine("                dictionaryEncoded = true;");
-        builder.AppendLine("                break;");
-        builder.AppendLine("            }");
+        builder.AppendLine("            stream.Position = offset;");
+        builder.AppendLine("            dictionaryEntries = ReadDictionaryPageHeader(stream);");
         builder.AppendLine("        }");
-        builder.AppendLine(
-            "        int? dictionaryEntries = dictionaryEncoded ? ReadDictionaryEntryCount(groupReader, stream, field) : null;"
-        );
+        builder.AppendLine("        finally");
+        builder.AppendLine("        {");
+        builder.AppendLine("            stream.Position = savedPosition;");
+        builder.AppendLine("        }");
         builder.AppendLine(
             "        if (dictionaryEntries.HasValue && dictionaryEntries.Value > options.MaxDictionaryEntries)"
         );
@@ -580,7 +593,8 @@ internal static class LegacyCodeEmitter
                 indexVar: "k",
                 bufferPrefix: "colArray_",
                 indent: "            ",
-                useMemoryForTextAndBinary: false
+                useMemoryForTextAndBinary: false,
+                classicApi: true
             );
 
             builder.AppendLine("        }");
@@ -897,7 +911,8 @@ internal static class LegacyCodeEmitter
             rowCountVar: "groupRows",
             indexVar: "k",
             bufferPrefix: "data_",
-            indent: "                    "
+            indent: "                    ",
+            classicApi: true
         );
         builder.AppendLine("                    currentOffset += groupRows;");
         builder.AppendLine("                }");
@@ -926,6 +941,10 @@ internal static class LegacyCodeEmitter
             PropertyKind.DateOnly => prop.IsNullable
                 ? "global::System.DateTime?"
                 : "global::System.DateTime",
+            // Parquet.Net 4.x/5.x reads TIME columns as TimeSpan; see SchemaComponent.
+            PropertyKind.TimeOnly => prop.IsNullable
+                ? "global::System.TimeSpan?"
+                : "global::System.TimeSpan",
             _ => IsReferenceTypeColumn(prop) ? prop.TypeName.TrimEnd('?') : prop.TypeName,
         };
     }
@@ -949,6 +968,19 @@ internal static class LegacyCodeEmitter
     private static bool IsReferenceTypeColumn(PropertyModel prop)
     {
         return BufferPoolComponent.IsReferenceTypeBuffer(prop);
+    }
+
+    private static bool HasTimeOnlyProperty(TargetClassModel model)
+    {
+        foreach (PropertyModel prop in model.Properties)
+        {
+            if (prop.Kind == PropertyKind.TimeOnly)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool IsStringColumn(PropertyModel prop) =>

@@ -202,6 +202,11 @@ public class SerializationBenchmark
 
 This matrix tracks the verification status across all 23 supported schema types and primary execution paths. It audits test sufficiency across the modern v6 generator and legacy v4/v5 backend, distinguishing executed integration coverage from compile-only presence.
 
+The legacy column is backed by `test/Parquet.SourceGenerator.Legacy.Tests` (#597), which runs the
+shared behavioural suite in `test/Shared/Behaviour` (type matrix and codec matrix, also run by the
+main test project against the modern backend) and a legacy hostile-input matrix against Parquet.Net
+4.25 on net8.0 and net472. See [Legacy Support](../guides/legacy-support.md#executed-test-suite-597).
+
 ### 6.1 Type × Path Matrix
 
 | CLR Type / Logical Mapping | Round-Trip (`Write`/`Read`) | Read Terminals (`ToArray`, `IAsyncEnumerable`, `Batches`) | Columnar Write (`WriteColumns`) | Arrow Ingestion (`FromArrowReader`) | Legacy Backend (v4/v5 Execution) |
@@ -218,16 +223,16 @@ This matrix tracks the verification status across all 23 supported schema types 
 | `float`, `float?` | ✅ Verified (`TestDataIntegration`) | ✅ Full terminal coverage | ✅ Verified | ✅ Exercised | ✅ Executed |
 | `double`, `double?` | ✅ Verified (`TestDataIntegration`) | ✅ Full terminal coverage | ✅ Verified | ✅ Exercised | ✅ Executed |
 | `decimal`, `decimal?` (custom prec/scale) | ✅ Verified (TPC-H LineItem & Fixtures) | ✅ Full terminal coverage | ✅ Verified | ✅ Exercised | ✅ Executed |
-| `DateTime`, `DateTime?` (Millis/Micros) | ✅ Verified (`TestDataIntegration`) | ✅ Full terminal coverage | ✅ Verified | ✅ Exercised | ✅ Executed |
-| `TimeSpan`, `TimeSpan?` (Millis/Micros) | ✅ Verified (`TestDataIntegration`) | ✅ Full terminal coverage | ✅ Verified | ✅ Exercised | ✅ Executed |
-| `DateOnly`, `DateOnly?` (Date32) | ✅ Verified (`TestDataIntegration`) | ✅ Full terminal coverage | ✅ Verified | ✅ Exercised | ⚠️ Compiles only (#600) |
-| `TimeOnly`, `TimeOnly?` (Time32/64) | ✅ Verified (`TestDataIntegration`) | ✅ Full terminal coverage | ✅ Verified | ✅ Exercised | ⚠️ Compiles only (#600) |
+| `DateTime`, `DateTime?` (Millis/Micros) | ✅ Verified (`TestDataIntegration`) | ✅ Full terminal coverage | ✅ Verified | ✅ Exercised | ✅ Executed (#597: the microsecond unit did not compile below net8.0 before it) |
+| `TimeSpan`, `TimeSpan?` (Millis/Micros) | ✅ Verified (`TestDataIntegration`) | ✅ Full terminal coverage | ✅ Verified | ✅ Exercised | ✅ Executed (#597: did not compile before it) |
+| `DateOnly`, `DateOnly?` (Date32) | ✅ Verified (`TestDataIntegration`) | ✅ Full terminal coverage | ✅ Verified | ✅ Exercised | ✅ Executed on net8.0 (#597; the type does not exist on net472) |
+| `TimeOnly`, `TimeOnly?` (Time32/64) | ✅ Verified (`TestDataIntegration`) | ✅ Full terminal coverage | ✅ Verified | ✅ Exercised | ✅ Executed on net8.0 (#597: did not compile before it; the type does not exist on net472) |
 | `Guid`, `Guid?` (Fixed-length byte array) | ✅ Verified (`TestDataIntegration`) | ✅ Full terminal coverage | ✅ Verified | ✅ Exercised | ✅ Executed |
 | `string` (Plain & Dictionary) | ✅ Verified (Adult Census & Fuzzing) | ✅ Full terminal coverage | ✅ Verified | ✅ Exercised | ✅ Executed |
-| `byte[]` (Binary byte array) | ✅ Verified (`TestDataIntegration`) | ✅ Full terminal coverage | ✅ Verified | ✅ Exercised | ✅ Executed |
+| `byte[]` (Binary byte array) | ✅ Verified (`TestDataIntegration`) | ✅ Full terminal coverage | ✅ Verified | ✅ Exercised | ✅ Executed; ❌ a zero-length value is a listed known failure (Parquet.Net 4.25 cannot read it back) |
 | `ReadOnlyMemory<byte>` (Zero-copy slice) | ✅ Verified (`TestDataIntegration`) | ✅ Full terminal coverage | ✅ Verified | ⚠️ Unsupported | ❌ Blocked on net472 |
 | `enum` (Int32 underlying type) | ✅ Verified (Diamonds & Fuzzing) | ✅ Full terminal coverage | ✅ Verified | ✅ Exercised | ✅ Executed |
-| `enum` (Non-int: `byte`, `short`, `long`) | ⚠️ Generator-verified | ⚠️ Compiles only | ⚠️ Compiles only | ⚠️ Untested | ⚠️ Compiles only |
+| `enum` (Non-int: `byte`, `short`, `long`) | ✅ `byte` and `long` executed by the shared type matrix (#597) | ⚠️ Compiles only | ⚠️ Compiles only | ⚠️ Untested | ✅ `byte` and `long` executed (#597) |
 | Compound models (Single-level nested) | ✅ Verified (`NestedModelTests`) | ✅ Full terminal coverage | ⚠️ In progress | ❌ Non-goal for Arrow | ⚠️ Scoped subset ([Nested Types Guide](../guides/nested-types.md)) |
 
 ### 6.2 Test Sufficiency Findings & Concrete Gaps
@@ -242,6 +247,6 @@ From the 0.1 testing evaluation, three specific verification gaps remain prior t
    - Primary round-trip and fuzzing tests run against `Snappy`, `Gzip`, and `Uncompressed`. Codec variations like `Zstd` and `Brotli` are exercised in multi-codec TPC-H LineItem benchmarks, but lack complete sweeps across all nullable boundary edge cases.
    - *Target*: Ensure codec variations are parameterized in property-based fuzzing runs (`.github/workflows/fuzz.yml`).
 
-3. **Legacy Integration Suite Execution (#600, #494)**:
-   - While `PackageConsumptionLegacy` confirms end-to-end NuGet package consumption and basic serialization on .NET Framework 4.7.2 and .NET 8, the full suite of 23 types is currently executed only against the modern engine. `DateOnly`, `TimeOnly`, and non-int enums must either have green execution proof in the legacy suite or emit clean compile-time diagnostic rejection (`PARQ006` / `PARQ007`).
+3. **Legacy Integration Suite Execution (#600, #494, #597)**:
+   - Closed for the flat types by #597: the shared type matrix executes every legacy-supported flat type, required and optional, on the legacy backend (net8.0 and net472) and on the modern one. Writing it showed that `TimeSpan`, `TimeOnly` and microsecond `DateTime` members did not compile on the legacy backend at all (fixed) and that a zero-length `byte[]` cannot be read back through Parquet.Net 4.25 (a listed known failure). Still open: the reader surface (#494) and columnar writes (#495) are not in the shared suite yet, and nested types are not on the legacy backend.
 

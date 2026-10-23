@@ -193,11 +193,73 @@ public class LegacyEmitterTests
         code.ShouldContain(
             "if (!missing_1) ValidateDictionaryEntries(rgReader, stream, field_1, options);"
         );
-        code.ShouldContain("ReadDictionaryEntryCount(groupReader, stream, field)");
+        // The dictionary is found by reading the chunk's first page, not by trusting the declared
+        // encodings, which Parquet.Net 4.25 does not record (#597; executed in
+        // Parquet.SourceGenerator.Legacy.Tests' MaxDictionaryEntries test).
+        code.ShouldContain("metadata.DictionaryPageOffset ?? metadata.DataPageOffset");
+        code.ShouldContain("dictionaryEntries = ReadDictionaryPageHeader(stream);");
+        code.ShouldNotContain("ReadDictionaryEntryCount");
+        code.ShouldNotContain("metadata.Encodings");
         code.ShouldContain("ValidateStringLengths(data_0, field_0.Name, options);");
         code.ShouldContain("if (!missing_1) ValidateStringLengths(data_1, field_1.Name, options);");
         code.ShouldContain("options.MaxStringLengthBytes");
         code.ShouldContain("throw new global::System.IO.InvalidDataException");
+    }
+
+    [Fact]
+    public void LegacyTimeColumnsUseTheParquetNet425TimeFields()
+    {
+        // #597: the shared schema and mapping components emitted Parquet.Net 6's TimeDataField and
+        // integer time buffers for the classic backend too, which does not compile against 4.25.
+        // Executed in Parquet.SourceGenerator.Legacy.Tests (type matrix, LegacyTimeColumnTests).
+        LegacyModels::PropertyModel micros = Prop(
+            "Stamp",
+            "stamp",
+            "global::System.DateTime",
+            LegacyModels::PropertyKind.DateTime,
+            false
+        ) with
+        {
+            TimestampUnit = "Microseconds",
+        };
+        string code = Emit(
+            Prop(
+                "Span",
+                "span",
+                "global::System.TimeSpan",
+                LegacyModels::PropertyKind.TimeSpan,
+                false
+            ),
+            Prop(
+                "Time",
+                "time",
+                "global::System.TimeOnly?",
+                LegacyModels::PropertyKind.TimeOnly,
+                true
+            ),
+            micros
+        );
+
+        code.ShouldNotContain("global::Parquet.Schema.TimeDataField(");
+        code.ShouldNotContain("TimeUnitPrecision");
+        code.ShouldContain(
+            "new global::Parquet.Schema.TimeSpanDataField(\"span\", global::Parquet.Schema.TimeSpanFormat.MilliSeconds, isNullable: false)"
+        );
+        code.ShouldContain(
+            "new global::Parquet.Schema.TimeSpanDataField(\"time\", global::Parquet.Schema.TimeSpanFormat.MicroSeconds, isNullable: true)"
+        );
+        code.ShouldContain("#if NET8_0_OR_GREATER");
+        code.ShouldContain("global::Parquet.Schema.DateTimeFormat.DateAndTimeMicros");
+        code.ShouldContain(
+            "global::Parquet.Schema.DateTimeFormat.Timestamp, isAdjustedToUTC: true, unit: global::Parquet.Schema.DateTimeTimeUnit.Micros"
+        );
+        code.ShouldContain("colArray_0[k] = item.Span;");
+        code.ShouldContain(
+            "colArray_1[k] = item.Time is null ? (global::System.TimeSpan?)null : item.Time.Value.ToTimeSpan();"
+        );
+        code.ShouldContain("ReadClassicTimeOnly(data_1[k].Value)");
+        code.ShouldContain("private static global::System.TimeOnly ReadClassicTimeOnly(");
+        code.ShouldNotContain("ReadTimeOnly(");
     }
 
     [Fact]

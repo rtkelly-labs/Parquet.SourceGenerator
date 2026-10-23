@@ -46,6 +46,27 @@ The upstream change that would remove the allocation gap is a caller-buffer read
 actively developed. Revisit if a net472-capable Parquet.Net release ever adds one, or if 6.x
 regains a `netstandard2.0` target.
 
+## Parquet.Net 4.25.0 Cannot Read A Zero-Length Binary Value
+
+Parquet.Net 4.25.0 writes a `byte[]` column containing a zero-length value, but reading the column
+back throws `IndexOutOfRangeException` from `ParquetPlainEncoder.Decode`, for required and optional
+columns alike. Reproduced against Parquet.Net 4.25.0 directly (`DataColumn` write, `ReadColumnAsync`
+read), so no generated code is involved; empty strings are unaffected. The legacy backend therefore
+cannot round-trip an empty `byte[]`, and a file from another writer that contains one fails to read
+with that exception rather than `InvalidDataException`. Listed as a known failure of the legacy
+backend (`TypeMatrixBehaviourTests.EmptyBinaryValueRoundTrips`, #597): the test asserts it still
+fails, so a fixed Parquet.Net turns it red until the entry is removed.
+
+## Parquet.Net 4.25.0 Does Not Record Its Dictionary Pages
+
+Parquet.Net 4.25.0 dictionary-encodes string columns but writes column metadata that lists only
+`RLE`, `BIT_PACKED` and `PLAIN` and carries no `dictionary_page_offset`; the dictionary page simply
+sits at `data_page_offset`. A reader that decides whether a chunk has a dictionary from the declared
+encodings sees none. The legacy generated reader used to, so `MaxDictionaryEntries` was never applied
+to files 4.25 writes, nor to any hostile file that omits the encoding. Since #597 it reads the first
+page header of every chunk instead. The modern reader still gates on the declared encodings
+(`ColumnHelpersComponent`), so a 4.25-written file read through it is not checked either.
+
 ## Parquet.Net 6.1.0 And 4.25.0 Size Allocations From Untrusted Footer Counts
 
 `ParquetSerializerOptions.MaxAllocationValues` is a per-column **count** of values (default
