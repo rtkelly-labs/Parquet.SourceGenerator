@@ -7,11 +7,26 @@ using System.Xml.Linq;
 
 // Require evidence that the 0.1 contract suites actually executed. Counts may change when
 // redundant cases are removed; named behavioral suites and whole-project execution may not.
+//
+// With no arguments it checks the reports of ci.yml's `test` job (Linux, net8.0). With `--net472`
+// it checks only the legacy suite's .NET Framework report, which the Windows `net472-consumer`
+// job produces: a Linux runner cannot execute net472 (#597).
 const string CoreReport = "ci-core.trx";
 const string ExternalReport = "ci-external.trx";
+const string Net472Report = "ci-net472.trx";
 
 const string MainResults = "test/Parquet.SourceGenerator.Tests/TestResults/";
 const string AbiResults = "test/Parquet.SourceGenerator.AbiMatrix/TestResults/";
+const string LegacyResults = "test/Parquet.SourceGenerator.Legacy.Tests/TestResults/";
+
+// The legacy backend's executed suite (#597): the shared behavioural suites, run against Parquet.Net
+// 4.25, plus its hostile-input matrix. The same shared suites are required of the modern report.
+string[] legacySuites =
+[
+    "Parquet.SourceGenerator.Behaviour.TypeMatrixBehaviourTests",
+    "Parquet.SourceGenerator.Behaviour.CodecBehaviourTests",
+    "Parquet.SourceGenerator.Legacy.Tests.Hostile.LegacyHostileInputTests",
+];
 
 string fixture = """
     <TestRun>
@@ -29,9 +44,35 @@ if (
         ["ContractTest"],
         out _
     )
+    // A run that executed nothing (a filter that matches no test, a project that lost its tests).
+    || Verify(
+        XDocument.Parse(
+            fixture
+                .Replace(
+                    "total=\"1\" executed=\"1\" passed=\"1\"",
+                    "total=\"0\" executed=\"0\" passed=\"0\""
+                )
+                .Replace("<UnitTestResult testId=\"1\" outcome=\"Passed\" />", string.Empty)
+        ),
+        ["ContractTest"],
+        out _
+    )
 )
 {
     Console.Error.WriteLine("Required-suite gate positive controls failed.");
+    return 1;
+}
+
+if (args.Length == 1 && args[0] == "--net472")
+{
+    return VerifyFile(Path.Combine(LegacyResults, Net472Report), legacySuites) ? 0 : 1;
+}
+
+if (args.Length != 0)
+{
+    Console.Error.WriteLine(
+        "Usage: dotnet run scripts/VerifyRequiredTestExecution.cs [-- --net472]"
+    );
     return 1;
 }
 
@@ -47,8 +88,11 @@ valid &= VerifyFile(
         "Parquet.SourceGenerator.Tests.VersionAndSchemaEvolutionMatrixTests",
         "Parquet.SourceGenerator.Tests.Security.DecompressionGuardReadPathTests",
         "Parquet.SourceGenerator.Tests.Security.HostileParquetTests",
+        "Parquet.SourceGenerator.Behaviour.TypeMatrixBehaviourTests",
+        "Parquet.SourceGenerator.Behaviour.CodecBehaviourTests",
     ]
 );
+valid &= VerifyFile(Path.Combine(LegacyResults, CoreReport), legacySuites);
 valid &= VerifyFile(
     Path.Combine(AbiResults, CoreReport),
     [

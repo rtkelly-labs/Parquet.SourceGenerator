@@ -9,7 +9,25 @@ namespace Parquet.SourceGenerator.Emitter.Components;
 /// </summary>
 internal static class DictionaryPageComponent
 {
-    public static void EmitHelpers(StringBuilder builder)
+    /// <summary>
+    /// Emits the dictionary page-header readers.
+    /// </summary>
+    /// <param name="builder">The builder.</param>
+    /// <param name="includeEntryCountReader">
+    /// False for the classic backend, which finds the first page of a chunk itself (see
+    /// <c>LegacyCodeEmitter</c>) and would otherwise carry an unused <c>ReadDictionaryEntryCount</c>.
+    /// </param>
+    public static void EmitHelpers(StringBuilder builder, bool includeEntryCountReader = true)
+    {
+        if (includeEntryCountReader)
+        {
+            EmitEntryCountReader(builder);
+        }
+
+        EmitPageHeaderReaders(builder);
+    }
+
+    private static void EmitEntryCountReader(StringBuilder builder)
     {
         builder.AppendLine("    private static int? ReadDictionaryEntryCount(");
         builder.AppendLine("        global::Parquet.ParquetRowGroupReader groupReader,");
@@ -36,6 +54,10 @@ internal static class DictionaryPageComponent
         builder.AppendLine("        }");
         builder.AppendLine("    }");
         builder.AppendLine();
+    }
+
+    private static void EmitPageHeaderReaders(StringBuilder builder)
+    {
         builder.AppendLine(
             "    private static int? ReadDictionaryPageHeader(global::System.IO.Stream stream)"
         );

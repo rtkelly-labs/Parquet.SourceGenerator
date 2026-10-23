@@ -13,12 +13,45 @@ internal static class SchemaComponent
     /// </summary>
     public static string BoolLiteral(bool value) => value ? "true" : "false";
 
+    private static bool IsMicrosecondTimestamp(PropertyModel prop) =>
+        prop.TimestampUnit == "1" || prop.TimestampUnit?.Contains("Microseconds") == true;
+
     /// <summary>
     /// Generates compile-time ParquetSchema DataField instantiation code.
     /// </summary>
-    public static string GetFieldCreationExpression(PropertyModel prop)
+    public static string GetFieldCreationExpression(PropertyModel prop) =>
+        GetFieldCreationExpression(prop, classicApi: false);
+
+    /// <summary>
+    /// Generates compile-time ParquetSchema DataField instantiation code for the given API level.
+    /// </summary>
+    /// <param name="prop">The member.</param>
+    /// <param name="classicApi">
+    /// True for the Parquet.Net 4.x/5.x backend, whose time fields differ from 6.x: 4.25 has no
+    /// <c>TimeDataField</c>/<c>TimeUnitPrecision</c> (its <c>TimeSpanDataField</c> columns carry
+    /// <c>TimeSpan</c> values directly, and it reads every TIME column back as one), and its
+    /// <c>DateTimeFormat.DateAndTimeMicros</c> exists only in the net8.0 build (#597).
+    /// <c>DateTimeFormat.Timestamp</c> with a microsecond unit is in every 4.25 build.
+    /// </param>
+    public static string GetFieldCreationExpression(PropertyModel prop, bool classicApi)
     {
         string name = EmittedText.Literal(prop.ParquetColumnName);
+
+        if (classicApi)
+        {
+            string nullable = BoolLiteral(prop.IsNullable);
+            switch (prop.Kind)
+            {
+                case PropertyKind.DateTime when IsMicrosecondTimestamp(prop):
+                    return $"new global::Parquet.Schema.DateTimeDataField({name}, global::Parquet.Schema.DateTimeFormat.Timestamp, isAdjustedToUTC: true, unit: global::Parquet.Schema.DateTimeTimeUnit.Micros, isNullable: {nullable})";
+                case PropertyKind.TimeSpan:
+                    return $"new global::Parquet.Schema.TimeSpanDataField({name}, global::Parquet.Schema.TimeSpanFormat.MilliSeconds, isNullable: {nullable})";
+                // 4.25 reads a TIME column back as a TimeSpan field whatever wrote it, so the
+                // classic backend carries TimeOnly as a TimeSpan of TIME_MICROS (the same file).
+                case PropertyKind.TimeOnly:
+                    return $"new global::Parquet.Schema.TimeSpanDataField({name}, global::Parquet.Schema.TimeSpanFormat.MicroSeconds, isNullable: {nullable})";
+            }
+        }
 
         return prop.Kind switch
         {
@@ -29,9 +62,7 @@ internal static class SchemaComponent
             PropertyKind.Decimal =>
                 $"new global::Parquet.Schema.DecimalDataField({name}, 38, 18, isNullable: {BoolLiteral(prop.IsNullable)})",
 
-            PropertyKind.DateTime
-                when prop.TimestampUnit == "1"
-                    || prop.TimestampUnit?.Contains("Microseconds") == true =>
+            PropertyKind.DateTime when IsMicrosecondTimestamp(prop) =>
                 $"new global::Parquet.Schema.DateTimeDataField({name}, global::Parquet.Schema.DateTimeFormat.DateAndTimeMicros, isNullable: {BoolLiteral(prop.IsNullable)})",
 
             PropertyKind.DateTime =>
@@ -76,7 +107,11 @@ internal static class SchemaComponent
     /// <summary>
     /// Emits compile-time ParquetSchema definition.
     /// </summary>
-    public static void EmitSchema(StringBuilder builder, TargetClassModel model)
+    public static void EmitSchema(
+        StringBuilder builder,
+        TargetClassModel model,
+        bool classicApi = false
+    )
     {
         builder.AppendLine("    /// <summary>");
         builder.AppendLine(
@@ -91,7 +126,24 @@ internal static class SchemaComponent
         {
             PropertyModel prop = model.Properties[i];
             string comma = i < model.Properties.Length - 1 ? "," : "";
-            builder.AppendLine($"        {GetFieldCreationExpression(prop)}{comma}");
+            if (classicApi && prop.Kind == PropertyKind.DateTime && IsMicrosecondTimestamp(prop))
+            {
+                // A net8.0+ consumer resolves Parquet.Net 4.25's net8.0 build, the only one with
+                // DateAndTimeMicros, which also records the TIMESTAMP_MICROS converted type; every
+                // other build gets the logical-type-only Timestamp field (#597).
+                builder.AppendLine("#if NET8_0_OR_GREATER");
+                builder.AppendLine(
+                    $"        new global::Parquet.Schema.DateTimeDataField({EmittedText.Literal(prop.ParquetColumnName)}, global::Parquet.Schema.DateTimeFormat.DateAndTimeMicros, isNullable: {BoolLiteral(prop.IsNullable)}){comma}"
+                );
+                builder.AppendLine("#else");
+                builder.AppendLine(
+                    $"        {GetFieldCreationExpression(prop, classicApi)}{comma}"
+                );
+                builder.AppendLine("#endif");
+                continue;
+            }
+
+            builder.AppendLine($"        {GetFieldCreationExpression(prop, classicApi)}{comma}");
         }
 
         builder.AppendLine("    );");

@@ -94,4 +94,16 @@
         />
         <AdditionalFiles Include="BannedSymbols.txt" />
     </ItemGroup>
+
+    <!--
+    The shared behavioural suite (#597): the same tests also compile into
+    Parquet.SourceGenerator.Legacy.Tests against the legacy backend. Behaviour/ModernBehaviourDriver.cs
+    is this project's implementation of the driver it calls.
+  -->
+    <ItemGroup>
+        <Compile
+            Include="..\Shared\Behaviour\**\*.cs"
+            Link="Behaviour\Shared\%(RecursiveDir)%(Filename)%(Extension)"
+        />
+    </ItemGroup>
 </Project>
