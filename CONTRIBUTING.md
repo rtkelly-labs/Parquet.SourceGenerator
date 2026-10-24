@@ -42,7 +42,7 @@ dotnet tool run paket restore --fail-on-checks --force  # CI's check: fails if p
 
 CI runs `dotnet tool run paket restore --fail-on-checks` on a fresh checkout. Locally add `--force`: once a restore has succeeded, the cache in the ignored `paket-files/` short-circuits the check and it exits 0 even when the two files disagree.
 
-Commit `paket.lock` (and `paket.dependencies` or `paket.references` if you changed them) with the change. Widening a range, for example taking a new major version, is an edit to `paket.dependencies` followed by `dotnet tool run paket update <package>`. Dependabot does not read Paket, so it never opens pull requests for these packages; the weekly `paket-outdated` workflow keeps one issue labelled `paket-outdated` listing what is out of date.
+Commit `paket.lock` (and `paket.dependencies` or `paket.references` if you changed them) with the change. Widening a range, for example taking a new major version, is an edit to `paket.dependencies` followed by `dotnet tool run paket update <package>`. Dependabot does not read Paket, so it never opens pull requests for these packages; the weekly `paket-outdated` workflow (`scripts/PaketOutdated.cs`) keeps one issue labelled `paket-outdated` listing what is out of date. Run `dotnet run scripts/PaketOutdated.cs -- --root . --out artifacts/paket-outdated.md --verdict artifacts/paket-outdated.txt` for the same report locally.
 
 ### 2. Run Test Suite
 ```bash
