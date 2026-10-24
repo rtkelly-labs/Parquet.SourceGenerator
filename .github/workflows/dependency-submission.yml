@@ -14,9 +14,11 @@ name: Dependency Submission
 # scripts/DependencySnapshot.cs turns the scan into the snapshot and fails closed on an empty one.
 #
 # Security model: push to main and manual dispatch on main only, never pull requests, so the
-# `contents: write` token (needed by the submission API alone) never meets code from a fork. The
-# repository code that runs is the restore (Paket, MSBuild restore targets) and the snapshot
-# script; the token is handed to the final `gh api` step only.
+# `contents: write` token (needed by the submission API alone) never meets code from a fork. Two
+# jobs: `scan` (read-only) runs all repository code (the restore, with Paket and the MSBuild
+# restore targets, and the snapshot script) and uploads snapshot.json; `submit` holds
+# `contents: write`, checks out nothing and only calls `gh api`. Repository code in the same job as
+# the token could add a directory to $GITHUB_PATH and shadow `gh` for the step that holds it.
 on:
   push:
     branches: [main]
@@ -30,8 +32,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  submit:
-    name: dependency-submission
+  scan:
+    name: dependency-scan
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -40,8 +42,7 @@ jobs:
       CD_VERSION: v8.0.4
       CD_SHA256: 8348597b457f0570e231e5a0b14f2f68a842d5d04a91acda9d47707f4f356ac5
     permissions:
-      # The dependency submission API requires contents: write; nothing here pushes.
-      contents: write
+      contents: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -92,7 +93,32 @@ jobs:
           --detector-version "${CD_VERSION#v}"
           --require benchmarks/Parquet.SourceGenerator.Benchmarks/Parquet.SourceGenerator.Benchmarks.csproj
 
+      - name: Upload the dependency snapshot
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: dependency-snapshot
+          path: ${{ runner.temp }}/snapshot.json
+          if-no-files-found: error
+          retention-days: 1
+
+  submit:
+    name: dependency-submission
+    needs: [scan]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      # The dependency submission API requires contents: write; nothing here pushes, and this job
+      # runs no repository code.
+      contents: write
+    steps:
+      - name: Download the dependency snapshot
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dependency-snapshot
+          path: ${{ runner.temp }}/snapshot
+
       - name: Submit the dependency snapshot
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh api --method POST "repos/$GITHUB_REPOSITORY/dependency-graph/snapshots" --input "$RUNNER_TEMP/snapshot.json"
+        run: gh api --method POST "repos/$GITHUB_REPOSITORY/dependency-graph/snapshots" --input "$RUNNER_TEMP/snapshot/snapshot.json"

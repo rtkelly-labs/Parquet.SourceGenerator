@@ -135,9 +135,10 @@ each project's `obj/project.assets.json` when there is no binary log); the `NuGe
 also parse `paket.lock` and submit the benchmark project's packages a second time, with no edges.
 `scripts/DependencySnapshot.cs` turns the scan into the snapshot (one manifest per project, direct
 and indirect packages with their edges) and fails closed when the scan did not succeed, resolved
-nothing, or lost the benchmark project; `gh api` submits it. It needs `contents: write`, which the
-submission API requires; it never runs on pull requests, and the repository code it executes is
-the restore and the snapshot script. Locally, v8.0.4 over a restored checkout gives 11 project
+nothing, or lost the benchmark project; `gh api` submits it. Only the final `submit` job holds `contents:
+write`, which the submission API requires: it downloads the snapshot artifact and runs `gh api`,
+and no repository code. The read-only `scan` job runs the restore, the scan and the snapshot
+script. It never runs on pull requests. Locally, v8.0.4 over a restored checkout gives 11 project
 manifests and 200 packages, 39 of them the benchmark project's. All 39 show as direct: Paket
 writes its whole resolved closure into the project as top-level references, so the edges are
 there but every package is also "referenced".
