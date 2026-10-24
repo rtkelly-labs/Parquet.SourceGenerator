@@ -3,13 +3,14 @@ name: Paket Outdated Report
 # Dependabot and Renovate do not read Paket, so for the Paket-managed projects (ADR 0004,
 # docs/architecture/adrs/0004-paket-pilot.md) this weekly report is what says an update exists. It
 # keeps ONE tracking issue, found by the `paket-outdated` label: opened or updated while
-# `paket outdated` finds a newer version inside the ranges in paket.dependencies (what
-# `dotnet tool run paket update` would take), closed once it finds none. A second section lists every
-# update with the ranges ignored (`--ignore-constraints`, which repeats the in-range ones), for
-# information only; taking one outside its range is a deliberate edit of paket.dependencies.
+# scripts/PaketOutdated.cs finds a newer version inside the ranges in paket.dependencies (what
+# `dotnet tool run paket update` would take), closed once it finds none. Its second section lists
+# declared packages (the transitive floors included) whose newest version is outside their range,
+# for information only; taking one is a deliberate edit of paket.dependencies. The script reads
+# Paket.Core's API, so no `paket outdated` output is parsed.
 #
-# Two jobs, so the one holding `issues: write` runs no repository code: `outdated` runs Paket with
-# a read-only token and hands its output over as a job output; `report` only calls the API.
+# Two jobs, so the one holding `issues: write` runs no repository code: `outdated` runs the script
+# with a read-only token and hands its report over as a job output; `report` only calls the API.
 on:
   schedule:
     # Mondays 05:17 UTC, clear of the Monday fuzz run (03:00) and the Sunday benchmarks.
@@ -37,7 +38,7 @@ jobs:
         with:
           persist-credentials: false
 
-      # Paket is a net10.0 local tool.
+      # Paket.Core 11 targets net10.0.
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
@@ -45,42 +46,18 @@ jobs:
             8.0.x
             10.0.x
 
-      - name: Restore local tools
-        run: dotnet tool restore --disable-parallel || dotnet tool restore --disable-parallel
-
-      - name: Run paket outdated
+      - name: Run the Paket outdated report
         id: report
         run: |
           set -euo pipefail
-          # A failing Paket run fails the job; it must not read as "nothing outdated".
-          dotnet tool run paket outdated > "$RUNNER_TEMP/within.txt"
-          dotnet tool run paket outdated --ignore-constraints > "$RUNNER_TEMP/beyond.txt"
-          if grep -q 'Outdated packages found' "$RUNNER_TEMP/within.txt"; then
-            outdated=true
-          elif grep -q 'No outdated packages found' "$RUNNER_TEMP/within.txt"; then
-            outdated=false
-          else
-            echo "::error::paket outdated printed neither verdict; refusing to report"
-            cat "$RUNNER_TEMP/within.txt"
-            exit 1
-          fi
-          {
-            echo "## Inside the ranges in paket.dependencies"
-            echo
-            echo "Take these with \`dotnet tool run paket update <package>\` (or \`dotnet tool run paket update\` for all), then commit paket.lock."
-            echo
-            echo '```'
-            grep -v -e '^Paket version' -e '^Total time taken' "$RUNNER_TEMP/within.txt"
-            echo '```'
-            echo
-            echo "## Every update, ignoring the ranges (information only)"
-            echo
-            echo "This repeats anything listed above. An entry that is not above needs its range in paket.dependencies widened on purpose."
-            echo
-            echo '```'
-            grep -v -e '^Paket version' -e '^Total time taken' "$RUNNER_TEMP/beyond.txt"
-            echo '```'
-          } > "$RUNNER_TEMP/report.md"
+          # A failing run exits non-zero and writes no verdict, so it fails the job; it must not
+          # read as "nothing outdated".
+          dotnet run scripts/PaketOutdated.cs -- --root . --out "$RUNNER_TEMP/report.md" --verdict "$RUNNER_TEMP/verdict.txt"
+          outdated=$(cat "$RUNNER_TEMP/verdict.txt")
+          case "$outdated" in
+            true|false) ;;
+            *) echo "::error::unexpected verdict '$outdated'"; exit 1 ;;
+          esac
           cat "$RUNNER_TEMP/report.md" >> "$GITHUB_STEP_SUMMARY"
           delimiter="EOF_$(openssl rand -hex 16)"
           {
@@ -112,7 +89,7 @@ jobs:
           gh label create "$label" --color 0E8A16 --description "Weekly paket outdated report (ADR 0004)" >/dev/null 2>&1 || true
           existing=$(gh issue list --state open --label "$label" --json number --jq '.[0].number // empty')
           {
-            echo "Weekly \`dotnet tool run paket outdated\` for the Paket-managed projects ([run]($RUN_URL)). This issue is updated in place each week and closed by the workflow once nothing inside the ranges is outdated. See docs/architecture/adrs/0004-paket-pilot.md."
+            echo "Weekly Paket outdated report (scripts/PaketOutdated.cs) for the Paket-managed projects ([run]($RUN_URL)). This issue is updated in place each week and closed by the workflow once nothing inside the ranges is outdated. See docs/architecture/adrs/0004-paket-pilot.md."
             echo
             printf '%s\n' "$REPORT"
           } > "$RUNNER_TEMP/body.md"

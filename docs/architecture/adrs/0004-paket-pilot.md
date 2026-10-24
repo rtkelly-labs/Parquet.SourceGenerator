@@ -113,25 +113,34 @@ benchmarks themselves stay on .NET 8.
 
 Dependabot keeps `nuget` on: it still covers every other project. It does not read Paket, so it no
 longer sees the benchmark project's packages. In its place, `paket-outdated.yml` runs weekly (and
-on dispatch) and keeps one issue labelled `paket-outdated`. The issue is open while
-`dotnet tool run paket outdated` finds a newer version inside the ranges (what `dotnet tool run paket update` would
-take) and is closed by the workflow once it finds none. Every update with the ranges ignored, from
-`--ignore-constraints` (which repeats the in-range ones), is listed for information; taking one
-outside its range is a deliberate range edit. The job
-that runs Paket has a read-only token; the job with `issues: write` runs no repository code.
+on dispatch) and keeps one issue labelled `paket-outdated`. It runs `scripts/PaketOutdated.cs`,
+which asks Paket.Core directly (`FindOutdated`, `GetDirectDependencies`) rather than parsing
+`paket outdated` output. The issue is open while there is a newer version inside the ranges (what
+`dotnet tool run paket update` would take) and is closed by the workflow once there is none. A
+second section lists, for information, the packages declared in `paket.dependencies` (the
+transitive floors included) whose newest version is outside their range; taking one is a
+deliberate range edit. Undeclared packages are left out: they follow their parents, so
+`--ignore-constraints` over the whole lock (about 40 lines today, almost all transitive) was noise.
+Paket.Core's version is held to the Paket tool's by a gate test. The job that runs the script has
+a read-only token; the job with `issues: write` runs no repository code.
 
 ### Security alerts without the static graph
 
 `dependency-submission.yml` runs on push to `main` (and dispatch on `main`), restores, and submits
-the resolved NuGet graph with `advanced-security/component-detection-dependency-submission-action`
-(SHA-pinned, NuGet detectors only, `fail-on-empty`). It needs `contents: write`, which the
-submission API requires; it never runs on pull requests, and the only repository code it executes
-is the restore. Two caveats: the action downloads the latest `microsoft/component-detection`
-release when it runs, so that binary is not pinned; and component detection also parses
-`paket.lock` directly and reports the lower bound of each dependency range as a component (for
-example `System.Memory 4.5.1` from `Microsoft.Extensions.Primitives`' `>= 4.5.1`), which can
-over-report. A local run of component-detection v8.0.5 over a restored checkout found all 38
-packages of the benchmark project from its `project.assets.json`.
+the resolved NuGet graph. It runs `microsoft/component-detection` itself, pinned to v8.0.4 by
+version and SHA-256, rather than through `advanced-security/component-detection-dependency-submission-action`,
+which always downloads the newest release (so the submitted graph could change with nothing in
+this repository changing). Only the project-assets detector runs (`MSBuildBinaryLog`, which reads
+each project's `obj/project.assets.json` when there is no binary log); the `NuGet` detector would
+also parse `paket.lock` and submit the benchmark project's packages a second time, with no edges.
+`scripts/DependencySnapshot.cs` turns the scan into the snapshot (one manifest per project, direct
+and indirect packages with their edges) and fails closed when the scan did not succeed, resolved
+nothing, or lost the benchmark project; `gh api` submits it. It needs `contents: write`, which the
+submission API requires; it never runs on pull requests, and the repository code it executes is
+the restore and the snapshot script. Locally, v8.0.4 over a restored checkout gives 11 project
+manifests and 200 packages, 39 of them the benchmark project's. All 39 show as direct: Paket
+writes its whole resolved closure into the project as top-level references, so the edges are
+there but every package is also "referenced".
 
 ## Phased plan
 
