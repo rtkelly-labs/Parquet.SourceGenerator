@@ -90,6 +90,18 @@ jobs:
           # Exact version: the action otherwise installs the latest uv on every run.
           version: "0.12.21"
 
+      - name: Restore local tools
+        run: |
+          # Workaround for dotnet/sdk #53783: cold tool-resolver cache can misattribute package commands on initial restore
+          dotnet tool restore --disable-parallel || dotnet tool restore --disable-parallel
+
+      # Paket pilot (docs/architecture/adrs/0004-paket-pilot.md). Strict: fails when
+      # paket.dependencies and paket.lock disagree; plain `paket restore` ignores the drift. Needs
+      # the local tools, and runs before the solution restore, which calls Paket for the
+      # Paket-managed projects.
+      - name: Restore Paket dependencies (strict)
+        run: dotnet tool run paket restore --fail-on-checks
+
       - name: Restore solution dependencies
         run: dotnet restore Parquet.SourceGenerator.slnx --locked-mode
 
@@ -114,11 +126,6 @@ jobs:
       # bogus CS1503 against every call into the generated *ParquetExtensions API. Non-layout
       # style rules are enforced by the build below, via EnforceCodeStyleInBuild plus
       # -warnaserror, which uses the real compilation where generators do run.
-      - name: Restore local tools
-        run: |
-          # Workaround for dotnet/sdk #53783: cold tool-resolver cache can misattribute package commands on initial restore
-          dotnet tool restore --disable-parallel || dotnet tool restore --disable-parallel
-
       - name: Verify C# Code Formatting (CSharpier)
         run: dotnet csharpier check .
 
@@ -458,6 +465,12 @@ jobs:
           dotnet-version: |
             8.0.x
             10.0.x
+
+      - name: Restore local tools
+        run: dotnet tool restore --disable-parallel || dotnet tool restore --disable-parallel
+
+      - name: Restore Paket dependencies (strict)
+        run: dotnet tool run paket restore --fail-on-checks
 
       - name: Restore dependencies
         run: dotnet restore Parquet.SourceGenerator.slnx --locked-mode

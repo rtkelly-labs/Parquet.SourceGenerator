@@ -1,0 +1,63 @@
+name: Dependency Submission
+
+# GitHub's dependency graph (and so Dependabot security alerts) reads packages.lock.json and
+# Directory.Packages.props, but not Paket. This submits the resolved NuGet graph of the whole
+# solution, Paket-managed projects included, through the dependency submission API, so security
+# alerts keep seeing the packages a Paket-managed project uses (ADR 0004,
+# docs/architecture/adrs/0004-paket-pilot.md). Component detection's NuGet detectors read each
+# project's obj/project.assets.json, which a Paket-managed project still gets from the NuGet
+# restore Paket drives, so the restore below must run first.
+#
+# Security model: push to main and manual dispatch on main only, never pull requests, so the
+# `contents: write` token (needed by the submission API alone) never meets code from a fork. The
+# only repository code that runs is the restore (Paket, MSBuild restore targets).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  submit:
+    name: dependency-submission
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      # The dependency submission API requires contents: write; nothing here pushes.
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Restore local tools
+        run: dotnet tool restore --disable-parallel || dotnet tool restore --disable-parallel
+
+      - name: Restore Paket dependencies (strict)
+        run: dotnet tool run paket restore --fail-on-checks
+
+      # Writes obj/project.assets.json for every project, which is what the NuGet detectors read.
+      - name: Restore solution dependencies
+        run: dotnet restore Parquet.SourceGenerator.slnx --locked-mode
+
+      - name: Submit the NuGet dependency graph
+        uses: advanced-security/component-detection-dependency-submission-action@a02aeda7a175ad4dd38a13c4d3ff2df9da8f2cf0 # v0.2.0
+        with:
+          detectorsCategories: NuGet
+          # Fail rather than submit an empty snapshot that would clear the graph.
+          fail-on-empty: 'true'

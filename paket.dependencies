@@ -1,0 +1,30 @@
+// Paket pilot: docs/architecture/adrs/0004-paket-pilot.md. Only projects with a paket.references
+// file are Paket-managed; every other project still uses Directory.Packages.props and its
+// packages.lock.json. After editing this file run `dotnet tool run paket install` and commit paket.lock.
+// CI restores with `dotnet tool run paket restore --fail-on-checks`, which fails when this file and
+// paket.lock disagree.
+//
+// Version operators: `~> 6.1` allows 6.x but not 7.0, `~> 4.8.0` allows 4.8.x only. paket.lock
+// holds the exact version; `dotnet tool run paket update <package>` moves it within the range.
+// `strategy: min` resolves transitive dependencies to the lowest version that satisfies them,
+// as NuGet does, so a pilot project resolves the same graph it did under NuGet.
+
+// Main group: benchmarks/Parquet.SourceGenerator.Benchmarks (net8.0).
+source https://api.nuget.org/v3/index.json
+storage: none
+framework: net8.0
+strategy: min
+
+nuget BenchmarkDotNet ~> 0.14.0
+// Same Roslyn line as Directory.Packages.props (the test project's compiler), not the 4.0.1 the
+// shipped generator builds against.
+nuget Microsoft.CodeAnalysis.CSharp ~> 4.8.0
+nuget Parquet.Net ~> 6.1
+
+// Transitive floors carried over from Central Package Management's transitive pinning
+// (CentralPackageTransitivePinningEnabled): without them these resolve lower than they do today.
+nuget CommandLineParser ~> 2.9
+nuget Microsoft.Bcl.AsyncInterfaces ~> 8.0
+nuget Microsoft.CodeAnalysis.Analyzers ~> 5.9
+nuget System.Memory ~> 4.6
+
