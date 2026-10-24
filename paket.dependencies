@@ -1,11 +1,11 @@
 // Paket pilot: docs/architecture/adrs/0004-paket-pilot.md. Only projects with a paket.references
 // file are Paket-managed; every other project still uses Directory.Packages.props and its
-// packages.lock.json. After editing this file run `dotnet paket install` and commit paket.lock.
-// CI restores with `dotnet paket restore --fail-on-checks`, which fails when this file and
+// packages.lock.json. After editing this file run `dotnet tool run paket install` and commit paket.lock.
+// CI restores with `dotnet tool run paket restore --fail-on-checks`, which fails when this file and
 // paket.lock disagree.
 //
 // Version operators: `~> 6.1` allows 6.x but not 7.0, `~> 4.8.0` allows 4.8.x only. paket.lock
-// holds the exact version; `dotnet paket update <package>` moves it within the range.
+// holds the exact version; `dotnet tool run paket update <package>` moves it within the range.
 // `strategy: min` resolves transitive dependencies to the lowest version that satisfies them,
 // as NuGet does, so a pilot project resolves the same graph it did under NuGet.
 
