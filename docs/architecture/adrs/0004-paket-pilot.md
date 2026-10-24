@@ -115,8 +115,9 @@ Dependabot keeps `nuget` on: it still covers every other project. It does not re
 longer sees the benchmark project's packages. In its place, `paket-outdated.yml` runs weekly (and
 on dispatch) and keeps one issue labelled `paket-outdated`. The issue is open while
 `dotnet tool run paket outdated` finds a newer version inside the ranges (what `dotnet tool run paket update` would
-take) and is closed by the workflow once it finds none. Newer versions outside the ranges, from
-`--ignore-constraints`, are listed for information; taking one is a deliberate range edit. The job
+take) and is closed by the workflow once it finds none. Every update with the ranges ignored, from
+`--ignore-constraints` (which repeats the in-range ones), is listed for information; taking one
+outside its range is a deliberate range edit. The job
 that runs Paket has a read-only token; the job with `issues: write` runs no repository code.
 
 ### Security alerts without the static graph
