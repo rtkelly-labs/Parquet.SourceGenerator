@@ -4,9 +4,9 @@ name: Paket Outdated Report
 # docs/architecture/adrs/0004-paket-pilot.md) this weekly report is what says an update exists. It
 # keeps ONE tracking issue, found by the `paket-outdated` label: opened or updated while
 # `paket outdated` finds a newer version inside the ranges in paket.dependencies (what
-# `dotnet tool run paket update` would take), closed once it finds none. Newer versions outside the ranges
-# (a major bump, a Roslyn line change) are listed for information only; taking one is a deliberate
-# edit of paket.dependencies.
+# `dotnet tool run paket update` would take), closed once it finds none. A second section lists every
+# update with the ranges ignored (`--ignore-constraints`, which repeats the in-range ones), for
+# information only; taking one outside its range is a deliberate edit of paket.dependencies.
 #
 # Two jobs, so the one holding `issues: write` runs no repository code: `outdated` runs Paket with
 # a read-only token and hands its output over as a job output; `report` only calls the API.
@@ -73,9 +73,9 @@ jobs:
             grep -v -e '^Paket version' -e '^Total time taken' "$RUNNER_TEMP/within.txt"
             echo '```'
             echo
-            echo "## Outside the ranges (information only)"
+            echo "## Every update, ignoring the ranges (information only)"
             echo
-            echo "Taking one of these means widening its range in paket.dependencies on purpose."
+            echo "This repeats anything listed above. An entry that is not above needs its range in paket.dependencies widened on purpose."
             echo
             echo '```'
             grep -v -e '^Paket version' -e '^Total time taken' "$RUNNER_TEMP/beyond.txt"

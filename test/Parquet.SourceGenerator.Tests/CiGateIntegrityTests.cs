@@ -481,8 +481,10 @@ public sealed class CiGateIntegrityTests
         examined.ShouldBeGreaterThanOrEqualTo(8, "the workflow scan examined too few restores");
     }
 
+    // `run: dotnet restore ...`, or the same command on a line of a `run: |` block. The strict
+    // Paket step itself must be a single-line `run:`, so a block-style one is reported, not missed.
     private static readonly Regex RestoreStep = new(
-        @"^\s*(?:-\s+)?run:\s+dotnet restore\b",
+        @"^\s*(?:(?:-\s+)?run:\s+)?dotnet restore\b",
         Options,
         RegexTimeout
     );
@@ -582,6 +584,11 @@ public sealed class CiGateIntegrityTests
     [InlineData(
         "run: dotnet tool run paket restore --fail-on-checks",
         "run: echo dotnet tool run paket restore --fail-on-checks"
+    )]
+    // A block-style restore with the strict step removed.
+    [InlineData(
+        "      - name: Restore Paket dependencies (strict)\n        run: dotnet tool run paket restore --fail-on-checks\n      - name: Restore solution dependencies\n        run: dotnet restore Parquet.SourceGenerator.slnx --locked-mode",
+        "      - name: Restore solution dependencies\n        run: |\n          set -euo pipefail\n          dotnet restore Parquet.SourceGenerator.slnx --locked-mode"
     )]
     // After the restore it was meant to guard (the two commands swapped).
     [InlineData(
