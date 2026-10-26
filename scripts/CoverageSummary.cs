@@ -1,5 +1,7 @@
 #pragma warning disable CA1305, MA0009, MA0011, MA0023, MA0047, CA1852
 
+#:package Spectre.Console@0.49.1
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -7,6 +9,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Xml.Linq;
+using Spectre.Console;
 
 // -----------------------------------------------------------------------------
 // CoverageSummary.cs
@@ -296,9 +299,49 @@ md.AppendLine(
     $"> Report generated on `{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC`"
 );
 
+var consoleTable = new Table().Border(TableBorder.Rounded);
+consoleTable.AddColumn(new TableColumn("Package / Assembly").LeftAligned());
+consoleTable.AddColumn(new TableColumn("Lines").Centered());
+consoleTable.AddColumn(new TableColumn("Total").Centered());
+consoleTable.AddColumn(new TableColumn("Line %").Centered());
+consoleTable.AddColumn(new TableColumn("Branches").Centered());
+consoleTable.AddColumn(new TableColumn("Total").Centered());
+consoleTable.AddColumn(new TableColumn("Branch %").Centered());
+consoleTable.AddColumn(new TableColumn("Status").Centered());
+
+foreach (var pkg in sortedPackages)
+{
+    bool passed = pkg.LineRate >= minLineRate && pkg.BranchRate >= minBranchRate;
+    string statusMarkup = passed ? "[green]✅ Pass[/]" : "[yellow]⚠️ Sub-target[/]";
+    consoleTable.AddRow(
+        Markup.Escape(pkg.Name),
+        $"{pkg.LinesCovered:N0}",
+        $"{pkg.LinesValid:N0}",
+        $"{pkg.LineRate:F2}%",
+        $"{pkg.BranchesCovered:N0}",
+        $"{pkg.BranchesValid:N0}",
+        $"{pkg.BranchRate:F2}%",
+        statusMarkup
+    );
+}
+
+string totalStatusMarkup = totalPassed ? "[green bold]✅ Pass[/]" : "[red bold]❌ Fail[/]";
+consoleTable.AddRow(
+    "[bold]Total (Shipping)[/]",
+    $"[bold]{totalLinesCovered:N0}[/]",
+    $"[bold]{totalLinesValid:N0}[/]",
+    $"[bold]{totalLineRate:F2}%[/]",
+    $"[bold]{totalBranchesCovered:N0}[/]",
+    $"[bold]{totalBranchesValid:N0}[/]",
+    $"[bold]{totalBranchRate:F2}%[/]",
+    totalStatusMarkup
+);
+
+AnsiConsole.WriteLine();
+AnsiConsole.Write(consoleTable);
+AnsiConsole.WriteLine();
+
 string markdownResult = md.ToString();
-Console.WriteLine();
-Console.WriteLine(markdownResult);
 
 if (!string.IsNullOrEmpty(outputMarkdownPath))
 {
