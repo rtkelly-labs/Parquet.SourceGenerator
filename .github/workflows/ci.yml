@@ -747,10 +747,10 @@ jobs:
             8.0.x
             10.0.x
 
-      - name: Pack the Attributes and Legacy packages
+      - name: Pack the Runtime and Legacy packages
         run: |
           set -euo pipefail
-          dotnet pack src/Parquet.SourceGenerator.Attributes/Parquet.SourceGenerator.Attributes.csproj \
+          dotnet pack src/Parquet.SourceGenerator.Runtime/Parquet.SourceGenerator.Runtime.csproj \
             --configuration Release --output artifacts -p:Version=0.0.0-net472.1
           dotnet pack src/Parquet.SourceGenerator.Legacy/Parquet.SourceGenerator.Legacy.csproj \
             --configuration Release --output artifacts -p:Version=0.0.0-net472.1

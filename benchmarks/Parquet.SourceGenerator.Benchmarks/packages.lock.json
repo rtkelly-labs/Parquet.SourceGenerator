@@ -258,10 +258,10 @@
       "parquet.sourcegenerator": {
         "type": "Project",
         "dependencies": {
-          "Parquet.SourceGenerator.Attributes": "[0.0.1, )"
+          "Parquet.SourceGenerator.Runtime": "[0.0.1, )"
         }
       },
-      "parquet.sourcegenerator.attributes": {
+      "parquet.sourcegenerator.runtime": {
         "type": "Project"
       },
       "CommandLineParser": {

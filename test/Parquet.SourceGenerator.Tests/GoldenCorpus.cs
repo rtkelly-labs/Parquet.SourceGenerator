@@ -481,6 +481,7 @@ internal static class GoldenCorpus
                     is "netstandard.dll"
                         or "mscorlib.dll"
                         or "Parquet.dll"
+                        or "Parquet.SourceGenerator.Runtime.dll"
                         or "Parquet.SourceGenerator.Attributes.dll"
                 || (
                     referenceArrow

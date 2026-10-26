@@ -16,6 +16,14 @@ The rule, the three surfaces and the author process are in
 
 <!-- Add new entries directly below this line, newest first. -->
 
+### 2026-10-26 — Rename and transition Parquet.SourceGenerator.Attributes to Parquet.SourceGenerator.Runtime (#725)
+
+- **Surface:** package
+- **Semver:** additive-minor
+- **Issue:** [#725](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/725)
+- **Change:** Renamed package and assembly `Parquet.SourceGenerator.Attributes` to `Parquet.SourceGenerator.Runtime` while retaining the `Parquet.SourceGenerator` root namespace.
+- **Rationale:** The companion package is not merely an attribute annotation library; it contains runtime execution logic (`VectorizedColumnTransforms`, `NullableColumnExtractor`, `ParquetSerializerOptions`) and provides the foundation for hoisting common runtime utilities (`DecompressionGuardStream`, `StringDeduplicator`, `FormatOptionsMapper`). Transitioning the assembly name to `Parquet.SourceGenerator.Runtime` accurately represents the runtime engine while keeping consumer namespaces unchanged.
+
 ### 2026-10-23 — Iceberg-ready columns: field IDs, local timestamps, INT32 dates
 
 - **Surface:** package
