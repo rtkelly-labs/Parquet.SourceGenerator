@@ -1,9 +1,12 @@
+#:package CommandLineParser@2.9.1
+
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Text.RegularExpressions;
+using CommandLine;
 
 // -----------------------------------------------------------------------------
 // VerifyPackageLayout.cs
@@ -28,180 +31,197 @@ using System.Text.RegularExpressions;
 //                                                [--version <expected package version>]
 // -----------------------------------------------------------------------------
 
-string packagesDir = Option(args, "--packages") ?? "artifacts";
-string manifestsDir = Option(args, "--manifests") ?? ".github/package-layout";
-string? expectedVersion = Option(args, "--version");
-
-int failures = 0;
-
-void Fail(string message)
-{
-    failures++;
-    Console.Error.WriteLine($"::error::{message}");
-}
-
-if (!Directory.Exists(packagesDir))
-{
-    Console.Error.WriteLine($"::error::Packages directory '{packagesDir}' does not exist.");
-    return 1;
-}
-
-if (!Directory.Exists(manifestsDir))
-{
-    Console.Error.WriteLine($"::error::Manifest directory '{manifestsDir}' does not exist.");
-    return 1;
-}
-
-string[] packages = Directory
-    .GetFiles(packagesDir, "*.nupkg")
-    .Where(path => !path.EndsWith(".snupkg", StringComparison.OrdinalIgnoreCase))
-    .OrderBy(path => path, StringComparer.Ordinal)
-    .ToArray();
-string[] manifests = Directory
-    .GetFiles(manifestsDir, "*.txt")
-    .OrderBy(path => path, StringComparer.Ordinal)
-    .ToArray();
-
-if (packages.Length == 0)
-{
-    Console.Error.WriteLine(
-        $"::error::No .nupkg in '{packagesDir}': the layout gate examined nothing."
+return Parser
+    .Default.ParseArguments<PackageLayoutOptions>(args)
+    .MapResult(
+        opts => Run(opts),
+        errs =>
+            errs.Any(e => e.Tag is ErrorType.HelpRequestedError or ErrorType.VersionRequestedError)
+                ? 0
+                : 1
     );
-    return 1;
-}
 
-if (manifests.Length == 0)
+static int Run(PackageLayoutOptions opts)
 {
-    Console.Error.WriteLine($"::error::No manifest in '{manifestsDir}'.");
-    return 1;
-}
+    string packagesDir = opts.PackagesDir;
+    string manifestsDir = opts.ManifestsDir;
+    string? expectedVersion = opts.ExpectedVersion;
 
-var seenIds = new HashSet<string>(StringComparer.Ordinal);
-foreach (string package in packages)
-{
-    using ZipArchive archive = ZipFile.OpenRead(package);
-    string[] entries = archive
-        .Entries.Select(entry => Normalise(entry.FullName))
-        .OrderBy(name => name, StringComparer.Ordinal)
+    int failures = 0;
+
+    void Fail(string message)
+    {
+        failures++;
+        Console.Error.WriteLine($"::error::{message}");
+    }
+
+    if (!Directory.Exists(packagesDir))
+    {
+        Console.Error.WriteLine($"::error::Packages directory '{packagesDir}' does not exist.");
+        return 1;
+    }
+
+    if (!Directory.Exists(manifestsDir))
+    {
+        Console.Error.WriteLine($"::error::Manifest directory '{manifestsDir}' does not exist.");
+        return 1;
+    }
+
+    string[] packages = Directory
+        .GetFiles(packagesDir, "*.nupkg")
+        .Where(path => !path.EndsWith(".snupkg", StringComparison.OrdinalIgnoreCase))
+        .OrderBy(path => path, StringComparer.Ordinal)
+        .ToArray();
+    string[] manifests = Directory
+        .GetFiles(manifestsDir, "*.txt")
+        .OrderBy(path => path, StringComparer.Ordinal)
         .ToArray();
 
-    ZipArchiveEntry? nuspecEntry = archive.Entries.FirstOrDefault(entry =>
-        entry.FullName.EndsWith(".nuspec", StringComparison.Ordinal)
-        && !entry.FullName.Contains('/')
-    );
-    if (nuspecEntry is null)
+    if (packages.Length == 0)
     {
-        Fail($"{Path.GetFileName(package)} has no root .nuspec.");
-        continue;
-    }
-
-    string nuspec;
-    using (var reader = new StreamReader(nuspecEntry.Open()))
-    {
-        nuspec = reader.ReadToEnd();
-    }
-
-    string? id = Regex.Match(nuspec, @"<id>\s*([^<\s]+)\s*</id>").Groups[1].Value;
-    string version = Regex.Match(nuspec, @"<version>\s*([^<\s]+)\s*</version>").Groups[1].Value;
-    if (string.IsNullOrEmpty(id))
-    {
-        Fail($"{Path.GetFileName(package)}: nuspec declares no id.");
-        continue;
-    }
-
-    seenIds.Add(id);
-    Console.WriteLine($"::group::{id} {version}: {entries.Length} entries");
-    foreach (string entry in entries)
-    {
-        Console.WriteLine(entry);
-    }
-    Console.WriteLine("::endgroup::");
-
-    if (expectedVersion is not null && version != expectedVersion)
-    {
-        Fail($"{id}: package version is '{version}', expected '{expectedVersion}'.");
-    }
-
-    string manifestPath = Path.Combine(manifestsDir, id + ".txt");
-    if (!File.Exists(manifestPath))
-    {
-        Fail(
-            $"{id}: no manifest at {manifestPath}. A new package must add its expected entry list "
-                + "deliberately."
+        Console.Error.WriteLine(
+            $"::error::No .nupkg in '{packagesDir}': the layout gate examined nothing."
         );
-        continue;
+        return 1;
     }
 
-    var expected = new List<string>();
-    var dependencies = new List<string>();
-    foreach (string raw in File.ReadAllLines(manifestPath))
+    if (manifests.Length == 0)
     {
-        string line = raw.Trim();
-        if (line.Length == 0 || line[0] == '#')
+        Console.Error.WriteLine($"::error::No manifest in '{manifestsDir}'.");
+        return 1;
+    }
+
+    var seenIds = new HashSet<string>(StringComparer.Ordinal);
+    foreach (string package in packages)
+    {
+        using ZipArchive archive = ZipFile.OpenRead(package);
+        string[] entries = archive
+            .Entries.Select(entry => Normalise(entry.FullName))
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToArray();
+
+        ZipArchiveEntry? nuspecEntry = archive.Entries.FirstOrDefault(entry =>
+            entry.FullName.EndsWith(".nuspec", StringComparison.Ordinal)
+            && !entry.FullName.Contains('/')
+        );
+        if (nuspecEntry is null)
         {
+            Fail($"{Path.GetFileName(package)} has no root .nuspec.");
             continue;
         }
 
-        if (line.StartsWith("@dependency ", StringComparison.Ordinal))
+        string nuspec;
+        using (var reader = new StreamReader(nuspecEntry.Open()))
         {
-            dependencies.Add(line.Substring("@dependency ".Length).Trim());
+            nuspec = reader.ReadToEnd();
         }
-        else
+
+        string? id = Regex.Match(nuspec, @"<id>\s*([^<\s]+)\s*</id>").Groups[1].Value;
+        string version = Regex.Match(nuspec, @"<version>\s*([^<\s]+)\s*</version>").Groups[1].Value;
+        if (string.IsNullOrEmpty(id))
         {
-            expected.Add(line);
+            Fail($"{Path.GetFileName(package)}: nuspec declares no id.");
+            continue;
         }
-    }
 
-    if (expected.Count == 0)
-    {
-        Fail($"{manifestPath} lists no entries; an empty manifest would accept an empty package.");
-        continue;
-    }
-
-    string[] unexpected = entries.Except(expected, StringComparer.Ordinal).ToArray();
-    string[] missing = expected.Except(entries, StringComparer.Ordinal).ToArray();
-    foreach (string entry in unexpected)
-    {
-        Fail(
-            $"{id}: unexpected package entry '{entry}'. Packed content is executed or consumed by "
-                + $"every consumer; if it is intended, add it to {manifestPath} in the same pull request."
-        );
-    }
-
-    foreach (string entry in missing)
-    {
-        Fail($"{id}: expected package entry '{entry}' is missing.");
-    }
-
-    foreach (string dependency in dependencies)
-    {
-        if (!Regex.IsMatch(nuspec, $"<dependency[^>]*\\bid=\"{Regex.Escape(dependency)}\""))
+        seenIds.Add(id);
+        Console.WriteLine($"::group::{id} {version}: {entries.Length} entries");
+        foreach (string entry in entries)
         {
-            Fail($"{id}: nuspec does not declare a dependency on {dependency}.");
+            Console.WriteLine(entry);
+        }
+        Console.WriteLine("::endgroup::");
+
+        if (expectedVersion is not null && version != expectedVersion)
+        {
+            Fail($"{id}: package version is '{version}', expected '{expectedVersion}'.");
+        }
+
+        string manifestPath = Path.Combine(manifestsDir, id + ".txt");
+        if (!File.Exists(manifestPath))
+        {
+            Fail(
+                $"{id}: no manifest at {manifestPath}. A new package must add its expected entry list "
+                    + "deliberately."
+            );
+            continue;
+        }
+
+        var expected = new List<string>();
+        var dependencies = new List<string>();
+        foreach (string raw in File.ReadAllLines(manifestPath))
+        {
+            string line = raw.Trim();
+            if (line.Length == 0 || line[0] == '#')
+            {
+                continue;
+            }
+
+            if (line.StartsWith("@dependency ", StringComparison.Ordinal))
+            {
+                dependencies.Add(line.Substring("@dependency ".Length).Trim());
+            }
+            else
+            {
+                expected.Add(line);
+            }
+        }
+
+        if (expected.Count == 0)
+        {
+            Fail(
+                $"{manifestPath} lists no entries; an empty manifest would accept an empty package."
+            );
+            continue;
+        }
+
+        string[] unexpected = entries.Except(expected, StringComparer.Ordinal).ToArray();
+        string[] missing = expected.Except(entries, StringComparer.Ordinal).ToArray();
+        foreach (string entry in unexpected)
+        {
+            Fail(
+                $"{id}: unexpected package entry '{entry}'. Packed content is executed or consumed by "
+                    + $"every consumer; if it is intended, add it to {manifestPath} in the same pull request."
+            );
+        }
+
+        foreach (string entry in missing)
+        {
+            Fail($"{id}: expected package entry '{entry}' is missing.");
+        }
+
+        foreach (string dependency in dependencies)
+        {
+            if (!Regex.IsMatch(nuspec, $"<dependency[^>]*\\bid=\"{Regex.Escape(dependency)}\""))
+            {
+                Fail($"{id}: nuspec does not declare a dependency on {dependency}.");
+            }
         }
     }
-}
 
-foreach (string manifest in manifests)
-{
-    string manifestId = Path.GetFileNameWithoutExtension(manifest);
-    if (!seenIds.Contains(manifestId))
+    foreach (string manifest in manifests)
     {
-        Fail(
-            $"Manifest {manifest} has no package in '{packagesDir}'; a package was dropped or "
-                + "renamed without updating its manifest."
-        );
+        string manifestId = Path.GetFileNameWithoutExtension(manifest);
+        if (!seenIds.Contains(manifestId))
+        {
+            Fail(
+                $"Manifest {manifest} has no package in '{packagesDir}'; a package was dropped or "
+                    + "renamed without updating its manifest."
+            );
+        }
     }
-}
 
-if (failures > 0)
-{
-    Console.Error.WriteLine($"Package layout FAILED: {failures} problem(s).");
-    return 1;
-}
+    if (failures > 0)
+    {
+        Console.Error.WriteLine($"Package layout FAILED: {failures} problem(s).");
+        return 1;
+    }
 
-Console.WriteLine($"Package layout OK: {seenIds.Count} package(s) match their manifests exactly.");
-return 0;
+    Console.WriteLine(
+        $"Package layout OK: {seenIds.Count} package(s) match their manifests exactly."
+    );
+    return 0;
+}
 
 static string Normalise(string entry) =>
     Regex.Replace(
@@ -210,8 +230,14 @@ static string Normalise(string entry) =>
         "package/services/metadata/core-properties/*.psmdcp"
     );
 
-static string? Option(string[] arguments, string option)
+public sealed class PackageLayoutOptions
 {
-    int index = Array.IndexOf(arguments, option);
-    return index < 0 || index + 1 >= arguments.Length ? null : arguments[index + 1];
+    [Option("packages", Default = "artifacts", HelpText = "Packages directory.")]
+    public string PackagesDir { get; set; } = "artifacts";
+
+    [Option("manifests", Default = ".github/package-layout", HelpText = "Manifests directory.")]
+    public string ManifestsDir { get; set; } = ".github/package-layout";
+
+    [Option("version", HelpText = "Expected package version.")]
+    public string? ExpectedVersion { get; set; }
 }

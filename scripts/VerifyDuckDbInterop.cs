@@ -1,56 +1,59 @@
+#:package CommandLineParser@2.9.1
 #:package CliWrap@3.7.1
 
+using System;
 using System.Diagnostics;
+using System.IO;
 using CliWrap;
 using CliWrap.Buffered;
+using CommandLine;
 
-string duckDb = RequiredOption(args, "--duckdb");
-string generatedPath = RequiredOption(args, "--generated");
-string outputPath = RequiredOption(args, "--output");
+return Parser
+    .Default.ParseArguments<DuckDbOptions>(args)
+    .MapResult(
+        opts => Run(opts),
+        errs =>
+            errs.Any(e => e.Tag is ErrorType.HelpRequestedError or ErrorType.VersionRequestedError)
+                ? 0
+                : 1
+    );
 
-string generatedSummary = RunDuckDb(
-    duckDb,
-    $"SELECT count(*)::VARCHAR || '|' || count(*) FILTER (WHERE optional_name IS NULL)::VARCHAR || '|' || min(id)::VARCHAR || '|' || max(id)::VARCHAR || '|' || sum(amount)::VARCHAR || '|' || max(octet_length(payload))::VARCHAR || '|' || min(epoch_us(timestamp))::VARCHAR || '|' || max(epoch_us(timestamp))::VARCHAR FROM read_parquet('{SqlPath(generatedPath)}')"
-);
-AssertEqual(
-    "3|1|1|3|123.4566|3|1718454600123000|1718627400789000",
-    generatedSummary,
-    "generated C# output queried by DuckDB"
-);
-
-string outputDirectory = Path.GetDirectoryName(outputPath) ?? ".";
-Directory.CreateDirectory(outputDirectory);
-string createSql =
-    "CREATE TEMP TABLE interop ("
-    + "id INTEGER NOT NULL, "
-    + "required_name VARCHAR NOT NULL, "
-    + "optional_name VARCHAR, "
-    + "payload BLOB, "
-    + "amount DECIMAL(18, 4) NOT NULL, "
-    + "timestamp TIMESTAMP NOT NULL, "
-    + "status INTEGER"
-    + ");"
-    + " INSERT INTO interop VALUES "
-    + "(1, 'one', ''::VARCHAR, ''::BLOB, CAST('123.4567' AS DECIMAL(18,4)), TIMESTAMP '2024-06-15 12:30:00.123', 1),"
-    + "(2, 'two', NULL::VARCHAR, NULL::BLOB, CAST('-0.0001' AS DECIMAL(18,4)), TIMESTAMP '2024-06-16 12:30:00.456', NULL::INTEGER),"
-    + "(3, 'three', 'three', from_hex('0001ff'), CAST('0.0000' AS DECIMAL(18,4)), TIMESTAMP '2024-06-17 12:30:00.789', 2);"
-    + $" COPY interop TO '{SqlPath(outputPath)}' (FORMAT PARQUET, COMPRESSION 'SNAPPY', ROW_GROUP_SIZE 2);";
-RunDuckDb(duckDb, createSql);
-Console.WriteLine($"DuckDB {RunDuckDb(duckDb, "SELECT version()")} created {outputPath}");
-
-static string RequiredOption(string[] arguments, string option)
+static int Run(DuckDbOptions opts)
 {
-    int index = Array.IndexOf(arguments, option);
-    if (
-        index < 0
-        || index + 1 >= arguments.Length
-        || string.IsNullOrWhiteSpace(arguments[index + 1])
-    )
-    {
-        throw new ArgumentException($"Missing required option {option}.");
-    }
+    string duckDb = opts.DuckDb;
+    string generatedPath = opts.GeneratedPath;
+    string outputPath = opts.OutputPath;
 
-    return arguments[index + 1];
+    string generatedSummary = RunDuckDb(
+        duckDb,
+        $"SELECT count(*)::VARCHAR || '|' || count(*) FILTER (WHERE optional_name IS NULL)::VARCHAR || '|' || min(id)::VARCHAR || '|' || max(id)::VARCHAR || '|' || sum(amount)::VARCHAR || '|' || max(octet_length(payload))::VARCHAR || '|' || min(epoch_us(timestamp))::VARCHAR || '|' || max(epoch_us(timestamp))::VARCHAR FROM read_parquet('{SqlPath(generatedPath)}')"
+    );
+    AssertEqual(
+        "3|1|1|3|123.4566|3|1718454600123000|1718627400789000",
+        generatedSummary,
+        "generated C# output queried by DuckDB"
+    );
+
+    string outputDirectory = Path.GetDirectoryName(outputPath) ?? ".";
+    Directory.CreateDirectory(outputDirectory);
+    string createSql =
+        "CREATE TEMP TABLE interop ("
+        + "id INTEGER NOT NULL, "
+        + "required_name VARCHAR NOT NULL, "
+        + "optional_name VARCHAR, "
+        + "payload BLOB, "
+        + "amount DECIMAL(18, 4) NOT NULL, "
+        + "timestamp TIMESTAMP NOT NULL, "
+        + "status INTEGER"
+        + ");"
+        + " INSERT INTO interop VALUES "
+        + "(1, 'one', ''::VARCHAR, ''::BLOB, CAST('123.4567' AS DECIMAL(18,4)), TIMESTAMP '2024-06-15 12:30:00.123', 1),"
+        + "(2, 'two', NULL::VARCHAR, NULL::BLOB, CAST('-0.0001' AS DECIMAL(18,4)), TIMESTAMP '2024-06-16 12:30:00.456', NULL::INTEGER),"
+        + "(3, 'three', 'three', from_hex('0001ff'), CAST('0.0000' AS DECIMAL(18,4)), TIMESTAMP '2024-06-17 12:30:00.789', 2);"
+        + $" COPY interop TO '{SqlPath(outputPath)}' (FORMAT PARQUET, COMPRESSION 'SNAPPY', ROW_GROUP_SIZE 2);";
+    RunDuckDb(duckDb, createSql);
+    Console.WriteLine($"DuckDB {RunDuckDb(duckDb, "SELECT version()")} created {outputPath}");
+    return 0;
 }
 
 static string SqlPath(string path) => path.Replace("'", "''", StringComparison.Ordinal);
@@ -80,4 +83,16 @@ static void AssertEqual(string expected, string actual, string context)
     {
         throw new InvalidOperationException($"{context}: expected '{expected}', actual '{actual}'");
     }
+}
+
+public sealed class DuckDbOptions
+{
+    [Option("duckdb", Required = true, HelpText = "DuckDB binary path.")]
+    public string DuckDb { get; set; } = string.Empty;
+
+    [Option("generated", Required = true, HelpText = "Path to generated parquet file.")]
+    public string GeneratedPath { get; set; } = string.Empty;
+
+    [Option("output", Required = true, HelpText = "Output parquet file path.")]
+    public string OutputPath { get; set; } = string.Empty;
 }

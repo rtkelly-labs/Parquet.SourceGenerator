@@ -1,5 +1,6 @@
 #pragma warning disable CA1305, MA0009, MA0011, MA0023, MA0047, CA1852
 
+#:package CommandLineParser@2.9.1
 #:package Spectre.Console@0.49.1
 
 using System;
@@ -9,6 +10,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Xml.Linq;
+using CommandLine;
 using Spectre.Console;
 
 // -----------------------------------------------------------------------------
@@ -19,355 +21,297 @@ using Spectre.Console;
 // summaries, and evaluates configured coverage gate thresholds.
 // -----------------------------------------------------------------------------
 
-string? inputPath = null;
-string? outputMarkdownPath = null;
-double minLineRate = 85.0;
-double minBranchRate = 70.0;
-int minPackages = 1;
+return Parser
+    .Default.ParseArguments<CoverageOptions>(args)
+    .MapResult(
+        opts => Run(opts),
+        errs =>
+            errs.Any(e => e.Tag is ErrorType.HelpRequestedError or ErrorType.VersionRequestedError)
+                ? 0
+                : 1
+    );
 
-for (int i = 0; i < args.Length; i++)
+static int Run(CoverageOptions opts)
 {
-    switch (args[i])
-    {
-        case "--input":
-        case "-i":
-            if (i + 1 < args.Length)
-                inputPath = args[++i];
-            break;
-        case "--output-markdown":
-        case "-o":
-            if (i + 1 < args.Length)
-                outputMarkdownPath = args[++i];
-            break;
-        case "--min-line":
-            if (
-                i + 1 < args.Length
-                && double.TryParse(
-                    args[++i],
-                    NumberStyles.Float,
-                    CultureInfo.InvariantCulture,
-                    out double ml
-                )
-            )
-                minLineRate = ml;
-            break;
-        case "--min-branch":
-            if (
-                i + 1 < args.Length
-                && double.TryParse(
-                    args[++i],
-                    NumberStyles.Float,
-                    CultureInfo.InvariantCulture,
-                    out double mb
-                )
-            )
-                minBranchRate = mb;
-            break;
-        case "--min-packages":
-            if (
-                i + 1 >= args.Length
-                || !int.TryParse(
-                    args[++i],
-                    NumberStyles.Integer,
-                    CultureInfo.InvariantCulture,
-                    out int mp
-                )
-                || mp < 1
-            )
-            {
-                Console.Error.WriteLine("❌ --min-packages requires an integer >= 1.");
-                return 1;
-            }
-            minPackages = mp;
-            break;
-        case "--help":
-        case "-h":
-            Console.WriteLine("Usage: dotnet run scripts/CoverageSummary.cs -- [options]");
-            Console.WriteLine("Options:");
-            Console.WriteLine(
-                "  --input, -i <path>             Path to coverage.cobertura.xml (defaults to search)"
-            );
-            Console.WriteLine(
-                "  --output-markdown, -o <path>   Output markdown file path (for sticky PR comment)"
-            );
-            Console.WriteLine(
-                "  --min-line <percent>           Minimum required line coverage percentage (default: 85.0)"
-            );
-            Console.WriteLine(
-                "  --min-branch <percent>         Minimum required branch coverage percentage (default: 70.0)"
-            );
-            Console.WriteLine(
-                "  --min-packages <count>         Minimum number of shipping packages that must appear in the report (default: 1)"
-            );
-            return 0;
-    }
-}
+    string? inputPath = opts.InputPath;
+    string? outputMarkdownPath = opts.OutputMarkdownPath;
+    double minLineRate = opts.MinLineRate;
+    double minBranchRate = opts.MinBranchRate;
+    int minPackages = opts.MinPackages;
 
-if (string.IsNullOrEmpty(inputPath) || !File.Exists(inputPath))
-{
-    inputPath = FindCoberturaXml();
-    if (inputPath is null || !File.Exists(inputPath))
+    if (minPackages < 1)
     {
-        Console.Error.WriteLine("❌ Could not locate coverage.cobertura.xml report.");
+        Console.Error.WriteLine("❌ --min-packages requires an integer >= 1.");
         return 1;
     }
-}
 
-Console.WriteLine($"📄 Processing coverage report: {inputPath}");
-Console.WriteLine(
-    $"🎯 Target gate thresholds: Line >= {minLineRate:F2}%, Branch >= {minBranchRate:F2}%, Packages >= {minPackages}"
-);
-
-XDocument doc;
-try
-{
-    doc = XDocument.Load(inputPath);
-}
-catch (Exception ex)
-{
-    Console.Error.WriteLine($"❌ Failed to parse coverage report XML: {ex.Message}");
-    return 1;
-}
-
-var root = doc.Root;
-if (root is null || root.Name != "coverage")
-{
-    Console.Error.WriteLine("❌ Invalid Cobertura XML: root element <coverage> not found.");
-    return 1;
-}
-
-var packages = new List<PackageCoverage>();
-
-foreach (var pkgElem in root.Descendants("package"))
-{
-    string name = pkgElem.Attribute("name")?.Value ?? "Unknown";
-
-    // Skip test assemblies and tools if they leaked through
-    if (
-        name.StartsWith("Parquet.SourceGenerator.Tests", StringComparison.OrdinalIgnoreCase)
-        || name.StartsWith("BenchmarkSummaryGenerator", StringComparison.OrdinalIgnoreCase)
-    )
+    if (string.IsNullOrEmpty(inputPath) || !File.Exists(inputPath))
     {
-        continue;
+        inputPath = FindCoberturaXml();
+        if (inputPath is null || !File.Exists(inputPath))
+        {
+            Console.Error.WriteLine("❌ Could not locate coverage.cobertura.xml report.");
+            return 1;
+        }
     }
 
-    int linesCovered = 0;
-    int linesValid = 0;
-    int branchesCovered = 0;
-    int branchesValid = 0;
+    Console.WriteLine($"📄 Processing coverage report: {inputPath}");
+    Console.WriteLine(
+        $"🎯 Target gate thresholds: Line >= {minLineRate:F2}%, Branch >= {minBranchRate:F2}%, Packages >= {minPackages}"
+    );
 
-    foreach (var lineElem in pkgElem.Descendants("line"))
+    XDocument doc;
+    try
     {
-        linesValid++;
+        doc = XDocument.Load(inputPath);
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"❌ Failed to parse coverage report XML: {ex.Message}");
+        return 1;
+    }
+
+    var root = doc.Root;
+    if (root is null || root.Name != "coverage")
+    {
+        Console.Error.WriteLine("❌ Invalid Cobertura XML: root element <coverage> not found.");
+        return 1;
+    }
+
+    var packages = new List<PackageCoverage>();
+
+    foreach (var pkgElem in root.Descendants("package"))
+    {
+        string name = pkgElem.Attribute("name")?.Value ?? "Unknown";
+
+        // Skip test assemblies and tools if they leaked through
         if (
-            int.TryParse(
-                lineElem.Attribute("hits")?.Value,
-                NumberStyles.Integer,
-                CultureInfo.InvariantCulture,
-                out int hits
-            )
-            && hits > 0
+            name.StartsWith("Parquet.SourceGenerator.Tests", StringComparison.OrdinalIgnoreCase)
+            || name.StartsWith("BenchmarkSummaryGenerator", StringComparison.OrdinalIgnoreCase)
         )
         {
-            linesCovered++;
+            continue;
         }
 
-        if (bool.TryParse(lineElem.Attribute("branch")?.Value, out bool isBranch) && isBranch)
+        int linesCovered = 0;
+        int linesValid = 0;
+        int branchesCovered = 0;
+        int branchesValid = 0;
+
+        foreach (var lineElem in pkgElem.Descendants("line"))
         {
-            // condition-coverage attribute format: "50% (1/2)"
-            string? cond = lineElem.Attribute("condition-coverage")?.Value;
-            if (cond != null && cond.Contains('(') && cond.Contains(')'))
+            linesValid++;
+            if (
+                int.TryParse(
+                    lineElem.Attribute("hits")?.Value,
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out int hits
+                )
+                && hits > 0
+            )
             {
-                int open = cond.IndexOf('(');
-                int slash = cond.IndexOf('/', open);
-                int close = cond.IndexOf(')', slash);
-                if (slash > open && close > slash)
+                linesCovered++;
+            }
+
+            if (bool.TryParse(lineElem.Attribute("branch")?.Value, out bool isBranch) && isBranch)
+            {
+                // condition-coverage attribute format: "50% (1/2)"
+                string? cond = lineElem.Attribute("condition-coverage")?.Value;
+                if (cond != null && cond.Contains('(') && cond.Contains(')'))
                 {
-                    ReadOnlySpan<char> span = cond.AsSpan();
-                    if (
-                        int.TryParse(
-                            span.Slice(open + 1, slash - open - 1),
-                            NumberStyles.Integer,
-                            CultureInfo.InvariantCulture,
-                            out int cov
-                        )
-                        && int.TryParse(
-                            span.Slice(slash + 1, close - slash - 1),
-                            NumberStyles.Integer,
-                            CultureInfo.InvariantCulture,
-                            out int tot
-                        )
-                    )
+                    int open = cond.IndexOf('(');
+                    int slash = cond.IndexOf('/', open);
+                    int close = cond.IndexOf(')', slash);
+                    if (slash > open && close > slash)
                     {
-                        branchesCovered += cov;
-                        branchesValid += tot;
+                        ReadOnlySpan<char> span = cond.AsSpan();
+                        if (
+                            int.TryParse(
+                                span.Slice(open + 1, slash - open - 1),
+                                NumberStyles.Integer,
+                                CultureInfo.InvariantCulture,
+                                out int cov
+                            )
+                            && int.TryParse(
+                                span.Slice(slash + 1, close - slash - 1),
+                                NumberStyles.Integer,
+                                CultureInfo.InvariantCulture,
+                                out int tot
+                            )
+                        )
+                        {
+                            branchesCovered += cov;
+                            branchesValid += tot;
+                        }
                     }
                 }
             }
         }
+
+        double lineRate = linesValid > 0 ? (double)linesCovered / linesValid * 100.0 : 100.0;
+        double branchRate =
+            branchesValid > 0 ? (double)branchesCovered / branchesValid * 100.0 : 100.0;
+
+        packages.Add(
+            new PackageCoverage(
+                Name: name,
+                LinesCovered: linesCovered,
+                LinesValid: linesValid,
+                LineRate: lineRate,
+                BranchesCovered: branchesCovered,
+                BranchesValid: branchesValid,
+                BranchRate: branchRate
+            )
+        );
     }
 
-    double lineRate = linesValid > 0 ? (double)linesCovered / linesValid * 100.0 : 100.0;
-    double branchRate = branchesValid > 0 ? (double)branchesCovered / branchesValid * 100.0 : 100.0;
+    // Deterministic ordering: Alphabetical by package name
+    var sortedPackages = packages.OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase).ToList();
 
-    packages.Add(
-        new PackageCoverage(
-            Name: name,
-            LinesCovered: linesCovered,
-            LinesValid: linesValid,
-            LineRate: lineRate,
-            BranchesCovered: branchesCovered,
-            BranchesValid: branchesValid,
-            BranchRate: branchRate
-        )
+    int totalLinesCovered = sortedPackages.Sum(p => p.LinesCovered);
+    int totalLinesValid = sortedPackages.Sum(p => p.LinesValid);
+    int totalBranchesCovered = sortedPackages.Sum(p => p.BranchesCovered);
+    int totalBranchesValid = sortedPackages.Sum(p => p.BranchesValid);
+
+    // An empty measurement is a failure, never a pass. A zero denominator previously
+    // defaulted the rate to 100%, so an empty, filtered-out or attribute-less report
+    // sailed through the gate having measured nothing at all.
+    if (sortedPackages.Count < minPackages)
+    {
+        Console.Error.WriteLine(
+            $"❌ Coverage report contains {sortedPackages.Count} shipping package(s), expected at least {minPackages} - refusing to pass. Check for an assembly rename or a stale report."
+        );
+        return 1;
+    }
+
+    if (totalLinesValid == 0)
+    {
+        Console.Error.WriteLine(
+            "❌ No lines found in coverage report - refusing to pass. The report measured nothing."
+        );
+        return 1;
+    }
+
+    if (totalBranchesValid == 0)
+    {
+        Console.Error.WriteLine(
+            "❌ No branches found in coverage report - refusing to pass. Condition-coverage data is missing."
+        );
+        return 1;
+    }
+
+    double totalLineRate = (double)totalLinesCovered / totalLinesValid * 100.0;
+    double totalBranchRate = (double)totalBranchesCovered / totalBranchesValid * 100.0;
+
+    bool totalPassed = totalLineRate >= minLineRate && totalBranchRate >= minBranchRate;
+
+    // Generate Markdown table
+    var md = new StringBuilder();
+    md.AppendLine("<!-- parquet-code-coverage-report -->");
+    md.AppendLine("## 📊 Code Coverage Summary");
+    md.AppendLine();
+    md.AppendLine(
+        "| Package / Assembly | Lines Covered | Total Lines | Line Rate | Branches Covered | Total Branches | Branch Rate | Status |"
     );
-}
+    md.AppendLine("| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |");
 
-// Deterministic ordering: Alphabetical by package name
-var sortedPackages = packages.OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase).ToList();
+    foreach (var pkg in sortedPackages)
+    {
+        bool passed = pkg.LineRate >= minLineRate && pkg.BranchRate >= minBranchRate;
+        string status = passed ? "✅ Pass" : "⚠️ Sub-target";
+        md.AppendLine(
+            CultureInfo.InvariantCulture,
+            $"| `{pkg.Name}` | {pkg.LinesCovered:N0} | {pkg.LinesValid:N0} | {pkg.LineRate:F2}% | {pkg.BranchesCovered:N0} | {pkg.BranchesValid:N0} | {pkg.BranchRate:F2}% | {status} |"
+        );
+    }
 
-int totalLinesCovered = sortedPackages.Sum(p => p.LinesCovered);
-int totalLinesValid = sortedPackages.Sum(p => p.LinesValid);
-int totalBranchesCovered = sortedPackages.Sum(p => p.BranchesCovered);
-int totalBranchesValid = sortedPackages.Sum(p => p.BranchesValid);
-
-// An empty measurement is a failure, never a pass. A zero denominator previously
-// defaulted the rate to 100%, so an empty, filtered-out or attribute-less report
-// sailed through the gate having measured nothing at all.
-if (sortedPackages.Count < minPackages)
-{
-    Console.Error.WriteLine(
-        $"❌ Coverage report contains {sortedPackages.Count} shipping package(s), expected at least {minPackages} - refusing to pass. Check for an assembly rename or a stale report."
-    );
-    return 1;
-}
-
-if (totalLinesValid == 0)
-{
-    Console.Error.WriteLine(
-        "❌ No lines found in coverage report - refusing to pass. The report measured nothing."
-    );
-    return 1;
-}
-
-if (totalBranchesValid == 0)
-{
-    Console.Error.WriteLine(
-        "❌ No branches found in coverage report - refusing to pass. Condition-coverage data is missing."
-    );
-    return 1;
-}
-
-double totalLineRate = (double)totalLinesCovered / totalLinesValid * 100.0;
-double totalBranchRate = (double)totalBranchesCovered / totalBranchesValid * 100.0;
-
-bool totalPassed = totalLineRate >= minLineRate && totalBranchRate >= minBranchRate;
-
-// Generate Markdown table
-var md = new StringBuilder();
-md.AppendLine("<!-- parquet-code-coverage-report -->");
-md.AppendLine("## 📊 Code Coverage Summary");
-md.AppendLine();
-md.AppendLine(
-    "| Package / Assembly | Lines Covered | Total Lines | Line Rate | Branches Covered | Total Branches | Branch Rate | Status |"
-);
-md.AppendLine("| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |");
-
-foreach (var pkg in sortedPackages)
-{
-    bool passed = pkg.LineRate >= minLineRate && pkg.BranchRate >= minBranchRate;
-    string status = passed ? "✅ Pass" : "⚠️ Sub-target";
+    string totalStatus = totalPassed ? "✅ **Pass**" : "❌ **Fail**";
     md.AppendLine(
         CultureInfo.InvariantCulture,
-        $"| `{pkg.Name}` | {pkg.LinesCovered:N0} | {pkg.LinesValid:N0} | {pkg.LineRate:F2}% | {pkg.BranchesCovered:N0} | {pkg.BranchesValid:N0} | {pkg.BranchRate:F2}% | {status} |"
+        $"| **Total (Shipping)** | **{totalLinesCovered:N0}** | **{totalLinesValid:N0}** | **{totalLineRate:F2}%** | **{totalBranchesCovered:N0}** | **{totalBranchesValid:N0}** | **{totalBranchRate:F2}%** | {totalStatus} |"
     );
-}
-
-string totalStatus = totalPassed ? "✅ **Pass**" : "❌ **Fail**";
-md.AppendLine(
-    CultureInfo.InvariantCulture,
-    $"| **Total (Shipping)** | **{totalLinesCovered:N0}** | **{totalLinesValid:N0}** | **{totalLineRate:F2}%** | **{totalBranchesCovered:N0}** | **{totalBranchesValid:N0}** | **{totalBranchRate:F2}%** | {totalStatus} |"
-);
-md.AppendLine();
-md.AppendLine("> [!NOTE]");
-md.AppendLine(
-    CultureInfo.InvariantCulture,
-    $"> **Gate Policy**: Minimum Line Rate: **{minLineRate:F2}%** | Minimum Branch Rate: **{minBranchRate:F2}%**"
-);
-md.AppendLine(
-    CultureInfo.InvariantCulture,
-    $"> Report generated on `{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC`"
-);
-
-var consoleTable = new Table()
-    .Border(TableBorder.Rounded)
-    .AddColumns(
-        "Package / Assembly",
-        "Lines",
-        "Total",
-        "Line %",
-        "Branches",
-        "Total",
-        "Branch %",
-        "Status"
-    )
-    .AlignDataColumns(Justify.Center);
-
-foreach (var pkg in sortedPackages)
-{
-    bool passed = pkg.LineRate >= minLineRate && pkg.BranchRate >= minBranchRate;
-    string statusMarkup = passed ? "[green]✅ Pass[/]" : "[yellow]⚠️ Sub-target[/]";
-    consoleTable.AddRow(
-        Markup.Escape(pkg.Name),
-        $"{pkg.LinesCovered:N0}",
-        $"{pkg.LinesValid:N0}",
-        $"{pkg.LineRate:F2}%",
-        $"{pkg.BranchesCovered:N0}",
-        $"{pkg.BranchesValid:N0}",
-        $"{pkg.BranchRate:F2}%",
-        statusMarkup
+    md.AppendLine();
+    md.AppendLine("> [!NOTE]");
+    md.AppendLine(
+        CultureInfo.InvariantCulture,
+        $"> **Gate Policy**: Minimum Line Rate: **{minLineRate:F2}%** | Minimum Branch Rate: **{minBranchRate:F2}%**"
     );
-}
+    md.AppendLine(
+        CultureInfo.InvariantCulture,
+        $"> Report generated on `{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC`"
+    );
 
-string totalStatusMarkup = totalPassed ? "[green bold]✅ Pass[/]" : "[red bold]❌ Fail[/]";
-consoleTable.AddRow(
-    "[bold]Total (Shipping)[/]",
-    $"[bold]{totalLinesCovered:N0}[/]",
-    $"[bold]{totalLinesValid:N0}[/]",
-    $"[bold]{totalLineRate:F2}%[/]",
-    $"[bold]{totalBranchesCovered:N0}[/]",
-    $"[bold]{totalBranchesValid:N0}[/]",
-    $"[bold]{totalBranchRate:F2}%[/]",
-    totalStatusMarkup
-);
+    var consoleTable = new Table()
+        .Border(TableBorder.Rounded)
+        .AddColumns(
+            "Package / Assembly",
+            "Lines",
+            "Total",
+            "Line %",
+            "Branches",
+            "Total",
+            "Branch %",
+            "Status"
+        )
+        .AlignDataColumns(Justify.Center);
 
-AnsiConsole.WriteLine();
-AnsiConsole.Write(consoleTable);
-AnsiConsole.WriteLine();
-
-string markdownResult = md.ToString();
-
-if (!string.IsNullOrEmpty(outputMarkdownPath))
-{
-    string? dir = Path.GetDirectoryName(outputMarkdownPath);
-    if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+    foreach (var pkg in sortedPackages)
     {
-        Directory.CreateDirectory(dir);
+        bool passed = pkg.LineRate >= minLineRate && pkg.BranchRate >= minBranchRate;
+        string statusMarkup = passed ? "[green]✅ Pass[/]" : "[yellow]⚠️ Sub-target[/]";
+        consoleTable.AddRow(
+            Markup.Escape(pkg.Name),
+            $"{pkg.LinesCovered:N0}",
+            $"{pkg.LinesValid:N0}",
+            $"{pkg.LineRate:F2}%",
+            $"{pkg.BranchesCovered:N0}",
+            $"{pkg.BranchesValid:N0}",
+            $"{pkg.BranchRate:F2}%",
+            statusMarkup
+        );
     }
-    File.WriteAllText(outputMarkdownPath, markdownResult);
-    Console.WriteLine($"💾 Saved coverage summary markdown to: {outputMarkdownPath}");
-}
 
-if (!totalPassed)
-{
-    Console.Error.WriteLine(
-        $"❌ Coverage gate failed! Line: {totalLineRate:F2}% (req >= {minLineRate:F2}%), Branch: {totalBranchRate:F2}% (req >= {minBranchRate:F2}%)"
+    string totalStatusMarkup = totalPassed ? "[green bold]✅ Pass[/]" : "[red bold]❌ Fail[/]";
+    consoleTable.AddRow(
+        "[bold]Total (Shipping)[/]",
+        $"[bold]{totalLinesCovered:N0}[/]",
+        $"[bold]{totalLinesValid:N0}[/]",
+        $"[bold]{totalLineRate:F2}%[/]",
+        $"[bold]{totalBranchesCovered:N0}[/]",
+        $"[bold]{totalBranchesValid:N0}[/]",
+        $"[bold]{totalBranchRate:F2}%[/]",
+        totalStatusMarkup
     );
-    return 1;
-}
 
-Console.WriteLine("✅ Code coverage gate passed successfully.");
-return 0;
+    AnsiConsole.WriteLine();
+    AnsiConsole.Write(consoleTable);
+    AnsiConsole.WriteLine();
+
+    string markdownResult = md.ToString();
+
+    if (!string.IsNullOrEmpty(outputMarkdownPath))
+    {
+        string? dir = Path.GetDirectoryName(outputMarkdownPath);
+        if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+        {
+            Directory.CreateDirectory(dir);
+        }
+        File.WriteAllText(outputMarkdownPath, markdownResult);
+        Console.WriteLine($"💾 Saved coverage summary markdown to: {outputMarkdownPath}");
+    }
+
+    if (!totalPassed)
+    {
+        Console.Error.WriteLine(
+            $"❌ Coverage gate failed! Line: {totalLineRate:F2}% (req >= {minLineRate:F2}%), Branch: {totalBranchRate:F2}% (req >= {minBranchRate:F2}%)"
+        );
+        return 1;
+    }
+
+    Console.WriteLine("✅ Code coverage gate passed successfully.");
+    return 0;
+}
 
 static string? FindCoberturaXml()
 {
@@ -425,6 +369,36 @@ sealed record PackageCoverage(
     int BranchesValid,
     double BranchRate
 );
+
+public sealed class CoverageOptions
+{
+    [Option('i', "input", HelpText = "Path to coverage.cobertura.xml (defaults to search).")]
+    public string? InputPath { get; set; }
+
+    [Option(
+        'o',
+        "output-markdown",
+        HelpText = "Output markdown file path (for sticky PR comment)."
+    )]
+    public string? OutputMarkdownPath { get; set; }
+
+    [Option("min-line", Default = 85.0, HelpText = "Minimum required line coverage percentage.")]
+    public double MinLineRate { get; set; } = 85.0;
+
+    [Option(
+        "min-branch",
+        Default = 70.0,
+        HelpText = "Minimum required branch coverage percentage."
+    )]
+    public double MinBranchRate { get; set; } = 70.0;
+
+    [Option(
+        "min-packages",
+        Default = 1,
+        HelpText = "Minimum number of shipping packages that must appear in the report."
+    )]
+    public int MinPackages { get; set; } = 1;
+}
 
 internal static class TableExtensions
 {
