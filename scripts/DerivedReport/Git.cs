@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using CliWrap;
+using CliWrap.Buffered;
 
 namespace Parquet.SourceGenerator.Tools.DerivedReport;
 
@@ -53,43 +55,35 @@ internal static class Git
     /// <summary>Runs git in <paramref name="repo"/> and returns its standard output.</summary>
     public static string Run(string? repo, int allowedExitCode, params string[] arguments)
     {
-        var start = new ProcessStartInfo("git")
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-        };
+        var args = new List<string>();
         if (repo is not null)
         {
-            start.ArgumentList.Add("-C");
-            start.ArgumentList.Add(repo);
+            args.Add("-C");
+            args.Add(repo);
         }
 
         // Pinned output: no pager, colour, rename detection or locale-dependent quoting, so the same
         // commits give the same text on every runner.
-        foreach (string setting in new[] { "core.quotepath=false", "color.ui=false" })
-        {
-            start.ArgumentList.Add("-c");
-            start.ArgumentList.Add(setting);
-        }
+        args.Add("-c");
+        args.Add("core.quotepath=false");
+        args.Add("-c");
+        args.Add("color.ui=false");
+        args.AddRange(arguments);
 
-        foreach (string argument in arguments)
-        {
-            start.ArgumentList.Add(argument);
-        }
+        var result = Cli.Wrap("git")
+            .WithArguments(args)
+            .WithValidation(CommandResultValidation.None)
+            .ExecuteBufferedAsync()
+            .GetAwaiter()
+            .GetResult();
 
-        using Process process =
-            Process.Start(start) ?? throw new InvalidOperationException("git did not start");
-        var error = process.StandardError.ReadToEndAsync();
-        string output = process.StandardOutput.ReadToEnd();
-        process.WaitForExit();
-        if (process.ExitCode != 0 && process.ExitCode != allowedExitCode)
+        if (result.ExitCode != 0 && result.ExitCode != allowedExitCode)
         {
             throw new InvalidOperationException(
-                $"git {string.Join(' ', arguments)} exited {process.ExitCode}: {error.Result}"
+                $"git {string.Join(' ', arguments)} exited {result.ExitCode}: {result.StandardError}"
             );
         }
 
-        return output;
+        return result.StandardOutput;
     }
 }

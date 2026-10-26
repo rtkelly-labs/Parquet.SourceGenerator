@@ -1,4 +1,8 @@
+#:package CliWrap@3.7.1
+
 using System.Diagnostics;
+using CliWrap;
+using CliWrap.Buffered;
 
 string duckDb = RequiredOption(args, "--duckdb");
 string generatedPath = RequiredOption(args, "--generated");
@@ -53,29 +57,21 @@ static string SqlPath(string path) => path.Replace("'", "''", StringComparison.O
 
 static string RunDuckDb(string executable, string sql)
 {
-    var startInfo = new ProcessStartInfo(executable)
-    {
-        RedirectStandardOutput = true,
-        RedirectStandardError = true,
-        UseShellExecute = false,
-        CreateNoWindow = true,
-    };
-    startInfo.ArgumentList.Add("-csv");
-    startInfo.ArgumentList.Add("-noheader");
-    startInfo.ArgumentList.Add("-c");
-    startInfo.ArgumentList.Add(sql);
+    var result = Cli.Wrap(executable)
+        .WithArguments(["-csv", "-noheader", "-c", sql])
+        .WithValidation(CommandResultValidation.None)
+        .ExecuteBufferedAsync()
+        .GetAwaiter()
+        .GetResult();
 
-    using var process =
-        Process.Start(startInfo) ?? throw new InvalidOperationException("Could not start DuckDB.");
-    string stdout = process.StandardOutput.ReadToEnd().Trim();
-    string stderr = process.StandardError.ReadToEnd().Trim();
-    process.WaitForExit();
-    if (process.ExitCode != 0)
+    if (result.ExitCode != 0)
     {
-        throw new InvalidOperationException($"DuckDB failed ({process.ExitCode}): {stderr}");
+        throw new InvalidOperationException(
+            $"DuckDB failed ({result.ExitCode}): {result.StandardError.Trim()}"
+        );
     }
 
-    return stdout;
+    return result.StandardOutput.Trim();
 }
 
 static void AssertEqual(string expected, string actual, string context)

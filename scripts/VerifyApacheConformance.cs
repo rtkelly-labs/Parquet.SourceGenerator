@@ -1,7 +1,11 @@
+#:package CliWrap@3.7.1
+
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using CliWrap;
+using CliWrap.Buffered;
 
 // Apache Parquet conformance verifier for issue #167.
 //
@@ -464,26 +468,15 @@ static string? Option(string[] arguments, string option)
 
 static ProcessResult Run(string executable, string[] arguments)
 {
-    var startInfo = new ProcessStartInfo(executable)
-    {
-        RedirectStandardOutput = true,
-        RedirectStandardError = true,
-        UseShellExecute = false,
-        CreateNoWindow = true,
-    };
-    foreach (string argument in arguments)
-    {
-        startInfo.ArgumentList.Add(argument);
-    }
+    var result = Cli.Wrap(executable)
+        .WithArguments(arguments)
+        .WithValidation(CommandResultValidation.None)
+        .ExecuteBufferedAsync()
+        .GetAwaiter()
+        .GetResult();
 
-    using var process =
-        Process.Start(startInfo)
-        ?? throw new InvalidOperationException($"Could not start {executable}.");
-    string stdout = process.StandardOutput.ReadToEnd();
-    string stderr = process.StandardError.ReadToEnd();
-    process.WaitForExit();
-    string output = stdout + Environment.NewLine + stderr;
-    return new ProcessResult(output, process.ExitCode);
+    string output = result.StandardOutput + Environment.NewLine + result.StandardError;
+    return new ProcessResult(output, result.ExitCode);
 }
 
 record SchemaField(string Name, string Repetition, string Physical, string? Annotation);
