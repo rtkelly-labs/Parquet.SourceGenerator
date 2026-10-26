@@ -35,6 +35,9 @@ jobs:
         with:
           lfs: true
 
+      - name: Lint file extensions and naming conventions
+        uses: ls-lint/action@e657c91ad982b57530ff046f40c6225b6a7b3dbd # v2.3.1
+
       # Policy: Python (.py) files are strictly forbidden in this repository, with the sole exception
       # of scripts/generate_test_data.py used to generate cross-engine PyArrow format-compatibility datasets.
       # All automation, benchmarks, and tooling must be authored in C# (.cs) executed via dotnet run.
