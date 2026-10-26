@@ -1,5 +1,22 @@
 #nullable enable
+override Parquet.SourceGenerator.ParquetDecompressionGuardStream.CanRead.get -> bool
+override Parquet.SourceGenerator.ParquetDecompressionGuardStream.CanSeek.get -> bool
+override Parquet.SourceGenerator.ParquetDecompressionGuardStream.CanWrite.get -> bool
+override Parquet.SourceGenerator.ParquetDecompressionGuardStream.Flush() -> void
+override Parquet.SourceGenerator.ParquetDecompressionGuardStream.Length.get -> long
+override Parquet.SourceGenerator.ParquetDecompressionGuardStream.Position.get -> long
+override Parquet.SourceGenerator.ParquetDecompressionGuardStream.Position.set -> void
+override Parquet.SourceGenerator.ParquetDecompressionGuardStream.Read(byte[]! buffer, int offset, int count) -> int
+override Parquet.SourceGenerator.ParquetDecompressionGuardStream.ReadAsync(byte[]! buffer, int offset, int count, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<int>!
+override Parquet.SourceGenerator.ParquetDecompressionGuardStream.ReadByte() -> int
+override Parquet.SourceGenerator.ParquetDecompressionGuardStream.Seek(long offset, System.IO.SeekOrigin origin) -> long
+override Parquet.SourceGenerator.ParquetDecompressionGuardStream.SetLength(long value) -> void
+override Parquet.SourceGenerator.ParquetDecompressionGuardStream.Write(byte[]! buffer, int offset, int count) -> void
 Parquet.SourceGenerator.ParquetColumnAttribute.FieldId.get -> int
 Parquet.SourceGenerator.ParquetColumnAttribute.FieldId.set -> void
+Parquet.SourceGenerator.ParquetDecompressionGuardStream
+Parquet.SourceGenerator.ParquetDecompressionGuardStream.Activate() -> void
+Parquet.SourceGenerator.ParquetDecompressionGuardStream.ParquetDecompressionGuardStream(System.IO.Stream! inner, int maxPageSize, int maxExpansionRatio) -> void
+Parquet.SourceGenerator.ParquetDecompressionGuardStream.ParquetDecompressionGuardStream(System.IO.Stream! inner, int maxPageSize, int maxExpansionRatio, int maxRowGroupCount) -> void
 Parquet.SourceGenerator.ParquetTimestampAttribute.AdjustedToUtc.get -> bool
 Parquet.SourceGenerator.ParquetTimestampAttribute.AdjustedToUtc.set -> void
