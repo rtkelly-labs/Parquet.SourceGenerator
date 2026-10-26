@@ -299,15 +299,18 @@ md.AppendLine(
     $"> Report generated on `{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC`"
 );
 
-var consoleTable = new Table().Border(TableBorder.Rounded);
-consoleTable.AddColumn(new TableColumn("Package / Assembly").LeftAligned());
-consoleTable.AddColumn(new TableColumn("Lines").Centered());
-consoleTable.AddColumn(new TableColumn("Total").Centered());
-consoleTable.AddColumn(new TableColumn("Line %").Centered());
-consoleTable.AddColumn(new TableColumn("Branches").Centered());
-consoleTable.AddColumn(new TableColumn("Total").Centered());
-consoleTable.AddColumn(new TableColumn("Branch %").Centered());
-consoleTable.AddColumn(new TableColumn("Status").Centered());
+var consoleTable = new Table()
+    .Border(TableBorder.Rounded)
+    .AddColumns(
+        new TableColumn("Package / Assembly").LeftAligned(),
+        new TableColumn("Lines").Centered(),
+        new TableColumn("Total").Centered(),
+        new TableColumn("Line %").Centered(),
+        new TableColumn("Branches").Centered(),
+        new TableColumn("Total").Centered(),
+        new TableColumn("Branch %").Centered(),
+        new TableColumn("Status").Centered()
+    );
 
 foreach (var pkg in sortedPackages)
 {
