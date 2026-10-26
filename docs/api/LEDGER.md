@@ -16,6 +16,15 @@ The rule, the three surfaces and the author process are in
 
 <!-- Add new entries directly below this line, newest first. -->
 
+### 2026-10-26 — Hoist DecompressionGuardStream into Runtime package (#720)
+
+- **Surface:** package
+- **Semver:** additive-minor
+- **Issue:** [#720](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/720)
+- **Change:** Added `ParquetDecompressionGuardStream` to `Parquet.SourceGenerator.Runtime`. It provides a seekable read wrapper that validates Thrift compact-protocol page headers and file metadata footer counts before allocating or decompressing hostile pages. Marked `[EditorBrowsable(EditorBrowsableState.Never)]`.
+- **Rationale:** Previously, ~675 lines of Thrift compact-protocol parsing and decompression stream guarding were emitted into every generated file/class. Compiling this once into `Parquet.SourceGenerator.Runtime` eliminates hundreds of duplicated lines per generated model, drops emitted ELOC by ~600 lines per model, and accelerates compilation without changing safety guarantees.
+
+
 ### 2026-10-26 — Rename and transition Parquet.SourceGenerator.Attributes to Parquet.SourceGenerator.Runtime (#725)
 
 - **Surface:** package
