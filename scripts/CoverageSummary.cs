@@ -302,15 +302,16 @@ md.AppendLine(
 var consoleTable = new Table()
     .Border(TableBorder.Rounded)
     .AddColumns(
-        new TableColumn("Package / Assembly").LeftAligned(),
-        new TableColumn("Lines").Centered(),
-        new TableColumn("Total").Centered(),
-        new TableColumn("Line %").Centered(),
-        new TableColumn("Branches").Centered(),
-        new TableColumn("Total").Centered(),
-        new TableColumn("Branch %").Centered(),
-        new TableColumn("Status").Centered()
-    );
+        "Package / Assembly",
+        "Lines",
+        "Total",
+        "Line %",
+        "Branches",
+        "Total",
+        "Branch %",
+        "Status"
+    )
+    .AlignDataColumns(Justify.Center);
 
 foreach (var pkg in sortedPackages)
 {
@@ -424,3 +425,20 @@ sealed record PackageCoverage(
     int BranchesValid,
     double BranchRate
 );
+
+internal static class TableExtensions
+{
+    public static Table AlignDataColumns(
+        this Table table,
+        Justify alignment = Justify.Center,
+        int startFromIndex = 1
+    )
+    {
+        for (int i = startFromIndex; i < table.Columns.Count; i++)
+        {
+            table.Columns[i].Alignment(alignment);
+        }
+
+        return table;
+    }
+}
