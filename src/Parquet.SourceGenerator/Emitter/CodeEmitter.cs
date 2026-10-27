@@ -1836,7 +1836,7 @@ internal static class CodeEmitter
         if (StringDeduplicatorComponent.HasStringProperties(model))
         {
             builder.AppendLine(
-                "                using var stringDeduplicator = new StringDeduplicator(512);"
+                "                using var stringDeduplicator = new global::Parquet.SourceGenerator.StringDeduplicator(512);"
             );
             builder.AppendLine();
         }

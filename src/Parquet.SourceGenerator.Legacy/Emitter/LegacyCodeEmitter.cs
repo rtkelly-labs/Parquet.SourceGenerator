@@ -66,15 +66,6 @@ internal static class LegacyCodeEmitter
             builder.AppendLine();
         }
 
-        if (StringDeduplicatorComponent.HasStringProperties(model))
-        {
-            StringDeduplicatorComponent.EmitStringDeduplicator(
-                builder,
-                emitRawSpanColumnReader: false
-            );
-            builder.AppendLine();
-        }
-
         EmitApplyCompression(builder);
         builder.AppendLine();
 
