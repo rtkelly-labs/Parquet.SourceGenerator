@@ -468,10 +468,11 @@ static string? Option(string[] arguments, string option)
 
 static ProcessResult Run(string executable, string[] arguments)
 {
+    using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
     var result = Cli.Wrap(executable)
         .WithArguments(arguments)
         .WithValidation(CommandResultValidation.None)
-        .ExecuteBufferedAsync()
+        .ExecuteBufferedAsync(cts.Token)
         .GetAwaiter()
         .GetResult();
 
