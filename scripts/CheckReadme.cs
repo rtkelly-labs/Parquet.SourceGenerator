@@ -1,3 +1,5 @@
+#:package CliWrap@3.7.1
+
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -6,6 +8,8 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using CliWrap;
+using CliWrap.Buffered;
 
 // -----------------------------------------------------------------------------
 // CheckReadme.cs
@@ -292,28 +296,15 @@ static (int ExitCode, string Output) Run(
     params string[] arguments
 )
 {
-    var start = new ProcessStartInfo(fileName)
-    {
-        WorkingDirectory = workingDirectory,
-        RedirectStandardOutput = true,
-        RedirectStandardError = true,
-        UseShellExecute = false,
-    };
-    foreach (string argument in arguments)
-    {
-        start.ArgumentList.Add(argument);
-    }
+    var result = Cli.Wrap(fileName)
+        .WithWorkingDirectory(workingDirectory)
+        .WithArguments(arguments)
+        .WithValidation(CommandResultValidation.None)
+        .ExecuteBufferedAsync()
+        .GetAwaiter()
+        .GetResult();
 
-    using var process = Process.Start(start)!;
-    // Both pipes are drained at once: a build that fills the unread one would otherwise block
-    // forever while this waits on the other.
-    Task<string> stdout = process.StandardOutput.ReadToEndAsync();
-    Task<string> stderr = process.StandardError.ReadToEndAsync();
-    process.WaitForExit();
-    return (
-        process.ExitCode,
-        stdout.GetAwaiter().GetResult() + "\n" + stderr.GetAwaiter().GetResult()
-    );
+    return (result.ExitCode, result.StandardOutput + "\n" + result.StandardError);
 }
 
 static string FindRepoRoot()
