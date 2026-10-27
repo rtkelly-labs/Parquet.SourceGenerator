@@ -159,7 +159,7 @@ internal static class LegacyCodeEmitter
         );
         builder.AppendLine("        }");
         builder.AppendLine(
-            "        long footerStart = await GetFooterStartAsync(stream, cancellationToken).ConfigureAwait(false);"
+            "        long footerStart = await global::Parquet.SourceGenerator.ParquetDecompressionGuardStream.GetFooterStartAsync(stream, cancellationToken).ConfigureAwait(false);"
         );
         builder.AppendLine("        ValidateColumnChunkBounds(reader, footerStart, 1_000_000);");
         for (int i = 0; i < model.Properties.Length; i++)
