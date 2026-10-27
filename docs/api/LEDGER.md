@@ -16,6 +16,15 @@ The rule, the three surfaces and the author process are in
 
 <!-- Add new entries directly below this line, newest first. -->
 
+### 2026-10-27 — Hoist StringDeduplicator into Runtime package (#721)
+
+- **Surface:** package
+- **Semver:** additive-minor
+- **Issue:** [#721](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/721)
+- **Change:** Added `StringDeduplicator` struct to `Parquet.SourceGenerator.Runtime`. It provides an L1 open-addressed hash table for string deduplication with SIMD-accelerated comparison and BCL `string.GetHashCode(ReadOnlySpan<char>, StringComparison.Ordinal)` hashing on modern runtimes with FNV-1a fallback on netstandard2.0. Marked `[EditorBrowsable(EditorBrowsableState.Never)]`.
+- **Rationale:** Previously, ~350 lines of string deduplicator struct, open-addressing table, and scalar char-by-char comparison loops were emitted into every generated class with string properties. Compiling this in `Parquet.SourceGenerator.Runtime` eliminates code duplication across models, drops emitted ELOC by ~200 lines per string model, and accelerates deduplication using SIMD `SequenceEqual` and BCL hashing.
+
+
 ### 2026-10-26 — Hoist DecompressionGuardStream into Runtime package (#720)
 
 - **Surface:** package

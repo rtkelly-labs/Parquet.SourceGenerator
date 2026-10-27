@@ -331,7 +331,7 @@ internal static class ColumnHelpersComponent
             "        string?[] buffer,",
             "        int rowCount,",
             "        bool deduplicateStrings,",
-            "        StringDeduplicator deduplicator,",
+            "        global::Parquet.SourceGenerator.StringDeduplicator deduplicator,",
             "        int maxStringLengthBytes,",
             "        global::System.Threading.CancellationToken cancellationToken)",
             "    {",

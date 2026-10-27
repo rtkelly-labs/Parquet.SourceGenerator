@@ -20,3 +20,9 @@ Parquet.SourceGenerator.ParquetDecompressionGuardStream.ParquetDecompressionGuar
 Parquet.SourceGenerator.ParquetDecompressionGuardStream.ParquetDecompressionGuardStream(System.IO.Stream! inner, int maxPageSize, int maxExpansionRatio, int maxRowGroupCount) -> void
 Parquet.SourceGenerator.ParquetTimestampAttribute.AdjustedToUtc.get -> bool
 Parquet.SourceGenerator.ParquetTimestampAttribute.AdjustedToUtc.set -> void
+Parquet.SourceGenerator.StringDeduplicator
+Parquet.SourceGenerator.StringDeduplicator.Deduplicate(string? value) -> string?
+Parquet.SourceGenerator.StringDeduplicator.Dispose() -> void
+Parquet.SourceGenerator.StringDeduplicator.GetOrAdd(System.ReadOnlySpan<char> value) -> string!
+Parquet.SourceGenerator.StringDeduplicator.StringDeduplicator() -> void
+Parquet.SourceGenerator.StringDeduplicator.StringDeduplicator(int capacity = 512) -> void

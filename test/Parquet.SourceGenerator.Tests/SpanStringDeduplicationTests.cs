@@ -208,7 +208,7 @@ public sealed class SpanStringDeduplicationTests
         {
             string candidate =
                 "collide-" + i.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            int bucket = (int)(Fnv1a(candidate) & TableMask);
+            int bucket = (int)(HashForDeduplicator(candidate) & TableMask);
             if (targetBucket < 0)
             {
                 targetBucket = bucket;
@@ -360,18 +360,21 @@ public sealed class SpanStringDeduplicationTests
     }
 
     /// <summary>
-    /// Mirrors the FNV-1a hash emitted into <c>StringDeduplicator</c> so tests can construct
+    /// Mirrors the hash used by <see cref="StringDeduplicator"/> so tests can construct
     /// deliberate bucket collisions.
     /// </summary>
-    private static uint Fnv1a(string value)
+    private static uint HashForDeduplicator(string value)
     {
+#if NETCOREAPP2_1_OR_GREATER
+        return (uint)string.GetHashCode(value, StringComparison.Ordinal);
+#else
         uint hash = 2166136261u;
         for (int i = 0; i < value.Length; i++)
         {
             hash ^= value[i];
             hash *= 16777619u;
         }
-
         return hash;
+#endif
     }
 }
