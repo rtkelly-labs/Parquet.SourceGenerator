@@ -31,6 +31,15 @@ public struct StringDeduplicator : IDisposable
     /// <param name="capacity">The power-of-two table capacity to allocate (default 512).</param>
     public StringDeduplicator(int capacity = 512)
     {
+        if (capacity <= 0 || (capacity & (capacity - 1)) != 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(capacity),
+                capacity,
+                "Capacity must be a positive power of two."
+            );
+        }
+
         _entries = ArrayPool<string?>.Shared.Rent(capacity);
         _mask = capacity - 1;
         Array.Clear(_entries, 0, capacity);

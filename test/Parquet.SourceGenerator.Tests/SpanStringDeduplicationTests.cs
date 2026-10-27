@@ -359,6 +359,31 @@ public sealed class SpanStringDeduplicationTests
         }
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(-16)]
+    [InlineData(3)]
+    [InlineData(100)]
+    [InlineData(500)]
+    public void ConstructorRejectsInvalidCapacity(int invalidCapacity)
+    {
+        Should.Throw<ArgumentOutOfRangeException>(() => new StringDeduplicator(invalidCapacity));
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(16)]
+    [InlineData(512)]
+    [InlineData(1024)]
+    public void ConstructorAcceptsPowerOfTwoCapacity(int validCapacity)
+    {
+        using var dedup = new StringDeduplicator(validCapacity);
+        string? result = dedup.Deduplicate("test");
+        result.ShouldBe("test");
+    }
+
     /// <summary>
     /// Mirrors the hash used by <see cref="StringDeduplicator"/> so tests can construct
     /// deliberate bucket collisions.
