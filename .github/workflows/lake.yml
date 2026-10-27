@@ -1,0 +1,165 @@
+name: Lake
+
+# The third pattern (lake/README.md): Lake.Parquet built from the pinned parquet-dotnet fork commit with the Lake
+# identity applied (scripts/BuildLakeParquet.cs), and the generator's packages consumed against it on .NET 10.
+# Its own workflow, outside ci.yml's required checks: a fork problem never blocks the modern and classic patterns.
+#
+# - pull requests and pushes touching the Lake pieces or the generator: build at the pin, test, consume;
+# - nightly: the same against the head of the fork branch named in lake/fork.json, so a fork change that breaks the
+#   Lake build or the generated code shows up before it is pinned;
+# - manual, with "publish": at the pin on main, then Lake.Parquet to nuget.org (trusted publishing) and a GitHub
+#   release lake-parquet-v<version>.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "lake/**"
+      - "scripts/BuildLakeParquet.cs"
+      - "test/PackageConsumptionLake/**"
+      - "test/PackageConsumption/**"
+      - "src/**"
+      - ".github/workflows/lake.yml"
+  pull_request:
+    paths:
+      - "lake/**"
+      - "scripts/BuildLakeParquet.cs"
+      - "test/PackageConsumptionLake/**"
+      - "test/PackageConsumption/**"
+      - "src/**"
+      - ".github/workflows/lake.yml"
+  schedule:
+    - cron: "41 3 * * *"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Fork branch or commit to build instead of the pinned commit (never published)"
+        required: false
+        default: ""
+      publish:
+        description: "Publish Lake.Parquet (main, pinned commit only)"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Lake.Parquet build and consumption
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.lake.outputs.version }}
+      pinned: ${{ steps.lake.outputs.pinned }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+            10.0.x
+
+      # the fork's suite has one Arrow interop test that runs pyarrow
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.12"
+      - run: pip install pyarrow pandas
+
+      - name: Build Lake.Parquet (fork + overlay, with the fork's tests)
+        id: lake
+        env:
+          REF_INPUT: ${{ inputs.ref }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          ref="$REF_INPUT"
+          if [ "$EVENT" = "schedule" ]; then ref="$(jq -r .branch lake/fork.json)"; fi
+          dotnet run scripts/BuildLakeParquet.cs -- --test ${ref:+--ref "$ref"}
+          echo "version=$(jq -r .version artifacts/lake/lake-build.json)" >> "$GITHUB_OUTPUT"
+          echo "pinned=$(jq -r .pinned artifacts/lake/lake-build.json)" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Lake.Parquet"
+            echo '```json'
+            cat artifacts/lake/lake-build.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify Lake.Parquet package layout
+        run: dotnet run scripts/VerifyPackageLayout.cs -- --packages artifacts/lake --manifests lake/package-layout --version "${{ steps.lake.outputs.version }}"
+
+      - name: Pack the generator packages
+        run: dotnet pack Parquet.SourceGenerator.slnx --configuration Release --output ./artifacts
+
+      # The generated code built and run on .NET 10 against Lake.Parquet, which also checks it runs on Lake.Parquet
+      # (assembly, provenance metadata, created_by), then files handed both ways with the modern pattern on
+      # Parquet.Net 6.x.
+      - name: Consume on .NET 10 with Lake.Parquet, and interoperate with the modern pattern
+        env:
+          LAKE_VERSION: ${{ steps.lake.outputs.version }}
+        run: |
+          set -euo pipefail
+          generator=$(ls artifacts/Parquet.SourceGenerator.[0-9]*.nupkg \
+            | sed -E 's/.*Parquet\.SourceGenerator\.([0-9][^/]*)\.nupkg/\1/')
+          lake=(dotnet run --project test/PackageConsumptionLake/PackageConsumptionLake.csproj --configuration Release
+                -p:GeneratorPackageVersion="$generator" -p:LakePackageVersion="$LAKE_VERSION"
+                -p:RestorePackagesPath="$RUNNER_TEMP/lake-packages" --)
+          modern=(dotnet run --project test/PackageConsumption/PackageConsumption.csproj --framework net8.0 --configuration Release
+                  -p:GeneratorPackageVersion="$generator" -p:RestorePackagesPath="$RUNNER_TEMP/modern-packages" --)
+          "${lake[@]}"
+          "${lake[@]}" --write-interop "$RUNNER_TEMP/lake.parquet"
+          "${modern[@]}" --read-interop "$RUNNER_TEMP/lake.parquet" lake
+          "${modern[@]}" --write-interop "$RUNNER_TEMP/modern.parquet"
+          "${lake[@]}" --read-interop "$RUNNER_TEMP/modern.parquet" modern
+
+      - name: Release notes of this version
+        run: awk 'NR>1 && /^# /{exit} {print}' lake/release-notes.md | tail -n +2 > artifacts/lake/release-notes.md
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: lake-parquet
+          path: artifacts/lake/
+
+  release:
+    name: Publish Lake.Parquet
+    needs: build
+    # main only, the pinned commit only (a --ref build is never published), and only when asked
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish && github.ref == 'refs/heads/main' && needs.build.outputs.pinned == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # the GitHub release and its tag
+      id-token: write # NuGet/login (trusted publishing)
+    environment: lake-release
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: lake-parquet
+          path: ./lake
+
+      - name: Login to NuGet via OIDC (Trusted Publishing)
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1
+        id: login
+        with:
+          user: ${{ secrets.NUGET_USER || 'rtk_13' }}
+
+      - name: Push Lake.Parquet
+        env:
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
+        run: |
+          dotnet nuget push "./lake/Lake.Parquet.${{ needs.build.outputs.version }}.nupkg" \
+            --api-key "$NUGET_API_KEY" \
+            --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate
+
+      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          tag_name: lake-parquet-v${{ needs.build.outputs.version }}
+          name: Lake.Parquet ${{ needs.build.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          prerelease: ${{ contains(needs.build.outputs.version, '-') }}
+          body_path: ./lake/release-notes.md
+          files: ./lake/Lake.Parquet.${{ needs.build.outputs.version }}.nupkg
