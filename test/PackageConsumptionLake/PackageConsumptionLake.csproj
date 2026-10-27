@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <!--
+    The third pattern's consumption test (lake/README.md): test/PackageConsumption's program, on .NET 10, with
+    Lake.Parquet in place of Parquet.Net. Lake.Parquet keeps Parquet.Net's API and namespace, so the generated code
+    must build and run unchanged against it. Not in Parquet.SourceGenerator.slnx, for the same reason as
+    test/PackageConsumption: the packages only exist after the Lake workflow has built them.
+  -->
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net10.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <IsPackable>false</IsPackable>
+        <RootNamespace>PackageConsumption</RootNamespace>
+        <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Parquet.SourceGenerator" Version="$(GeneratorPackageVersion)" />
+        <PackageReference Include="Lake.Parquet" Version="$(LakePackageVersion)" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <Compile Include="..\PackageConsumption\Program.cs" Link="Program.cs" />
+        <Compile
+            Include="..\PackageConsumption\InteropVerification.cs"
+            Link="InteropVerification.cs"
+        />
+        <Compile
+            Include="..\PackageConsumption\CrossVersionInteropDriver.cs"
+            Link="CrossVersionInteropDriver.cs"
+        />
+        <Compile Include="..\CrossVersionInterop\InteropModels.cs" Link="InteropModels.cs" />
+    </ItemGroup>
+</Project>

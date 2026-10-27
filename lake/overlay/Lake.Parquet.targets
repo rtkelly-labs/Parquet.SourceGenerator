@@ -1,0 +1,45 @@
+<Project>
+    <!--
+    The Lake.Parquet identity, applied to a checkout of the pinned parquet-dotnet fork by scripts/BuildLakeParquet.cs
+    (lake/README.md). The script copies this file to src/Parquet/ and imports it from the last line of
+    Parquet.csproj, so every property here wins over the project file's own. The fork itself carries none of
+    this: it stays upstream Parquet.Net plus the review units.
+
+    The C# namespace stays `Parquet`, as upstream's, so Lake.Parquet replaces Parquet.Net in a project: the two
+    cannot be referenced together.
+  -->
+    <PropertyGroup>
+        <PackageId>Lake.Parquet</PackageId>
+        <AssemblyName>Lake.Parquet</AssemblyName>
+        <RootNamespace>Parquet</RootNamespace>
+        <Product>Lake.Parquet</Product>
+        <!-- the third generator pattern is .NET 10 only -->
+        <TargetFrameworks>net10.0</TargetFrameworks>
+        <Authors>Ryan Kelly (rtkelly-labs); Parquet.Net by Ivan Gavryliuk (@aloneguid)</Authors>
+        <Description>Apache Parquet for .NET for table formats (Iceberg, DuckLake): a fork of Parquet.Net with field IDs on every field, modular encryption, statistics in each type's sort order with column orders, typed statistics, physical values, FIXED_LEN_BYTE_ARRAY(n) and faster reads. Replaces Parquet.Net (same Parquet namespace). .NET 10.</Description>
+        <PackageTags>apache parquet lakehouse iceberg ducklake dotnet c# encryption</PackageTags>
+        <PackageProjectUrl>https://github.com/rtkelly-labs/Parquet.SourceGenerator/tree/main/lake</PackageProjectUrl>
+        <RepositoryUrl>https://github.com/rtkelly-labs/parquet-dotnet</RepositoryUrl>
+        <!-- the documentation file follows the assembly name, so IntelliSense finds it next to Lake.Parquet.dll -->
+        <DocumentationFile></DocumentationFile>
+        <PackageReleaseNotes>Based on Parquet.Net $(LakeUpstreamVersion) (https://github.com/aloneguid/parquet-dotnet/commit/$(LakeUpstreamCommit)), fork commit $(LakeForkCommit). https://github.com/rtkelly-labs/Parquet.SourceGenerator/blob/main/lake/release-notes.md</PackageReleaseNotes>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <None Remove="..\..\docs\README.md" />
+        <None Include="lake\README.md" Pack="true" PackagePath="\" />
+        <!-- MIT: the copyright notice travels with every copy -->
+        <None Include="..\..\LICENSE" Pack="true" PackagePath="\" />
+        <AssemblyMetadata Include="LakeForkCommit" Value="$(LakeForkCommit)" />
+        <AssemblyMetadata Include="LakeUpstreamCommit" Value="$(LakeUpstreamCommit)" />
+        <AssemblyMetadata Include="LakeUpstreamVersion" Value="$(LakeUpstreamVersion)" />
+    </ItemGroup>
+
+    <!-- set by scripts/BuildLakeParquet.cs; a build without them would publish a package that cannot say what it is -->
+    <Target Name="LakeParquetRequiresProvenance" BeforeTargets="CoreCompile">
+        <Error
+            Condition="'$(LakeForkCommit)' == '' or '$(LakeUpstreamCommit)' == '' or '$(LakeUpstreamVersion)' == ''"
+            Text="Lake.Parquet is built by scripts/BuildLakeParquet.cs, which sets LakeForkCommit, LakeUpstreamCommit and LakeUpstreamVersion."
+        />
+    </Target>
+</Project>

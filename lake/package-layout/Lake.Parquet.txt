@@ -1,0 +1,17 @@
+# Exact entry list of the Lake.Parquet package (lake/README.md); checked by scripts/VerifyPackageLayout.cs in
+# .github/workflows/lake.yml. Any other entry fails the Lake build. Add one deliberately, in the same pull request.
+@dependency CommunityToolkit.HighPerformance
+@dependency K4os.Compression.LZ4
+@dependency Microsoft.IO.RecyclableMemoryStream
+@dependency Snappier
+@dependency ZstdSharp.Port
+LICENSE
+Lake.Parquet.nuspec
+README.md
+[Content_Types].xml
+_rels/.rels
+icon.png
+lib/net10.0/Lake.Parquet.dll
+lib/net10.0/Lake.Parquet.pdb
+lib/net10.0/Lake.Parquet.xml
+package/services/metadata/core-properties/*.psmdcp

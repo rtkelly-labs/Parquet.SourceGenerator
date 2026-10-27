@@ -1,0 +1,11 @@
+<Project>
+    <!--
+    Intentionally empty, and intentionally NOT importing the repository's root
+    Directory.Build.props.
+
+    This project has to compile the way an external consumer's project would: no repo-wide
+    LangVersion, no analysis level, no package metadata, no SourceLink. Inheriting those would mean
+    the test proves the packages work *under this repository's build settings* rather than on their
+    own. MSBuild stops searching upward once it finds this file.
+  -->
+</Project>
