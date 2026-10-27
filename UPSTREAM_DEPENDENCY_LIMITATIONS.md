@@ -5,6 +5,12 @@
 To prototype, verify, and stage enhancements addressing the architectural limitations below, an official fork is maintained at:
 **[rtkelly-labs/parquet-dotnet](https://github.com/rtkelly-labs/parquet-dotnet)** (forked from `aloneguid/parquet-dotnet`).
 
+The fork is published as **Lake.Parquet** (package and assembly `Lake.Parquet`; the `Parquet` namespace is kept, so it
+replaces Parquet.Net rather than sitting beside it). It follows upstream by merging each upstream release
+(`scripts/lake/sync-upstream.sh` in the fork, run weekly by its CI); see the fork's `docs/lake/maintaining.md`. A third
+generator pattern on top of it, `Lake.Parquet.SourceGenerator` for .NET 10, is planned alongside the modern
+(`Parquet.SourceGenerator`, Parquet.Net 6) and classic (`Parquet.SourceGenerator.Legacy`, Parquet.Net 4/5) packages.
+
 ### Policy & Contribution Guidelines
 Upstream `aloneguid/parquet-dotnet` maintains an explicit policy against LLM-generated pull requests, issues, and discussions, welcoming users to maintain independent forks. Consequently:
 - `rtkelly-labs/parquet-dotnet` serves as the primary repository for staging, validating, and testing fixes against `Parquet.SourceGenerator`.
