@@ -31,14 +31,16 @@ using CommandLine;
 //                                                [--version <expected package version>]
 // -----------------------------------------------------------------------------
 
-return Parser
-    .Default.ParseArguments<PackageLayoutOptions>(args)
+using var parser = new Parser(settings =>
+{
+    settings.AutoVersion = false;
+    settings.HelpWriter = Console.Error;
+});
+return parser
+    .ParseArguments<PackageLayoutOptions>(args)
     .MapResult(
         opts => Run(opts),
-        errs =>
-            errs.Any(e => e.Tag is ErrorType.HelpRequestedError or ErrorType.VersionRequestedError)
-                ? 0
-                : 1
+        errs => errs.Any(e => e.Tag is ErrorType.HelpRequestedError) ? 0 : 1
     );
 
 static int Run(PackageLayoutOptions opts)
