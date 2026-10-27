@@ -388,7 +388,7 @@ internal static class CodeEmitter
         );
         builder.AppendLine("        }");
         builder.AppendLine(
-            "        long footerStart = await GetFooterStartAsync(stream, cancellationToken).ConfigureAwait(false);"
+            "        long footerStart = await global::Parquet.SourceGenerator.ParquetDecompressionGuardStream.GetFooterStartAsync(stream, cancellationToken).ConfigureAwait(false);"
         );
         builder.AppendLine("        ValidateColumnChunkBounds(reader, footerStart, 1_000_000);");
         // The limit is enforced during the walk: a depth computed to the end and compared afterwards

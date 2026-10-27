@@ -66,6 +66,92 @@ public sealed class ParquetDecompressionGuardStream : Stream
         _knownEnd = -1;
     }
 
+    /// <summary>
+    /// Reads and validates the 4-byte footer length at the end of a Parquet stream,
+    /// returning the offset in the stream where the metadata footer starts.
+    /// </summary>
+    /// <param name="stream">The seekable Parquet stream.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The stream offset where the Parquet metadata footer starts.</returns>
+    /// <exception cref="ArgumentNullException">Thrown if <paramref name="stream"/> is null.</exception>
+    /// <exception cref="InvalidDataException">Thrown if the stream is too short, unseekable, or the footer length is invalid.</exception>
+    public static async Task<long> GetFooterStartAsync(
+        Stream stream,
+        CancellationToken cancellationToken = default
+    )
+    {
+#if NET6_0_OR_GREATER
+        ArgumentNullException.ThrowIfNull(stream);
+#else
+        if (stream is null)
+        {
+            throw new ArgumentNullException(nameof(stream));
+        }
+#endif
+
+        if (!stream.CanSeek || stream.Length < 8)
+        {
+            throw new InvalidDataException(
+                "Parquet stream is not seekable or is too small to contain a footer."
+            );
+        }
+
+        long originalPosition = stream.Position;
+        try
+        {
+            stream.Position = stream.Length - 8;
+            var footerLengthBytes = new byte[4];
+            int read = 0;
+            while (read < footerLengthBytes.Length)
+            {
+#if NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER
+                int count = await stream
+                    .ReadAsync(
+                        MemoryExtensions.AsMemory(
+                            footerLengthBytes,
+                            read,
+                            footerLengthBytes.Length - read
+                        ),
+                        cancellationToken
+                    )
+                    .ConfigureAwait(false);
+#else
+                int count = await stream
+                    .ReadAsync(
+                        footerLengthBytes,
+                        read,
+                        footerLengthBytes.Length - read,
+                        cancellationToken
+                    )
+                    .ConfigureAwait(false);
+#endif
+                if (count == 0)
+                {
+                    throw new InvalidDataException("Parquet footer length could not be read.");
+                }
+
+                read += count;
+            }
+
+            long footerLength =
+                footerLengthBytes[0]
+                | ((long)footerLengthBytes[1] << 8)
+                | ((long)footerLengthBytes[2] << 16)
+                | ((long)footerLengthBytes[3] << 24);
+            long footerStart = stream.Length - 8 - footerLength;
+            if (footerStart < 4 || footerStart > stream.Length - 8)
+            {
+                throw new InvalidDataException("Parquet footer bounds are invalid.");
+            }
+
+            return footerStart;
+        }
+        finally
+        {
+            stream.Position = originalPosition;
+        }
+    }
+
     /// <inheritdoc/>
     public override bool CanRead => _inner.CanRead;
 

@@ -16,6 +16,7 @@ Parquet.SourceGenerator.ParquetColumnAttribute.FieldId.get -> int
 Parquet.SourceGenerator.ParquetColumnAttribute.FieldId.set -> void
 Parquet.SourceGenerator.ParquetDecompressionGuardStream
 Parquet.SourceGenerator.ParquetDecompressionGuardStream.Activate() -> void
+static Parquet.SourceGenerator.ParquetDecompressionGuardStream.GetFooterStartAsync(System.IO.Stream! stream, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<long>!
 Parquet.SourceGenerator.ParquetDecompressionGuardStream.ParquetDecompressionGuardStream(System.IO.Stream! inner, int maxPageSize, int maxExpansionRatio) -> void
 Parquet.SourceGenerator.ParquetDecompressionGuardStream.ParquetDecompressionGuardStream(System.IO.Stream! inner, int maxPageSize, int maxExpansionRatio, int maxRowGroupCount) -> void
 Parquet.SourceGenerator.ParquetTimestampAttribute.AdjustedToUtc.get -> bool

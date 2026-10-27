@@ -16,6 +16,14 @@ The rule, the three surfaces and the author process are in
 
 <!-- Add new entries directly below this line, newest first. -->
 
+### 2026-10-27 — Consolidate footer start helper into ParquetDecompressionGuardStream (#723)
+
+- **Surface:** package
+- **Semver:** additive-minor
+- **Issue:** [#723](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/723)
+- **Change:** Added `GetFooterStartAsync(Stream stream, CancellationToken cancellationToken = default)` static method to `ParquetDecompressionGuardStream` in `Parquet.SourceGenerator.Runtime`.
+- **Rationale:** Previously, ~55 lines of footer length reading and boundary validation were emitted into every generated model extension class. Centralizing this helper in `ParquetDecompressionGuardStream` eliminates duplicated boilerplate across all emitted models while maintaining full compatibility.
+
 ### 2026-10-27 — Hoist StringDeduplicator into Runtime package (#721)
 
 - **Surface:** package
