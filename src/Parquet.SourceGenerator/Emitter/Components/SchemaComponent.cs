@@ -16,7 +16,16 @@ internal static class SchemaComponent
     /// <summary>
     /// Generates compile-time ParquetSchema DataField instantiation code.
     /// </summary>
-    public static string GetFieldCreationExpression(PropertyModel prop)
+    /// <remarks>
+    /// <c>FieldId</c> and a local timestamp use Parquet.Net APIs the 4.x/5.x line lacks; the classic
+    /// parser rejects members that set them (PARQ023), so they only reach this for the v6 backend.
+    /// </remarks>
+    public static string GetFieldCreationExpression(PropertyModel prop) =>
+        prop.FieldId is int fieldId
+            ? $"{GetFieldConstructorExpression(prop)} {{ FieldId = {fieldId} }}"
+            : GetFieldConstructorExpression(prop);
+
+    private static string GetFieldConstructorExpression(PropertyModel prop)
     {
         string name = EmittedText.Literal(prop.ParquetColumnName);
 
@@ -30,6 +39,16 @@ internal static class SchemaComponent
                 $"new global::Parquet.Schema.DecimalDataField({name}, 38, 18, isNullable: {BoolLiteral(prop.IsNullable)})",
 
             PropertyKind.DateTime
+                when (
+                    prop.TimestampUnit == "1"
+                    || prop.TimestampUnit?.Contains("Microseconds") == true
+                ) && !prop.TimestampAdjustedToUtc =>
+            // DateTimeFormat.Timestamp, not DateAndTimeMicros: Parquet.Net writes the latter as the
+            // legacy TIMESTAMP_MICROS converted type, which always means UTC-adjusted and ignores
+            // isAdjustedToUTC. Timestamp writes the logical type, which carries the flag.
+            $"new global::Parquet.Schema.DateTimeDataField({name}, global::Parquet.Schema.DateTimeFormat.Timestamp, isAdjustedToUTC: false, unit: global::Parquet.Schema.DateTimeTimeUnit.Micros, isNullable: {BoolLiteral(prop.IsNullable)})",
+
+            PropertyKind.DateTime
                 when prop.TimestampUnit == "1"
                     || prop.TimestampUnit?.Contains("Microseconds") == true =>
                 $"new global::Parquet.Schema.DateTimeDataField({name}, global::Parquet.Schema.DateTimeFormat.DateAndTimeMicros, isNullable: {BoolLiteral(prop.IsNullable)})",
@@ -37,8 +56,10 @@ internal static class SchemaComponent
             PropertyKind.DateTime =>
                 $"new global::Parquet.Schema.DateTimeDataField({name}, global::Parquet.Schema.DateTimeFormat.Impala, isNullable: {BoolLiteral(prop.IsNullable)})",
 
+            // INT32 DATE, the column every reader expects for a calendar date. INT96 (Impala) here
+            // round-tripped in .NET but other readers saw a timestamp, and Iceberg rejects INT96.
             PropertyKind.DateOnly =>
-                $"new global::Parquet.Schema.DateTimeDataField({name}, global::Parquet.Schema.DateTimeFormat.Impala, isNullable: {BoolLiteral(prop.IsNullable)})",
+                $"new global::Parquet.Schema.DateTimeDataField({name}, global::Parquet.Schema.DateTimeFormat.Date, isNullable: {BoolLiteral(prop.IsNullable)})",
 
             PropertyKind.TimeSpan =>
                 $"new global::Parquet.Schema.TimeDataField({name}, global::Parquet.Schema.TimeUnitPrecision.Millis, isNullable: {BoolLiteral(prop.IsNullable)})",
@@ -381,59 +402,6 @@ internal static class SchemaComponent
     /// </summary>
     public static void EmitValidateColumnChunkBounds(StringBuilder builder)
     {
-        builder.AppendLine(
-            "    private static async global::System.Threading.Tasks.Task<long> GetFooterStartAsync(global::System.IO.Stream stream, global::System.Threading.CancellationToken cancellationToken)"
-        );
-        builder.AppendLine("    {");
-        builder.AppendLine("        if (!stream.CanSeek || stream.Length < 8)");
-        builder.AppendLine("        {");
-        builder.AppendLine(
-            "            throw new global::System.IO.InvalidDataException(\"Parquet stream is not seekable or is too small to contain a footer.\");"
-        );
-        builder.AppendLine("        }");
-        builder.AppendLine("        long originalPosition = stream.Position;");
-        builder.AppendLine("        try");
-        builder.AppendLine("        {");
-        builder.AppendLine("            stream.Position = stream.Length - 8;");
-        builder.AppendLine("            var footerLengthBytes = new byte[4];");
-        builder.AppendLine("            int read = 0;");
-        builder.AppendLine("            while (read < footerLengthBytes.Length)");
-        builder.AppendLine("            {");
-        builder.AppendLine("#if NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER");
-        builder.AppendLine(
-            "                int count = await stream.ReadAsync(global::System.MemoryExtensions.AsMemory(footerLengthBytes, read, footerLengthBytes.Length - read), cancellationToken).ConfigureAwait(false);"
-        );
-        builder.AppendLine("#else");
-        builder.AppendLine(
-            "                int count = await stream.ReadAsync(footerLengthBytes, read, footerLengthBytes.Length - read, cancellationToken).ConfigureAwait(false);"
-        );
-        builder.AppendLine("#endif");
-        builder.AppendLine("                if (count == 0)");
-        builder.AppendLine("                {");
-        builder.AppendLine(
-            "                    throw new global::System.IO.InvalidDataException(\"Parquet footer length could not be read.\");"
-        );
-        builder.AppendLine("                }");
-        builder.AppendLine("                read += count;");
-        builder.AppendLine("            }");
-        builder.AppendLine(
-            "            long footerLength = footerLengthBytes[0] | ((long)footerLengthBytes[1] << 8) | ((long)footerLengthBytes[2] << 16) | ((long)footerLengthBytes[3] << 24);"
-        );
-        builder.AppendLine("            long footerStart = stream.Length - 8 - footerLength;");
-        builder.AppendLine("            if (footerStart < 4 || footerStart > stream.Length - 8)");
-        builder.AppendLine("            {");
-        builder.AppendLine(
-            "                throw new global::System.IO.InvalidDataException(\"Parquet footer bounds are invalid.\");"
-        );
-        builder.AppendLine("            }");
-        builder.AppendLine("            return footerStart;");
-        builder.AppendLine("        }");
-        builder.AppendLine("        finally");
-        builder.AppendLine("        {");
-        builder.AppendLine("            stream.Position = originalPosition;");
-        builder.AppendLine("        }");
-        builder.AppendLine("    }");
-        builder.AppendLine();
         builder.AppendLine(
             "    private static void ValidateColumnChunkBounds(global::Parquet.ParquetReader reader, long footerStart, int maxChunkCount)"
         );

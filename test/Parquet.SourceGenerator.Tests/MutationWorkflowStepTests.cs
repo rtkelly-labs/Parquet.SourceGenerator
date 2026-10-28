@@ -40,7 +40,7 @@ public sealed class MutationWorkflowStepTests : IDisposable
 
     [Theory]
     [InlineData("Stryker — the generator (parser + emitters)", "GENERATOR_REPORT")]
-    [InlineData("Stryker — shipped runtime helpers (Attributes)", "ATTRIBUTES_REPORT")]
+    [InlineData("Stryker — shipped runtime helpers (Runtime)", "ATTRIBUTES_REPORT")]
     public async Task TheStrykerStepSurvivesAFreshRunnerWithNoOutputDirectoryAsync(
         string stepName,
         string reportVariable
@@ -58,7 +58,7 @@ public sealed class MutationWorkflowStepTests : IDisposable
 
     [Theory]
     [InlineData("Stryker — the generator (parser + emitters)", "GENERATOR_REPORT")]
-    [InlineData("Stryker — shipped runtime helpers (Attributes)", "ATTRIBUTES_REPORT")]
+    [InlineData("Stryker — shipped runtime helpers (Runtime)", "ATTRIBUTES_REPORT")]
     public async Task TheStrykerStepReportsOnlyTheDirectoryThisRunCreatedAsync(
         string stepName,
         string reportVariable
@@ -95,7 +95,7 @@ public sealed class MutationWorkflowStepTests : IDisposable
         string workflow = ReadWorkflow();
         StepScript("Stryker — the generator (parser + emitters)", workflow)
             .ShouldContain("dotnet tool run dotnet-stryker");
-        StepScript("Stryker — shipped runtime helpers (Attributes)", workflow)
+        StepScript("Stryker — shipped runtime helpers (Runtime)", workflow)
             .ShouldContain("dotnet tool run dotnet-stryker");
         Should.Throw<InvalidOperationException>(() => StepScript("No such step", workflow));
     }

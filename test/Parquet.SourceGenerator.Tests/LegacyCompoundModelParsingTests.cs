@@ -104,6 +104,66 @@ public sealed class LegacyCompoundModelParsingTests
         meta.MapValue!.IsNullable.ShouldBeTrue();
     }
 
+    [Theory]
+    [InlineData("[ParquetColumn(FieldId = 2)]", "FieldId")]
+    [InlineData(
+        "[ParquetTimestamp(ParquetTimestampUnit.Microseconds, AdjustedToUtc = false)]",
+        "AdjustedToUtc"
+    )]
+    public void ColumnOptionsTheClassicApiCannotWriteTriggerPARQ023(string attribute, string option)
+    {
+        // Dropping either would write a column without its ID, or a local timestamp marked UTC, and
+        // the v6 spelling of a local timestamp does not compile against Parquet.Net before 4.25.
+        string source = $$"""
+            using Parquet.SourceGenerator;
+            using System;
+
+            namespace App;
+
+            [ParquetSerializable]
+            public partial class Row
+            {
+                public int Id { get; init; }
+                {{attribute}} public DateTime At { get; init; }
+            }
+            """;
+
+        INamedTypeSymbol row = CompileAndGet(source, "App.Row");
+        var result = LegacyParser.GetTargetModel(row, LegacyApiLevel.V4, allowCompoundTypes: true);
+
+        var diagnostic = result.Diagnostics.ShouldHaveSingleItem();
+        diagnostic.Descriptor.Id.ShouldBe(
+            DiagnosticDescriptors.ColumnOptionUnsupportedOnClassicApi.Id
+        );
+        diagnostic
+            .ToDiagnostic()
+            .GetMessage(System.Globalization.CultureInfo.InvariantCulture)
+            .ShouldContain(option);
+    }
+
+    [Fact]
+    public void UtcAdjustedTimestampsAreStillAcceptedByTheClassicApi()
+    {
+        string source = """
+            using Parquet.SourceGenerator;
+            using System;
+
+            namespace App;
+
+            [ParquetSerializable]
+            public partial class Row
+            {
+                [ParquetTimestamp(ParquetTimestampUnit.Microseconds, AdjustedToUtc = true)]
+                public DateTime At { get; init; }
+            }
+            """;
+
+        INamedTypeSymbol row = CompileAndGet(source, "App.Row");
+        var result = LegacyParser.GetTargetModel(row, LegacyApiLevel.V4, allowCompoundTypes: true);
+
+        result.Diagnostics.ShouldBeEmpty();
+    }
+
     [Fact]
     public void ListElementsUnsupportedByTheClassicApiTriggerPARQ011()
     {

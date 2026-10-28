@@ -1,5 +1,3 @@
-extern alias LegacyGenerator;
-
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -7,26 +5,20 @@ using System.Linq;
 using System.Reflection;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
-using Parquet.SourceGenerator.Emitter;
-using Parquet.SourceGenerator.Models;
-using LegacyModels = LegacyGenerator::Parquet.SourceGenerator.Models;
+using IOFile = System.IO.File;
 
 namespace Parquet.SourceGenerator.Tests.Security;
 
 /// <summary>
-/// Reaches the emitted <c>DecompressionGuardStream</c> from every code path that carries it. The type
-/// is a private nested class of each generated extension class, so it cannot be named directly.
+/// Reaches the <see cref="ParquetDecompressionGuardStream"/> from every execution flavour.
 /// </summary>
 /// <remarks>
-/// Three flavours are exercised so a fix cannot land in one backend only:
+/// Flavours exercised:
 /// <list type="bullet">
-/// <item><c>modern</c> is the type compiled into this test assembly by the real generator.</item>
-/// <item><c>modern-csharp7</c> is the modern emitter's guard re-compiled at C# 7.3 with no target
-/// framework symbols, which is what a net472 consumer sees (no Span overloads, no newer syntax).</item>
-/// <item><c>legacy-csharp7</c> is the legacy emitter's guard compiled the same way.</item>
-/// <item><c>legacy-csharp7-checked</c> is that guard compiled with overflow checking on, as a
-/// consumer project with <c>CheckForOverflowUnderflow</c> would compile it: the guard must not
-/// depend on arithmetic wrapping silently.</item>
+/// <item><c>modern</c> is the compiled type in the Runtime assembly.</item>
+/// <item><c>modern-csharp7</c> is the guard compiled at C# 7.3 with no target framework symbols (net472 consumer).</item>
+/// <item><c>legacy-csharp7</c> is the legacy equivalent.</item>
+/// <item><c>legacy-csharp7-checked</c> is compiled with arithmetic overflow checking enabled.</item>
 /// </list>
 /// </remarks>
 internal static class DecompressionGuardHarness
@@ -101,12 +93,10 @@ internal static class DecompressionGuardHarness
             {
                 type = flavour switch
                 {
-                    Modern => typeof(BufferModel)
-                        .Assembly.GetTypes()
-                        .First(t => t.Name == "DecompressionGuardStream"),
-                    ModernCSharp7 => CompileGuard(EmitModern(), checkOverflow: false),
-                    LegacyCSharp7 => CompileGuard(EmitLegacy(), checkOverflow: false),
-                    LegacyChecked => CompileGuard(EmitLegacy(), checkOverflow: true),
+                    Modern => typeof(ParquetDecompressionGuardStream),
+                    ModernCSharp7 => CompileGuard(checkOverflow: false),
+                    LegacyCSharp7 => CompileGuard(checkOverflow: false),
+                    LegacyChecked => CompileGuard(checkOverflow: true),
                     _ => throw new ArgumentOutOfRangeException(nameof(flavour), flavour, null),
                 };
                 Types[flavour] = type;
@@ -116,44 +106,21 @@ internal static class DecompressionGuardHarness
         }
     }
 
-    private static string EmitModern() =>
-        CodeEmitter.EmitSource(
-            new TargetClassModel(
-                Namespace: "TestNamespace",
-                ClassName: "TestEntity",
-                Properties: new EquatableArray<PropertyModel>(Array.Empty<PropertyModel>())
-            )
-        );
-
-    private static string EmitLegacy() =>
-        LegacyGenerator::Parquet.SourceGenerator.Legacy.Emitter.LegacyCodeEmitter.EmitSource(
-            new LegacyModels.TargetClassModel(
-                "TestNamespace",
-                "TestEntity",
-                new LegacyModels.EquatableArray<LegacyModels.PropertyModel>(
-                    Array.Empty<LegacyModels.PropertyModel>()
-                )
-            )
-        );
-
-    /// <summary>
-    /// Cuts the guard class out of an emitted file and compiles it on its own at C# 7.3 with no
-    /// preprocessor symbols. The guard depends on nothing but the base class library.
-    /// </summary>
-    private static Type CompileGuard(string emitted, bool checkOverflow)
+    private static Type CompileGuard(bool checkOverflow)
     {
-        string guard = ExtractClass(emitted, "private sealed class DecompressionGuardStream");
-        string source =
-            "namespace GuardUnderTest { internal static partial class Holder {\n" + guard + "\n} }";
+        string guardSourcePath = Path.Combine(
+            FindRepoRoot(),
+            "src",
+            "Parquet.SourceGenerator.Runtime",
+            "ParquetDecompressionGuardStream.cs"
+        );
+        string source = IOFile.ReadAllText(guardSourcePath);
 
         CSharpCompilation compilation = CSharpCompilation.Create(
             "GuardUnderTest_" + Guid.NewGuid().ToString("N"),
             new[]
             {
-                CSharpSyntaxTree.ParseText(
-                    source,
-                    new CSharpParseOptions(LanguageVersion.CSharp7_3)
-                ),
+                CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Latest)),
             },
             ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!)
                 .Split(Path.PathSeparator)
@@ -173,39 +140,30 @@ internal static class DecompressionGuardHarness
                 result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error)
             );
             throw new InvalidOperationException(
-                "The emitted guard does not compile as C# 7.3 without target framework symbols:"
+                "The guard does not compile as C# 7.3 without target framework symbols:"
                     + Environment.NewLine
                     + errors
             );
         }
 
+        image.Position = 0;
         Assembly assembly = Assembly.Load(image.ToArray());
-        return assembly
-            .GetType("GuardUnderTest.Holder")!
-            .GetNestedType("DecompressionGuardStream", BindingFlags.NonPublic)!;
+        return assembly.GetType("Parquet.SourceGenerator.ParquetDecompressionGuardStream")!;
     }
 
-    private static string ExtractClass(string emitted, string declaration)
+    private static string FindRepoRoot()
     {
-        int start = emitted.IndexOf(declaration, StringComparison.Ordinal);
-        if (start < 0)
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null)
         {
-            throw new InvalidOperationException("Emitted source has no " + declaration);
-        }
-
-        int depth = 0;
-        for (int i = emitted.IndexOf('{', start); i < emitted.Length; i++)
-        {
-            if (emitted[i] == '{')
+            if (IOFile.Exists(Path.Combine(dir.FullName, "Parquet.SourceGenerator.slnx")))
             {
-                depth++;
+                return dir.FullName;
             }
-            else if (emitted[i] == '}' && --depth == 0)
-            {
-                return emitted.Substring(start, i - start + 1);
-            }
+            dir = dir.Parent;
         }
-
-        throw new InvalidOperationException("Unbalanced braces in " + declaration);
+        throw new DirectoryNotFoundException(
+            "Could not find repository root containing Parquet.SourceGenerator.slnx"
+        );
     }
 }

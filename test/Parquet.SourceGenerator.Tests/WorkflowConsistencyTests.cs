@@ -86,7 +86,7 @@ public sealed class WorkflowConsistencyTests
             {
                 "Parquet.SourceGenerator",
                 "Parquet.SourceGenerator.Legacy",
-                "Parquet.SourceGenerator.Attributes",
+                "Parquet.SourceGenerator.Runtime",
             }
         )
         {

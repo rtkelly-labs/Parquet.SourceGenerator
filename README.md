@@ -78,7 +78,7 @@ dotnet add package Parquet.SourceGenerator
 dotnet add package Parquet.Net
 ```
 
-`Parquet.SourceGenerator.Attributes` is referenced automatically. `Parquet.Net` is required because the generated code targets its low-level columnar APIs directly.
+`Parquet.SourceGenerator.Runtime` is referenced automatically. `Parquet.Net` is required because the generated code targets its low-level columnar APIs directly.
 
 ### 2. Define Your Model
 
@@ -362,6 +362,8 @@ Full details on every diagnostic rule (`PARQ001` to `PARQ016`), with examples an
 - `PARQ011`: Classic API version compatibility
 - `PARQ012`–`PARQ014`: Cyclic or too-deep compound types, and an ineligible `[ParquetSortKey]`
 - `PARQ016`: Colliding generated type names (`PARQ015` retired)
+- `PARQ023`: A column option (`FieldId`, `AdjustedToUtc = false`) the classic backend cannot write
+- `PARQ024`: The same Parquet field ID declared by more than one column
 
 ---
 

@@ -65,7 +65,7 @@ internal static class Program
         // ---- Shared: at parity on both backends -------------------------------------------
         // WriteParquetAsync(this IEnumerable<T>, Stream, ParquetSerializerOptions?, CancellationToken)
         // is the same normalised .api.txt line on both backends, and ParquetSerializerOptions is the
-        // shared Attributes package type.
+        // shared Runtime package type.
         var options = new ParquetSerializerOptions { RowGroupSize = 2 };
         using var stream = new MemoryStream();
         await expected.WriteParquetAsync(stream, options);
