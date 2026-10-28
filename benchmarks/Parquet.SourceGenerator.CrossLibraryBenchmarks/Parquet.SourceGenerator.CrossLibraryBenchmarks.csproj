@@ -27,7 +27,7 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\..\src\Parquet.SourceGenerator.Attributes\Parquet.SourceGenerator.Attributes.csproj" />
+        <ProjectReference Include="..\..\src\Parquet.SourceGenerator.Runtime\Parquet.SourceGenerator.Runtime.csproj" />
         <ProjectReference
             Include="..\..\src\Parquet.SourceGenerator\Parquet.SourceGenerator.csproj"
             OutputItemType="Analyzer"
