@@ -11,7 +11,11 @@
     "featureVersion": 17,
     "notes": "Hadoop's UserGroupInformation calls Subject.getSubject, which JDKs newer than 21 refuse outright; 17 is the current LTS that runs the tool without security-manager workaround flags."
   },
-  "repository": "https://repo1.maven.org/maven2",
+  "mirrors": [
+    "https://repo1.maven.org/maven2",
+    "https://repo.maven.apache.org/maven2"
+  ],
+  "mirrorsNotes": "Tried in order, every round, by scripts/VerifyApacheConformance.cs --restore; failed rounds are retried with backoff. Both hosts serve Maven Central. The SHA-256 below is the trust anchor for every artifact whichever mirror serves it, so adding a mirror never widens what is accepted.",
   "artifacts": [
     {
       "file": "parquet-cli-1.18.1-runtime.jar",
