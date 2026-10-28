@@ -77,7 +77,7 @@ jobs:
           echo "Tag $TAG is free."
 
       - name: Upload release notes
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: release-info
           path: ${{ runner.temp }}/release-notes.md
@@ -212,7 +212,7 @@ jobs:
             -p:RestorePackagesPath="$RUNNER_TEMP/consumption-packages-legacy-net472"
 
       - name: Upload Packages
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: nuget-packages
           path: ./artifacts/*.nupkg
@@ -234,7 +234,7 @@ jobs:
           tar -czf "$RUNNER_TEMP/derived-outputs.tar.gz" -C "$out" manifest.json golden metrics callgraph api-model.json
 
       - name: Upload Derived Outputs
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: derived-outputs
           path: ${{ runner.temp }}/derived-outputs.tar.gz
