@@ -15,6 +15,7 @@ Upstream `aloneguid/parquet-dotnet` maintains an explicit policy against LLM-gen
 2. **Nullable Read Optimization**: Add zero-definition-level fast path to `ParquetRowGroupReader.ReadRawAsync<T>` when column chunk `NullCount == 0`.
 3. **CRC32 Checksum Validation**: Implement optional page header CRC32 validation during page decompression.
 4. **UTF-8 Byte Spans**: Expose raw byte-span read surfaces (`ReadOnlyMemory<byte>`) for UTF-8 columns to eliminate intermediate `char[]` / `string` allocations.
+5. **Exact Integer-Backed Decimal Decode**: Replace `(decimal)Math.Pow(10, -scale)` in `ParquetPlainEncoder` (decode and statistics) with an exact power of ten, for example `new decimal(1, 0, 0, false, (byte)scale)`, so decimals are exact on .NET 11. See "Parquet.Net Integer-Backed Decimals Are Inexact On .NET 11" below.
 
 ---
 
@@ -23,6 +24,40 @@ Upstream `aloneguid/parquet-dotnet` maintains an explicit policy against LLM-gen
 `ParquetRowGroupReader.ReadRawAsync<T>` requires definition-level memory whenever `DataField.MaxDefinitionLevel > 0`. This prevents the generator from implementing the `NullCount == 0` definition-level bypass for nullable fields.
 
 Track the limitation and future upstream fixes in [issue #150](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/150). Scan Parquet.Net for a safe non-nullable read path or an API that permits omitting definition-level output before revisiting the optimization.
+
+## Parquet.Net Integer-Backed Decimals Are Inexact On .NET 11
+
+Parquet.Net 6.x (and 4.25) decodes an INT32- or INT64-backed decimal as
+`unscaled * (decimal)Math.Pow(10, -scale)` (`ParquetPlainEncoder.Decode` for columns,
+`TryDecodeDecimal` for statistics). That was exact only because, up to .NET 10, the `double` to
+`decimal` conversion rounded to 15 significant digits, turning the `double` nearest 10^-scale back
+into the exact power of ten. .NET 11 keeps the `double`'s value:
+
+```
+.NET 10.0.12:  (decimal)Math.Pow(10,-2) = 0.01                            1999 * it = 19.99
+.NET 11 rc3:   (decimal)Math.Pow(10,-2) = 0.0100000000000000002081668171  1999 * it = 19.990000000000000416125467383
+```
+
+Found by CI's .NET 11 job (#743), which failed 38 decimal tests. The error is not only in far digits:
+at scale 10, an 18-digit unscaled value decodes 36 units of the column's own scale away, a
+well-formed `decimal(18,10)` that cannot be told from a correct one. At scales of about 14 and above
+the factor is numerically exact at decimal's 28 places, but values come back holding 28 places
+(`19.9900000000000000000000000000`) instead of the column's scale. Fixed-length and byte-array
+decimals decode through `BigInteger` and are unaffected; scale 0 is unaffected.
+
+**Workaround here.** Generated readers check each decimal chunk's physical type and, for INT32 and
+INT64, pass the decoded values through `ParquetDecimalScale` (Runtime package), which divides by
+the same factor, rounds to the unscaled integer and rescales exactly, at the column's scale. It is
+a no-op where the factor is exact, so before .NET 11 it costs one lookup per column read. The fuzz
+oracle (`IndependentParquetEngine.DecimalCodec`) applies the same correction, because it reads
+through Parquet.Net too. Decimal statistics are not corrected, because decimals are excluded from
+row-group pruning. Any other Parquet.Net caller on .NET 11, including a consumer reading with
+`ParquetSerializer`, still gets the inexact values.
+
+**Upstream fix.** Use an exact power of ten (workstream 5). Tests: `DecimalScaleRoundTripTests`
+(matrix and seeded properties over INT32, INT64 and fixed-length shapes, through the POCO and
+batch readers) and `ParquetDecimalScaleTests` (the arithmetic, driven with the .NET 11 factor on
+any runtime).
 
 ## Parquet.Net 4.25.0 Legacy String Reads
 

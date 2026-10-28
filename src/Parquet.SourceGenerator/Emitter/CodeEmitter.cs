@@ -626,6 +626,15 @@ internal static class CodeEmitter
                 indent,
                 entriesVariable: $"entries_{col.Slot}"
             );
+            EmitRestoreDecimals(
+                builder,
+                col,
+                fieldAccess,
+                bufName,
+                $"entries_{col.Slot}",
+                "",
+                indent
+            );
             return;
         }
 
@@ -651,6 +660,7 @@ internal static class CodeEmitter
                 indent,
                 entriesVariable: "rowCount"
             );
+            EmitRestoreDecimals(builder, col, fieldAccess, bufName, "rowCount", "", indent);
             return;
         }
 
@@ -658,11 +668,47 @@ internal static class CodeEmitter
         if (!prop.IsNullable)
         {
             builder.AppendLine(GetReadPrimitiveCall(prop, fieldAccess, bufName, indent));
+        }
+        else
+        {
+            builder.AppendLine(
+                GetNullableReadCall(prop, fieldAccess, bufName, $"missing_{col.Slot}", indent)
+            );
+        }
+
+        EmitRestoreDecimals(builder, col, fieldAccess, bufName, "rowCount", missingArg, indent);
+    }
+
+    /// <summary>
+    /// After a decimal column's read, the restore that keeps INT32/INT64-backed values exact on
+    /// .NET 11+ (see <c>ParquetDecimalScale</c>). A nullable flat column's buffer holds
+    /// <c>decimal?</c>; every other decimal buffer holds <c>decimal</c>.
+    /// </summary>
+    private static void EmitRestoreDecimals(
+        StringBuilder builder,
+        LeafColumn col,
+        string fieldAccess,
+        string bufName,
+        string count,
+        string missingArg,
+        string indent
+    )
+    {
+        if (col.Leaf.Kind != PropertyKind.Decimal)
+        {
             return;
         }
 
+        bool nullableBuffer = !col.IsCompound && !col.IsListLeaf && col.Leaf.IsNullable;
         builder.AppendLine(
-            GetNullableReadCall(prop, fieldAccess, bufName, $"missing_{col.Slot}", indent)
+            ColumnHelpersComponent.RestoreDecimalStatement(
+                nullableBuffer ? "decimal?" : "decimal",
+                bufName,
+                count,
+                fieldAccess,
+                missingArg,
+                indent
+            )
         );
     }
 
