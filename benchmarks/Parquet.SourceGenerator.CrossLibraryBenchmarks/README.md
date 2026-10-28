@@ -15,6 +15,17 @@ The comparands come from NuGet; their source and that of the non-.NET engines is
 for their decode paths (Arrow C++ `cpp/src/parquet`, arrow-rs `parquet`, Polars
 `crates/polars-parquet`, DuckDB `extension/parquet`).
 
+## Where the fixes go: Lake.Parquet
+
+Gaps this suite finds in Parquet.Net's decoder are fixed in our fork,
+[rtkelly-labs/parquet-dotnet](https://github.com/rtkelly-labs/parquet-dotnet), published as
+**`Lake.Parquet`**: upstream unchanged plus only the changes evaluated against it, each with a record
+in the fork's [`docs/changes/`](https://github.com/rtkelly-labs/parquet-dotnet/tree/master/docs/changes)
+that carries its numbers from this suite and its upstream status. Because it is renamed into the
+`Lake.Parquet` namespace and assembly, it can be referenced beside Parquet.Net in this one project, so
+it joins the table as a `LakeParquet` comparand, measured against `ParquetNet` in the same run, once
+the first version is published. See UPSTREAM_DEPENDENCY_LIMITATIONS.md for the fork's rules.
+
 ## Two tiers
 
 - **Typed rows** (`TpchTypedRead`, `CensusTypedRead`, `DiamondsTypedRead`): materialise the whole
