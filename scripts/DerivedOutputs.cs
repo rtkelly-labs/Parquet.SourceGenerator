@@ -1,10 +1,13 @@
 #pragma warning disable CA1305, CA1852, MA0002, MA0009, MA0011, MA0047, MA0051
 
+#:package CliWrap@3.7.1
+
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using CliWrap;
 
 // -----------------------------------------------------------------------------
 // DerivedOutputs.cs
@@ -164,26 +167,22 @@ static void Run(
     params string[] arguments
 )
 {
-    var start = new ProcessStartInfo(fileName)
-    {
-        WorkingDirectory = workingDirectory,
-        UseShellExecute = false,
-    };
-    foreach (string argument in arguments)
-        start.ArgumentList.Add(argument);
-    foreach (var (key, value) in environment ?? new Dictionary<string, string>())
-        start.Environment[key] = value;
-
     Console.WriteLine($"> {fileName} {string.Join(' ', arguments)}");
-    using Process process =
-        Process.Start(start) ?? throw new InvalidOperationException($"{fileName} did not start");
-    process.WaitForExit();
-    if (process.ExitCode != 0)
+    var cmd = Cli.Wrap(fileName)
+        .WithWorkingDirectory(workingDirectory)
+        .WithArguments(arguments)
+        .WithEnvironmentVariables(environment ?? new Dictionary<string, string>())
+        .WithStandardOutputPipe(PipeTarget.ToStream(Console.OpenStandardOutput()))
+        .WithStandardErrorPipe(PipeTarget.ToStream(Console.OpenStandardError()))
+        .WithValidation(CommandResultValidation.None);
+
+    var result = cmd.ExecuteAsync().GetAwaiter().GetResult();
+    if (result.ExitCode != 0)
     {
         Console.Error.WriteLine(
-            $"'{fileName} {arguments[0]} {arguments[1]}' exited {process.ExitCode}."
+            $"'{fileName} {arguments[0]} {arguments[1]}' exited {result.ExitCode}."
         );
-        Environment.Exit(process.ExitCode);
+        Environment.Exit(result.ExitCode);
     }
 }
 

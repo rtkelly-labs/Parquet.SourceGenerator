@@ -81,7 +81,7 @@
     Roslyn does not need Attributes.dll beside it in analyzers/dotnet/cs.
   -->
     <ItemGroup>
-        <ProjectReference Include="..\Parquet.SourceGenerator.Attributes\Parquet.SourceGenerator.Attributes.csproj" />
+        <ProjectReference Include="..\Parquet.SourceGenerator.Runtime\Parquet.SourceGenerator.Runtime.csproj" />
     </ItemGroup>
 
     <ItemGroup>

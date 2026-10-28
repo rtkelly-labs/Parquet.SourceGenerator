@@ -78,7 +78,7 @@ dotnet add package Parquet.SourceGenerator
 dotnet add package Parquet.Net
 ```
 
-`Parquet.SourceGenerator.Attributes` is referenced automatically. `Parquet.Net` is required because the generated code targets its low-level columnar APIs directly.
+`Parquet.SourceGenerator.Runtime` is referenced automatically. `Parquet.Net` is required because the generated code targets its low-level columnar APIs directly.
 
 ### 2. Define Your Model
 
