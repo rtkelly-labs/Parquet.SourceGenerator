@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Fixed
+- **`MaxDictionaryEntries` is enforced on dictionary pages the footer does not declare** (#607). The modern
+  reader checked a chunk's dictionary page only when its `ColumnMetaData.encodings` listed
+  `PLAIN_DICTIONARY` or `RLE_DICTIONARY`, but Parquet.Net decodes a dictionary page wherever a chunk starts
+  with one. Parquet.Net 4.25 never records the encoding and a hostile file can leave it out, so for those
+  files the limit was not applied at all. When the footer recorded no dictionary page offset, the header
+  was also looked up at the deprecated `file_offset`, which writers point at different places. The
+  generated reader now reads the first page header of every chunk, found the way Parquet.Net finds it
+  (the lowest recorded page offset), and rejects a dictionary page above the limit with
+  `InvalidDataException`. The check costs one page header per column chunk.
+
 ## [0.1.0-alpha.1] - 2026-10-25
 
 First prerelease of 0.1, and the first published from `rtkelly-labs` through nuget.org trusted publishing. Changes since `0.0.3`:
@@ -327,15 +338,6 @@ the migration list; each row's detail is in the entries below and in `docs/api/L
   script's numeric parsing is culture-invariant (#455).
 - **`DateOnly` is written as INT32 `DATE` again**, not INT96. INT96 round-tripped in .NET, but other readers
   (pyarrow, Spark) saw a timestamp, and Apache Iceberg rejects INT96.
-- **`MaxDictionaryEntries` is enforced on dictionary pages the footer does not declare** (#607). The modern
-  reader checked a chunk's dictionary page only when its `ColumnMetaData.encodings` listed
-  `PLAIN_DICTIONARY` or `RLE_DICTIONARY`, but Parquet.Net decodes a dictionary page wherever a chunk starts
-  with one. Parquet.Net 4.25 never records the encoding and a hostile file can leave it out, so for those
-  files the limit was not applied at all. When the footer recorded no dictionary page offset, the header
-  was also looked up at the deprecated `file_offset`, which writers point at different places. The
-  generated reader now reads the first page header of every chunk, found the way Parquet.Net finds it
-  (the lowest recorded page offset), and rejects a dictionary page above the limit with
-  `InvalidDataException`. The check costs one page header per column chunk.
 - **Arrow scope is stated plainly** (#590). The READMEs, `docs/14`, `docs/19` and `docs/47` say that only Arrow
   ingestion (`RecordBatch` to Parquet, when Apache.Arrow is referenced) ships; export to Arrow does not, and
   `docs/19` no longer lists the closed #178 as open work.
