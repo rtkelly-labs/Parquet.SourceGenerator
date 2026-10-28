@@ -8,7 +8,7 @@
 // because a single test assembly can only reference one Parquet.Net at a time.
 //
 // Plain classes with settable properties on purpose: this source has to compile under the classic
-// backend on net472 as well as the modern one on net8.0/net9.0.
+// backend on net472 as well as the modern one on net10.0.
 
 using Parquet.SourceGenerator;
 

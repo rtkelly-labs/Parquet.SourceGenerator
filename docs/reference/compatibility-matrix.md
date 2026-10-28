@@ -24,7 +24,7 @@ than being treated as accidentally supported.
 | Variant | Underlying API | Current package baseline | Supported consumer targets |
 |:---|:---|:---|:---|
 | Modern generator | Parquet.Net v6 `DataField` and `Memory<T>` APIs | Parquet.Net 6.1.0 | Consumer projects using the modern package and a compatible .NET runtime |
-| Classic generator | Parquet.Net v4/v5 `DataColumn` APIs | Parquet.Net 4.25.0 in package-consumption tests | .NET 8, .NET 9, and .NET Framework 4.7.2 in the current test setup |
+| Classic generator | Parquet.Net v4/v5 `DataColumn` APIs | Parquet.Net 4.25.0 in package-consumption tests | .NET 10 and .NET Framework 4.7.2 in the current test setup |
 | Generator analyzer | Roslyn incremental generator | `netstandard2.0` analyzer assembly | Roslyn hosts compatible with the package's compiler dependency range |
 
 The classic backend is one API family for Parquet.Net 4.x and 5.x. The modern backend targets the

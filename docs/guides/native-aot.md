@@ -276,7 +276,7 @@ All 11 AOT checks passed.
 dotnet publish test/Parquet.SourceGenerator.AotTest/Parquet.SourceGenerator.AotTest.csproj -c Release
 
 # Execute compiled native binary directly
-./test/Parquet.SourceGenerator.AotTest/bin/Release/net8.0/osx-arm64/publish/Parquet.SourceGenerator.AotTest
+./test/Parquet.SourceGenerator.AotTest/bin/Release/net10.0/osx-arm64/publish/Parquet.SourceGenerator.AotTest
 ```
 
 This verification runs automatically in GitHub Actions CI on every pull request, ensuring zero regressions across all supported data types.

@@ -179,10 +179,10 @@ jobs:
           # and start none (#568). The push step authenticates explicitly instead.
           persist-credentials: false
 
-      - name: Setup .NET 8 SDK
+      - name: Setup .NET 10 SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: 10.0.x
 
       - name: Restore dependencies
         run: dotnet restore benchmarks/Parquet.SourceGenerator.Benchmarks/Parquet.SourceGenerator.Benchmarks.csproj --locked-mode
@@ -296,9 +296,9 @@ jobs:
   # step fails or passes with it; this one only reads.
   #
   # The set lives in benchmarks/gate-filter.txt, the reference in benchmarks/baseline.json (keyed
-  # by class + method + parameters). The runtime is pinned to .NET 8 with DOTNET_ROLL_FORWARD
-  # because the benchmark project rolls forward to the latest installed major, and allocations
-  # differ between runtimes.
+  # by class + method + parameters). The runtime is pinned to .NET 10, the LTS the package targets,
+  # with DOTNET_ROLL_FORWARD, because the benchmark project rolls forward to the latest installed
+  # major, and allocations differ between runtimes. The baseline must be recorded on that major.
   regression-gate:
     name: Allocation regression gate
     if: |
@@ -320,10 +320,10 @@ jobs:
           ref: ${{ github.event.inputs.target_branch || github.ref_name }}
           lfs: true
 
-      - name: Setup .NET 8 SDK
+      - name: Setup .NET 10 SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: 10.0.x
 
       - name: Restore dependencies
         run: dotnet restore benchmarks/Parquet.SourceGenerator.Benchmarks/Parquet.SourceGenerator.Benchmarks.csproj --locked-mode

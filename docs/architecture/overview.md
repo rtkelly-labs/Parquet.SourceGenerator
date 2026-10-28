@@ -76,7 +76,7 @@ The generator repository is structured into distinct projects separated by opera
 
 | Project | Target | Description | Dependencies |
 |:---|:---|:---|:---|
-| `Parquet.SourceGenerator.Attributes` | `netstandard2.0`, `net8.0` | Consumer-facing attributes (`[ParquetSerializable]`, `[ParquetColumn]`, etc.) | **Zero dependencies** |
+| `Parquet.SourceGenerator.Runtime` | `netstandard2.0`, `netstandard2.1`, `net10.0` | Consumer-facing attributes and runtime support (`[ParquetSerializable]`, `[ParquetColumn]`, etc.) | **Zero dependencies** |
 | `Parquet.SourceGenerator` | `netstandard2.0` (Analyzer) | Modern Roslyn incremental generator targeting **Parquet.Net 6.x** | Roslyn 4.8 / 4.12 analyzers |
 | `Parquet.SourceGenerator.Legacy` | `netstandard2.0` (Analyzer) | Legacy Roslyn incremental generator targeting **Parquet.Net 4.x** | Roslyn 4.8 / 4.12 analyzers |
 | `Parquet.SourceGenerator.ApiGates` | `netstandard2.0` (Analyzer) | Build-time Roslyn analyzer enforcing public surface and internal seam contracts | Roslyn analyzers |

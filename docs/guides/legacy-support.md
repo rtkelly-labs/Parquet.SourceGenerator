@@ -6,10 +6,10 @@
 
 ## 1. Overview & Parity Contract
 
-The legacy backend exposes **the same generated API contract as the modern backend**, ensuring that multi-targeting projects (e.g. `net472;net8.0`) can compile the exact same calling code against both engines without `#if` directives. Missing members are restricted to platform-impossible capabilities, documented below.
+The legacy backend exposes **the same generated API contract as the modern backend**, ensuring that multi-targeting projects (e.g. `net472;net10.0`) can compile the exact same calling code against both engines without `#if` directives. Missing members are restricted to platform-impossible capabilities, documented below.
 
-The purpose is a single calling contract. A project that multi-targets `net472;net8.0` references
-Parquet.Net 4.25 on `net472` and 6.x on `net8.0`, and compiles **the same source** against both.
+The purpose is a single calling contract. A project that multi-targets `net472;net10.0` references
+Parquet.Net 4.25 on `net472` and 6.x on `net10.0`, and compiles **the same source** against both.
 Today it cannot, because the two backends emit different type names, different write signatures
 and different read surfaces.
 
@@ -55,7 +55,7 @@ upstream change that would remove it are recorded in
 
 | Capability | Why | Decision |
 |:---|:---|:---|
-| `<Model>ParquetReader.Batches()` / `ColumnBatch` | Batch reading is part of the **stable modern API** (net8+). It is the zero-POCO read path whose point is caller-visible pooled column buffers. The v4 `DataColumn` API allocates each column itself, so a legacy `Batches()` would have the same shape without the benefit. The legacy backend does not emit it at all. It is absent, not a member that throws, so multi-target callers get a compile-time error and guard it with `#if NET8_0_OR_GREATER` rather than a runtime failure. | Owner decision, 2026-09-24 (#490) |
+| `<Model>ParquetReader.Batches()` / `ColumnBatch` | Batch reading is part of the **stable modern API** (net10.0, and netstandard2.1 elsewhere). It is the zero-POCO read path whose point is caller-visible pooled column buffers. The v4 `DataColumn` API allocates each column itself, so a legacy `Batches()` would have the same shape without the benefit. The legacy backend does not emit it at all. It is absent, not a member that throws, so multi-target callers get a compile-time error and guard it with `#if NET8_0_OR_GREATER` rather than a runtime failure. | Owner decision, 2026-09-24 (#490) |
 
 ### Temporary (gaps to close)
 
@@ -86,7 +86,7 @@ batched writes.
   entries fail when they stop differing.
 - **Shared behavioural suite (#493).** The round-trip, reader and pruning tests run against both
   backends from one test source.
-- **Multi-target consumer (#493).** One test project with `TargetFrameworks` of `net472;net8.0`
+- **Multi-target consumer (#493).** One test project with `TargetFrameworks` of `net472;net10.0`
   builds the same calling source against both backends.
 
 `BackendCompatibilityPolicyTests` currently asserts the opposite: that no modern-only member

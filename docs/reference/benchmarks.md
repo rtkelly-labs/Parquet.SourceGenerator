@@ -131,7 +131,7 @@ so a method name declared in two classes, or a benchmark parameterised by someth
 exact identity), which the benchmark project's `Program` adds to the default exporters.
 
 **Runtime.** The benchmark project rolls forward to the newest installed .NET major, and allocations
-differ between runtimes, so the gate sets `DOTNET_ROLL_FORWARD=Minor` and runs on .NET 8. Do the same
+differ between runtimes, so the gate sets `DOTNET_ROLL_FORWARD=Minor` and runs on .NET 10. Do the same
 when recording locally. The baseline file records the runtime and hardware it came from, and the gate
 prints them next to the current run's.
 

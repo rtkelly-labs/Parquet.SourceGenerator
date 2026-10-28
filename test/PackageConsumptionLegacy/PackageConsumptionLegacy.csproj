@@ -3,12 +3,12 @@
     Deliberately NOT part of Parquet.SourceGenerator.slnx.
 
     Consumes Parquet.SourceGenerator.Legacy as a NuGet package built into ../../artifacts.
-    Exercises Parquet.Net 4.25.0 across .NET 8, .NET 9, and .NET Framework 4.7.2.
+    Exercises Parquet.Net 4.25.0 on .NET 10 (and, in CI, the .NET 11 runtime) and .NET Framework 4.7.2.
   -->
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
-        <TargetFrameworks>net8.0;net9.0;net472</TargetFrameworks>
+        <TargetFrameworks>net10.0;net472</TargetFrameworks>
         <Nullable>enable</Nullable>
         <IsPackable>false</IsPackable>
         <RootNamespace>PackageConsumptionLegacy</RootNamespace>
@@ -33,7 +33,7 @@
     <!--
     Building a .NET Framework target on Linux needs the reference assemblies; the CI runner has no
     .NET Framework targeting pack installed. This only makes the target *buildable* — running it
-    still requires Windows or Mono, so CI compiles net472 and executes net8.0/net9.0.
+    still requires Windows or Mono, so CI compiles net472 and executes net10.0.
   -->
     <ItemGroup Condition="'$(TargetFramework)' == 'net472'">
         <PackageReference

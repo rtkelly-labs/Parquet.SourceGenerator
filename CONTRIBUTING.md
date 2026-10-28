@@ -7,7 +7,7 @@ Thank you for your interest in contributing to **Parquet.SourceGenerator**! This
 ## 🛠️ Development Setup
 
 ### Prerequisites
-- [.NET 8.0 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) or higher
+- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) (`global.json` pins the 10.0 feature band)
 - Python 3.11+ with [`uv`](https://github.com/astral-sh/uv) (for PyArrow cross-engine test dataset generation)
 
 ### Clone
@@ -131,7 +131,7 @@ To release:
    - parses the first cut version section — the source of both the version and the release
      notes — and refuses to continue if its `v<version>` tag already exists;
    - builds with that version and runs the full verification battery (tests, samples, native
-     AOT, package layout, package consumption on .NET 8/9/472);
+     AOT, package layout, package consumption on .NET 10 and .NET Framework 4.7.2);
    - publishes to NuGet.org via Trusted Publishing (the `publish` job deploys to the `release`
      environment; required reviewers are an org-only feature and GitHub forbids approving your
      own deployment anyway, so on a solo project the real brake is the manual dispatch plus the

@@ -7,8 +7,10 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using CrossVersionInterop;
 using Parquet.SourceGenerator;
@@ -54,6 +56,21 @@ internal static class Program
 {
     private static async Task<int> Main(string[] args)
     {
+        // CI's .NET 11 leg rolls this net10.0 build forward and sets EXPECTED_DOTNET_MAJOR, so a
+        // roll-forward that silently stayed on .NET 10 fails instead of passing for the wrong reason.
+        Console.WriteLine($"Runtime: {RuntimeInformation.FrameworkDescription}");
+        string? expectedMajor = Environment.GetEnvironmentVariable("EXPECTED_DOTNET_MAJOR");
+        if (
+            !string.IsNullOrEmpty(expectedMajor)
+            && Environment.Version.Major.ToString(CultureInfo.InvariantCulture) != expectedMajor
+        )
+        {
+            Console.Error.WriteLine(
+                $"Expected .NET {expectedMajor}, running on {RuntimeInformation.FrameworkDescription}."
+            );
+            return 1;
+        }
+
         // Cross-version interoperability modes. The default path below is the original
         // self-contained round-trip check; these two modes exist so CI can hand a file written by
         // this package to the legacy package and back again.

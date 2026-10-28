@@ -41,7 +41,7 @@ using CliWrap;
 // Usage:
 //   dotnet run scripts/DerivedOutputs.cs                         # this checkout -> artifacts/
 //   dotnet run scripts/DerivedOutputs.cs -- --out <dir> --repo <checkout>
-// Needs the .NET 8 and 10 SDKs; restores what it builds.
+// Needs the .NET 10 SDK; restores what it builds.
 // -----------------------------------------------------------------------------
 
 string? repo = null;
