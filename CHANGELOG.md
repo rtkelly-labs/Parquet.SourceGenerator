@@ -325,6 +325,14 @@ the migration list; each row's detail is in the entries below and in `docs/api/L
   only for code that referenced the Attributes helpers directly.
 
 ### Fixed
+- **CI: the Apache conformance toolchain restore survives a flaky Maven Central.** A transient 404 from
+  repo1.maven.org for `parquet-cli-1.18.1-runtime.jar`, which is published and unchanged, failed CI on #692.
+  `scripts/VerifyApacheConformance.cs --restore` now tries the manifest's ordered `mirrors` (repo1.maven.org,
+  then repo.maven.apache.org) with retries and backoff, writes a jar only after it matches its pinned SHA-256
+  whichever mirror served it, and on failure prints one `::error::` per artifact naming every URL tried and its
+  status. The tools dir is cached in CI by manifest hash; the "already restored" check compared hex digests
+  case-sensitively and never matched, so it re-downloaded every jar on every run and now does not. The
+  script's numeric parsing is culture-invariant (#455).
 - **`DateOnly` is written as INT32 `DATE` again**, not INT96. INT96 round-tripped in .NET, but other readers
   (pyarrow, Spark) saw a timestamp, and Apache Iceberg rejects INT96.
 - **Legacy backend: `TimeSpan`, `TimeOnly` and microsecond `DateTime` members compile and round-trip**
