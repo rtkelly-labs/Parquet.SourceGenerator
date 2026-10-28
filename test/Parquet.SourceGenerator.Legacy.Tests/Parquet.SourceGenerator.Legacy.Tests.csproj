@@ -60,7 +60,7 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\..\src\Parquet.SourceGenerator.Attributes\Parquet.SourceGenerator.Attributes.csproj" />
+        <ProjectReference Include="..\..\src\Parquet.SourceGenerator.Runtime\Parquet.SourceGenerator.Runtime.csproj" />
         <!-- Consumed exactly as a package consumer consumes it: an analyzer, never a compile reference. -->
         <ProjectReference
             Include="..\..\src\Parquet.SourceGenerator.Legacy\Parquet.SourceGenerator.Legacy.csproj"

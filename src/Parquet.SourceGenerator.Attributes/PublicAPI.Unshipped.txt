@@ -1,5 +1,0 @@
-#nullable enable
-Parquet.SourceGenerator.ParquetColumnAttribute.FieldId.get -> int
-Parquet.SourceGenerator.ParquetColumnAttribute.FieldId.set -> void
-Parquet.SourceGenerator.ParquetTimestampAttribute.AdjustedToUtc.get -> bool
-Parquet.SourceGenerator.ParquetTimestampAttribute.AdjustedToUtc.set -> void

@@ -33,7 +33,7 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\..\src\Parquet.SourceGenerator.Attributes\Parquet.SourceGenerator.Attributes.csproj" />
+        <ProjectReference Include="..\..\src\Parquet.SourceGenerator.Runtime\Parquet.SourceGenerator.Runtime.csproj" />
         <!--
       ReferenceOutputAssembly stays "true" here, unlike every other consumer in the repository.
       This project unit-tests the generator's internals directly (CodeEmitter, TargetParser,

@@ -40,6 +40,7 @@ internal static class GeneratedSourceHarness
                             or "mscorlib.dll"
                             or "Parquet.dll"
                             or "Apache.Arrow.dll"
+                            or "Parquet.SourceGenerator.Runtime.dll"
                             or "Parquet.SourceGenerator.Attributes.dll";
             })
             .Distinct(StringComparer.Ordinal)
