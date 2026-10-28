@@ -569,11 +569,17 @@ public sealed class DecimalScaleRoundTripTests
     )
     {
         byte[] bytes = await shape.WriteAsync(rows, rowGroupSize);
-        AssertSame(rows, await shape.ReadPocoAsync(bytes), $"POCO reader, {description}");
-        AssertSame(rows, await shape.ReadBatchesAsync(bytes), $"batch reader, {description}");
+        AssertSame(shape, rows, await shape.ReadPocoAsync(bytes), $"POCO reader, {description}");
+        AssertSame(
+            shape,
+            rows,
+            await shape.ReadBatchesAsync(bytes),
+            $"batch reader, {description}"
+        );
     }
 
     private static void AssertSame(
+        Shape shape,
         IReadOnlyList<(decimal Value, decimal? Opt)> expected,
         (decimal Value, decimal? Opt)[] actual,
         string description
@@ -584,6 +590,21 @@ public sealed class DecimalScaleRoundTripTests
         {
             actual[i].Value.ShouldBe(expected[i].Value, $"{description}: row {i} value");
             actual[i].Opt.ShouldBe(expected[i].Opt, $"{description}: row {i} opt");
+            // Equal is not enough: 19.99 and 19.990 are equal but print differently, so the
+            // representation is pinned too (see ExpectedScale).
+            actual[i]
+                .Value.Scale.ShouldBe(
+                    ExpectedScale(shape, expected[i].Value),
+                    $"{description}: row {i} value scale"
+                );
+            if (expected[i].Opt is decimal opt)
+            {
+                actual[i]
+                    .Opt!.Value.Scale.ShouldBe(
+                        ExpectedScale(shape, opt),
+                        $"{description}: row {i} opt scale"
+                    );
+            }
         }
     }
 
@@ -629,6 +650,15 @@ public sealed class DecimalScaleRoundTripTests
 
         return rng.Chance(0.5) ? -value : value;
     }
+
+    /// <summary>
+    /// The scale a read value carries today. Integer-backed columns come back at the column's scale
+    /// (19.99 at scale 2), as written. Fixed-length columns decode through BigInteger and come back
+    /// with trailing zeros dropped (1900 unscaled at scale 10 reads as 190, not 190.0000000000).
+    /// Both are pinned as they are, so a change to either is a decision rather than an accident.
+    /// </summary>
+    private static byte ExpectedScale(Shape shape, decimal written) =>
+        shape.Precision <= 18 ? written.Scale : (written / 1.0000000000000000000000000000m).Scale;
 
     /// <summary>The exact value of <paramref name="unscaled"/> at <paramref name="scale"/>.</summary>
     private static decimal Scaled(decimal unscaled, int scale) =>
