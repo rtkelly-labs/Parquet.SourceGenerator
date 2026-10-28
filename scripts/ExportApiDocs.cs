@@ -57,8 +57,8 @@ var targetProjects = new[]
 {
     new
     {
-        AssemblyName = "Parquet.SourceGenerator.Attributes",
-        RelativePath = "src/Parquet.SourceGenerator.Attributes",
+        AssemblyName = "Parquet.SourceGenerator.Runtime",
+        RelativePath = "src/Parquet.SourceGenerator.Runtime",
     },
     new { AssemblyName = "Parquet.SourceGenerator", RelativePath = "src/Parquet.SourceGenerator" },
 };

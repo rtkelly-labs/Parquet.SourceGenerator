@@ -49,7 +49,7 @@ internal static class BatchReadComponent
     /// Rents the buffers a row group is decoded into. Strings and byte arrays rent a second array
     /// for the lane that wraps the decoded values.
     /// </summary>
-    private static void EmitRentals(StringBuilder builder, EmissionPlan plan, string indent)
+    private static void EmitRentals(IndentedWriter writer, EmissionPlan plan)
     {
         foreach (LeafColumn col in plan.Columns)
         {
@@ -57,32 +57,33 @@ internal static class BatchReadComponent
             switch (ColumnarBatchComponent.KindOf(col.Leaf))
             {
                 case ColumnarBatchComponent.LaneKind.Packed:
-                    builder.AppendLine(
-                        $"{indent}var buffer_{slot} = {Pool}<{LaneType(col)}>.Shared.Rent(rowCount);"
+                    writer.Line(
+                        $"var buffer_{slot} = {Pool}<{LaneType(col)}>.Shared.Rent(rowCount);"
                     );
-                    builder.AppendLine(
-                        $"{indent}var defLevels_{slot} = {Pool}<int>.Shared.Rent(rowCount);"
-                    );
+                    writer.Line($"var defLevels_{slot} = {Pool}<int>.Shared.Rent(rowCount);");
                     break;
                 case ColumnarBatchComponent.LaneKind.Direct:
-                    builder.AppendLine(
-                        $"{indent}var buffer_{slot} = {Pool}<{DecodeType(col)}>.Shared.Rent(rowCount);"
+                    writer.Line(
+                        $"var buffer_{slot} = {Pool}<{DecodeType(col)}>.Shared.Rent(rowCount);"
                     );
                     break;
                 default:
-                    builder.AppendLine(
-                        $"{indent}var buffer_{slot} = {Pool}<{DecodeType(col)}>.Shared.Rent(rowCount);"
+                    writer.Line(
+                        $"var buffer_{slot} = {Pool}<{DecodeType(col)}>.Shared.Rent(rowCount);"
                     );
-                    builder.AppendLine(
-                        $"{indent}var lane_{slot} = {Pool}<{LaneType(col)}>.Shared.Rent(rowCount);"
+                    writer.Line(
+                        $"var lane_{slot} = {Pool}<{LaneType(col)}>.Shared.Rent(rowCount);"
                     );
                     break;
             }
         }
     }
 
+    private static void EmitRentals(StringBuilder builder, EmissionPlan plan, string indent) =>
+        EmitRentals(new IndentedWriter(builder) { IndentLevel = indent.Length / 4 }, plan);
+
     /// <summary>Returns every rented buffer. Reference-holding buffers are cleared on the way back.</summary>
-    private static void EmitReturns(StringBuilder builder, EmissionPlan plan, string indent)
+    private static void EmitReturns(IndentedWriter writer, EmissionPlan plan)
     {
         foreach (LeafColumn col in plan.Columns)
         {
@@ -90,29 +91,30 @@ internal static class BatchReadComponent
             switch (ColumnarBatchComponent.KindOf(col.Leaf))
             {
                 case ColumnarBatchComponent.LaneKind.Packed:
-                    builder.AppendLine(
-                        $"{indent}{Pool}<{LaneType(col)}>.Shared.Return(buffer_{slot}, clearArray: false);"
+                    writer.Line(
+                        $"{Pool}<{LaneType(col)}>.Shared.Return(buffer_{slot}, clearArray: false);"
                     );
-                    builder.AppendLine(
-                        $"{indent}{Pool}<int>.Shared.Return(defLevels_{slot}, clearArray: false);"
-                    );
+                    writer.Line($"{Pool}<int>.Shared.Return(defLevels_{slot}, clearArray: false);");
                     break;
                 case ColumnarBatchComponent.LaneKind.Direct:
-                    builder.AppendLine(
-                        $"{indent}{Pool}<{DecodeType(col)}>.Shared.Return(buffer_{slot}, clearArray: false);"
+                    writer.Line(
+                        $"{Pool}<{DecodeType(col)}>.Shared.Return(buffer_{slot}, clearArray: false);"
                     );
                     break;
                 default:
-                    builder.AppendLine(
-                        $"{indent}{Pool}<{DecodeType(col)}>.Shared.Return(buffer_{slot}, clearArray: true);"
+                    writer.Line(
+                        $"{Pool}<{DecodeType(col)}>.Shared.Return(buffer_{slot}, clearArray: true);"
                     );
-                    builder.AppendLine(
-                        $"{indent}{Pool}<{LaneType(col)}>.Shared.Return(lane_{slot}, clearArray: true);"
+                    writer.Line(
+                        $"{Pool}<{LaneType(col)}>.Shared.Return(lane_{slot}, clearArray: true);"
                     );
                     break;
             }
         }
     }
+
+    private static void EmitReturns(StringBuilder builder, EmissionPlan plan, string indent) =>
+        EmitReturns(new IndentedWriter(builder) { IndentLevel = indent.Length / 4 }, plan);
 
     /// <summary>
     /// The statements that decode one column of the current row group. A packed column is read raw;

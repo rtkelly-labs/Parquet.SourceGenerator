@@ -1,9 +1,13 @@
+#:package CliWrap@3.7.1
+
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
+using CliWrap;
+using CliWrap.Buffered;
 
 // -----------------------------------------------------------------------------
 // CheckApiLedger.cs
@@ -552,53 +556,14 @@ static (int ExitCode, string StandardOutput, string StandardError) Run(
     string arguments
 )
 {
-    var startInfo = new ProcessStartInfo(fileName)
-    {
-        RedirectStandardOutput = true,
-        RedirectStandardError = true,
-        UseShellExecute = false,
-    };
+    var result = Cli.Wrap(fileName)
+        .WithArguments(arguments)
+        .WithValidation(CommandResultValidation.None)
+        .ExecuteBufferedAsync()
+        .GetAwaiter()
+        .GetResult();
 
-    foreach (string argument in SplitArguments(arguments))
-    {
-        startInfo.ArgumentList.Add(argument);
-    }
-
-    using var process = Process.Start(startInfo)!;
-    string stdout = process.StandardOutput.ReadToEnd();
-    string stderr = process.StandardError.ReadToEnd();
-    process.WaitForExit();
-    return (process.ExitCode, stdout, stderr);
-}
-
-static IEnumerable<string> SplitArguments(string arguments)
-{
-    var current = new StringBuilder();
-    bool quoted = false;
-    foreach (char character in arguments)
-    {
-        if (character == '"')
-        {
-            quoted = !quoted;
-        }
-        else if (character == ' ' && !quoted)
-        {
-            if (current.Length > 0)
-            {
-                yield return current.ToString();
-                current.Clear();
-            }
-        }
-        else
-        {
-            current.Append(character);
-        }
-    }
-
-    if (current.Length > 0)
-    {
-        yield return current.ToString();
-    }
+    return (result.ExitCode, result.StandardOutput, result.StandardError);
 }
 
 static string FindRepoRoot()
