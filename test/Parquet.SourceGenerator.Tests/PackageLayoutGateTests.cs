@@ -177,8 +177,8 @@ public sealed class PackageLayoutGateTests : IDisposable
             .OrderBy(name => name, StringComparer.Ordinal)
             .ShouldBe([
                 "Parquet.SourceGenerator",
-                "Parquet.SourceGenerator.Attributes",
                 "Parquet.SourceGenerator.Legacy",
+                "Parquet.SourceGenerator.Runtime",
             ]);
 
         foreach (string file in files)
@@ -190,10 +190,10 @@ public sealed class PackageLayoutGateTests : IDisposable
                 .ShouldBeGreaterThan(5, $"{name}: manifest lists too few entries");
             lines
                 .Any(l => l.Contains("analyzers/dotnet/cs/", StringComparison.Ordinal))
-                .ShouldBe(name != "Parquet.SourceGenerator.Attributes", name);
+                .ShouldBe(name != "Parquet.SourceGenerator.Runtime", name);
             lines
-                .Any(l => l == "@dependency Parquet.SourceGenerator.Attributes")
-                .ShouldBe(name != "Parquet.SourceGenerator.Attributes", name);
+                .Any(l => l == "@dependency Parquet.SourceGenerator.Runtime")
+                .ShouldBe(name != "Parquet.SourceGenerator.Runtime", name);
         }
     }
 

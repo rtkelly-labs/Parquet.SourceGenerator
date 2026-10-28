@@ -1,7 +1,7 @@
 # Mutation testing
 
 `mutation.yml` runs Stryker.NET every night over the generator (`Parquet.SourceGenerator`) and
-the shipped runtime helpers (`Parquet.SourceGenerator.Attributes`). Coverage tells you that a
+the shipped runtime helpers (`Parquet.SourceGenerator.Runtime`). Coverage tells you that a
 line executed. Mutation testing tells you whether a test would have failed if that line were
 wrong. The run reports a score and never gates on it (#261): there is no floor, and the
 workflow does not fail because the number is low.

@@ -2,7 +2,7 @@
   "description": "Partitions of the nightly mutation sweep (#668). One Stryker run over all 9358 generator mutants does not fit a job, so mutation.yml runs one matrix job per partition and MutationSummary.cs merges the reports. Strings are Stryker --mutate globs. A {\"file\", \"lines\": [first, last]} entry mutates only those lines of one file (omit last for the end of the file); the workflow converts it to the character span Stryker expects. A partition with \"rest\": true mutates every file of its project that no other partition of that project claims, so a new source file is always mutated somewhere. MutationSummary.cs fails when a partition's report is missing, covers no mutant, or claims a mutant another partition also tested. See docs/internals/mutation-testing.md before changing the split.",
   "projects": {
     "Parquet.SourceGenerator.csproj": "Parquet.SourceGenerator (parser + emitters)",
-    "Parquet.SourceGenerator.Attributes.csproj": "Parquet.SourceGenerator.Attributes (shipped helpers)"
+    "Parquet.SourceGenerator.Runtime.csproj": "Parquet.SourceGenerator.Runtime (shipped helpers)"
   },
   "partitions": [
     {
@@ -195,8 +195,8 @@
       "rest": true
     },
     {
-      "name": "attributes",
-      "project": "Parquet.SourceGenerator.Attributes.csproj",
+      "name": "runtime",
+      "project": "Parquet.SourceGenerator.Runtime.csproj",
       "rest": true
     }
   ]
