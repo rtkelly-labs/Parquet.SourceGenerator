@@ -29,11 +29,10 @@ internal static class CompoundBuffers
     }
 
     public static void EmitWriteRentals(
-        StringBuilder builder,
+        IndentedWriter writer,
         TargetClassModel model,
         string sizeExpr,
-        string varPrefix = "buffer_",
-        string indent = "        "
+        string varPrefix = "buffer_"
     )
     {
         foreach (LeafColumn col in EmissionPlan.For(model).Columns)
@@ -41,46 +40,92 @@ internal static class CompoundBuffers
             int i = col.Slot;
             if (col.IsListLeaf)
             {
-                builder.AppendLine(
-                    $"{indent}var {varPrefix}{i} = global::System.Buffers.ArrayPool<{col.PackedType}>.Shared.Rent({sizeExpr});"
+                writer.Line(
+                    $"var {varPrefix}{i} = global::System.Buffers.ArrayPool<{col.PackedType}>.Shared.Rent({sizeExpr});"
                 );
-                builder.AppendLine(
-                    $"{indent}var defLevels_{i} = global::System.Buffers.ArrayPool<int>.Shared.Rent({sizeExpr});"
+                writer.Line(
+                    $"var defLevels_{i} = global::System.Buffers.ArrayPool<int>.Shared.Rent({sizeExpr});"
                 );
-                builder.AppendLine(
-                    $"{indent}var repLevels_{i} = global::System.Buffers.ArrayPool<int>.Shared.Rent({sizeExpr});"
+                writer.Line(
+                    $"var repLevels_{i} = global::System.Buffers.ArrayPool<int>.Shared.Rent({sizeExpr});"
                 );
-                builder.AppendLine($"{indent}int nonNullCount_{i} = 0;");
-                builder.AppendLine($"{indent}int posCount_{i} = 0;");
+                writer.Line($"int nonNullCount_{i} = 0;");
+                writer.Line($"int posCount_{i} = 0;");
             }
             else if (col.IsCompound)
             {
-                builder.AppendLine(
-                    $"{indent}var {varPrefix}{i} = global::System.Buffers.ArrayPool<{col.PackedType}>.Shared.Rent({sizeExpr});"
+                writer.Line(
+                    $"var {varPrefix}{i} = global::System.Buffers.ArrayPool<{col.PackedType}>.Shared.Rent({sizeExpr});"
                 );
-                builder.AppendLine(
-                    $"{indent}var defLevels_{i} = global::System.Buffers.ArrayPool<int>.Shared.Rent({sizeExpr});"
+                writer.Line(
+                    $"var defLevels_{i} = global::System.Buffers.ArrayPool<int>.Shared.Rent({sizeExpr});"
                 );
-                builder.AppendLine($"{indent}int nonNullCount_{i} = 0;");
+                writer.Line($"int nonNullCount_{i} = 0;");
             }
             else if (BufferPoolComponent.UsesWriteAllParts(col.Leaf))
             {
                 string nonNullType = BufferPoolComponent.GetNonNullableBufferType(col.Leaf);
-                builder.AppendLine(
-                    $"{indent}var {varPrefix}{i} = global::System.Buffers.ArrayPool<{nonNullType}>.Shared.Rent({sizeExpr});"
+                writer.Line(
+                    $"var {varPrefix}{i} = global::System.Buffers.ArrayPool<{nonNullType}>.Shared.Rent({sizeExpr});"
                 );
-                builder.AppendLine(
-                    $"{indent}var defLevels_{i} = global::System.Buffers.ArrayPool<int>.Shared.Rent({sizeExpr});"
+                writer.Line(
+                    $"var defLevels_{i} = global::System.Buffers.ArrayPool<int>.Shared.Rent({sizeExpr});"
                 );
-                builder.AppendLine($"{indent}int nonNullCount_{i} = 0;");
+                writer.Line($"int nonNullCount_{i} = 0;");
             }
             else
             {
                 string bufType = BufferPoolComponent.GetWriteBufferElementType(col.Leaf);
-                builder.AppendLine(
-                    $"{indent}var {varPrefix}{i} = global::System.Buffers.ArrayPool<{bufType}>.Shared.Rent({sizeExpr});"
+                writer.Line(
+                    $"var {varPrefix}{i} = global::System.Buffers.ArrayPool<{bufType}>.Shared.Rent({sizeExpr});"
                 );
             }
+        }
+    }
+
+    public static void EmitWriteRentals(
+        StringBuilder builder,
+        TargetClassModel model,
+        string sizeExpr,
+        string varPrefix = "buffer_",
+        string indent = "        "
+    ) =>
+        EmitWriteRentals(
+            new IndentedWriter(builder) { IndentLevel = indent.Length / 4 },
+            model,
+            sizeExpr,
+            varPrefix
+        );
+
+    public static void EmitSingleWriteReturn(
+        IndentedWriter writer,
+        LeafColumn col,
+        string varPrefix = "buffer_"
+    )
+    {
+        int propIndex = col.Slot;
+        if (col.IsCompound || col.IsListLeaf)
+        {
+            bool growable = col.IsListLeaf;
+            writer.Line(
+                $"global::System.Buffers.ArrayPool<{col.PackedType}>.Shared.Return({varPrefix}{propIndex}, clearArray: true);"
+            );
+            writer.Line($"{varPrefix}{propIndex} = null!;");
+            writer.Line(
+                $"global::System.Buffers.ArrayPool<int>.Shared.Return(defLevels_{propIndex}, clearArray: false);"
+            );
+            writer.Line($"defLevels_{propIndex} = null!;");
+            if (growable)
+            {
+                writer.Line(
+                    $"global::System.Buffers.ArrayPool<int>.Shared.Return(repLevels_{propIndex}, clearArray: false);"
+                );
+                writer.Line($"repLevels_{propIndex} = null!;");
+            }
+        }
+        else
+        {
+            BufferPoolComponent.EmitSingleWriteReturn(writer, col.Leaf, propIndex, varPrefix);
         }
     }
 
@@ -89,39 +134,12 @@ internal static class CompoundBuffers
         LeafColumn col,
         string varPrefix = "buffer_",
         string indent = "                "
-    )
-    {
-        int propIndex = col.Slot;
-        if (col.IsCompound || col.IsListLeaf)
-        {
-            bool growable = col.IsListLeaf;
-            builder.AppendLine(
-                $"{indent}global::System.Buffers.ArrayPool<{col.PackedType}>.Shared.Return({varPrefix}{propIndex}, clearArray: true);"
-            );
-            builder.AppendLine($"{indent}{varPrefix}{propIndex} = null!;");
-            builder.AppendLine(
-                $"{indent}global::System.Buffers.ArrayPool<int>.Shared.Return(defLevels_{propIndex}, clearArray: false);"
-            );
-            builder.AppendLine($"{indent}defLevels_{propIndex} = null!;");
-            if (growable)
-            {
-                builder.AppendLine(
-                    $"{indent}global::System.Buffers.ArrayPool<int>.Shared.Return(repLevels_{propIndex}, clearArray: false);"
-                );
-                builder.AppendLine($"{indent}repLevels_{propIndex} = null!;");
-            }
-        }
-        else
-        {
-            BufferPoolComponent.EmitSingleWriteReturn(
-                builder,
-                col.Leaf,
-                propIndex,
-                varPrefix,
-                indent
-            );
-        }
-    }
+    ) =>
+        EmitSingleWriteReturn(
+            new IndentedWriter(builder) { IndentLevel = indent.Length / 4 },
+            col,
+            varPrefix
+        );
 
     /// <summary>
     /// Emits the write-side <c>finally</c> returns. Each is one <c>ReturnPooledArray</c> call (the
@@ -129,10 +147,9 @@ internal static class CompoundBuffers
     /// count (#552). Flat and compound columns share this one shape.
     /// </summary>
     public static void EmitWriteReturns(
-        StringBuilder builder,
+        IndentedWriter writer,
         TargetClassModel model,
-        string varPrefix = "buffer_",
-        string indent = "            "
+        string varPrefix = "buffer_"
     )
     {
         foreach (LeafColumn col in EmissionPlan.For(model).Columns)
@@ -140,26 +157,68 @@ internal static class CompoundBuffers
             int i = col.Slot;
             if (col.IsCompound || col.IsListLeaf)
             {
-                builder.AppendLine($"{indent}ReturnPooledArray({varPrefix}{i}, clearArray: true);");
-                builder.AppendLine($"{indent}ReturnPooledArray(defLevels_{i}, clearArray: false);");
+                writer.Line($"ReturnPooledArray({varPrefix}{i}, clearArray: true);");
+                writer.Line($"ReturnPooledArray(defLevels_{i}, clearArray: false);");
                 if (col.IsListLeaf)
-                    builder.AppendLine(
-                        $"{indent}ReturnPooledArray(repLevels_{i}, clearArray: false);"
-                    );
+                    writer.Line($"ReturnPooledArray(repLevels_{i}, clearArray: false);");
             }
             else if (BufferPoolComponent.UsesWriteAllParts(col.Leaf))
             {
-                builder.AppendLine(
-                    $"{indent}ReturnPooledArray({varPrefix}{i}, clearArray: false);"
-                );
-                builder.AppendLine($"{indent}ReturnPooledArray(defLevels_{i}, clearArray: false);");
+                writer.Line($"ReturnPooledArray({varPrefix}{i}, clearArray: false);");
+                writer.Line($"ReturnPooledArray(defLevels_{i}, clearArray: false);");
             }
             else
             {
                 bool isRef = BufferPoolComponent.IsReferenceTypeBuffer(col.Leaf, isWrite: true);
                 string clearArg = isRef ? "clearArray: true" : "clearArray: false";
-                builder.AppendLine($"{indent}ReturnPooledArray({varPrefix}{i}, {clearArg});");
+                writer.Line($"ReturnPooledArray({varPrefix}{i}, {clearArg});");
             }
+        }
+    }
+
+    public static void EmitWriteReturns(
+        StringBuilder builder,
+        TargetClassModel model,
+        string varPrefix = "buffer_",
+        string indent = "            "
+    ) =>
+        EmitWriteReturns(
+            new IndentedWriter(builder) { IndentLevel = indent.Length / 4 },
+            model,
+            varPrefix
+        );
+
+    public static void EmitRentals(
+        IndentedWriter writer,
+        TargetClassModel model,
+        string sizeExpr,
+        string varPrefix = "buffer_",
+        bool isWrite = false
+    )
+    {
+        foreach (LeafColumn col in EmissionPlan.For(model).Columns)
+        {
+            int i = col.Slot;
+            if (col.IsCompound || col.IsListLeaf)
+            {
+                writer.Line(
+                    $"var {varPrefix}{i} = global::System.Buffers.ArrayPool<{col.PackedType}>.Shared.Rent({sizeExpr});"
+                );
+                writer.Line(
+                    $"var defLevels_{i} = global::System.Buffers.ArrayPool<int>.Shared.Rent({sizeExpr});"
+                );
+                if (col.IsListLeaf)
+                    writer.Line(
+                        $"var repLevels_{i} = global::System.Buffers.ArrayPool<int>.Shared.Rent({sizeExpr});"
+                    );
+                continue;
+            }
+            string bufType = isWrite
+                ? BufferPoolComponent.GetWriteBufferElementType(col.Leaf)
+                : BufferPoolComponent.GetBufferElementType(col.Leaf);
+            writer.Line(
+                $"var {varPrefix}{i} = global::System.Buffers.ArrayPool<{bufType}>.Shared.Rent({sizeExpr});"
+            );
         }
     }
 
@@ -170,6 +229,20 @@ internal static class CompoundBuffers
         string varPrefix = "buffer_",
         string indent = "        ",
         bool isWrite = false
+    ) =>
+        EmitRentals(
+            new IndentedWriter(builder) { IndentLevel = indent.Length / 4 },
+            model,
+            sizeExpr,
+            varPrefix,
+            isWrite
+        );
+
+    public static void EmitReturns(
+        IndentedWriter writer,
+        TargetClassModel model,
+        string varPrefix = "buffer_",
+        bool isWrite = false
     )
     {
         foreach (LeafColumn col in EmissionPlan.For(model).Columns)
@@ -177,23 +250,25 @@ internal static class CompoundBuffers
             int i = col.Slot;
             if (col.IsCompound || col.IsListLeaf)
             {
-                builder.AppendLine(
-                    $"{indent}var {varPrefix}{i} = global::System.Buffers.ArrayPool<{col.PackedType}>.Shared.Rent({sizeExpr});"
+                writer.Line(
+                    $"global::System.Buffers.ArrayPool<{col.PackedType}>.Shared.Return({varPrefix}{i}, clearArray: true);"
                 );
-                builder.AppendLine(
-                    $"{indent}var defLevels_{i} = global::System.Buffers.ArrayPool<int>.Shared.Rent({sizeExpr});"
+                writer.Line(
+                    $"global::System.Buffers.ArrayPool<int>.Shared.Return(defLevels_{i}, clearArray: false);"
                 );
                 if (col.IsListLeaf)
-                    builder.AppendLine(
-                        $"{indent}var repLevels_{i} = global::System.Buffers.ArrayPool<int>.Shared.Rent({sizeExpr});"
+                    writer.Line(
+                        $"global::System.Buffers.ArrayPool<int>.Shared.Return(repLevels_{i}, clearArray: false);"
                     );
                 continue;
             }
             string bufType = isWrite
                 ? BufferPoolComponent.GetWriteBufferElementType(col.Leaf)
                 : BufferPoolComponent.GetBufferElementType(col.Leaf);
-            builder.AppendLine(
-                $"{indent}var {varPrefix}{i} = global::System.Buffers.ArrayPool<{bufType}>.Shared.Rent({sizeExpr});"
+            bool isRef = BufferPoolComponent.IsReferenceTypeBuffer(col.Leaf, isWrite);
+            string clearArg = isRef ? "clearArray: true" : "clearArray: false";
+            writer.Line(
+                $"global::System.Buffers.ArrayPool<{bufType}>.Shared.Return({varPrefix}{i}, {clearArg});"
             );
         }
     }
@@ -204,33 +279,11 @@ internal static class CompoundBuffers
         string varPrefix = "buffer_",
         string indent = "            ",
         bool isWrite = false
-    )
-    {
-        foreach (LeafColumn col in EmissionPlan.For(model).Columns)
-        {
-            int i = col.Slot;
-            if (col.IsCompound || col.IsListLeaf)
-            {
-                builder.AppendLine(
-                    $"{indent}global::System.Buffers.ArrayPool<{col.PackedType}>.Shared.Return({varPrefix}{i}, clearArray: true);"
-                );
-                builder.AppendLine(
-                    $"{indent}global::System.Buffers.ArrayPool<int>.Shared.Return(defLevels_{i}, clearArray: false);"
-                );
-                if (col.IsListLeaf)
-                    builder.AppendLine(
-                        $"{indent}global::System.Buffers.ArrayPool<int>.Shared.Return(repLevels_{i}, clearArray: false);"
-                    );
-                continue;
-            }
-            string bufType = isWrite
-                ? BufferPoolComponent.GetWriteBufferElementType(col.Leaf)
-                : BufferPoolComponent.GetBufferElementType(col.Leaf);
-            bool isRef = BufferPoolComponent.IsReferenceTypeBuffer(col.Leaf, isWrite);
-            string clearArg = isRef ? "clearArray: true" : "clearArray: false";
-            builder.AppendLine(
-                $"{indent}global::System.Buffers.ArrayPool<{bufType}>.Shared.Return({varPrefix}{i}, {clearArg});"
-            );
-        }
-    }
+    ) =>
+        EmitReturns(
+            new IndentedWriter(builder) { IndentLevel = indent.Length / 4 },
+            model,
+            varPrefix,
+            isWrite
+        );
 }

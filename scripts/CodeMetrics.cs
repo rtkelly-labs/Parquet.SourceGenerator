@@ -85,7 +85,7 @@ var measured = new (string Project, string? TargetFramework)[]
     // superset of, so it is pinned here: measuring "whichever TFM MSBuild happened to hand back
     // first" would not be deterministic.
     (
-        "src/Parquet.SourceGenerator.Attributes/Parquet.SourceGenerator.Attributes.csproj",
+        "src/Parquet.SourceGenerator.Runtime/Parquet.SourceGenerator.Runtime.csproj",
         "netstandard2.0"
     ),
 };

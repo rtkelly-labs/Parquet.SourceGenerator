@@ -137,7 +137,7 @@
           "System.Runtime.CompilerServices.Unsafe": "4.5.3"
         }
       },
-      "parquet.sourcegenerator.attributes": {
+      "parquet.sourcegenerator.runtime": {
         "type": "Project",
         "dependencies": {
           "Microsoft.Bcl.AsyncInterfaces": "[8.0.0, )",

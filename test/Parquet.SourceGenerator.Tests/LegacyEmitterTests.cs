@@ -347,7 +347,7 @@ public class LegacyEmitterTests
 
         code.ShouldContain("var colArray_10 = new global::System.Guid[count];");
         code.ShouldContain("var colArray_11 = new global::System.Guid?[count];");
-        code.ShouldContain("struct StringDeduplicator");
+        code.ShouldContain("new global::Parquet.SourceGenerator.StringDeduplicator(512);");
         code.ShouldContain("ReadColumnAsync");
         code.ShouldContain("WriteColumnAsync");
     }
