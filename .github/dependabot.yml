@@ -15,6 +15,12 @@ updates:
           - "Roslynator*"
           - "Meziantou*"
           - "Microsoft.CodeAnalysis*"
+        # The Roslyn compiler is not an analyzer: its central version is the host compiler the tests
+        # and benchmarks run the generator under (the shipped generator's floor is its own
+        # VersionOverride, #432). Moving it is a compatibility decision, so it comes as its own pull
+        # request instead of riding on an analyzer bump (#705 took it from 4.8.0 to 5.9.0).
+        exclude-patterns:
+          - "Microsoft.CodeAnalysis.CSharp"
 
   # Maintain GitHub Actions workflows
   - package-ecosystem: "github-actions"
