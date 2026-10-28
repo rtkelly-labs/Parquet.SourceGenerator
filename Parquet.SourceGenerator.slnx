@@ -11,7 +11,7 @@
         <Project Path="samples/Parquet.SourceGenerator.SampleAot/Parquet.SourceGenerator.SampleAot.csproj" />
     </Folder>
     <Folder Name="/src/">
-        <Project Path="src/Parquet.SourceGenerator.Attributes/Parquet.SourceGenerator.Attributes.csproj" />
+        <Project Path="src/Parquet.SourceGenerator.Runtime/Parquet.SourceGenerator.Runtime.csproj" />
         <Project Path="src/Parquet.SourceGenerator.Legacy/Parquet.SourceGenerator.Legacy.csproj" />
         <Project Path="src/Parquet.SourceGenerator/Parquet.SourceGenerator.csproj" />
     </Folder>

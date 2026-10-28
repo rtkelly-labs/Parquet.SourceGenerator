@@ -176,7 +176,7 @@ public sealed class MutationWorkflowStepTests : IDisposable
         run.ExitCode.ShouldBe(0, run.Describe());
         run.Output.ShouldStartWith("matrix={\"include\":[{\"name\":\"");
         run.Output.ShouldContain("\"name\":\"generator-rest\"");
-        run.Output.ShouldContain("\"name\":\"attributes\"");
+        run.Output.ShouldContain("\"name\":\"runtime\"");
     }
 
     [Theory]

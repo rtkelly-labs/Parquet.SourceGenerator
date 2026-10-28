@@ -113,15 +113,15 @@ public sealed class AnalyzerGateTests
                 Path.Combine(
                     root,
                     "src",
-                    "Parquet.SourceGenerator.Attributes",
-                    "Parquet.SourceGenerator.Attributes.csproj"
+                    "Parquet.SourceGenerator.Runtime",
+                    "Parquet.SourceGenerator.Runtime.csproj"
                 )
             )
             .Any(i =>
                 i.Kind == "PackageReference"
                 && i.Include == "Microsoft.CodeAnalysis.PublicApiAnalyzers"
             )
-            .ShouldBeTrue("Attributes must reference PublicApiAnalyzers");
+            .ShouldBeTrue("Runtime must reference PublicApiAnalyzers");
 
         foreach (
             string project in new[] { "Parquet.SourceGenerator", "Parquet.SourceGenerator.Legacy" }

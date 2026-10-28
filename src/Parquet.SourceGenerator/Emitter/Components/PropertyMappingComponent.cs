@@ -253,6 +253,35 @@ internal static class PropertyMappingComponent
     /// target[targetOffset + index] = new T { Prop1 = ..., Prop2 = ... };
     /// </summary>
     public static void EmitObjectMaterialization(
+        IndentedWriter writer,
+        TargetClassModel model,
+        string targetArray,
+        string offsetExpr,
+        string indexVar,
+        string bufferPrefix = "buffer_"
+    )
+    {
+        string targetSlot = string.IsNullOrEmpty(offsetExpr)
+            ? $"{targetArray}[{indexVar}]"
+            : $"{targetArray}[{offsetExpr} + {indexVar}]";
+
+        writer.Line($"{targetSlot} = new {EmittedText.Ident(model.ClassName)}");
+        writer.Line("{");
+
+        using (writer.Indent())
+        {
+            for (int i = 0; i < model.Properties.Length; i++)
+            {
+                PropertyModel prop = model.Properties[i];
+                string readExpr = GetReadExpression(prop, $"{bufferPrefix}{i}[{indexVar}]");
+                writer.Line($"{EmittedText.Ident(prop.Name)} = {readExpr},");
+            }
+        }
+
+        writer.Line("};");
+    }
+
+    public static void EmitObjectMaterialization(
         StringBuilder builder,
         TargetClassModel model,
         string targetArray,
@@ -260,36 +289,26 @@ internal static class PropertyMappingComponent
         string indexVar,
         string bufferPrefix = "buffer_",
         string indent = "                "
-    )
-    {
-        string targetSlot = string.IsNullOrEmpty(offsetExpr)
-            ? $"{targetArray}[{indexVar}]"
-            : $"{targetArray}[{offsetExpr} + {indexVar}]";
-
-        builder.AppendLine($"{indent}{targetSlot} = new {EmittedText.Ident(model.ClassName)}");
-        builder.AppendLine($"{indent}{{");
-
-        for (int i = 0; i < model.Properties.Length; i++)
-        {
-            PropertyModel prop = model.Properties[i];
-            string readExpr = GetReadExpression(prop, $"{bufferPrefix}{i}[{indexVar}]");
-            builder.AppendLine($"{indent}    {EmittedText.Ident(prop.Name)} = {readExpr},");
-        }
-
-        builder.AppendLine($"{indent}}};");
-    }
+    ) =>
+        EmitObjectMaterialization(
+            new IndentedWriter(builder) { IndentLevel = indent.Length / 4 },
+            model,
+            targetArray,
+            offsetExpr,
+            indexVar,
+            bufferPrefix
+        );
 
     /// <summary>
     /// Emits property extraction from an item into column buffers:
     /// buffer_{i}[index] = item.Prop;
     /// </summary>
     public static void EmitPropertyAssignments(
-        StringBuilder builder,
+        IndentedWriter writer,
         TargetClassModel model,
         string itemVar = "item",
         string indexVar = "i",
         string bufferPrefix = "buffer_",
-        string indent = "                    ",
         bool useMemoryForTextAndBinary = true
     )
     {
@@ -301,9 +320,27 @@ internal static class PropertyMappingComponent
                 $"{itemVar}.{EmittedText.Ident(prop.Name)}",
                 useMemoryForTextAndBinary
             );
-            builder.AppendLine($"{indent}{bufferPrefix}{p}[{indexVar}] = {writeExpr};");
+            writer.Line($"{bufferPrefix}{p}[{indexVar}] = {writeExpr};");
         }
     }
+
+    public static void EmitPropertyAssignments(
+        StringBuilder builder,
+        TargetClassModel model,
+        string itemVar = "item",
+        string indexVar = "i",
+        string bufferPrefix = "buffer_",
+        string indent = "                    ",
+        bool useMemoryForTextAndBinary = true
+    ) =>
+        EmitPropertyAssignments(
+            new IndentedWriter(builder) { IndentLevel = indent.Length / 4 },
+            model,
+            itemVar,
+            indexVar,
+            bufferPrefix,
+            useMemoryForTextAndBinary
+        );
 
     /// <summary>
     /// Emits <c>ReadTimeOnly</c>, which builds a <c>TimeOnly</c> from a file-controlled

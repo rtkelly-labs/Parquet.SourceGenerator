@@ -16,6 +16,40 @@ The rule, the three surfaces and the author process are in
 
 <!-- Add new entries directly below this line, newest first. -->
 
+### 2026-10-27 — Consolidate footer start helper into ParquetDecompressionGuardStream (#723)
+
+- **Surface:** package
+- **Semver:** additive-minor
+- **Issue:** [#723](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/723)
+- **Change:** Added `GetFooterStartAsync(Stream stream, CancellationToken cancellationToken = default)` static method to `ParquetDecompressionGuardStream` in `Parquet.SourceGenerator.Runtime`.
+- **Rationale:** Previously, ~55 lines of footer length reading and boundary validation were emitted into every generated model extension class. Centralizing this helper in `ParquetDecompressionGuardStream` eliminates duplicated boilerplate across all emitted models while maintaining full compatibility.
+
+### 2026-10-27 — Hoist StringDeduplicator into Runtime package (#721)
+
+- **Surface:** package
+- **Semver:** additive-minor
+- **Issue:** [#721](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/721)
+- **Change:** Added `StringDeduplicator` struct to `Parquet.SourceGenerator.Runtime`. It provides an L1 open-addressed hash table for string deduplication with SIMD-accelerated comparison and BCL `string.GetHashCode(ReadOnlySpan<char>, StringComparison.Ordinal)` hashing on modern runtimes with FNV-1a fallback on netstandard2.0. Marked `[EditorBrowsable(EditorBrowsableState.Never)]`.
+- **Rationale:** Previously, ~350 lines of string deduplicator struct, open-addressing table, and scalar char-by-char comparison loops were emitted into every generated class with string properties. Compiling this in `Parquet.SourceGenerator.Runtime` eliminates code duplication across models, drops emitted ELOC by ~200 lines per string model, and accelerates deduplication using SIMD `SequenceEqual` and BCL hashing.
+
+
+### 2026-10-26 — Hoist DecompressionGuardStream into Runtime package (#720)
+
+- **Surface:** package
+- **Semver:** additive-minor
+- **Issue:** [#720](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/720)
+- **Change:** Added `ParquetDecompressionGuardStream` to `Parquet.SourceGenerator.Runtime`. It provides a seekable read wrapper that validates Thrift compact-protocol page headers and file metadata footer counts before allocating or decompressing hostile pages. Marked `[EditorBrowsable(EditorBrowsableState.Never)]`.
+- **Rationale:** Previously, ~675 lines of Thrift compact-protocol parsing and decompression stream guarding were emitted into every generated file/class. Compiling this once into `Parquet.SourceGenerator.Runtime` eliminates hundreds of duplicated lines per generated model, drops emitted ELOC by ~600 lines per model, and accelerates compilation without changing safety guarantees.
+
+
+### 2026-10-26 — Rename and transition Parquet.SourceGenerator.Attributes to Parquet.SourceGenerator.Runtime (#725)
+
+- **Surface:** package
+- **Semver:** additive-minor
+- **Issue:** [#725](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/725)
+- **Change:** Renamed package and assembly `Parquet.SourceGenerator.Attributes` to `Parquet.SourceGenerator.Runtime` while retaining the `Parquet.SourceGenerator` root namespace.
+- **Rationale:** The companion package is not merely an attribute annotation library; it contains runtime execution logic (`VectorizedColumnTransforms`, `NullableColumnExtractor`, `ParquetSerializerOptions`) and provides the foundation for hoisting common runtime utilities (`DecompressionGuardStream`, `StringDeduplicator`, `FormatOptionsMapper`). Transitioning the assembly name to `Parquet.SourceGenerator.Runtime` accurately represents the runtime engine while keeping consumer namespaces unchanged.
+
 ### 2026-10-23 — Iceberg-ready columns: field IDs, local timestamps, INT32 dates
 
 - **Surface:** package
