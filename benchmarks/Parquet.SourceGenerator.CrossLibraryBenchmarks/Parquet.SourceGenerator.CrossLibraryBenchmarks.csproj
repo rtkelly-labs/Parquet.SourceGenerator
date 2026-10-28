@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <!--
+      Cross-library read comparison: this generator against Parquet.Net (pure managed), ParquetSharp
+      (Arrow C++), DuckDB.NET (DuckDB) and Polars.NET (Polars, Rust) on the provenanced datasets.
+      Kept apart from Parquet.SourceGenerator.Benchmarks, which is the allocation regression gate:
+      the native comparands would perturb that project's dependency graph and lock file. Not in the
+      solution, so the PR build does not restore the native runtimes; it runs on dispatch from
+      .github/workflows/cross-library-benchmarks.yml. See README.md beside this file.
+    -->
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net8.0</TargetFramework>
+        <IsPackable>false</IsPackable>
+        <RootNamespace>Parquet.SourceGenerator.CrossLibraryBenchmarks</RootNamespace>
+        <ProduceReferenceAssembly>false</ProduceReferenceAssembly>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="BenchmarkDotNet" />
+        <PackageReference Include="Parquet.Net" />
+        <PackageReference Include="ParquetSharp" />
+        <PackageReference Include="DuckDB.NET.Data.Full" />
+        <PackageReference Include="Polars.NET" />
+        <PackageReference Include="Polars.NET.Native.osx-arm64" />
+        <PackageReference Include="Polars.NET.Native.linux-x64" />
+        <PackageReference Include="Polars.NET.Native.win-x64" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\src\Parquet.SourceGenerator.Attributes\Parquet.SourceGenerator.Attributes.csproj" />
+        <ProjectReference
+            Include="..\..\src\Parquet.SourceGenerator\Parquet.SourceGenerator.csproj"
+            OutputItemType="Analyzer"
+            ReferenceOutputAssembly="true"
+        />
+    </ItemGroup>
+
+    <ItemGroup>
+        <None
+            Include="..\data\*.parquet"
+            CopyToOutputDirectory="PreserveNewest"
+            Link="data\%(Filename)%(Extension)"
+        />
+    </ItemGroup>
+</Project>
