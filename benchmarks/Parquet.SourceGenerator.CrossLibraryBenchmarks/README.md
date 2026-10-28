@@ -104,7 +104,7 @@ Run it in CI rather than locally: dispatch **Cross-Library Benchmarks**
 gh workflow run cross-library-benchmarks.yml --ref <branch> -f filter='*'
 ```
 
-The job restores in locked mode on .NET 8, runs `--validate`, then the benchmarks. The tables go
+The job restores in locked mode on .NET 10, runs `--validate`, then the benchmarks. The tables go
 to the run's summary and the full reports to the `cross-library-benchmark-results` artifact. It is
 dispatch-only and writes nothing back. A shared runner's absolute times are noisy, so read the
 ratios within one table. Locally:
