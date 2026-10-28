@@ -200,7 +200,7 @@ jobs:
       # newer JDKs refuse. Every SHA-256 is re-verified from the manifest before use, and all
       # tool dumps plus the source and corrupt files are uploaded when this gate fails.
       - name: Setup Java (Apache Parquet conformance tooling)
-        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: '17'
