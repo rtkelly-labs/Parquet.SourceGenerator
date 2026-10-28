@@ -68,8 +68,13 @@ internal static class AllocationBudgetComponent
     /// The bytes one value of a flat column costs the array Parquet.Net allocates for it: the element
     /// (see <see cref="BufferBytes"/>) and, for text and binary, the lane that wraps it.
     /// </summary>
+    /// <remarks>
+    /// The classic column of a <c>TimeSpan</c> is a <c>TimeSpan[]</c> (8 bytes an element), not the
+    /// <c>int</c> milliseconds the modern buffers hold.
+    /// </remarks>
     public static int FlatBytesPerValue(PropertyModel prop) =>
-        BufferBytes(prop) + (IsReferenceColumn(prop) ? 16 : 0);
+        (prop.Kind == PropertyKind.TimeSpan ? 8 * (prop.IsNullable ? 2 : 1) : BufferBytes(prop))
+        + (IsReferenceColumn(prop) ? 16 : 0);
 
     /// <summary>
     /// The element bytes of a column's buffer, allowing for the padding of <c>T?</c>: a nullable value

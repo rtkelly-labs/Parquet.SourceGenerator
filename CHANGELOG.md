@@ -8,6 +8,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **An executed test suite for the legacy backend** (`test/Parquet.SourceGenerator.Legacy.Tests`, #597).
+  It runs the generated legacy code against Parquet.Net 4.25.0 on net8.0 (the `test` job) and net472
+  (the Windows `net472-consumer` job): a type matrix over every legacy-supported flat type, required and
+  optional, a codec matrix over all six codecs and four levels that checks the codec recorded in the
+  footer, and a hostile-input matrix that exercises every legacy `Max*` limit. The type and codec
+  matrices live in `test/Shared/Behaviour` and also run against the modern backend through a per-backend
+  driver, the skeleton the parity work (#494, #495) extends. `VerifyRequiredTestExecution.cs` requires
+  both legacy reports, so a run that loses the project or executes no tests fails.
+
+### Fixed
+
+- **Legacy backend: `TimeSpan`, `TimeOnly` and microsecond `DateTime` members compile and round-trip**
+  (#597). The legacy emitter used Parquet.Net 6's `TimeDataField`/`TimeUnitPrecision`, which 4.25 does
+  not have, and `DateTimeFormat.DateAndTimeMicros`, which 4.25 has only in its net8.0 build, so such a
+  model's generated code did not compile. These columns are now `TimeSpanDataField` (TIME_MILLIS for
+  `TimeSpan`, TIME_MICROS for `TimeOnly`, checked to lie within one day on read). A microsecond
+  `DateTime` works on net8.0+; below it the generated code is now a `#error` naming the member, because
+  Parquet.Net 4.25's netstandard2.0 and net6.0 builds cannot write microsecond timestamps at all.
+  Modern output is unchanged.
+- **Legacy backend: `MaxDictionaryEntries` applies to files Parquet.Net 4.25 writes** (#597). The legacy
+  reader only looked for a dictionary page when the column metadata declared a dictionary encoding,
+  which 4.25 never records (and a hostile file need not), so the limit was skipped. It now reads the
+  first page header of each column chunk.
+
 ## [0.1.0-alpha.1] - 2026-10-25
 
 First prerelease of 0.1, and the first published from `rtkelly-labs` through nuget.org trusted publishing. Changes since `0.0.3`:

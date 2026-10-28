@@ -19,6 +19,7 @@
         <Project Path="test/Parquet.SourceGenerator.AbiMatrix/Parquet.SourceGenerator.AbiMatrix.csproj" />
         <Project Path="test/Parquet.SourceGenerator.AotTest/Parquet.SourceGenerator.AotTest.csproj" />
         <Project Path="test/Parquet.SourceGenerator.CLI/Parquet.SourceGenerator.CLI.csproj" />
+        <Project Path="test/Parquet.SourceGenerator.Legacy.Tests/Parquet.SourceGenerator.Legacy.Tests.csproj" />
         <Project Path="test/Parquet.SourceGenerator.Tests/Parquet.SourceGenerator.Tests.csproj" />
     </Folder>
     <Folder Name="/tools/">

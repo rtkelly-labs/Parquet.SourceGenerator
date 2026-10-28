@@ -1,3 +1,4 @@
+using System;
 using System.Text;
 using Parquet.SourceGenerator.Models;
 
@@ -12,6 +13,12 @@ internal static class SchemaComponent
     /// Formats a boolean as a C# literal ("true" or "false").
     /// </summary>
     public static string BoolLiteral(bool value) => value ? "true" : "false";
+
+    /// <summary>
+    /// Whether a <c>DateTime</c> member is declared with microsecond precision.
+    /// </summary>
+    public static bool IsMicrosecondTimestamp(PropertyModel prop) =>
+        prop.TimestampUnit == "1" || prop.TimestampUnit?.Contains("Microseconds") == true;
 
     /// <summary>
     /// Generates compile-time ParquetSchema DataField instantiation code.
@@ -39,18 +46,13 @@ internal static class SchemaComponent
                 $"new global::Parquet.Schema.DecimalDataField({name}, 38, 18, isNullable: {BoolLiteral(prop.IsNullable)})",
 
             PropertyKind.DateTime
-                when (
-                    prop.TimestampUnit == "1"
-                    || prop.TimestampUnit?.Contains("Microseconds") == true
-                ) && !prop.TimestampAdjustedToUtc =>
+                when IsMicrosecondTimestamp(prop) && !prop.TimestampAdjustedToUtc =>
             // DateTimeFormat.Timestamp, not DateAndTimeMicros: Parquet.Net writes the latter as the
             // legacy TIMESTAMP_MICROS converted type, which always means UTC-adjusted and ignores
             // isAdjustedToUTC. Timestamp writes the logical type, which carries the flag.
             $"new global::Parquet.Schema.DateTimeDataField({name}, global::Parquet.Schema.DateTimeFormat.Timestamp, isAdjustedToUTC: false, unit: global::Parquet.Schema.DateTimeTimeUnit.Micros, isNullable: {BoolLiteral(prop.IsNullable)})",
 
-            PropertyKind.DateTime
-                when prop.TimestampUnit == "1"
-                    || prop.TimestampUnit?.Contains("Microseconds") == true =>
+            PropertyKind.DateTime when IsMicrosecondTimestamp(prop) =>
                 $"new global::Parquet.Schema.DateTimeDataField({name}, global::Parquet.Schema.DateTimeFormat.DateAndTimeMicros, isNullable: {BoolLiteral(prop.IsNullable)})",
 
             PropertyKind.DateTime =>
@@ -97,7 +99,18 @@ internal static class SchemaComponent
     /// <summary>
     /// Emits compile-time ParquetSchema definition.
     /// </summary>
-    public static void EmitSchema(StringBuilder builder, TargetClassModel model)
+    /// <param name="builder">The builder.</param>
+    /// <param name="model">The model.</param>
+    /// <param name="fieldOverride">
+    /// A backend's own lines for a field (given the member and its trailing comma), or null to use
+    /// <see cref="GetFieldCreationExpression"/>. The classic backend uses it for the fields Parquet.Net
+    /// 4.x spells differently (#597).
+    /// </param>
+    public static void EmitSchema(
+        StringBuilder builder,
+        TargetClassModel model,
+        Func<PropertyModel, string, string?>? fieldOverride = null
+    )
     {
         builder.AppendLine("    /// <summary>");
         builder.AppendLine(
@@ -112,6 +125,13 @@ internal static class SchemaComponent
         {
             PropertyModel prop = model.Properties[i];
             string comma = i < model.Properties.Length - 1 ? "," : "";
+            string? lines = fieldOverride?.Invoke(prop, comma);
+            if (lines is not null)
+            {
+                builder.Append(lines);
+                continue;
+            }
+
             builder.AppendLine($"        {GetFieldCreationExpression(prop)}{comma}");
         }
 
