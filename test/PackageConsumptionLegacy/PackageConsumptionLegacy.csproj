@@ -28,6 +28,14 @@
             Version="$(GeneratorPackageVersion)"
         />
         <PackageReference Include="Parquet.Net" Version="4.25.0" />
+        <!--
+          Parquet.Net 4.25.0 pulls Snappier 1.1.6 and System.Text.Json 8.0.4, both with high
+          severity advisories (GHSA-pggp-6c3x-2xmx, GHSA-8g4q-xg66-9fp4). The .NET 10 SDK audits
+          transitive packages, so restore fails with NU1903 unless the patched versions are pinned
+          here; this project opts out of central package management.
+        -->
+        <PackageReference Include="Snappier" Version="1.3.1" />
+        <PackageReference Include="System.Text.Json" Version="8.0.5" />
     </ItemGroup>
 
     <!--
