@@ -111,19 +111,32 @@ internal static class RowGroupPruningComponent
     /// opened and before any column read, so a rejected group never touches a data page.
     /// </summary>
     public static void EmitLoopGuard(
-        StringBuilder builder,
+        IndentedWriter writer,
         TargetClassModel model,
-        string indent,
         string groupReaderVar = "groupReader",
         string indexVar = "r"
     )
     {
         if (!IsEnabled(model))
             return;
-        builder.AppendLine(
-            $"{indent}if (!AcceptRowGroup(predicate, {groupReaderVar}, {indexVar}{FieldArguments(model)})) continue;"
+        writer.Line(
+            $"if (!AcceptRowGroup(predicate, {groupReaderVar}, {indexVar}{FieldArguments(model)})) continue;"
         );
     }
+
+    public static void EmitLoopGuard(
+        StringBuilder builder,
+        TargetClassModel model,
+        string indent,
+        string groupReaderVar = "groupReader",
+        string indexVar = "r"
+    ) =>
+        EmitLoopGuard(
+            new IndentedWriter(builder) { IndentLevel = indent.Length / 4 },
+            model,
+            groupReaderVar,
+            indexVar
+        );
 
     /// <summary>
     /// Emits the pre-pass that decides which row groups survive and how many rows they hold, so a
@@ -212,16 +225,18 @@ internal static class RowGroupPruningComponent
     }
 
     /// <summary>Emits the cheap per-iteration test against the pre-pass result.</summary>
+    public static void EmitSelectionCheck(IndentedWriter writer, TargetClassModel model)
+    {
+        if (!IsEnabled(model))
+            return;
+        writer.Line("if (selectedGroups != null && !selectedGroups[r]) continue;");
+    }
+
     public static void EmitSelectionCheck(
         StringBuilder builder,
         TargetClassModel model,
         string indent
-    )
-    {
-        if (!IsEnabled(model))
-            return;
-        builder.AppendLine($"{indent}if (selectedGroups != null && !selectedGroups[r]) continue;");
-    }
+    ) => EmitSelectionCheck(new IndentedWriter(builder) { IndentLevel = indent.Length / 4 }, model);
 
     /// <summary>
     /// Emits the guard method: projects one row group's column-chunk statistics onto the model's

@@ -388,7 +388,7 @@ internal static class CodeEmitter
         );
         builder.AppendLine("        }");
         builder.AppendLine(
-            "        long footerStart = await GetFooterStartAsync(stream, cancellationToken).ConfigureAwait(false);"
+            "        long footerStart = await global::Parquet.SourceGenerator.ParquetDecompressionGuardStream.GetFooterStartAsync(stream, cancellationToken).ConfigureAwait(false);"
         );
         builder.AppendLine("        ValidateColumnChunkBounds(reader, footerStart, 1_000_000);");
         // The limit is enforced during the walk: a depth computed to the end and compared afterwards
@@ -1836,7 +1836,7 @@ internal static class CodeEmitter
         if (StringDeduplicatorComponent.HasStringProperties(model))
         {
             builder.AppendLine(
-                "                using var stringDeduplicator = new StringDeduplicator(512);"
+                "                using var stringDeduplicator = new global::Parquet.SourceGenerator.StringDeduplicator(512);"
             );
             builder.AppendLine();
         }
@@ -2165,11 +2165,10 @@ internal static class CodeEmitter
     }
 
     private static void EmitRentalsFor(
-        StringBuilder builder,
+        IndentedWriter writer,
         TargetClassModel model,
         string sizeExpr,
         string varPrefix = "buffer_",
-        string indent = "        ",
         bool isWrite = false
     )
     {
@@ -2181,17 +2180,48 @@ internal static class CodeEmitter
             string target = EmissionPlan.For(model).Columns.Any(c => c.IsListLeaf)
                 ? "long allocatedBytes = "
                 : string.Empty;
-            builder.AppendLine(
-                $"{indent}{target}CheckAllocationBudget(0, {sizeExpr}, {ReadBudget.BytesPerRow(EmissionPlan.For(model))}, options);"
+            writer.Line(
+                $"{target}CheckAllocationBudget(0, {sizeExpr}, {ReadBudget.BytesPerRow(EmissionPlan.For(model))}, options);"
             );
         }
 
         if (EmissionPlan.For(model).HasCompound)
         {
-            CompoundBuffers.EmitRentals(builder, model, sizeExpr, varPrefix, indent);
+            CompoundBuffers.EmitRentals(writer, model, sizeExpr, varPrefix, isWrite);
             return;
         }
-        BufferPoolComponent.EmitRentals(builder, model, sizeExpr, varPrefix, indent, isWrite);
+        BufferPoolComponent.EmitRentals(writer, model, sizeExpr, varPrefix, isWrite);
+    }
+
+    private static void EmitRentalsFor(
+        StringBuilder builder,
+        TargetClassModel model,
+        string sizeExpr,
+        string varPrefix = "buffer_",
+        string indent = "        ",
+        bool isWrite = false
+    ) =>
+        EmitRentalsFor(
+            new IndentedWriter(builder) { IndentLevel = indent.Length / 4 },
+            model,
+            sizeExpr,
+            varPrefix,
+            isWrite
+        );
+
+    private static void EmitReturnsFor(
+        IndentedWriter writer,
+        TargetClassModel model,
+        string varPrefix = "buffer_",
+        bool isWrite = false
+    )
+    {
+        if (EmissionPlan.For(model).HasCompound)
+        {
+            CompoundBuffers.EmitReturns(writer, model, varPrefix, isWrite);
+            return;
+        }
+        BufferPoolComponent.EmitReturns(writer, model, varPrefix, isWrite);
     }
 
     private static void EmitReturnsFor(
@@ -2200,14 +2230,27 @@ internal static class CodeEmitter
         string varPrefix = "buffer_",
         string indent = "            ",
         bool isWrite = false
+    ) =>
+        EmitReturnsFor(
+            new IndentedWriter(builder) { IndentLevel = indent.Length / 4 },
+            model,
+            varPrefix,
+            isWrite
+        );
+
+    private static void EmitWriteRentalsFor(
+        IndentedWriter writer,
+        TargetClassModel model,
+        string sizeExpr,
+        string varPrefix = "buffer_"
     )
     {
         if (EmissionPlan.For(model).HasCompound)
         {
-            CompoundBuffers.EmitReturns(builder, model, varPrefix, indent);
+            CompoundBuffers.EmitWriteRentals(writer, model, sizeExpr, varPrefix);
             return;
         }
-        BufferPoolComponent.EmitReturns(builder, model, varPrefix, indent, isWrite);
+        BufferPoolComponent.EmitWriteRentals(writer, model, sizeExpr, varPrefix);
     }
 
     private static void EmitWriteRentalsFor(
@@ -2216,14 +2259,23 @@ internal static class CodeEmitter
         string sizeExpr,
         string varPrefix = "buffer_",
         string indent = "        "
+    ) =>
+        EmitWriteRentalsFor(
+            new IndentedWriter(builder) { IndentLevel = indent.Length / 4 },
+            model,
+            sizeExpr,
+            varPrefix
+        );
+
+    private static void EmitWriteReturnsFor(
+        IndentedWriter writer,
+        TargetClassModel model,
+        string varPrefix = "buffer_"
     )
     {
-        if (EmissionPlan.For(model).HasCompound)
-        {
-            CompoundBuffers.EmitWriteRentals(builder, model, sizeExpr, varPrefix, indent);
-            return;
-        }
-        BufferPoolComponent.EmitWriteRentals(builder, model, sizeExpr, varPrefix, indent);
+        // Flat and compound models share CompoundBuffers' shape here: every return is a call to
+        // the shared ReturnPooledArray helper (#552).
+        CompoundBuffers.EmitWriteReturns(writer, model, varPrefix);
     }
 
     private static void EmitWriteReturnsFor(
@@ -2231,12 +2283,12 @@ internal static class CodeEmitter
         TargetClassModel model,
         string varPrefix = "buffer_",
         string indent = "            "
-    )
-    {
-        // Flat and compound models share CompoundBuffers' shape here: every return is a call to
-        // the shared ReturnPooledArray helper (#552).
-        CompoundBuffers.EmitWriteReturns(builder, model, varPrefix, indent);
-    }
+    ) =>
+        EmitWriteReturnsFor(
+            new IndentedWriter(builder) { IndentLevel = indent.Length / 4 },
+            model,
+            varPrefix
+        );
 
     private static void EmitArrayMaterializationFor(
         StringBuilder builder,

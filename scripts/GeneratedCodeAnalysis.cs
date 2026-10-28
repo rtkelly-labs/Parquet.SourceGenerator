@@ -1,5 +1,7 @@
 #pragma warning disable CA1305, CA1852, MA0002, MA0009, MA0011, MA0047, MA0051
 
+#:package CliWrap@3.7.1
+
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -7,6 +9,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using CliWrap;
 
 // -----------------------------------------------------------------------------
 // GeneratedCodeAnalysis.cs
@@ -378,18 +381,18 @@ static void ReadSarif(
 
 static int Run(string workingDirectory, string fileName, params string[] arguments)
 {
-    var start = new ProcessStartInfo(fileName)
-    {
-        UseShellExecute = false,
-        WorkingDirectory = workingDirectory,
-    };
-    foreach (string argument in arguments)
-        start.ArgumentList.Add(argument);
     Console.WriteLine($"> {fileName} {string.Join(' ', arguments)}");
-    using Process process =
-        Process.Start(start) ?? throw new InvalidOperationException($"{fileName} did not start");
-    process.WaitForExit();
-    return process.ExitCode;
+    var result = Cli.Wrap(fileName)
+        .WithWorkingDirectory(workingDirectory)
+        .WithArguments(arguments)
+        .WithStandardOutputPipe(PipeTarget.ToStream(Console.OpenStandardOutput()))
+        .WithStandardErrorPipe(PipeTarget.ToStream(Console.OpenStandardError()))
+        .WithValidation(CommandResultValidation.None)
+        .ExecuteAsync()
+        .GetAwaiter()
+        .GetResult();
+
+    return result.ExitCode;
 }
 
 static string FindRepoRoot(string start)
