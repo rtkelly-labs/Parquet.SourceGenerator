@@ -261,6 +261,9 @@ internal static class ColumnHelpersComponent
             "    }"
         );
 
+    // Every chunk's first page header is read, whatever the footer's encodings list says: Parquet.Net
+    // decodes a dictionary page wherever a chunk starts with one, Parquet.Net 4.25 never declares the
+    // encoding, and a hostile file can leave it out. One header per chunk, never per row.
     private static void EmitValidateDictionaryEntryLimit(StringBuilder builder) =>
         AppendLines(
             builder,
@@ -276,17 +279,7 @@ internal static class ColumnHelpersComponent
             "        {",
             "            return;",
             "        }",
-            "        var metadata = groupReader.GetMetadata(field).MetaData;",
-            "        bool dictionaryEncoded = false;",
-            "        foreach (var encoding in metadata.Encodings)",
-            "        {",
-            "            if (encoding == global::Parquet.Meta.Encoding.PLAIN_DICTIONARY || encoding == global::Parquet.Meta.Encoding.RLE_DICTIONARY)",
-            "            {",
-            "                dictionaryEncoded = true;",
-            "                break;",
-            "            }",
-            "        }",
-            "        int? dictionaryEntries = dictionaryEncoded ? ReadDictionaryEntryCount(groupReader, stream, field) : null;",
+            "        int? dictionaryEntries = ReadDictionaryEntryCount(groupReader, stream, field);",
             "        if (dictionaryEntries.HasValue && dictionaryEntries.Value > options.MaxDictionaryEntries)",
             "        {",
             "            throw new global::System.IO.InvalidDataException($\"Dictionary column '{columnName}' entry count {dictionaryEntries.Value} exceeds maximum allowed {options.MaxDictionaryEntries}.\");",

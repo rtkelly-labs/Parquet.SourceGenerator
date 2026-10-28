@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Fixed
+- **`MaxDictionaryEntries` is enforced on dictionary pages the footer does not declare** (#607). The modern
+  reader checked a chunk's dictionary page only when its `ColumnMetaData.encodings` listed
+  `PLAIN_DICTIONARY` or `RLE_DICTIONARY`, but Parquet.Net decodes a dictionary page wherever a chunk starts
+  with one. Parquet.Net 4.25 never records the encoding and a hostile file can leave it out, so for those
+  files the limit was not applied at all. When the footer recorded no dictionary page offset, the header
+  was also looked up at the deprecated `file_offset`, which writers point at different places. The
+  generated reader now reads the first page header of every chunk, found the way Parquet.Net finds it
+  (the lowest recorded page offset), and rejects a dictionary page above the limit with
+  `InvalidDataException`. The check costs one page header per column chunk.
+
 ## [0.1.0-alpha.1] - 2026-10-25
 
 First prerelease of 0.1, and the first published from `rtkelly-labs` through nuget.org trusted publishing. Changes since `0.0.3`:
