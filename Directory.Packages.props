@@ -40,5 +40,17 @@
         <PackageVersion Include="CommandLineParser" Version="2.9.1" />
         <PackageVersion Include="System.Text.Json" Version="8.0.5" />
         <PackageVersion Include="Roslynator.Analyzers" Version="5.0.0" />
+
+        <!--
+          Cross-library benchmark comparands (benchmarks/Parquet.SourceGenerator.CrossLibraryBenchmarks
+          only; not in the solution). Each wraps a native Parquet engine: ParquetSharp -> Arrow C++,
+          DuckDB.NET -> DuckDB, Polars.NET -> Polars (Rust). Polars ships its runtime per RID.
+        -->
+        <PackageVersion Include="ParquetSharp" Version="25.0.1.1" />
+        <PackageVersion Include="DuckDB.NET.Data.Full" Version="1.5.6.1" />
+        <PackageVersion Include="Polars.NET" Version="1.0.0" />
+        <PackageVersion Include="Polars.NET.Native.osx-arm64" Version="1.0.0" />
+        <PackageVersion Include="Polars.NET.Native.linux-x64" Version="1.0.0" />
+        <PackageVersion Include="Polars.NET.Native.win-x64" Version="1.0.0" />
     </ItemGroup>
 </Project>
