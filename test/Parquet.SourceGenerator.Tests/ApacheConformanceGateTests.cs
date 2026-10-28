@@ -17,7 +17,7 @@ namespace Parquet.SourceGenerator.Tests;
 public class ApacheConformanceGateTests
 {
     private const string EmptyToolManifest =
-        """{ "repository": "https://example.invalid", "artifacts": [] }""";
+        """{ "mirrors": [ "https://example.invalid" ], "artifacts": [] }""";
 
     [Fact]
     [Trait("Category", "Integration")]
@@ -125,23 +125,19 @@ public class ApacheConformanceGateTests
                 await global::System.IO.File.WriteAllBytesAsync(path, [0x50, 0x41, 0x52, 0x31]);
             }
 
-            ProcessStartInfo psi = CreateProcessStartInfo(
+            return await RunScriptAsync(
                 repoRoot,
+                "--tool-manifest",
                 toolManifest,
+                "--tools-dir",
                 toolsDir,
+                "--root",
                 fixtureRoot,
+                "--fixture-manifest",
                 fixtureManifest,
+                "--output-dir",
                 Path.Combine(tempDir, "evidence")
             );
-
-            using Process? process = Process.Start(psi);
-            process.ShouldNotBeNull();
-
-            Task<string> stdoutTask = process.StandardOutput.ReadToEndAsync();
-            Task<string> stderrTask = process.StandardError.ReadToEndAsync();
-            await process.WaitForExitAsync();
-
-            return new ScriptResult(process.ExitCode, await stdoutTask, await stderrTask);
         }
         finally
         {
@@ -156,7 +152,7 @@ public class ApacheConformanceGateTests
         }
     }
 
-    private static string FindRepoRoot()
+    internal static string FindRepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir != null)
@@ -176,13 +172,25 @@ public class ApacheConformanceGateTests
         );
     }
 
+    internal static async Task<ScriptResult> RunScriptAsync(
+        string repoRoot,
+        params string[] scriptArguments
+    )
+    {
+        ProcessStartInfo psi = CreateProcessStartInfo(repoRoot, scriptArguments);
+        using Process? process = Process.Start(psi);
+        process.ShouldNotBeNull();
+
+        Task<string> stdoutTask = process.StandardOutput.ReadToEndAsync();
+        Task<string> stderrTask = process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync();
+
+        return new ScriptResult(process.ExitCode, await stdoutTask, await stderrTask);
+    }
+
     private static ProcessStartInfo CreateProcessStartInfo(
         string repoRoot,
-        string toolManifest,
-        string toolsDir,
-        string fixtureRoot,
-        string fixtureManifest,
-        string outputDir
+        string[] scriptArguments
     )
     {
         string homeDotnetDir = Path.Combine(
@@ -201,24 +209,11 @@ public class ApacheConformanceGateTests
             UseShellExecute = false,
             CreateNoWindow = true,
         };
-        foreach (
-            string argument in new[]
-            {
-                "run",
-                "scripts/VerifyApacheConformance.cs",
-                "--",
-                "--tool-manifest",
-                toolManifest,
-                "--tools-dir",
-                toolsDir,
-                "--root",
-                fixtureRoot,
-                "--fixture-manifest",
-                fixtureManifest,
-                "--output-dir",
-                outputDir,
-            }
-        )
+        foreach (string argument in new[] { "run", "scripts/VerifyApacheConformance.cs", "--" })
+        {
+            psi.ArgumentList.Add(argument);
+        }
+        foreach (string argument in scriptArguments)
         {
             psi.ArgumentList.Add(argument);
         }
@@ -241,5 +236,5 @@ public class ApacheConformanceGateTests
         return psi;
     }
 
-    private sealed record ScriptResult(int ExitCode, string Stdout, string Stderr);
+    internal sealed record ScriptResult(int ExitCode, string Stdout, string Stderr);
 }
