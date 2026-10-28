@@ -19,11 +19,13 @@ using LegacyModels = LegacyGenerator::Parquet.SourceGenerator.Models;
 namespace Parquet.SourceGenerator.Tests;
 
 /// <summary>One golden model: the file name its emitted source is published under, the source
-/// itself, and the generator diagnostics (empty for the models emitted without the driver).</summary>
+/// itself, the generator diagnostics (empty for the models emitted without the driver) and, for
+/// driver-generated models, the model declaration the driver ran over.</summary>
 internal sealed record GoldenEmission(
     string FileName,
     string Source,
-    IReadOnlyList<Diagnostic> Diagnostics
+    IReadOnlyList<Diagnostic> Diagnostics,
+    string? ModelSource = null
 );
 
 /// <summary>
@@ -378,7 +380,8 @@ internal static class GoldenCorpus
         return new GoldenEmission(
             fileName,
             outputTrees[outputTrees.Count - 1].ToString(),
-            diagnostics
+            diagnostics,
+            source
         );
     }
 
@@ -405,7 +408,7 @@ internal static class GoldenCorpus
             combined = primary.TrimEnd() + "\n\n" + arrowBody;
         }
 
-        return new GoldenEmission(fileName, combined, diagnostics);
+        return new GoldenEmission(fileName, combined, diagnostics, source);
     }
 
     private static PropertyModel Prop(
@@ -464,39 +467,10 @@ internal static class GoldenCorpus
     ) RunGenerator(string source, bool referenceArrow = false)
     {
         SyntaxTree syntaxTree = CSharpSyntaxTree.ParseText(source);
-        // The real runtime reference set (filtered TPA): an emitted source that only
-        // "looks" stable but would not bind in a consumer project fails here (#255).
-        if (AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") is not string tpaJoined)
-        {
-            throw new InvalidOperationException("TPA unavailable");
-        }
-        string[] tpa = tpaJoined.Split(Path.PathSeparator);
-        var references = tpa.Where(p => p.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
-            .Where(p => !p.Contains("/runtimes/", StringComparison.OrdinalIgnoreCase))
-            .Where(p =>
-                Path.GetFileName(p).StartsWith("System.", StringComparison.OrdinalIgnoreCase)
-                || Path.GetFileName(p)
-                    .StartsWith("Microsoft.Win32", StringComparison.OrdinalIgnoreCase)
-                || Path.GetFileName(p)
-                    is "netstandard.dll"
-                        or "mscorlib.dll"
-                        or "Parquet.dll"
-                        or "Parquet.SourceGenerator.Runtime.dll"
-                        or "Parquet.SourceGenerator.Attributes.dll"
-                || (
-                    referenceArrow
-                    && Path.GetFileName(p)
-                        .Equals("Apache.Arrow.dll", StringComparison.OrdinalIgnoreCase)
-                )
-            )
-            .Distinct(StringComparer.Ordinal)
-            .Select(p => (MetadataReference)MetadataReference.CreateFromFile(p))
-            .ToList();
-
         CSharpCompilation compilation = CSharpCompilation.Create(
             "GoldenTestAssembly",
             new[] { syntaxTree },
-            references,
+            References(referenceArrow),
             new CSharpCompilationOptions(
                 OutputKind.DynamicallyLinkedLibrary,
                 nullableContextOptions: NullableContextOptions.Enable
@@ -524,6 +498,39 @@ internal static class GoldenCorpus
             .ShouldBeEmpty();
 
         return (diagnostics, outputCompilation.SyntaxTrees.ToList());
+    }
+
+    /// <summary>The metadata references every golden compilation is created with.</summary>
+    internal static IReadOnlyList<MetadataReference> References(bool referenceArrow = false)
+    {
+        // The real runtime reference set (filtered TPA): an emitted source that only
+        // "looks" stable but would not bind in a consumer project fails here (#255).
+        if (AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") is not string tpaJoined)
+        {
+            throw new InvalidOperationException("TPA unavailable");
+        }
+        string[] tpa = tpaJoined.Split(Path.PathSeparator);
+        return tpa.Where(p => p.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+            .Where(p => !p.Contains("/runtimes/", StringComparison.OrdinalIgnoreCase))
+            .Where(p =>
+                Path.GetFileName(p).StartsWith("System.", StringComparison.OrdinalIgnoreCase)
+                || Path.GetFileName(p)
+                    .StartsWith("Microsoft.Win32", StringComparison.OrdinalIgnoreCase)
+                || Path.GetFileName(p)
+                    is "netstandard.dll"
+                        or "mscorlib.dll"
+                        or "Parquet.dll"
+                        or "Parquet.SourceGenerator.Runtime.dll"
+                        or "Parquet.SourceGenerator.Attributes.dll"
+                || (
+                    referenceArrow
+                    && Path.GetFileName(p)
+                        .Equals("Apache.Arrow.dll", StringComparison.OrdinalIgnoreCase)
+                )
+            )
+            .Distinct(StringComparer.Ordinal)
+            .Select(p => (MetadataReference)MetadataReference.CreateFromFile(p))
+            .ToList();
     }
 
     private static string FindRepositoryRoot()

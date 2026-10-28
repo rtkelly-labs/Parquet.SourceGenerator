@@ -379,7 +379,14 @@ public sealed class CiGateIntegrityTests
         MappingsOf(Path.Combine(root, "NuGet.config"))
             .ShouldContain(("nuget.org", "*"), "the root config must map every id to nuget.org");
 
-        foreach (string consumer in new[] { "PackageConsumption", "PackageConsumptionLegacy" })
+        foreach (
+            string consumer in new[]
+            {
+                "PackageConsumption",
+                "PackageConsumptionLegacy",
+                "PackageConsumptionMultiTarget",
+            }
+        )
         {
             var mappings = MappingsOf(Path.Combine(root, "test", consumer, "nuget.config"));
             mappings.ShouldContain(
@@ -491,6 +498,53 @@ public sealed class CiGateIntegrityTests
         // The consumer must keep the scenario that proves it does not deadlock a blocked caller.
         string program = Read(root, "test", "PackageConsumptionLegacy", "Program.cs");
         program.ShouldContain("SynchronizationContextScenario.Run()");
+    }
+
+    [Fact]
+    public void TheMultiTargetConsumerIsCompiledForBothFrameworksAndExecutedOnNet472()
+    {
+        // #493: the net472;net8.0 consumer is the evidence that one calling source compiles against
+        // both backends. `test` builds every target framework and runs net8.0; net472-consumer runs
+        // both on Windows, where net472 actually executes.
+        string root = FindRepositoryRoot();
+        string ci = Read(root, ".github", "workflows", "ci.yml");
+        const string Project =
+            @"test/PackageConsumptionMultiTarget/PackageConsumptionMultiTarget\.csproj";
+
+        string testJob = JobBlock(ci, "test");
+        Regex
+            .IsMatch(
+                testJob,
+                @"project=" + Project + @"\s*\n\s*dotnet build ""\$project""",
+                Options,
+                RegexTimeout
+            )
+            .ShouldBeTrue(
+                "the test job must build every target framework of the multi-target consumer"
+            );
+
+        string windowsJob = JobBlock(ci, "net472-consumer");
+        Regex
+            .IsMatch(
+                windowsJob,
+                @"project=" + Project + @"\s*\n\s*for tfm in net472 net8\.0; do",
+                Options,
+                RegexTimeout
+            )
+            .ShouldBeTrue(
+                "net472-consumer must run the multi-target consumer on net472 and net8.0"
+            );
+        windowsJob.ShouldContain("src/Parquet.SourceGenerator/Parquet.SourceGenerator.csproj");
+
+        string csproj = Read(
+            root,
+            "test",
+            "PackageConsumptionMultiTarget",
+            "PackageConsumptionMultiTarget.csproj"
+        );
+        csproj.ShouldContain("<TargetFrameworks>net472;net8.0</TargetFrameworks>");
+        string program = Read(root, "test", "PackageConsumptionMultiTarget", "Program.cs");
+        program.ShouldContain("await expected.WriteParquetAsync(stream, options);");
     }
 
     [Fact]

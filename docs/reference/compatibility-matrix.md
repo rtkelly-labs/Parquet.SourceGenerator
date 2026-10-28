@@ -52,11 +52,11 @@ the builder (`<Model>Parquet.From(...)`); its flat `ReadParquet*Async` methods w
 `0.1.0` (#480, [document 48](48-FLAT-READ-REMOVAL-480.md)). The classic backend has no builder, so its
 flat `ReadParquetAsync` and `ReadParquetArrayAsync` stay: they are its declared read subset.
 
-This is a product boundary, not an accidental emitter gap. `BackendCompatibilityPolicyTests` checks
-the signature-only API of every classic golden model, rendered from the live emitter output, and fails if a modern-only member name appears there or
-if a required core member disappears. A future feature must either stay within the declared core or
-update this policy, the compatibility matrix, README files, and the corresponding API evidence in
-the same pull request.
+Every difference between the two backends' generated API is now held by the parity gate (#493):
+`BackendParityGateTests` diffs each golden model's emitted `.api.txt` through both generators
+against `src/api/legacy-parity-allowlist.txt`, fails on any unlisted difference, and fails on any
+entry that no longer differs, so the gap can only shrink
+([Legacy Support § Enforcement](../guides/legacy-support.md#enforcement)).
 
 ## Generated Model Type Envelope
 

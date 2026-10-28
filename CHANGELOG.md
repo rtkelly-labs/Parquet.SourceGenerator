@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+- **CI gate: legacy/modern emitted API parity, with an allowlist that can only shrink** (#493). Every golden
+  model is generated through both backends and the normalised `.api.txt` lines are diffed against
+  `src/api/legacy-parity-allowlist.txt`: an unlisted difference fails, an entry that no longer differs fails,
+  and a permanent modern-only entry (`AsBatches()`) fails if the legacy backend starts emitting it. The initial
+  list records today's gap (builder reader #494, columnar and `IAsyncEnumerable<T>` writes #495, nested models
+  #176, the Arrow bridge #490). A new `net472;net8.0` consumer (`test/PackageConsumptionMultiTarget`) compiles
+  one calling source against both packages and runs it on .NET Framework and .NET 8; its shared code is the
+  part at parity today. `BackendCompatibilityPolicyTests` no longer pins the classic surface to the #246 core.
+
 ## [0.1.0-alpha.1] - 2026-10-25
 
 First prerelease of 0.1, and the first published from `rtkelly-labs` through nuget.org trusted publishing. Changes since `0.0.3`:
