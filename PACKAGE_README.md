@@ -9,7 +9,7 @@ dotnet add package Parquet.SourceGenerator
 dotnet add package Parquet.Net
 ```
 
-`Parquet.SourceGenerator.Attributes` is automatically included as a dependency. `Parquet.Net` must be referenced directly by your project.
+`Parquet.SourceGenerator.Runtime` is automatically included as a dependency. `Parquet.Net` must be referenced directly by your project.
 
 ## 📖 Quick Start Example
 

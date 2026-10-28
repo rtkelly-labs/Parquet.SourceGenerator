@@ -1,6 +1,7 @@
 #:sdk Microsoft.NET.Sdk.Razor
 #:package Microsoft.AspNetCore.Components.Web@10.0.12
 #:package Microsoft.Extensions.Logging.Abstractions@10.0.12
+#:package CliWrap@3.7.1
 #:property EnableDefaultItems=true
 #:property EnableDefaultCompileItems=true
 #pragma warning disable CA1852

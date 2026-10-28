@@ -8,7 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
-Changes since `0.0.3`, the last tagged release; this section becomes the next release entry when one is cut.
+## [0.1.0-alpha.1] - 2026-10-25
+
+First prerelease of 0.1, and the first published from `rtkelly-labs` through nuget.org trusted publishing. Changes since `0.0.3`:
 
 ### Migrating from 0.0.x to 0.1
 

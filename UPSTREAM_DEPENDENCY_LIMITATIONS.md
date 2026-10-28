@@ -1,5 +1,23 @@
 # Upstream Dependency Limitations
 
+## Upstream Fork & Tracking Pipeline (`rtkelly-labs/parquet-dotnet`)
+
+To prototype, verify, and stage enhancements addressing the architectural limitations below, an official fork is maintained at:
+**[rtkelly-labs/parquet-dotnet](https://github.com/rtkelly-labs/parquet-dotnet)** (forked from `aloneguid/parquet-dotnet`).
+
+### Policy & Contribution Guidelines
+Upstream `aloneguid/parquet-dotnet` maintains an explicit policy against LLM-generated pull requests, issues, and discussions, welcoming users to maintain independent forks. Consequently:
+- `rtkelly-labs/parquet-dotnet` serves as the primary repository for staging, validating, and testing fixes against `Parquet.SourceGenerator`.
+- Any pull requests submitted upstream to `aloneguid/parquet-dotnet` must be authored, reviewed, and submitted manually by human maintainers.
+
+### Targeted Workstreams
+1. **Security & Bounded Allocations**: Add bounded list/binary reading to `ThriftCompactProtocolReader` and `ParquetReaderOptions.MaxDecompressedPageSize` to eliminate untrusted allocation amplification at the source.
+2. **Nullable Read Optimization**: Add zero-definition-level fast path to `ParquetRowGroupReader.ReadRawAsync<T>` when column chunk `NullCount == 0`.
+3. **CRC32 Checksum Validation**: Implement optional page header CRC32 validation during page decompression.
+4. **UTF-8 Byte Spans**: Expose raw byte-span read surfaces (`ReadOnlyMemory<byte>`) for UTF-8 columns to eliminate intermediate `char[]` / `string` allocations.
+
+---
+
 ## Parquet.Net 6.1.0 Nullable Reads
 
 `ParquetRowGroupReader.ReadRawAsync<T>` requires definition-level memory whenever `DataField.MaxDefinitionLevel > 0`. This prevents the generator from implementing the `NullCount == 0` definition-level bypass for nullable fields.
