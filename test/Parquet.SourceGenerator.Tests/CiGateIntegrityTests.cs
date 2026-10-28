@@ -529,8 +529,9 @@ public sealed class CiGateIntegrityTests
             problems.AddRange(found.Select(p => $"{Path.GetFileName(file)}: {p}"));
         }
 
-        // ci.yml (test, derived), benchmarks.yml (two jobs), fuzz, metrics-oracle, mutation, release.
-        examined.ShouldBeGreaterThanOrEqualTo(8, "the workflow scan examined too few restores");
+        // ci.yml (test, derived), benchmarks.yml (two jobs), fuzz, metrics-oracle, mutation, release,
+        // dependency-submission.
+        examined.ShouldBeGreaterThanOrEqualTo(9, "the workflow scan examined too few restores");
         problems.ShouldBeEmpty();
     }
 

@@ -22,6 +22,7 @@ cd Parquet.SourceGenerator
 
 ### 1. Build Solution
 ```bash
+dotnet tool restore --disable-parallel   # local tools first: the solution restore runs Paket (ADR 0004)
 dotnet build Parquet.SourceGenerator.slnx --configuration Release
 ```
 
