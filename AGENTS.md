@@ -46,3 +46,4 @@
     runs and whether a required check reaches it. A new CI job in `ci.yml` must be added to the
     `build` aggregate's `needs` and result check (`CiGateIntegrityTests` fails otherwise), and a
     new gate needs a positive control or an "examined N" assertion so it cannot pass on nothing.
+16. **Script Language Policy**: Automation scripts in `scripts/` MUST use the repository's approved language stack (C# `.cs` for .NET). Alien scripting runtimes (`.py`, `.sh`, `.ps1`) are strictly prohibited and gated by CI (with the sole exception of `scripts/generate_test_data.py` for cross-engine format generation).

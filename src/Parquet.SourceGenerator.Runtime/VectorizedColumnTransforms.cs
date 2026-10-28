@@ -1,9 +1,7 @@
 using System;
+using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-#if NET8_0_OR_GREATER
-using System.Runtime.Intrinsics;
-#endif
 
 namespace Parquet.SourceGenerator;
 
@@ -48,42 +46,32 @@ internal static class VectorizedColumnTransforms
         int i = 0;
 
 #if NET8_0_OR_GREATER
-        if (Vector256.IsHardwareAccelerated && length >= 8)
+        if (Vector.IsHardwareAccelerated && length >= Vector<long>.Count)
         {
-            var vMultiplier = Vector256.Create(10L);
-            var vEpoch = Vector256.Create(UnixEpochTicks);
-            ref long srcRef = ref MemoryMarshal.GetReference(source);
-            ref long dstRef = ref MemoryMarshal.GetReference(destination);
-            int limit = length - 8;
+            var vMultiplier = new Vector<long>(10L);
+            var vEpoch = new Vector<long>(UnixEpochTicks);
+            int step = Vector<long>.Count;
+            int step2 = step * 2;
+            int limit2 = length - step2;
 
-            while (i <= limit)
+            while (i <= limit2)
             {
-                var v0 = Vector256.LoadUnsafe(ref srcRef, (nuint)i);
-                var v1 = Vector256.LoadUnsafe(ref srcRef, (nuint)(i + 4));
+                var v0 = new Vector<long>(source.Slice(i));
+                var v1 = new Vector<long>(source.Slice(i + step));
                 var r0 = (v0 * vMultiplier) + vEpoch;
                 var r1 = (v1 * vMultiplier) + vEpoch;
-                r0.StoreUnsafe(ref dstRef, (nuint)i);
-                r1.StoreUnsafe(ref dstRef, (nuint)(i + 4));
-                i += 8;
+                r0.CopyTo(destination.Slice(i));
+                r1.CopyTo(destination.Slice(i + step));
+                i += step2;
             }
-        }
-        else if (Vector128.IsHardwareAccelerated && length >= 4)
-        {
-            var vMultiplier = Vector128.Create(10L);
-            var vEpoch = Vector128.Create(UnixEpochTicks);
-            ref long srcRef = ref MemoryMarshal.GetReference(source);
-            ref long dstRef = ref MemoryMarshal.GetReference(destination);
-            int limit = length - 4;
 
+            int limit = length - step;
             while (i <= limit)
             {
-                var v0 = Vector128.LoadUnsafe(ref srcRef, (nuint)i);
-                var v1 = Vector128.LoadUnsafe(ref srcRef, (nuint)(i + 2));
+                var v0 = new Vector<long>(source.Slice(i));
                 var r0 = (v0 * vMultiplier) + vEpoch;
-                var r1 = (v1 * vMultiplier) + vEpoch;
-                r0.StoreUnsafe(ref dstRef, (nuint)i);
-                r1.StoreUnsafe(ref dstRef, (nuint)(i + 2));
-                i += 4;
+                r0.CopyTo(destination.Slice(i));
+                i += step;
             }
         }
 #endif
@@ -113,42 +101,32 @@ internal static class VectorizedColumnTransforms
         int i = 0;
 
 #if NET8_0_OR_GREATER
-        if (Vector256.IsHardwareAccelerated && length >= 8)
+        if (Vector.IsHardwareAccelerated && length >= Vector<long>.Count)
         {
-            var vMultiplier = Vector256.Create(10L);
-            var vEpoch = Vector256.Create(UtcEpochConstant);
-            ref long srcRef = ref MemoryMarshal.GetReference(source);
-            ref long dstRef = ref MemoryMarshal.GetReference(rawDst);
-            int limit = length - 8;
+            var vMultiplier = new Vector<long>(10L);
+            var vEpoch = new Vector<long>(UtcEpochConstant);
+            int step = Vector<long>.Count;
+            int step2 = step * 2;
+            int limit2 = length - step2;
 
-            while (i <= limit)
+            while (i <= limit2)
             {
-                var v0 = Vector256.LoadUnsafe(ref srcRef, (nuint)i);
-                var v1 = Vector256.LoadUnsafe(ref srcRef, (nuint)(i + 4));
+                var v0 = new Vector<long>(source.Slice(i));
+                var v1 = new Vector<long>(source.Slice(i + step));
                 var r0 = (v0 * vMultiplier) + vEpoch;
                 var r1 = (v1 * vMultiplier) + vEpoch;
-                r0.StoreUnsafe(ref dstRef, (nuint)i);
-                r1.StoreUnsafe(ref dstRef, (nuint)(i + 4));
-                i += 8;
+                r0.CopyTo(rawDst.Slice(i));
+                r1.CopyTo(rawDst.Slice(i + step));
+                i += step2;
             }
-        }
-        else if (Vector128.IsHardwareAccelerated && length >= 4)
-        {
-            var vMultiplier = Vector128.Create(10L);
-            var vEpoch = Vector128.Create(UtcEpochConstant);
-            ref long srcRef = ref MemoryMarshal.GetReference(source);
-            ref long dstRef = ref MemoryMarshal.GetReference(rawDst);
-            int limit = length - 4;
 
+            int limit = length - step;
             while (i <= limit)
             {
-                var v0 = Vector128.LoadUnsafe(ref srcRef, (nuint)i);
-                var v1 = Vector128.LoadUnsafe(ref srcRef, (nuint)(i + 2));
+                var v0 = new Vector<long>(source.Slice(i));
                 var r0 = (v0 * vMultiplier) + vEpoch;
-                var r1 = (v1 * vMultiplier) + vEpoch;
-                r0.StoreUnsafe(ref dstRef, (nuint)i);
-                r1.StoreUnsafe(ref dstRef, (nuint)(i + 2));
-                i += 4;
+                r0.CopyTo(rawDst.Slice(i));
+                i += step;
             }
         }
 #endif
@@ -221,42 +199,32 @@ internal static class VectorizedColumnTransforms
         int i = 0;
 
 #if NET8_0_OR_GREATER
-        if (Vector256.IsHardwareAccelerated && length >= 8)
+        if (Vector.IsHardwareAccelerated && length >= Vector<long>.Count)
         {
-            var vMultiplier = Vector256.Create(10_000L);
-            var vEpoch = Vector256.Create(UnixEpochTicks);
-            ref long srcRef = ref MemoryMarshal.GetReference(source);
-            ref long dstRef = ref MemoryMarshal.GetReference(destination);
-            int limit = length - 8;
+            var vMultiplier = new Vector<long>(10_000L);
+            var vEpoch = new Vector<long>(UnixEpochTicks);
+            int step = Vector<long>.Count;
+            int step2 = step * 2;
+            int limit2 = length - step2;
 
-            while (i <= limit)
+            while (i <= limit2)
             {
-                var v0 = Vector256.LoadUnsafe(ref srcRef, (nuint)i);
-                var v1 = Vector256.LoadUnsafe(ref srcRef, (nuint)(i + 4));
+                var v0 = new Vector<long>(source.Slice(i));
+                var v1 = new Vector<long>(source.Slice(i + step));
                 var r0 = (v0 * vMultiplier) + vEpoch;
                 var r1 = (v1 * vMultiplier) + vEpoch;
-                r0.StoreUnsafe(ref dstRef, (nuint)i);
-                r1.StoreUnsafe(ref dstRef, (nuint)(i + 4));
-                i += 8;
+                r0.CopyTo(destination.Slice(i));
+                r1.CopyTo(destination.Slice(i + step));
+                i += step2;
             }
-        }
-        else if (Vector128.IsHardwareAccelerated && length >= 4)
-        {
-            var vMultiplier = Vector128.Create(10_000L);
-            var vEpoch = Vector128.Create(UnixEpochTicks);
-            ref long srcRef = ref MemoryMarshal.GetReference(source);
-            ref long dstRef = ref MemoryMarshal.GetReference(destination);
-            int limit = length - 4;
 
+            int limit = length - step;
             while (i <= limit)
             {
-                var v0 = Vector128.LoadUnsafe(ref srcRef, (nuint)i);
-                var v1 = Vector128.LoadUnsafe(ref srcRef, (nuint)(i + 2));
+                var v0 = new Vector<long>(source.Slice(i));
                 var r0 = (v0 * vMultiplier) + vEpoch;
-                var r1 = (v1 * vMultiplier) + vEpoch;
-                r0.StoreUnsafe(ref dstRef, (nuint)i);
-                r1.StoreUnsafe(ref dstRef, (nuint)(i + 2));
-                i += 4;
+                r0.CopyTo(destination.Slice(i));
+                i += step;
             }
         }
 #endif
@@ -286,42 +254,32 @@ internal static class VectorizedColumnTransforms
         int i = 0;
 
 #if NET8_0_OR_GREATER
-        if (Vector256.IsHardwareAccelerated && length >= 8)
+        if (Vector.IsHardwareAccelerated && length >= Vector<long>.Count)
         {
-            var vMultiplier = Vector256.Create(10_000L);
-            var vEpoch = Vector256.Create(UtcEpochConstant);
-            ref long srcRef = ref MemoryMarshal.GetReference(source);
-            ref long dstRef = ref MemoryMarshal.GetReference(rawDst);
-            int limit = length - 8;
+            var vMultiplier = new Vector<long>(10_000L);
+            var vEpoch = new Vector<long>(UtcEpochConstant);
+            int step = Vector<long>.Count;
+            int step2 = step * 2;
+            int limit2 = length - step2;
 
-            while (i <= limit)
+            while (i <= limit2)
             {
-                var v0 = Vector256.LoadUnsafe(ref srcRef, (nuint)i);
-                var v1 = Vector256.LoadUnsafe(ref srcRef, (nuint)(i + 4));
+                var v0 = new Vector<long>(source.Slice(i));
+                var v1 = new Vector<long>(source.Slice(i + step));
                 var r0 = (v0 * vMultiplier) + vEpoch;
                 var r1 = (v1 * vMultiplier) + vEpoch;
-                r0.StoreUnsafe(ref dstRef, (nuint)i);
-                r1.StoreUnsafe(ref dstRef, (nuint)(i + 4));
-                i += 8;
+                r0.CopyTo(rawDst.Slice(i));
+                r1.CopyTo(rawDst.Slice(i + step));
+                i += step2;
             }
-        }
-        else if (Vector128.IsHardwareAccelerated && length >= 4)
-        {
-            var vMultiplier = Vector128.Create(10_000L);
-            var vEpoch = Vector128.Create(UtcEpochConstant);
-            ref long srcRef = ref MemoryMarshal.GetReference(source);
-            ref long dstRef = ref MemoryMarshal.GetReference(rawDst);
-            int limit = length - 4;
 
+            int limit = length - step;
             while (i <= limit)
             {
-                var v0 = Vector128.LoadUnsafe(ref srcRef, (nuint)i);
-                var v1 = Vector128.LoadUnsafe(ref srcRef, (nuint)(i + 2));
+                var v0 = new Vector<long>(source.Slice(i));
                 var r0 = (v0 * vMultiplier) + vEpoch;
-                var r1 = (v1 * vMultiplier) + vEpoch;
-                r0.StoreUnsafe(ref dstRef, (nuint)i);
-                r1.StoreUnsafe(ref dstRef, (nuint)(i + 2));
-                i += 4;
+                r0.CopyTo(rawDst.Slice(i));
+                i += step;
             }
         }
 #endif
@@ -399,36 +357,28 @@ internal static class VectorizedColumnTransforms
         int i = 0;
 
 #if NET8_0_OR_GREATER
-        if (Vector256.IsHardwareAccelerated && length >= 8)
+        if (Vector.IsHardwareAccelerated && length >= Vector<double>.Count)
         {
-            var vFactor = Vector256.Create(factor);
-            ref double srcRef = ref MemoryMarshal.GetReference(source);
-            ref double dstRef = ref MemoryMarshal.GetReference(destination);
-            int limit = length - 8;
+            var vFactor = new Vector<double>(factor);
+            int step = Vector<double>.Count;
+            int step2 = step * 2;
+            int limit2 = length - step2;
 
-            while (i <= limit)
+            while (i <= limit2)
             {
-                var v0 = Vector256.LoadUnsafe(ref srcRef, (nuint)i);
-                var v1 = Vector256.LoadUnsafe(ref srcRef, (nuint)(i + 4));
-                (v0 * vFactor).StoreUnsafe(ref dstRef, (nuint)i);
-                (v1 * vFactor).StoreUnsafe(ref dstRef, (nuint)(i + 4));
-                i += 8;
+                var v0 = new Vector<double>(source.Slice(i));
+                var v1 = new Vector<double>(source.Slice(i + step));
+                (v0 * vFactor).CopyTo(destination.Slice(i));
+                (v1 * vFactor).CopyTo(destination.Slice(i + step));
+                i += step2;
             }
-        }
-        else if (Vector128.IsHardwareAccelerated && length >= 4)
-        {
-            var vFactor = Vector128.Create(factor);
-            ref double srcRef = ref MemoryMarshal.GetReference(source);
-            ref double dstRef = ref MemoryMarshal.GetReference(destination);
-            int limit = length - 4;
 
+            int limit = length - step;
             while (i <= limit)
             {
-                var v0 = Vector128.LoadUnsafe(ref srcRef, (nuint)i);
-                var v1 = Vector128.LoadUnsafe(ref srcRef, (nuint)(i + 2));
-                (v0 * vFactor).StoreUnsafe(ref dstRef, (nuint)i);
-                (v1 * vFactor).StoreUnsafe(ref dstRef, (nuint)(i + 2));
-                i += 4;
+                var v0 = new Vector<double>(source.Slice(i));
+                (v0 * vFactor).CopyTo(destination.Slice(i));
+                i += step;
             }
         }
 #endif
@@ -458,36 +408,28 @@ internal static class VectorizedColumnTransforms
         int i = 0;
 
 #if NET8_0_OR_GREATER
-        if (Vector256.IsHardwareAccelerated && length >= 16)
+        if (Vector.IsHardwareAccelerated && length >= Vector<float>.Count)
         {
-            var vFactor = Vector256.Create(factor);
-            ref float srcRef = ref MemoryMarshal.GetReference(source);
-            ref float dstRef = ref MemoryMarshal.GetReference(destination);
-            int limit = length - 16;
+            var vFactor = new Vector<float>(factor);
+            int step = Vector<float>.Count;
+            int step2 = step * 2;
+            int limit2 = length - step2;
 
-            while (i <= limit)
+            while (i <= limit2)
             {
-                var v0 = Vector256.LoadUnsafe(ref srcRef, (nuint)i);
-                var v1 = Vector256.LoadUnsafe(ref srcRef, (nuint)(i + 8));
-                (v0 * vFactor).StoreUnsafe(ref dstRef, (nuint)i);
-                (v1 * vFactor).StoreUnsafe(ref dstRef, (nuint)(i + 8));
-                i += 16;
+                var v0 = new Vector<float>(source.Slice(i));
+                var v1 = new Vector<float>(source.Slice(i + step));
+                (v0 * vFactor).CopyTo(destination.Slice(i));
+                (v1 * vFactor).CopyTo(destination.Slice(i + step));
+                i += step2;
             }
-        }
-        else if (Vector128.IsHardwareAccelerated && length >= 8)
-        {
-            var vFactor = Vector128.Create(factor);
-            ref float srcRef = ref MemoryMarshal.GetReference(source);
-            ref float dstRef = ref MemoryMarshal.GetReference(destination);
-            int limit = length - 8;
 
+            int limit = length - step;
             while (i <= limit)
             {
-                var v0 = Vector128.LoadUnsafe(ref srcRef, (nuint)i);
-                var v1 = Vector128.LoadUnsafe(ref srcRef, (nuint)(i + 4));
-                (v0 * vFactor).StoreUnsafe(ref dstRef, (nuint)i);
-                (v1 * vFactor).StoreUnsafe(ref dstRef, (nuint)(i + 4));
-                i += 8;
+                var v0 = new Vector<float>(source.Slice(i));
+                (v0 * vFactor).CopyTo(destination.Slice(i));
+                i += step;
             }
         }
 #endif
@@ -517,19 +459,19 @@ internal static class VectorizedColumnTransforms
         int i = 0;
 
 #if NET8_0_OR_GREATER
-        if (Vector128.IsHardwareAccelerated && length >= 4)
+        if (Vector.IsHardwareAccelerated && length >= Vector<int>.Count)
         {
-            ref int srcRef = ref MemoryMarshal.GetReference(source);
-            ref long dstRef = ref MemoryMarshal.GetReference(destination);
-            int limit = length - 4;
+            int step = Vector<int>.Count;
+            int halfStep = Vector<long>.Count;
+            int limit = length - step;
 
             while (i <= limit)
             {
-                var v = Vector128.LoadUnsafe(ref srcRef, (nuint)i);
-                var (lower, upper) = Vector128.Widen(v);
-                lower.StoreUnsafe(ref dstRef, (nuint)i);
-                upper.StoreUnsafe(ref dstRef, (nuint)(i + 2));
-                i += 4;
+                var v = new Vector<int>(source.Slice(i));
+                Vector.Widen(v, out Vector<long> low, out Vector<long> high);
+                low.CopyTo(destination.Slice(i));
+                high.CopyTo(destination.Slice(i + halfStep));
+                i += step;
             }
         }
 #endif
@@ -555,19 +497,19 @@ internal static class VectorizedColumnTransforms
         int i = 0;
 
 #if NET8_0_OR_GREATER
-        if (Vector128.IsHardwareAccelerated && length >= 4)
+        if (Vector.IsHardwareAccelerated && length >= Vector<int>.Count)
         {
-            ref long srcRef = ref MemoryMarshal.GetReference(source);
-            ref int dstRef = ref MemoryMarshal.GetReference(destination);
-            int limit = length - 4;
+            int step = Vector<int>.Count;
+            int halfStep = Vector<long>.Count;
+            int limit = length - step;
 
             while (i <= limit)
             {
-                var lower = Vector128.LoadUnsafe(ref srcRef, (nuint)i);
-                var upper = Vector128.LoadUnsafe(ref srcRef, (nuint)(i + 2));
-                var narrowed = Vector128.Narrow(lower, upper);
-                narrowed.StoreUnsafe(ref dstRef, (nuint)i);
-                i += 4;
+                var low = new Vector<long>(source.Slice(i));
+                var high = new Vector<long>(source.Slice(i + halfStep));
+                var narrowed = Vector.Narrow(low, high);
+                narrowed.CopyTo(destination.Slice(i));
+                i += step;
             }
         }
 #endif
@@ -593,19 +535,19 @@ internal static class VectorizedColumnTransforms
         int i = 0;
 
 #if NET8_0_OR_GREATER
-        if (Vector128.IsHardwareAccelerated && length >= 8)
+        if (Vector.IsHardwareAccelerated && length >= Vector<short>.Count)
         {
-            ref short srcRef = ref MemoryMarshal.GetReference(source);
-            ref int dstRef = ref MemoryMarshal.GetReference(destination);
-            int limit = length - 8;
+            int step = Vector<short>.Count;
+            int halfStep = Vector<int>.Count;
+            int limit = length - step;
 
             while (i <= limit)
             {
-                var v = Vector128.LoadUnsafe(ref srcRef, (nuint)i);
-                var (lower, upper) = Vector128.Widen(v);
-                lower.StoreUnsafe(ref dstRef, (nuint)i);
-                upper.StoreUnsafe(ref dstRef, (nuint)(i + 4));
-                i += 8;
+                var v = new Vector<short>(source.Slice(i));
+                Vector.Widen(v, out Vector<int> low, out Vector<int> high);
+                low.CopyTo(destination.Slice(i));
+                high.CopyTo(destination.Slice(i + halfStep));
+                i += step;
             }
         }
 #endif
@@ -631,19 +573,19 @@ internal static class VectorizedColumnTransforms
         int i = 0;
 
 #if NET8_0_OR_GREATER
-        if (Vector128.IsHardwareAccelerated && length >= 8)
+        if (Vector.IsHardwareAccelerated && length >= Vector<short>.Count)
         {
-            ref int srcRef = ref MemoryMarshal.GetReference(source);
-            ref short dstRef = ref MemoryMarshal.GetReference(destination);
-            int limit = length - 8;
+            int step = Vector<short>.Count;
+            int halfStep = Vector<int>.Count;
+            int limit = length - step;
 
             while (i <= limit)
             {
-                var lower = Vector128.LoadUnsafe(ref srcRef, (nuint)i);
-                var upper = Vector128.LoadUnsafe(ref srcRef, (nuint)(i + 4));
-                var narrowed = Vector128.Narrow(lower, upper);
-                narrowed.StoreUnsafe(ref dstRef, (nuint)i);
-                i += 8;
+                var low = new Vector<int>(source.Slice(i));
+                var high = new Vector<int>(source.Slice(i + halfStep));
+                var narrowed = Vector.Narrow(low, high);
+                narrowed.CopyTo(destination.Slice(i));
+                i += step;
             }
         }
 #endif
@@ -669,24 +611,24 @@ internal static class VectorizedColumnTransforms
         int i = 0;
 
 #if NET8_0_OR_GREATER
-        if (Vector128.IsHardwareAccelerated && length >= 16)
+        if (Vector.IsHardwareAccelerated && length >= Vector<byte>.Count)
         {
-            ref byte srcRef = ref MemoryMarshal.GetReference(source);
-            ref int dstRef = ref MemoryMarshal.GetReference(destination);
-            int limit = length - 16;
+            int step = Vector<byte>.Count;
+            int intStep = Vector<int>.Count;
+            int limit = length - step;
 
             while (i <= limit)
             {
-                var v = Vector128.LoadUnsafe(ref srcRef, (nuint)i);
-                var (w0, w1) = Vector128.Widen(v);
-                var (i0, i1) = Vector128.Widen(w0);
-                var (i2, i3) = Vector128.Widen(w1);
+                var v = new Vector<byte>(source.Slice(i));
+                Vector.Widen(v, out Vector<ushort> lowUshort, out Vector<ushort> highUshort);
+                Vector.Widen(lowUshort, out Vector<uint> u0, out Vector<uint> u1);
+                Vector.Widen(highUshort, out Vector<uint> u2, out Vector<uint> u3);
 
-                i0.AsInt32().StoreUnsafe(ref dstRef, (nuint)i);
-                i1.AsInt32().StoreUnsafe(ref dstRef, (nuint)(i + 4));
-                i2.AsInt32().StoreUnsafe(ref dstRef, (nuint)(i + 8));
-                i3.AsInt32().StoreUnsafe(ref dstRef, (nuint)(i + 12));
-                i += 16;
+                Vector.AsVectorInt32(u0).CopyTo(destination.Slice(i));
+                Vector.AsVectorInt32(u1).CopyTo(destination.Slice(i + intStep));
+                Vector.AsVectorInt32(u2).CopyTo(destination.Slice(i + (intStep * 2)));
+                Vector.AsVectorInt32(u3).CopyTo(destination.Slice(i + (intStep * 3)));
+                i += step;
             }
         }
 #endif

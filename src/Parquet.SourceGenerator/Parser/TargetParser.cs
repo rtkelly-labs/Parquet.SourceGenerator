@@ -342,6 +342,9 @@ internal static class TargetParser
 
         CollectMembers(typeSymbol, scope, sink);
 
+        // Rule PARQ024: a field ID names one column of the whole schema, nested leaves included.
+        ReportDuplicateFieldIds(sink.Properties, className, fallbackLocation, diagnostics);
+
         // Rule PARQ003: Warning if no public serializable properties found. Suppressed when a
         // member was rejected above — "this type has no serializable members" is misleading when the
         // real answer is "its members were rejected", and PARQ006/PARQ007 already say why.
@@ -774,7 +777,8 @@ internal static class TargetParser
         int Order,
         bool Deduplicate,
         ColumnEncoding Encoding,
-        bool IsSortKey
+        bool IsSortKey,
+        int? FieldId
     );
 
     /// <summary>
@@ -1055,19 +1059,21 @@ internal static class TargetParser
             return;
         }
 
-        // Rule PARQ011: the type has a representation in Parquet.Net 6 but not in the 4.x/5.x
-        // API. Reported separately from PARQ006 because the answer is different: the member is
-        // fine, the backend is not, and the fix is to use the v6 package rather than to change
-        // the type.
-        if (scope.ApiLevel == ParquetApiLevel.V4 && !IsSupportedOnClassicApi(underlyingType))
+        // Rules PARQ011 and PARQ023: what the 4.x/5.x API cannot represent or write.
+        if (
+            scope.ApiLevel == ParquetApiLevel.V4
+            && ClassicApiRejection(
+                member,
+                memberType,
+                underlyingType,
+                column,
+                scope.ClassName,
+                memberLocation
+            )
+                is DiagnosticInfo rejection
+        )
         {
-            scope.Diagnostics.Add(
-                new DiagnosticInfo(
-                    DiagnosticDescriptors.TypeUnsupportedOnClassicApi,
-                    memberLocation,
-                    new[] { member.Name, memberType.ToDisplayString(), scope.ClassName }
-                )
-            );
+            scope.Diagnostics.Add(rejection);
             sink.RejectedAnyMember = true;
             return;
         }
@@ -1148,6 +1154,7 @@ internal static class TargetParser
         int order = -1;
         bool deduplicate = false;
         ColumnEncoding encoding = ColumnEncoding.Default;
+        int? fieldId = null;
 
         if (columnAttr is not null)
         {
@@ -1173,6 +1180,8 @@ internal static class TargetParser
                     deduplicate = dedupe;
                 else if (namedArg.Key == "Encoding" && namedArg.Value.Value is int encodingInt)
                     encoding = (ColumnEncoding)encodingInt;
+                else if (namedArg.Key == "FieldId" && namedArg.Value.Value is int id && id >= 0)
+                    fieldId = id;
             }
         }
 
@@ -1213,7 +1222,7 @@ internal static class TargetParser
         // per eligible column whether or not anything looks them up.
         bool isSortKey = HasAttribute(member, SortKeyFullNames, SortKeyShortNames);
 
-        return new ColumnOptions(columnName, order, deduplicate, encoding, isSortKey);
+        return new ColumnOptions(columnName, order, deduplicate, encoding, isSortKey, fieldId);
     }
 
     private static (int? Precision, int? Scale) ReadDecimalOptions(
@@ -1266,6 +1275,29 @@ internal static class TargetParser
             return timestampAttr.ConstructorArguments[0].Value?.ToString();
 
         return null;
+    }
+
+    /// <summary>
+    /// <c>[ParquetTimestamp(..., AdjustedToUtc = false)]</c>: a local (wall-clock) timestamp. Absent
+    /// or true keeps the UTC-adjusted annotation every earlier release wrote.
+    /// </summary>
+    private static bool ReadTimestampAdjustedToUtc(ISymbol member)
+    {
+        AttributeData? timestampAttr = FindAttribute(
+            member,
+            TimestampFullNames,
+            TimestampShortNames
+        );
+        if (timestampAttr is null)
+            return true;
+
+        foreach (KeyValuePair<string, TypedConstant> namedArg in timestampAttr.NamedArguments)
+        {
+            if (namedArg.Key == "AdjustedToUtc" && namedArg.Value.Value is bool adjusted)
+                return adjusted;
+        }
+
+        return true;
     }
 
     private static (ITypeSymbol UnderlyingType, bool IsNullable) UnwrapNullable(
@@ -1406,6 +1438,8 @@ internal static class TargetParser
         )
         {
             IsSortKey = column.IsSortKey,
+            FieldId = column.FieldId,
+            TimestampAdjustedToUtc = ReadTimestampAdjustedToUtc(member),
         };
     }
 
@@ -2176,6 +2210,98 @@ internal static class TargetParser
         "System.ReadOnlyMemory<byte>",
         "System.ReadOnlyMemory<char>",
     };
+
+    /// <summary>
+    /// Reports PARQ024 for each <c>[ParquetColumn(FieldId = n)]</c> value that more than one column
+    /// of the schema declares. Readers that resolve columns by ID (Apache Iceberg among them)
+    /// require IDs to be unique across the schema, so the walk covers struct children, list
+    /// elements and map values as well as top-level members.
+    /// </summary>
+    private static void ReportDuplicateFieldIds(
+        IEnumerable<PropertyModel> properties,
+        string className,
+        Location location,
+        List<DiagnosticInfo> diagnostics
+    )
+    {
+        var columnsById = new Dictionary<int, List<string>>();
+        var pending = new Stack<(PropertyModel Model, string Path)>(
+            properties.Select(p => (p, p.ParquetColumnName))
+        );
+        while (pending.Count > 0)
+        {
+            (PropertyModel model, string path) = pending.Pop();
+            if (model.FieldId is int id)
+            {
+                if (!columnsById.TryGetValue(id, out List<string>? columns))
+                    columnsById[id] = columns = [];
+                columns.Add(path);
+            }
+            foreach (PropertyModel child in model.Children)
+                pending.Push((child, path + "." + child.ParquetColumnName));
+            if (model.Element is { } element)
+                pending.Push((element, path + ".element"));
+            if (model.MapValue is { } value)
+                pending.Push((value, path + ".value"));
+        }
+
+        foreach (KeyValuePair<int, List<string>> entry in columnsById.OrderBy(e => e.Key))
+        {
+            if (entry.Value.Count < 2)
+                continue;
+            diagnostics.Add(
+                new DiagnosticInfo(
+                    DiagnosticDescriptors.DuplicateFieldId,
+                    location,
+                    new[]
+                    {
+                        entry.Key.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                        className,
+                        string.Join(", ", entry.Value.OrderBy(c => c, StringComparer.Ordinal)),
+                    }
+                )
+            );
+        }
+    }
+
+    /// <summary>
+    /// The diagnostic the classic (4.x/5.x) backend reports for a member it cannot carry, or null.
+    /// PARQ011: the type has a representation in Parquet.Net 6 but not in the 4.x/5.x API —
+    /// reported separately from PARQ006 because the member is fine and the backend is not, so the
+    /// fix is the v6 package rather than a different type. PARQ023: a column option the 4.x/5.x API
+    /// cannot write; dropping it would write the column without its field ID, or a local timestamp
+    /// annotated as UTC, with nothing to say so.
+    /// </summary>
+    private static DiagnosticInfo? ClassicApiRejection(
+        ISymbol member,
+        ITypeSymbol memberType,
+        ITypeSymbol underlyingType,
+        ColumnOptions column,
+        string className,
+        Location location
+    )
+    {
+        if (!IsSupportedOnClassicApi(underlyingType))
+        {
+            return new DiagnosticInfo(
+                DiagnosticDescriptors.TypeUnsupportedOnClassicApi,
+                location,
+                new[] { member.Name, memberType.ToDisplayString(), className }
+            );
+        }
+
+        string? option =
+            column.FieldId is not null ? "[ParquetColumn(FieldId = ...)]"
+            : !ReadTimestampAdjustedToUtc(member) ? "[ParquetTimestamp(..., AdjustedToUtc = false)]"
+            : null;
+        return option is null
+            ? null
+            : new DiagnosticInfo(
+                DiagnosticDescriptors.ColumnOptionUnsupportedOnClassicApi,
+                location,
+                new[] { member.Name, className, option }
+            );
+    }
 
     /// <summary>
     /// Whether a member type has a column representation in the Parquet.Net 4.x/5.x API.
