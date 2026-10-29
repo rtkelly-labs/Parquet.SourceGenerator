@@ -57,6 +57,12 @@ internal static class LegacyCodeEmitter
             builder.AppendLine();
         }
 
+        if (HasDecimalColumn(model))
+        {
+            EmitIntegerDecimalScale(builder);
+            builder.AppendLine();
+        }
+
         EmitBuildFormatOptions(builder);
         builder.AppendLine();
 
@@ -117,6 +123,45 @@ internal static class LegacyCodeEmitter
     private static void EmitResolveSchemaField(StringBuilder builder)
     {
         SchemaComponent.EmitResolveSchemaField(builder, usePath: true);
+    }
+
+    private static bool HasDecimalColumn(TargetClassModel model)
+    {
+        for (int i = 0; i < model.Properties.Length; i++)
+        {
+            if (model.Properties[i].Kind == PropertyKind.Decimal)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Parquet.Net 4.25 decodes INT32- and INT64-backed decimals through
+    /// <c>(decimal)Math.Pow(10, -scale)</c>, as 6.x does, which from .NET 11 leaves the
+    /// <c>double</c>'s error in every value. This reports the file scale of such a chunk, or 0 for
+    /// fixed-length and byte-array decimals, which decode exactly (see <c>ParquetDecimalScale</c>).
+    /// </summary>
+    private static void EmitIntegerDecimalScale(StringBuilder builder)
+    {
+        builder.AppendLine("    private static int IntegerDecimalScale(");
+        builder.AppendLine("        global::Parquet.ParquetRowGroupReader groupReader,");
+        builder.AppendLine("        global::Parquet.Schema.DataField field)");
+        builder.AppendLine("    {");
+        builder.AppendLine(
+            "        var decimalField = field as global::Parquet.Schema.DecimalDataField;"
+        );
+        builder.AppendLine("        if (decimalField == null)");
+        builder.AppendLine("        {");
+        builder.AppendLine("            return 0;");
+        builder.AppendLine("        }");
+        builder.AppendLine("        var type = groupReader.GetMetadata(field).MetaData.Type;");
+        builder.AppendLine(
+            "        return type == global::Parquet.Meta.Type.INT32 || type == global::Parquet.Meta.Type.INT64 ? decimalField.Scale : 0;"
+        );
+        builder.AppendLine("    }");
     }
 
     private static void EmitSchemaHelpers(StringBuilder builder)
@@ -857,6 +902,12 @@ internal static class LegacyCodeEmitter
                     builder.AppendLine(
                         $"                    if (!missing_{i}) ValidateColumnLength(data_{i}.Length, field_{i}.Name, groupRows);"
                     );
+                    if (prop.Kind == PropertyKind.Decimal)
+                    {
+                        builder.AppendLine(
+                            $"                    if (!missing_{i}) global::Parquet.SourceGenerator.ParquetDecimalScale.RestoreIntegerScaled(data_{i}, IntegerDecimalScale(rgReader, field_{i}));"
+                        );
+                    }
                 }
             }
             else
@@ -870,6 +921,12 @@ internal static class LegacyCodeEmitter
                 builder.AppendLine(
                     $"                    ValidateColumnLength(data_{i}.Length, field_{i}.Name, groupRows);"
                 );
+                if (prop.Kind == PropertyKind.Decimal)
+                {
+                    builder.AppendLine(
+                        $"                    global::Parquet.SourceGenerator.ParquetDecimalScale.RestoreIntegerScaled(data_{i}, IntegerDecimalScale(rgReader, field_{i}));"
+                    );
+                }
                 if (IsStringColumn(prop))
                 {
                     builder.AppendLine(

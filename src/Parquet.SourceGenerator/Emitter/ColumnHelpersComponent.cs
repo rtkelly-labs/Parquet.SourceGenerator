@@ -137,6 +137,12 @@ internal static class ColumnHelpersComponent
             EmitValidatePackedStringLengths(builder);
         }
 
+        if (columns.Any(c => c.Leaf.Kind == PropertyKind.Decimal))
+        {
+            builder.AppendLine();
+            EmitIntegerDecimalScale(builder);
+        }
+
         builder.AppendLine();
         EmitReturnPooledArray(builder);
     }
@@ -224,6 +230,45 @@ internal static class ColumnHelpersComponent
             "        }",
             "",
             "        return (int)total;",
+            "    }"
+        );
+
+    /// <summary>
+    /// The statement that restores a decimal column after its read: the decoded values pass through
+    /// <c>ParquetDecimalScale</c> with the scale <c>IntegerDecimalScale</c> reports, which is 0 (a
+    /// no-op) unless the chunk is INT32- or INT64-backed. One call per decimal read, no branch.
+    /// </summary>
+    public static string RestoreDecimalStatement(
+        string elementType,
+        string bufName,
+        string count,
+        string fieldAccess,
+        string missingArg,
+        string indent
+    ) =>
+        $"{indent}global::Parquet.SourceGenerator.ParquetDecimalScale.RestoreIntegerScaled(new global::System.Span<{elementType}>({bufName}, 0, {count}), IntegerDecimalScale(groupReader, {fieldAccess}{missingArg}));";
+
+    /// <summary>
+    /// Parquet.Net decodes INT32- and INT64-backed decimals through <c>(decimal)Math.Pow(10, -scale)</c>,
+    /// which from .NET 11 leaves the <c>double</c>'s error in every value; fixed-length and
+    /// byte-array decimals decode exactly and must not be touched. This reports which case a chunk
+    /// is, with the scale from the file, which is the one Parquet.Net decoded with.
+    /// </summary>
+    private static void EmitIntegerDecimalScale(StringBuilder builder) =>
+        AppendLines(
+            builder,
+            "    private static int IntegerDecimalScale(",
+            "        global::Parquet.ParquetRowGroupReader groupReader,",
+            "        global::Parquet.Schema.DataField field,",
+            "        bool missing = false)",
+            "    {",
+            "        var decimalField = field as global::Parquet.Schema.DecimalDataField;",
+            "        if (missing || decimalField == null)",
+            "        {",
+            "            return 0;",
+            "        }",
+            "        var type = groupReader.GetMetadata(field).MetaData.Type;",
+            "        return type == global::Parquet.Meta.Type.INT32 || type == global::Parquet.Meta.Type.INT64 ? decimalField.Scale : 0;",
             "    }"
         );
 

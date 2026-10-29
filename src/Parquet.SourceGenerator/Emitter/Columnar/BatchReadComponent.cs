@@ -141,6 +141,21 @@ internal static class BatchReadComponent
                 builder.AppendLine(
                     $"{indent}int packed_{slot} = await ReadPackedColumnAsync<{LaneType(col)}>(groupReader, field_{slot}, missing_{slot}, buffer_{slot}, defLevels_{slot}, rowCount, cancellationToken).ConfigureAwait(false);"
                 );
+                if (col.Leaf.Kind == PropertyKind.Decimal)
+                {
+                    // The batch exposes this buffer to the caller, so it is restored here, before the
+                    // lane wraps it, over the packed values only.
+                    builder.AppendLine(
+                        ColumnHelpersComponent.RestoreDecimalStatement(
+                            "decimal",
+                            $"buffer_{slot}",
+                            $"packed_{slot}",
+                            $"field_{slot}",
+                            $", missing_{slot}",
+                            indent
+                        )
+                    );
+                }
                 break;
             case ColumnarBatchComponent.LaneKind.Direct:
                 emitColumnRead(builder, col, $"field_{slot}", $"buffer_{slot}");

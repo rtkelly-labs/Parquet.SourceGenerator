@@ -27,3 +27,6 @@ Parquet.SourceGenerator.StringDeduplicator.Dispose() -> void
 Parquet.SourceGenerator.StringDeduplicator.GetOrAdd(System.ReadOnlySpan<char> value) -> string!
 Parquet.SourceGenerator.StringDeduplicator.StringDeduplicator() -> void
 Parquet.SourceGenerator.StringDeduplicator.StringDeduplicator(int capacity = 512) -> void
+Parquet.SourceGenerator.ParquetDecimalScale
+static Parquet.SourceGenerator.ParquetDecimalScale.RestoreIntegerScaled(System.Span<decimal> values, int scale) -> void
+static Parquet.SourceGenerator.ParquetDecimalScale.RestoreIntegerScaled(System.Span<decimal?> values, int scale) -> void
