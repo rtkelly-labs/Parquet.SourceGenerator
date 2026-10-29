@@ -119,6 +119,14 @@ jobs:
       - name: Verify Benchmark Data LFS Hydration & Provenance Integrity
         run: dotnet run scripts/VerifyProvenance.cs
 
+      - name: Restore local tools
+        run: dotnet tool restore --disable-parallel || dotnet tool restore --disable-parallel
+
+      # Paket-managed projects (docs/architecture/adrs/0004-paket-pilot.md). Strict: fails when
+      # paket.dependencies and paket.lock disagree.
+      - name: Restore Paket dependencies (strict)
+        run: dotnet tool run paket restore --fail-on-checks
+
       - name: Restore dependencies
         run: dotnet restore Parquet.SourceGenerator.slnx --locked-mode
 

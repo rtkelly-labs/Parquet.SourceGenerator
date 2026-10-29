@@ -1,0 +1,124 @@
+name: Dependency Submission
+
+# GitHub's dependency graph (and so Dependabot security alerts) reads packages.lock.json and
+# Directory.Packages.props, but not Paket. This submits the resolved NuGet graph of the whole
+# solution, Paket-managed projects included, through the dependency submission API, so security
+# alerts keep seeing the packages a Paket-managed project uses (ADR 0004,
+# docs/architecture/adrs/0004-paket-pilot.md).
+#
+# component-detection is pinned (version and SHA-256 below) and run directly: the submission
+# action always downloads the newest release, so the graph could change with nothing in this
+# repository changing. Only its project-assets detector runs (`MSBuildBinaryLog`, which reads each
+# project's obj/project.assets.json when no binary log exists); its NuGet detector would also
+# read paket.lock and submit the benchmark project's packages a second time, with no edges.
+# scripts/DependencySnapshot.cs turns the scan into the snapshot and fails closed on an empty one.
+#
+# Security model: push to main and manual dispatch on main only, never pull requests, so the
+# `contents: write` token (needed by the submission API alone) never meets code from a fork. Two
+# jobs: `scan` (read-only) runs all repository code (the restore, with Paket and the MSBuild
+# restore targets, and the snapshot script) and uploads snapshot.json; `submit` holds
+# `contents: write`, checks out nothing and only calls `gh api`. Repository code in the same job as
+# the token could add a directory to $GITHUB_PATH and shadow `gh` for the step that holds it.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  scan:
+    name: dependency-scan
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # The pinned component-detection release and the SHA-256 of its linux-x64 binary.
+      CD_VERSION: v8.0.4
+      CD_SHA256: 8348597b457f0570e231e5a0b14f2f68a842d5d04a91acda9d47707f4f356ac5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Restore local tools
+        run: dotnet tool restore --disable-parallel || dotnet tool restore --disable-parallel
+
+      - name: Restore Paket dependencies (strict)
+        run: dotnet tool run paket restore --fail-on-checks
+
+      # Writes obj/project.assets.json for every project, which is what the scan below reads.
+      - name: Restore solution dependencies
+        run: dotnet restore Parquet.SourceGenerator.slnx --locked-mode
+
+      - name: Download component-detection
+        run: |
+          set -euo pipefail
+          curl -sSfL --retry 3 -o "$RUNNER_TEMP/component-detection" \
+            "https://github.com/microsoft/component-detection/releases/download/$CD_VERSION/component-detection-linux-x64"
+          echo "$CD_SHA256  $RUNNER_TEMP/component-detection" | sha256sum --check --strict
+          chmod +x "$RUNNER_TEMP/component-detection"
+
+      - name: Scan the restored projects
+        run: |
+          "$RUNNER_TEMP/component-detection" scan \
+            --SourceDirectory "$GITHUB_WORKSPACE" \
+            --DetectorsFilter MSBuildBinaryLog \
+            --ManifestFile "$RUNNER_TEMP/scan.json"
+
+      - name: Build the dependency snapshot
+        run: >-
+          dotnet run scripts/DependencySnapshot.cs --
+          --manifest "$RUNNER_TEMP/scan.json"
+          --out "$RUNNER_TEMP/snapshot.json"
+          --sha "$GITHUB_SHA"
+          --ref "$GITHUB_REF"
+          --job-id "$GITHUB_RUN_ID"
+          --correlator "$GITHUB_WORKFLOW"
+          --detector-version "${CD_VERSION#v}"
+          --require benchmarks/Parquet.SourceGenerator.Benchmarks/Parquet.SourceGenerator.Benchmarks.csproj
+
+      - name: Upload the dependency snapshot
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: dependency-snapshot
+          path: ${{ runner.temp }}/snapshot.json
+          if-no-files-found: error
+          retention-days: 1
+
+  submit:
+    name: dependency-submission
+    needs: [scan]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      # The dependency submission API requires contents: write; nothing here pushes, and this job
+      # runs no repository code.
+      contents: write
+    steps:
+      - name: Download the dependency snapshot
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dependency-snapshot
+          path: ${{ runner.temp }}/snapshot
+
+      - name: Submit the dependency snapshot
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method POST "repos/$GITHUB_REPOSITORY/dependency-graph/snapshots" --input "$RUNNER_TEMP/snapshot/snapshot.json"
