@@ -33,7 +33,7 @@ Zero-reflection C# source generation vs **`ParquetSerializer` v6** reflection ba
 | **Streaming Read (IAsyncEnumerable)** | 100,000 items | 12.41 ms (12.30 MB) | **5.18 ms** (**8.22 MB**) | ⚡ **2.4x faster** | 📉 **33% less memory** |
 | **Guid Serialization** | 100,000 items | 15.82 ms (17.71 MB) | **10.39 ms** (**10.70 MB**) | ⚡ **1.5x faster** | 📉 **40% less memory** |
 
-> 📌 **Note**: BenchmarkDotNet results captured on GitHub Actions. Detailed multi-scale reports (1K, 10K, 100K, 1M rows) are in [docs/BENCHMARKS.md](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/BENCHMARKS.md).
+> 📌 **Note**: BenchmarkDotNet results captured on GitHub Actions. Detailed multi-scale reports (1K, 10K, 100K, 1M rows) are in [docs/BENCHMARKS.md](https://github.com/rtkelly-labs/Parquet.SourceGenerator/blob/main/docs/BENCHMARKS.md).
 
 
 ## 🌐 Real-World Provenanced Dataset Benchmarks
@@ -189,7 +189,7 @@ shape Parquet.Net's `WriteAllPartsAsync` accepts without an intermediate buffer.
 schema this removes around 7% of end-to-end write time (the transpose it deletes); allocation is
 unchanged, since the row-oriented path's rentals come from a warm `ArrayPool`. Measured numbers, both
 GC modes, and the reasons the API is shaped this way are in
-[docs/12](docs/12-BUFFER-REUSE-AND-EXTRACTION-STRATEGIES.md#-6-direct-columnar-handoff--measured-issue-137).
+[docs/12](docs/architecture/memory-and-performance.md#-6-direct-columnar-handoff--measured-issue-137).
 Models with struct, list or map members keep the row-oriented API only.
 
 ### 4. Reading Parquet Files (Sequential & Multi-Core Parallel) (Stable Core)
@@ -252,7 +252,7 @@ rather than being silently degraded: `.Parallel()` on a `Stream` source (buffer 
 `From(ReadOnlyMemory<byte>)`); `.Parallel()` together with `.Where(...)`; `AsAsyncEnumerable()` or
 `AsBatches()` after `.Parallel()` (streaming is sequential); and `AsBatches()` after `.Where(...)`. The
 flat `ReadParquet*Async` methods were removed before `0.1.0`; the mapping is in [CHANGELOG.md](CHANGELOG.md) and the decision in
-[docs/48](docs/48-FLAT-READ-REMOVAL-480.md). The `Parquet.SourceGenerator.Legacy` package has no
+[docs/48](https://github.com/rtkelly-labs/Parquet.SourceGenerator/blob/e4d46b90cee76d9b3cee0b0fd0452aa386415ef1/docs/48-FLAT-READ-REMOVAL-480.md). The `Parquet.SourceGenerator.Legacy` package has no
 builder and keeps its flat `ReadParquetAsync` / `ReadParquetArrayAsync`.
 
 `AsBatches()` is emitted for flat models only (no nested structs, lists or maps) and allocates no domain objects.
@@ -353,7 +353,7 @@ The Roslyn analyzer enforces correct usage at compile time, catching errors befo
 public record Metric(int Id); 
 ```
 
-Full details on every diagnostic rule (`PARQ001` to `PARQ016`), with examples and fixes, are documented in **[`docs/13-COMPILER-DIAGNOSTICS.md`](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/13-COMPILER-DIAGNOSTICS.md)**:
+Full details on every diagnostic rule (`PARQ001` to `PARQ016`), with examples and fixes, are documented in **[`docs/reference/compiler-diagnostics.md`](https://github.com/rtkelly-labs/Parquet.SourceGenerator/blob/main/docs/reference/compiler-diagnostics.md)**:
 - `PARQ001`: Type must be declared `partial`
 - `PARQ002`: Duplicate `[ParquetColumn]` column names detected
 - `PARQ005`: Invalid `[ParquetDecimal]` precision or scale
@@ -398,7 +398,7 @@ To enable Native AOT in your application:
 </PropertyGroup>
 ```
 
-> 📖 For a deep dive into CoreCLR type system mechanics, `Nullable<T>` value type sharing, and runtime directives, see **[`docs/10-NATIVE-AOT-GUIDE.md`](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/10-NATIVE-AOT-GUIDE.md)**.
+> 📖 For a deep dive into CoreCLR type system mechanics, `Nullable<T>` value type sharing, and runtime directives, see **[`docs/guides/native-aot.md`](https://github.com/rtkelly-labs/Parquet.SourceGenerator/blob/main/docs/guides/native-aot.md)**.
 
 ---
 
@@ -434,7 +434,7 @@ OrderEventParquetExtensions.WriteParquetRowGroupAsync(writer, recordBatch);
   `ArrayPool` rental. Nullable columns derive their definition levels from the Arrow validity
   bitmap and produce byte-identical files to the POCO path.
 - **Supported floor:** Apache.Arrow `23.0.0`. Full mapping table and rejection rules in
-  **[`docs/14-COMPATIBILITY-MATRIX.md`](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/14-COMPATIBILITY-MATRIX.md#apache-arrow-recordbatch-ingestion-experimental-177)**.
+  **[`docs/reference/compatibility-matrix.md`](https://github.com/rtkelly-labs/Parquet.SourceGenerator/blob/main/docs/reference/compatibility-matrix.md#apache-arrow-recordbatch-ingestion-experimental-177)**.
 
 ---
 
@@ -482,10 +482,10 @@ OrderEventParquetExtensions.WriteParquetRowGroupAsync(writer, recordBatch);
 
 Contributions are welcome! Please review our community guidelines:
 
-- 📖 **[Contributing Guide](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/CONTRIBUTING.md)**: Build setup, testing, and PR guidelines.
-- 📜 **[Code of Conduct](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/CODE_OF_CONDUCT.md)**: Community standards.
-- 🛡️ **[Security Policy](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/SECURITY.md)**: Vulnerability disclosure.
-- 📝 **[Changelog](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/CHANGELOG.md)**: Release history and notes.
+- 📖 **[Contributing Guide](https://github.com/rtkelly-labs/Parquet.SourceGenerator/blob/main/CONTRIBUTING.md)**: Build setup, testing, and PR guidelines.
+- 📜 **[Code of Conduct](https://github.com/rtkelly-labs/Parquet.SourceGenerator/blob/main/CODE_OF_CONDUCT.md)**: Community standards.
+- 🛡️ **[Security Policy](https://github.com/rtkelly-labs/Parquet.SourceGenerator/blob/main/SECURITY.md)**: Vulnerability disclosure.
+- 📝 **[Changelog](https://github.com/rtkelly-labs/Parquet.SourceGenerator/blob/main/CHANGELOG.md)**: Release history and notes.
 
 To build from source:
 
@@ -499,4 +499,4 @@ dotnet build Parquet.SourceGenerator.slnx --configuration Release
 
 ## 📄 License
 
-This project is licensed under the [MIT License](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/LICENSE).
+This project is licensed under the [MIT License](https://github.com/rtkelly-labs/Parquet.SourceGenerator/blob/main/LICENSE).

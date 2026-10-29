@@ -104,7 +104,7 @@ If you publish numbers anywhere, include the machine and runtime they came from.
    edges are generated, not committed (`dotnet run scripts/DerivedOutputs.cs` writes them to the
    gitignored `artifacts/`). CI posts their diff against the merge base as one comment on the pull
    request; check its "Emitted public API" section shows only the changes you intend
-   ([docs/17](docs/17-GENERATED-API-BASELINES.md), [docs/18](docs/18-API-CHANGE-CONTRACT.md)).
+   ([docs/17](https://github.com/rtkelly-labs/Parquet.SourceGenerator/blob/e4d46b90cee76d9b3cee0b0fd0452aa386415ef1/docs/17-GENERATED-API-BASELINES.md), [docs/18](docs/architecture/api-governance.md)).
 5. **PR Title**: Must follow Conventional Commits — CI validates it (`feat:`, `fix:`, `perf:`,
    `docs:`, `style:`, `refactor:`, `test:`, `chore:`, `ci:`, `build:`).
 6. **Commit Message**: Use Conventional Commit messages too.
