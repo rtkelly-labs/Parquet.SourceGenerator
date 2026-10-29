@@ -111,10 +111,7 @@ jobs:
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
-          dotnet-version: |
-            8.0.x
-            9.0.x
-            10.0.x
+          dotnet-version: 10.0.x
 
       - name: Verify Benchmark Data LFS Hydration & Provenance Integrity
         run: dotnet run scripts/VerifyProvenance.cs
@@ -172,34 +169,22 @@ jobs:
         with:
           version: ${{ needs.prepare.outputs.version }}
 
-      - name: Verify Package Consumption (v6 & Legacy packages on .NET 8 & .NET 9)
+      - name: Verify Package Consumption (v6 & Legacy packages on .NET 10)
         run: |
           set -euo pipefail
           version="${{ needs.prepare.outputs.version }}"
           echo "Consuming Parquet.SourceGenerator $version and Legacy from local feed"
           dotnet run --project test/PackageConsumption/PackageConsumption.csproj \
-            --framework net8.0 \
+            --framework net10.0 \
             --configuration Release \
             -p:GeneratorPackageVersion="$version" \
-            -p:RestorePackagesPath="$RUNNER_TEMP/consumption-packages-net8"
-
-          dotnet run --project test/PackageConsumption/PackageConsumption.csproj \
-            --framework net9.0 \
-            --configuration Release \
-            -p:GeneratorPackageVersion="$version" \
-            -p:RestorePackagesPath="$RUNNER_TEMP/consumption-packages-net9"
+            -p:RestorePackagesPath="$RUNNER_TEMP/consumption-packages-net10"
 
           dotnet run --project test/PackageConsumptionLegacy/PackageConsumptionLegacy.csproj \
-            --framework net8.0 \
+            --framework net10.0 \
             --configuration Release \
             -p:GeneratorPackageVersion="$version" \
-            -p:RestorePackagesPath="$RUNNER_TEMP/consumption-packages-legacy-net8"
-
-          dotnet run --project test/PackageConsumptionLegacy/PackageConsumptionLegacy.csproj \
-            --framework net9.0 \
-            --configuration Release \
-            -p:GeneratorPackageVersion="$version" \
-            -p:RestorePackagesPath="$RUNNER_TEMP/consumption-packages-legacy-net9"
+            -p:RestorePackagesPath="$RUNNER_TEMP/consumption-packages-legacy-net10"
 
       - name: Verify Legacy Package Consumption Compiles on .NET Framework 4.7.2
         run: |

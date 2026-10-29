@@ -238,12 +238,7 @@ static string BuildProject(string projectFile)
     string projDir = Path.GetDirectoryName(Path.GetFullPath(projectFile))!;
     string projName = Path.GetFileNameWithoutExtension(projectFile);
 
-    string[] searchPaths =
-    [
-        Path.Combine(projDir, "bin", "Release", "net8.0", $"{projName}.dll"),
-        Path.Combine(projDir, "bin", "Release", "net9.0", $"{projName}.dll"),
-        Path.Combine(projDir, "bin", "Release", "net10.0", $"{projName}.dll"),
-    ];
+    string[] searchPaths = [Path.Combine(projDir, "bin", "Release", "net10.0", $"{projName}.dll")];
 
     foreach (var path in searchPaths)
     {

@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Removed
+
+- **.NET 8 and .NET 9 target frameworks.** `Parquet.SourceGenerator.Runtime` now ships
+  `netstandard2.0`, `netstandard2.1` and `net10.0`. Both runtimes leave support on 2026-11-10;
+  applications on them still work through the `netstandard2.1` build, without the vectorised
+  column paths. CI builds and tests on .NET 10 (LTS), and runs the suite and a package consumer on
+  the .NET 11 runtime (STS). `net11.0` is added when .NET 11 is GA.
+
 ## [0.1.0-alpha.1] - 2026-10-25
 
 First prerelease of 0.1, and the first published from `rtkelly-labs` through nuget.org trusted publishing. Changes since `0.0.3`:

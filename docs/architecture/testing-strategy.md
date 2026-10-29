@@ -20,12 +20,12 @@ its behavioral replacement; test count and coverage percentages alone do not est
 ## 1. End-to-End Package Consumption
 
 `test/PackageConsumption` and `test/PackageConsumptionLegacy` restore the packed packages from a
-local feed rather than referencing the shipping projects. CI executes both on .NET 8 and .NET 9,
+local feed rather than referencing the shipping projects. CI executes both on .NET 10, and the modern one on the .NET 11 runtime (`test-net11`),
 then hands files between the modern and legacy consumers in both directions. These checks exercise
 package layout, analyzer loading, attribute dependencies, compilation and serialization together.
 
 The Windows `net472-consumer` job in `ci.yml` executes the Legacy package on .NET Framework 4.7.2
-and hands files to and from .NET 8. It is part of the required `build` aggregate, with no path filter
+and hands files to and from .NET 10. It is part of the required `build` aggregate, with no path filter
 or failure bypass. The native AOT publish-and-execute check is described in section 4.
 
 ## 2. Generator and File Integration
@@ -243,5 +243,5 @@ From the 0.1 testing evaluation, three specific verification gaps remain prior t
    - *Target*: Ensure codec variations are parameterized in property-based fuzzing runs (`.github/workflows/fuzz.yml`).
 
 3. **Legacy Integration Suite Execution (#600, #494)**:
-   - While `PackageConsumptionLegacy` confirms end-to-end NuGet package consumption and basic serialization on .NET Framework 4.7.2 and .NET 8, the full suite of 23 types is currently executed only against the modern engine. `DateOnly`, `TimeOnly`, and non-int enums must either have green execution proof in the legacy suite or emit clean compile-time diagnostic rejection (`PARQ006` / `PARQ007`).
+   - While `PackageConsumptionLegacy` confirms end-to-end NuGet package consumption and basic serialization on .NET Framework 4.7.2 and .NET 10, the full suite of 23 types is currently executed only against the modern engine. `DateOnly`, `TimeOnly`, and non-int enums must either have green execution proof in the legacy suite or emit clean compile-time diagnostic rejection (`PARQ006` / `PARQ007`).
 

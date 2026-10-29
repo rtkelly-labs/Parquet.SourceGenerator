@@ -72,9 +72,7 @@ jobs:
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
-          dotnet-version: |
-            8.0.x
-            10.0.x
+          dotnet-version: 10.0.x
 
       - name: Verify Benchmark Data LFS Hydration & Provenance Integrity
         run: dotnet run scripts/VerifyProvenance.cs
@@ -233,7 +231,7 @@ jobs:
           path: ${{ runner.temp }}/apache-conformance/
 
       - name: Interrogate IL & Verify Zero Boxing Regression Gate
-        run: dotnet run scripts/InterrogateIL.cs --assembly test/Parquet.SourceGenerator.CLI/bin/Release/net8.0/Parquet.SourceGenerator.CLI.dll --check
+        run: dotnet run scripts/InterrogateIL.cs --assembly test/Parquet.SourceGenerator.CLI/bin/Release/net10.0/Parquet.SourceGenerator.CLI.dll --check
 
       - name: Run Full Test Suite with Code Coverage Collection
         env:
@@ -328,35 +326,24 @@ jobs:
       - name: Verify Package Layout
         uses: ./.github/actions/verify-package-layout
 
-      - name: Verify Package Consumption (v6 & Legacy packages on .NET 8 & .NET 9)
+      # .NET 10 here; the test-net11 job consumes the modern package on the .NET 11 runtime.
+      - name: Verify Package Consumption (v6 & Legacy packages on .NET 10)
         run: |
           set -euo pipefail
           version=$(ls artifacts/Parquet.SourceGenerator.[0-9]*.nupkg \
             | sed -E 's/.*Parquet\.SourceGenerator\.([0-9][^/]*)\.nupkg/\1/')
           echo "Consuming Parquet.SourceGenerator $version and Legacy from local feed"
           dotnet run --project test/PackageConsumption/PackageConsumption.csproj \
-            --framework net8.0 \
+            --framework net10.0 \
             --configuration Release \
             -p:GeneratorPackageVersion="$version" \
-            -p:RestorePackagesPath="$RUNNER_TEMP/consumption-packages-net8"
-
-          dotnet run --project test/PackageConsumption/PackageConsumption.csproj \
-            --framework net9.0 \
-            --configuration Release \
-            -p:GeneratorPackageVersion="$version" \
-            -p:RestorePackagesPath="$RUNNER_TEMP/consumption-packages-net9"
+            -p:RestorePackagesPath="$RUNNER_TEMP/consumption-packages-net10"
 
           dotnet run --project test/PackageConsumptionLegacy/PackageConsumptionLegacy.csproj \
-            --framework net8.0 \
+            --framework net10.0 \
             --configuration Release \
             -p:GeneratorPackageVersion="$version" \
-            -p:RestorePackagesPath="$RUNNER_TEMP/consumption-packages-legacy-net8"
-
-          dotnet run --project test/PackageConsumptionLegacy/PackageConsumptionLegacy.csproj \
-            --framework net9.0 \
-            --configuration Release \
-            -p:GeneratorPackageVersion="$version" \
-            -p:RestorePackagesPath="$RUNNER_TEMP/consumption-packages-legacy-net9"
+            -p:RestorePackagesPath="$RUNNER_TEMP/consumption-packages-legacy-net10"
 
       # Neither in-solution tests nor the two steps above can cover the version axis of the
       # compatibility matrix: a test assembly references exactly one Parquet.Net, so nothing inside
@@ -376,13 +363,13 @@ jobs:
           mkdir -p "$interop" "$(dirname "$matrix")"
 
           modern=(dotnet run --project test/PackageConsumption/PackageConsumption.csproj
-            --framework net8.0 --configuration Release
+            --framework net10.0 --configuration Release
             -p:GeneratorPackageVersion="$version"
-            -p:RestorePackagesPath="$RUNNER_TEMP/consumption-packages-net8")
+            -p:RestorePackagesPath="$RUNNER_TEMP/consumption-packages-net10")
           legacy=(dotnet run --project test/PackageConsumptionLegacy/PackageConsumptionLegacy.csproj
-            --framework net8.0 --configuration Release
+            --framework net10.0 --configuration Release
             -p:GeneratorPackageVersion="$version"
-            -p:RestorePackagesPath="$RUNNER_TEMP/consumption-packages-legacy-net8")
+            -p:RestorePackagesPath="$RUNNER_TEMP/consumption-packages-legacy-net10")
 
           "${modern[@]}" -- --write-interop "$interop/modern.parquet"
           "${legacy[@]}" -- --read-interop "$interop/modern.parquet" modern/Parquet.Net-6.x "$matrix"
@@ -468,9 +455,7 @@ jobs:
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
-          dotnet-version: |
-            8.0.x
-            10.0.x
+          dotnet-version: 10.0.x
 
       - name: Restore dependencies
         run: dotnet restore Parquet.SourceGenerator.slnx --locked-mode
@@ -690,9 +675,7 @@ jobs:
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
-          dotnet-version: |
-            8.0.x
-            10.0.x
+          dotnet-version: 10.0.x
 
       # Publishes each golden model's emitted source to artifacts/golden/ (gitignored).
       - name: Publish golden outputs
@@ -734,7 +717,7 @@ jobs:
   # The Legacy package exists for .NET Framework. The compile-only net472 step in `test` proves it
   # builds and nothing about running it (#565); this job executes the consumer on a real .NET
   # Framework runtime (windows-latest): write, read, compression, batching and schema evolution
-  # scenarios, the blocked-SynchronizationContext round trip, and a file hand-off with net8.0 in both
+  # scenarios, the blocked-SynchronizationContext round trip, and a file hand-off with net10.0 in both
   # directions. It is part of the `build` aggregate and has no path filter, so a change outside src/
   # cannot skip it and then leave a required check satisfied by absence. It builds its own two
   # packages because artifacts do not cross jobs without extra steps.
@@ -753,9 +736,7 @@ jobs:
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
-          dotnet-version: |
-            8.0.x
-            10.0.x
+          dotnet-version: 10.0.x
 
       - name: Pack the Runtime and Legacy packages
         run: |
@@ -777,9 +758,9 @@ jobs:
             -p:GeneratorPackageVersion=0.0.0-net472.1 \
             -p:RestorePackagesPath="$RUNNER_TEMP/consumption-packages-legacy-net472"
 
-      # The same file format has to cross runtimes: written by .NET Framework and read on .NET 8,
+      # The same file format has to cross runtimes: written by .NET Framework and read on .NET 10,
       # and the reverse. Each leg prints the producer so a mislabelled run is visible.
-      - name: Hand a file between .NET Framework 4.7.2 and .NET 8
+      - name: Hand a file between .NET Framework 4.7.2 and .NET 10
         run: |
           set -euo pipefail
           dir="$RUNNER_TEMP/net472-interop"
@@ -788,30 +769,100 @@ jobs:
           net472=(dotnet run --project "$project" --framework net472 --configuration Release
             -p:GeneratorPackageVersion=0.0.0-net472.1
             -p:RestorePackagesPath="$RUNNER_TEMP/consumption-packages-legacy-net472")
-          net8=(dotnet run --project "$project" --framework net8.0 --configuration Release
+          net10=(dotnet run --project "$project" --framework net10.0 --configuration Release
             -p:GeneratorPackageVersion=0.0.0-net472.1
-            -p:RestorePackagesPath="$RUNNER_TEMP/consumption-packages-legacy-net8")
+            -p:RestorePackagesPath="$RUNNER_TEMP/consumption-packages-legacy-net10")
 
           "${net472[@]}" -- --write-interop "$dir/net472.parquet"
-          "${net8[@]}" -- --read-interop "$dir/net472.parquet" classic/net472
-          "${net8[@]}" -- --write-interop "$dir/net8.parquet"
-          "${net472[@]}" -- --read-interop "$dir/net8.parquet" classic/net8.0
+          "${net10[@]}" -- --read-interop "$dir/net472.parquet" classic/net472
+          "${net10[@]}" -- --write-interop "$dir/net10.parquet"
+          "${net472[@]}" -- --read-interop "$dir/net10.parquet" classic/net10.0
+
+  # The package targets net10.0 (LTS); this job proves it on the next runtime, .NET 11 (STS). It
+  # builds with RollForward=LatestMajor and runs the core suite and the package consumer on the
+  # newest installed runtime. Until .NET 11 is GA that is a release candidate, which
+  # DOTNET_ROLL_FORWARD_TO_PRERELEASE admits. EXPECTED_DOTNET_MAJOR is the positive control:
+  # RuntimeVersionTests and the consumer fail if the run stayed on .NET 10. When .NET 11 ships,
+  # add net11.0 to the package and drop the prerelease switch.
+  test-net11:
+    name: test-net11
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      DOTNET_ROLL_FORWARD_TO_PRERELEASE: '1'
+      EXPECTED_DOTNET_MAJOR: '11'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          lfs: true
+
+      # global.json pins the build to the .NET 10 SDK; 11.0.x only supplies the runtime to roll onto.
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          dotnet-version: |
+            10.0.x
+            11.0.x
+
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.11'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.12.21"
+
+      - name: Restore solution dependencies
+        run: dotnet restore Parquet.SourceGenerator.slnx --locked-mode
+
+      - name: Build solution (Release, rolling forward to the latest runtime)
+        run: dotnet build Parquet.SourceGenerator.slnx --configuration Release --no-restore -p:RollForward=LatestMajor
+
+      - name: Verify and Generate Test Data
+        uses: ./.github/actions/verify-test-data
+
+      - name: Run Test Suite on .NET 11
+        env:
+          PARQUET_TEST_DATA_ROOT: ${{ runner.temp }}/parquet-source-generator/data
+          PARQUET_TEST_DATA_CSHARP_ROOT: ${{ runner.temp }}/parquet-source-generator/data_csharp
+          PARQUET_COMPAT_MATRIX_OUTPUT: ${{ runner.temp }}/parquet-source-generator/compatibility-matrix
+        run: dotnet test Parquet.SourceGenerator.slnx --configuration Release --no-build --filter "Category!=DatasetIntegrity&Category!=ExternalInterop" --verbosity normal --logger "trx;LogFileName=ci-net11.trx"
+
+      - name: Pack
+        run: dotnet pack Parquet.SourceGenerator.slnx --configuration Release --no-build --output ./artifacts
+
+      - name: Verify Package Consumption on .NET 11
+        run: |
+          set -euo pipefail
+          version=$(ls artifacts/Parquet.SourceGenerator.[0-9]*.nupkg \
+            | sed -E 's/.*Parquet\.SourceGenerator\.([0-9][^/]*)\.nupkg/\1/')
+          dotnet run --project test/PackageConsumption/PackageConsumption.csproj \
+            --framework net10.0 \
+            --configuration Release \
+            -p:RollForward=LatestMajor \
+            -p:GeneratorPackageVersion="$version" \
+            -p:RestorePackagesPath="$RUNNER_TEMP/consumption-packages-net11"
 
   build:
     name: build
     if: always()
-    needs: [test, derived, generated-analysis, net472-consumer]
+    needs: [test, derived, generated-analysis, net472-consumer, test-net11]
     runs-on: ubuntu-latest
     steps:
-      - name: Require test, derived, generated-analysis and net472-consumer
+      - name: Require test, derived, generated-analysis, net472-consumer and test-net11
         env:
           TEST_RESULT: ${{ needs.test.result }}
           DERIVED_RESULT: ${{ needs.derived.result }}
           ANALYSIS_RESULT: ${{ needs.generated-analysis.result }}
           NET472_RESULT: ${{ needs.net472-consumer.result }}
+          NET11_RESULT: ${{ needs.test-net11.result }}
         run: |
-          echo "test: $TEST_RESULT, derived: $DERIVED_RESULT, generated-analysis: $ANALYSIS_RESULT, net472-consumer: $NET472_RESULT"
-          if [ "$TEST_RESULT" != "success" ] || [ "$DERIVED_RESULT" != "success" ] || [ "$ANALYSIS_RESULT" != "success" ] || [ "$NET472_RESULT" != "success" ]; then
-            echo "::error::Required jobs did not all succeed (test=$TEST_RESULT, derived=$DERIVED_RESULT, generated-analysis=$ANALYSIS_RESULT, net472-consumer=$NET472_RESULT)."
+          echo "test: $TEST_RESULT, derived: $DERIVED_RESULT, generated-analysis: $ANALYSIS_RESULT, net472-consumer: $NET472_RESULT, test-net11: $NET11_RESULT"
+          if [ "$TEST_RESULT" != "success" ] || [ "$DERIVED_RESULT" != "success" ] || [ "$ANALYSIS_RESULT" != "success" ] || [ "$NET472_RESULT" != "success" ] || [ "$NET11_RESULT" != "success" ]; then
+            echo "::error::Required jobs did not all succeed (test=$TEST_RESULT, derived=$DERIVED_RESULT, generated-analysis=$ANALYSIS_RESULT, net472-consumer=$NET472_RESULT, test-net11=$NET11_RESULT)."
             exit 1
           fi

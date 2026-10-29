@@ -8,7 +8,7 @@
 
 Install the package via the .NET CLI or Package Manager:
 
-### Modern .NET (.NET 8.0, .NET 9.0+)
+### Modern .NET (.NET 10+; .NET 8 and 9 use the netstandard2.1 build)
 For projects targeting modern .NET with Parquet.Net 6+:
 
 ```bash

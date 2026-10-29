@@ -32,8 +32,9 @@ public sealed class WorkflowConsistencyTests
         string ci = Read(root, ".github", "workflows", "ci.yml");
         string release = Read(root, ".github", "workflows", "release.yml");
 
-        AssertWorkflowDelegatesOnce(ci);
-        AssertWorkflowDelegatesOnce(release);
+        // ci.yml delegates from two jobs: `test` (.NET 10) and `test-net11` (.NET 11 runtime).
+        AssertWorkflowDelegates(ci, times: 2);
+        AssertWorkflowDelegates(release, times: 1);
 
         foreach (string step in new[] { HashStep, PythonGenerationStep, CSharpGenerationStep })
         {
@@ -429,9 +430,9 @@ public sealed class WorkflowConsistencyTests
                 || line.StartsWith($"uses: {action} #", StringComparison.Ordinal)
             );
 
-    private static void AssertWorkflowDelegatesOnce(string workflow)
+    private static void AssertWorkflowDelegates(string workflow, int times)
     {
-        Count(workflow, $"uses: {SharedAction}").ShouldBe(1);
+        Count(workflow, $"uses: {SharedAction}").ShouldBe(times);
     }
 
     private static string Read(string root, params string[] segments) =>

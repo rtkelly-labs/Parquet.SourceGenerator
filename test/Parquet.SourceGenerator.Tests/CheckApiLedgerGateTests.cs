@@ -367,6 +367,13 @@ public class CheckApiLedgerGateTests
             // The runner's own CI variables must not leak into the script under test.
             psi.Environment.Remove("GITHUB_BASE_REF");
             psi.Environment.Remove("GITHUB_EVENT_BEFORE");
+            // Nor may `dotnet test`'s MSBuild location. The throwaway repository has no global.json,
+            // so the child CLI resolves the newest installed SDK; inheriting these would make it build
+            // with the parent SDK's targets instead. With the .NET 11 SDK installed beside 10 (CI's
+            // test-net11 job) that split SDK fails with NETSDK1045 before the script runs.
+            psi.Environment.Remove("MSBuildSDKsPath");
+            psi.Environment.Remove("MSBuildExtensionsPath");
+            psi.Environment.Remove("MSBUILD_EXE_PATH");
             foreach ((string name, string value) in environment)
             {
                 psi.Environment[name] = value;

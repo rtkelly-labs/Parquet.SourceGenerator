@@ -356,7 +356,7 @@ public class IlInterrogationTests
             "Parquet.SourceGenerator.CLI",
             "bin",
             "Release",
-            "net8.0",
+            "net10.0",
             "Parquet.SourceGenerator.CLI.dll"
         );
         string cliDebugDll = Path.Combine(
@@ -365,7 +365,7 @@ public class IlInterrogationTests
             "Parquet.SourceGenerator.CLI",
             "bin",
             "Debug",
-            "net8.0",
+            "net10.0",
             "Parquet.SourceGenerator.CLI.dll"
         );
 

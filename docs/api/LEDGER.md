@@ -16,6 +16,22 @@ The rule, the three surfaces and the author process are in
 
 <!-- Add new entries directly below this line, newest first. -->
 
+### 2026-10-28 — Runtime package targets net10.0 in place of net8.0 and net9.0
+
+- **Surface:** package
+- **Semver:** breaking-major
+- **Issue:** not filed
+- **Change:** `Parquet.SourceGenerator.Runtime` ships `lib/netstandard2.0`, `lib/netstandard2.1`
+  and `lib/net10.0`. `lib/net8.0` and `lib/net9.0`, published in `0.1.0-alpha.1`, are removed.
+  `PublicAPI.Shipped.txt` is one file for every target, so no member is added or removed.
+- **Rationale:** .NET 8 and .NET 9 leave support on 2026-11-10, and 0.1 should not ship assets
+  for runtimes that are out of support by the time it is stable. .NET 10 is the LTS. Recorded as a
+  removal because it is one: a .NET 8 or 9 application still restores and runs, but it now
+  resolves the `netstandard2.1` build, which has no `NET8_0_OR_GREATER` vector paths
+  (`VectorizedColumnTransforms`, `NullableColumnExtractor`), so it takes the scalar fallbacks.
+  .NET 11 consumers resolve `net10.0`; CI's `test-net11` job runs the suite and the consumer on
+  the .NET 11 runtime. `net11.0` is added when .NET 11 is GA.
+
 ### 2026-10-27 — Consolidate footer start helper into ParquetDecompressionGuardStream (#723)
 
 - **Surface:** package

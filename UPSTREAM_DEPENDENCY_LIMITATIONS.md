@@ -24,6 +24,23 @@ Upstream `aloneguid/parquet-dotnet` maintains an explicit policy against LLM-gen
 
 Track the limitation and future upstream fixes in [issue #150](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/150). Scan Parquet.Net for a safe non-nullable read path or an API that permits omitting definition-level output before revisiting the optimization.
 
+## Parquet.Net 4.25.0 Pulls Vulnerable Snappier And System.Text.Json
+
+Parquet.Net 4.25.0, the version the Legacy package is tested against, resolves Snappier 1.1.6 and
+System.Text.Json 8.0.4. Both have high severity advisories: Snappier loops forever decompressing
+malformed framed input ([GHSA-pggp-6c3x-2xmx](https://github.com/advisories/GHSA-pggp-6c3x-2xmx),
+fixed in 1.3.1), and System.Text.Json has
+[GHSA-8g4q-xg66-9fp4](https://github.com/advisories/GHSA-8g4q-xg66-9fp4) (fixed in 8.0.5). From the
+.NET 10 SDK, NuGet audits transitive packages, so an unpinned consumer of 4.25.0 fails restore
+with NU1903 when warnings are errors.
+
+The repository pins the patched versions: centrally (`Directory.Packages.props`, transitive
+pinning) for `analysis/GeneratedCode.Legacy`, and explicitly in
+`test/PackageConsumptionLegacy`, which opts out of central management. The consumer passes on
+.NET 10 with Snappier 1.3.1, compression included. A real consumer of the Legacy package gets the
+vulnerable versions unless it pins them too; the package itself declares no dependency on
+either. Whether the Legacy package should declare minimum versions for them is open.
+
 ## Parquet.Net 4.25.0 Legacy String Reads
 
 The legacy `ParquetRowGroupReader.ReadColumnAsync` API materializes a complete `DataColumn` before
