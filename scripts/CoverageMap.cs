@@ -376,8 +376,12 @@ static int RiskRank(string risk) =>
     : risk.StartsWith("Medium", StringComparison.Ordinal) ? 2
     : 3;
 
-static string FormatEvidence(IReadOnlyList<string> paths) =>
-    string.Join("<br>", paths.Select(path => $"[`{path}`](../{path})"));
+// Evidence paths are repo-relative; links resolve from the output file's folder.
+static string FormatEvidence(IReadOnlyList<string> paths)
+{
+    string toRoot = string.Concat(Enumerable.Repeat("../", OutputPath.Count(c => c == '/')));
+    return string.Join("<br>", paths.Select(path => $"[`{path}`]({toRoot}{path})"));
+}
 
 static string FormatDial(IReadOnlySet<string> kinds) =>
     kinds.Count == 0
