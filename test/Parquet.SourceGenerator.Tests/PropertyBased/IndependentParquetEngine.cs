@@ -230,7 +230,7 @@ public static class ColumnCodecs
         [typeof(ulong)] = new ValueCodec<ulong>(),
         [typeof(float)] = new ValueCodec<float>(),
         [typeof(double)] = new ValueCodec<double>(),
-        [typeof(decimal)] = new ValueCodec<decimal>(),
+        [typeof(decimal)] = new DecimalCodec(),
         [typeof(DateTime)] = new ValueCodec<DateTime>(),
         [typeof(TimeSpan)] = new ValueCodec<TimeSpan>(),
         [typeof(Guid)] = new ValueCodec<Guid>(),
@@ -249,6 +249,57 @@ public static class ColumnCodecs
                     + $"{field.ClrType}. Add one to {nameof(ColumnCodecs)} when the supported "
                     + "envelope grows."
             );
+}
+
+/// <summary>
+/// Codec for a decimal column. Writes as <see cref="ValueCodec{T}"/> does; reads the same way and
+/// then undoes Parquet.Net's <c>double</c>-derived scale factor on INT32- and INT64-backed chunks.
+/// </summary>
+/// <remarks>
+/// This engine is a second client of Parquet.Net, so it inherits the library's decimal decode: from
+/// .NET 11 that leaves the <c>double</c>'s error in every integer-backed value (see
+/// <c>ParquetDecimalScale</c> and UPSTREAM_DEPENDENCY_LIMITATIONS.md). An oracle that kept the error
+/// would fail every comparison against the values that were written. The physical-type check is
+/// made here independently of the emitted <c>IntegerDecimalScale</c>; the arithmetic is shared,
+/// and is tested on its own in <c>ParquetDecimalScaleTests</c>.
+/// </remarks>
+public sealed class DecimalCodec : IColumnCodec
+{
+    private readonly ValueCodec<decimal> _inner = new();
+
+    public async Task<object?[]> ReadAsync(
+        ParquetRowGroupReader reader,
+        DataField field,
+        int rowCount,
+        CancellationToken cancellationToken
+    )
+    {
+        object?[] values = await _inner.ReadAsync(reader, field, rowCount, cancellationToken);
+        Parquet.Meta.Type? physical = reader.GetMetadata(field)?.MetaData?.Type;
+        if (
+            field is not DecimalDataField decimalField
+            || physical is not (Parquet.Meta.Type.INT32 or Parquet.Meta.Type.INT64)
+        )
+        {
+            return values;
+        }
+
+        var restored = new decimal?[values.Length];
+        for (int i = 0; i < values.Length; i++)
+        {
+            restored[i] = (decimal?)values[i];
+        }
+
+        ParquetDecimalScale.RestoreIntegerScaled(restored, decimalField.Scale);
+        return restored.Select(v => v.HasValue ? (object?)v.Value : null).ToArray();
+    }
+
+    public Task WriteAsync(
+        ParquetRowGroupWriter writer,
+        DataField field,
+        IReadOnlyList<object?> values,
+        CancellationToken cancellationToken
+    ) => _inner.WriteAsync(writer, field, values, cancellationToken);
 }
 
 /// <summary>Codec for a value-typed column, nullable or not.</summary>

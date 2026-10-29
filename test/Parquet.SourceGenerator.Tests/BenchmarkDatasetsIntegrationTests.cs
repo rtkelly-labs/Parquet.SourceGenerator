@@ -329,10 +329,16 @@ public sealed class BenchmarkDatasetsIntegrationTests
             refRecords[i].PartKey.ShouldBe(sgRecords[i].PartKey);
             refRecords[i].SuppKey.ShouldBe(sgRecords[i].SuppKey);
             refRecords[i].LineNumber.ShouldBe(sgRecords[i].LineNumber);
-            refRecords[i].Quantity.ShouldBe(sgRecords[i].Quantity);
-            refRecords[i].ExtendedPrice.ShouldBe(sgRecords[i].ExtendedPrice);
-            refRecords[i].Discount.ShouldBe(sgRecords[i].Discount);
-            refRecords[i].Tax.ShouldBe(sgRecords[i].Tax);
+            ParquetNetDecimalReference
+                .Exact(refRecords[i].Quantity, 2)
+                .ShouldBe(sgRecords[i].Quantity);
+            ParquetNetDecimalReference
+                .Exact(refRecords[i].ExtendedPrice, 2)
+                .ShouldBe(sgRecords[i].ExtendedPrice);
+            ParquetNetDecimalReference
+                .Exact(refRecords[i].Discount, 2)
+                .ShouldBe(sgRecords[i].Discount);
+            ParquetNetDecimalReference.Exact(refRecords[i].Tax, 2).ShouldBe(sgRecords[i].Tax);
             refRecords[i].ReturnFlag.ShouldBe(sgRecords[i].ReturnFlag);
             refRecords[i].LineStatus.ShouldBe(sgRecords[i].LineStatus);
             refRecords[i].ShipDate.ShouldBe(sgRecords[i].ShipDate);

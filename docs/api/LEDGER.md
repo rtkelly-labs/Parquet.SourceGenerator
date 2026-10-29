@@ -16,6 +16,33 @@ The rule, the three surfaces and the author process are in
 
 <!-- Add new entries directly below this line, newest first. -->
 
+### 2026-10-28 — `ParquetDecimalScale`: exact integer-backed decimals on .NET 11
+
+- **Surface:** package
+- **Semver:** additive-minor
+- **Issue:** not filed
+- **Change:** Added `ParquetDecimalScale` (`[EditorBrowsable(Never)]`) to
+  `Parquet.SourceGenerator.Runtime` with `RestoreIntegerScaled(Span<decimal>, int)` and
+  `RestoreIntegerScaled(Span<decimal?>, int)`. Generated readers call it after reading a decimal
+  column whose chunk is INT32- or INT64-backed.
+- **Rationale:** Parquet.Net decodes those decimals as `unscaled * (decimal)Math.Pow(10, -scale)`.
+  From .NET 11 the `double` to `decimal` conversion no longer rounds to 15 significant digits, so
+  the factor carries the `double`'s error and every value is off (19.99 reads as
+  19.990000000000000416125467383), sometimes by whole units of the column's scale. The helper
+  divides by the same factor, rounds to the unscaled integer and rescales exactly. It is a no-op
+  where the factor is already exact, which is every runtime before .NET 11. Public because emitted
+  code in consumer assemblies calls it; hidden like `StringDeduplicator`. Detail in
+  UPSTREAM_DEPENDENCY_LIMITATIONS.md.
+
+### 2026-10-28 — `ParquetDecimalScale` test entry points
+
+- **Surface:** seam
+- **Semver:** internal
+- **Issue:** not filed
+- **Rationale:** `TryGetCorrection` and `Restore(Span<decimal>, int, decimal)` take the factor as
+  an argument so `ParquetDecimalScaleTests` can drive the .NET 11 arithmetic on any runtime; before
+  .NET 11 the public entry points do nothing.
+
 ### 2026-10-27 — Consolidate footer start helper into ParquetDecompressionGuardStream (#723)
 
 - **Surface:** package

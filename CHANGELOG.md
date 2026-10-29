@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **Decimals read wrong on .NET 11.** Parquet.Net decodes INT32- and INT64-backed decimals through
+  `(decimal)Math.Pow(10, -scale)`, which was exact only while the runtime rounded `double` to
+  `decimal` conversions to 15 significant digits. .NET 11 keeps the `double`'s value, so 19.99 read
+  back as 19.990000000000000416125467383, and an 18-digit value at scale 10 by 36 units of its own
+  scale. Generated readers now restore those columns exactly through
+  `ParquetDecimalScale` (a no-op before .NET 11); fixed-length decimals were already exact. The
+  values keep the column's scale, as on earlier runtimes.
+
 ## [0.1.0-alpha.1] - 2026-10-25
 
 First prerelease of 0.1, and the first published from `rtkelly-labs` through nuget.org trusted publishing. Changes since `0.0.3`:
