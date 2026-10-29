@@ -33,7 +33,7 @@ Zero-reflection C# source generation vs **`ParquetSerializer` v6** reflection ba
 | **Streaming Read (IAsyncEnumerable)** | 100,000 items | 12.41 ms (12.30 MB) | **5.18 ms** (**8.22 MB**) | ⚡ **2.4x faster** | 📉 **33% less memory** |
 | **Guid Serialization** | 100,000 items | 15.82 ms (17.71 MB) | **10.39 ms** (**10.70 MB**) | ⚡ **1.5x faster** | 📉 **40% less memory** |
 
-> 📌 **Note**: BenchmarkDotNet results captured on GitHub Actions. Detailed multi-scale reports (1K, 10K, 100K, 1M rows) are in [docs/BENCHMARKS.md](https://github.com/rtkelly-labs/Parquet.SourceGenerator/blob/main/docs/BENCHMARKS.md).
+> 📌 **Note**: BenchmarkDotNet results captured on GitHub Actions. Detailed multi-scale reports (1K, 10K, 100K, 1M rows) are in [docs/reference/benchmarks.md](docs/reference/benchmarks.md).
 
 
 ## 🌐 Real-World Provenanced Dataset Benchmarks
@@ -189,7 +189,7 @@ shape Parquet.Net's `WriteAllPartsAsync` accepts without an intermediate buffer.
 schema this removes around 7% of end-to-end write time (the transpose it deletes); allocation is
 unchanged, since the row-oriented path's rentals come from a warm `ArrayPool`. Measured numbers, both
 GC modes, and the reasons the API is shaped this way are in
-[docs/12](docs/architecture/memory-and-performance.md#-6-direct-columnar-handoff--measured-issue-137).
+[Memory and performance](docs/architecture/memory-and-performance.md#-6-direct-columnar-handoff--measured-issue-137).
 Models with struct, list or map members keep the row-oriented API only.
 
 ### 4. Reading Parquet Files (Sequential & Multi-Core Parallel) (Stable Core)
@@ -434,7 +434,7 @@ OrderEventParquetExtensions.WriteParquetRowGroupAsync(writer, recordBatch);
   `ArrayPool` rental. Nullable columns derive their definition levels from the Arrow validity
   bitmap and produce byte-identical files to the POCO path.
 - **Supported floor:** Apache.Arrow `23.0.0`. Full mapping table and rejection rules in
-  **[`docs/reference/compatibility-matrix.md`](https://github.com/rtkelly-labs/Parquet.SourceGenerator/blob/main/docs/reference/compatibility-matrix.md#apache-arrow-recordbatch-ingestion-experimental-177)**.
+  **[`docs/reference/compatibility-matrix.md`](https://github.com/rtkelly-labs/Parquet.SourceGenerator/blob/main/docs/reference/compatibility-matrix.md#apache-arrow-recordbatch-ingestion-optional-integration)**.
 
 ---
 

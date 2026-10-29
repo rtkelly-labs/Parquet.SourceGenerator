@@ -4,7 +4,7 @@ Every line added to a governed catalogue — an emitted-API `*.api.txt`, `src/ap
 `PublicAPI.Unshipped.txt` — needs an entry here classifying its semver impact. Newest first.
 
 The rule, the three surfaces and the author process are in
-[18 - API Change Contract](../architecture/api-governance.md). The buckets are `additive-minor`,
+[API Governance & Change Contract](../architecture/api-governance.md). The buckets are `additive-minor`,
 `breaking-major`, `internal` and `generated-shape`.
 
 > **Everything dated before 2026-09-10 was catalogued retrospectively.** The single
