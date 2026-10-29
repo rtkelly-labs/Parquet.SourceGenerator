@@ -53,7 +53,7 @@ PSG is demonstrably ahead of both reference ecosystems in several engineering an
   - *Action*: Add an automated test sweep iterating across all `[ParquetSerializable]` types in `test/` and `benchmarks/`.
   - *Oracle Rule*:
     - For **flat and struct-only models**: byte-diff or round-trip against `ParquetSerializer` as the reference oracle.
-    - For **nested collections/lists**: as established in [Nested Types Guide](../../guides/nested-types.md §2.6), `ParquetSerializer` loses nested nulls. Use raw Dremel level assertions and PyArrow/DuckDB as external oracles.
+    - For **nested collections/lists**: as established in [Nested Types Guide](../../guides/nested-types.md) §2.6, `ParquetSerializer` loses nested nulls. Use raw Dremel level assertions and PyArrow/DuckDB as external oracles.
 
 ### 3. Schema Metadata Representation: Inlining vs Data Hoisting (`Google.Protobuf`)
 * **Peer Pattern**: `Google.Protobuf` avoids code bloat by embedding serialized descriptor bytes and building schema reflection once, reserving code inlining strictly for hot serialization loops.
@@ -71,7 +71,7 @@ PSG is demonstrably ahead of both reference ecosystems in several engineering an
     3. Row-to-column transposition or direct columnar array passing.
     4. Level shredding across multi-level list and map hierarchies.
     5. String deduplication pool sharing.
-  - Scattering columnar assembly logic into per-field polymorphic strategy classes fractures the layout of the columnar loop and harms Roslyn generator maintainability. PSG's modular component structure ([`Emitter/Components/`](../src/Parquet.SourceGenerator/Emitter/Components/): `SchemaComponent`, `ColumnarBatchComponent`, `StringDeduplicatorComponent`, etc.) aligns better with columnar reality.
+  - Scattering columnar assembly logic into per-field polymorphic strategy classes fractures the layout of the columnar loop and harms Roslyn generator maintainability. PSG's modular component structure ([`Emitter/Components/`](../../../src/Parquet.SourceGenerator/Emitter/Components): `SchemaComponent`, `ColumnarBatchComponent`, `StringDeduplicatorComponent`, etc.) aligns better with columnar reality.
 
 ### 5. Edition-Gated Codegen Features (`Google.Protobuf`)
 * **Peer Pattern**: Protobuf "Editions" gate features (such as C# nullable reference types and UTF-8 string views) with edition defaults, decoupling language feature adoption from breaking changes.
@@ -82,7 +82,7 @@ PSG is demonstrably ahead of both reference ecosystems in several engineering an
 ### 6. Closed Model Stance & Defensive Resource Limits (`protobuf-net`)
 * **Peer Pattern**: `protobuf-net` enforces that models are strictly closed: unrecognized contracts trigger compile diagnostics rather than silent runtime fallbacks. At runtime, `ParseContext.DefaultRecursionLimit` and `LimitedInputStream` cap input exposure before allocating buffers.
 * **PSG Assessment**: **High Priority Adoption (Defensive Hardening).**
-  - *The Trap*: As documented in [Nested Types Guide](../../guides/nested-types.md §2.3), reader buffers are sized from file-header `NumValues`. Hostile or corrupted Parquet metadata claiming 2 billion rows can force immediate out-of-memory crashes before reading column chunks.
+  - *The Trap*: As documented in [Nested Types Guide](../../guides/nested-types.md) §2.3, reader buffers are sized from file-header `NumValues`. Hostile or corrupted Parquet metadata claiming 2 billion rows can force immediate out-of-memory crashes before reading column chunks.
   - *Action*:
     1. Implement explicit allocation limits and max buffer chunk size constants in generated readers.
     2. Cap compound nesting depth during schema resolution.

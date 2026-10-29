@@ -33,7 +33,7 @@ performance characteristics.
 
 ### Backend API policy for 0.1
 
-> **Direction change:** [document 49](49-LEGACY-PARITY-490.md) (#490) supersedes the declared-subset
+> **Direction change:** [document 49](../guides/legacy-support.md) (#490) supersedes the declared-subset
 > policy below. The classic backend is moving to the same generated API as the modern backend, with
 > any remaining difference listed in a parity allowlist. Until that work lands, the text below still
 > describes what the classic backend emits today.
@@ -49,7 +49,7 @@ separate compatibility decision is made.
 
 The two backends therefore read differently on purpose. The modern backend's only read surface is
 the builder (`<Model>Parquet.From(...)`); its flat `ReadParquet*Async` methods were removed before
-`0.1.0` (#480, [document 48](48-FLAT-READ-REMOVAL-480.md)). The classic backend has no builder, so its
+`0.1.0` (#480, [document 48](https://github.com/rtkelly-labs/Parquet.SourceGenerator/blob/e4d46b90cee76d9b3cee0b0fd0452aa386415ef1/docs/48-FLAT-READ-REMOVAL-480.md)). The classic backend has no builder, so its
 flat `ReadParquetAsync` and `ReadParquetArrayAsync` stay: they are its declared read subset.
 
 This is a product boundary, not an accidental emitter gap. `BackendCompatibilityPolicyTests` checks
@@ -102,7 +102,7 @@ enabled. In an oblivious context, reference types remain conservatively optional
 | Reference types without an accessible parameterless constructor | Unsupported | Rejected by `PARQ008` |
 | Positional records | Unsupported | Rejected when no accessible parameterless construction is available |
 
-The backend-specific boundary in [document 42](42-NESTED-BACKEND-SCOPE-176.md) qualifies these rows:
+The backend-specific boundary in [document 42](https://github.com/rtkelly-labs/Parquet.SourceGenerator/blob/e4d46b90cee76d9b3cee0b0fd0452aa386415ef1/docs/42-NESTED-BACKEND-SCOPE-176.md) qualifies these rows:
 modern generated nested paths are limited to the tested golden models, while classic generated models
 remain flat-only. Native AOT evidence is currently limited to flat models.
 
@@ -120,7 +120,7 @@ promise for generated models.
 | Column order changed in the file | Supported | Generated readers resolve fields by name after the fast positional check |
 | Additional file columns | Supported for reading | Generated readers resolve the fields they know; additional columns are not materialized |
 | Missing required generated column | Supported failure | The reader throws a descriptive `InvalidDataException` |
-| Missing optional generated column | Supported | The column materialises as all-null; see [document 16](16-VERSION-AND-SCHEMA-EVOLUTION.md) |
+| Missing optional generated column | Supported | The column materialises as all-null; see [document 16](schema-evolution.md) |
 | Nested and repeated fields | Unverified for modern generated models; unsupported for classic | Modern coverage is limited to the documented golden models; no full two-backend parity promise exists |
 | Lists and maps | Unverified for modern generated models; unsupported for classic | External files remain fixture/conformance inputs outside the documented generated-model scope |
 | Encrypted Parquet files | Unknown/future | No compatibility promise |
@@ -176,9 +176,9 @@ but CI regenerates that directory on every run with the currently pinned Parquet
 files read from it during a CI run are produced by the current writer. Anything that must be read
 back as genuinely older-producer output therefore lives under `test/data_producers/`, which nothing
 regenerates: `test/data_producers/parquet-net-6.0.3/` is written by
-[`tools/ParquetNetLegacyFixtures`](../tools/ParquetNetLegacyFixtures), a manually-run tool that pins
+[`tools/ParquetNetLegacyFixtures`](../../tools/ParquetNetLegacyFixtures), a manually-run tool that pins
 Parquet.Net 6.0.3 explicitly. Exact committed fixture provenance is recorded in
-[`test/data/fixture-manifest.json`](../test/data/fixture-manifest.json).
+[`test/data/fixture-manifest.json`](../../test/data/fixture-manifest.json).
 There is currently no generated `test/data_csharp/v4` directory.
 
 ## Compatibility Definitions
@@ -200,7 +200,7 @@ forward-compatible.
 Column reordering and additional file columns are supported. Missing required generated columns fail
 descriptively. Missing optional generated columns materialise as nulls. The full behaviour table,
 the producer/consumer/version matrix behind it, and the known gaps are in
-[document 16](16-VERSION-AND-SCHEMA-EVOLUTION.md).
+[document 16](schema-evolution.md).
 
 ### Semantic compatibility
 
@@ -338,7 +338,7 @@ substitute for semantic interoperability tests.
 - [Issue #165](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/165) adds PyArrow interoperability.
 - [Issue #166](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/166) adds DuckDB interoperability.
 - [Issue #167](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/167) adds Apache conformance validation.
-- [Issue #168](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/168) adds version and schema-evolution testing; results in [document 16](16-VERSION-AND-SCHEMA-EVOLUTION.md).
+- [Issue #168](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/168) adds version and schema-evolution testing; results in [document 16](schema-evolution.md).
 - [Issue #169](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/169) adds property-based and negative testing.
 - [Issue #170](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/170) provides the `/regression` execution modes.
 - [Issue #177](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/177) adds the Apache Arrow `RecordBatch` ingestion bridge.
