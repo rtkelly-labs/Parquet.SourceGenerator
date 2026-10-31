@@ -56,13 +56,24 @@ internal sealed class ParquetIncrementalGenerator : IIncrementalGenerator
             }
         );
 
+        // Which Parquet library the generated code calls: Parquet.Net (namespace Parquet), or its
+        // fork Lake.Parquet (namespace Lake.Parquet), picked from the consumer's references. A bool,
+        // so every downstream node stays cached until that reference changes.
+        IncrementalValueProvider<bool> lakeParquet = context.CompilationProvider.Select(
+            static (compilation, _) => ParquetLibrary.ReferencesLakeParquet(compilation)
+        );
+
         // 2. Register source output emission & diagnostic reporting
         context.RegisterSourceOutput(
-            targets.Combine(configuration),
-            static (spc, pair) =>
+            targets.Combine(configuration).Combine(lakeParquet),
+            static (spc, triple) =>
             {
-                TargetParserResult result = pair.Left;
-                if (pair.Right.ConfigurationDiagnostic is not null)
+                ((TargetParserResult, GeneratorConfiguration) pair, bool lake) = (
+                    triple.Left,
+                    triple.Right
+                );
+                TargetParserResult result = pair.Item1;
+                if (pair.Item2.ConfigurationDiagnostic is not null)
                 {
                     return;
                 }
@@ -85,8 +96,11 @@ internal sealed class ParquetIncrementalGenerator : IIncrementalGenerator
                         ? result.Model.ClassName
                         : $"{result.Model.Namespace}.{result.Model.ClassName}";
                     string hintName = $"{prefix}.ParquetSerializer.g.cs";
-                    string sourceCode = CodeEmitter.EmitSource(result.Model, pair.Right);
-                    spc.AddSource(hintName, sourceCode);
+                    string sourceCode = CodeEmitter.EmitSource(result.Model, pair.Item2);
+                    spc.AddSource(
+                        hintName,
+                        lake ? ParquetLibrary.Retarget(sourceCode) : sourceCode
+                    );
                 }
             }
         );
@@ -98,13 +112,16 @@ internal sealed class ParquetIncrementalGenerator : IIncrementalGenerator
             static (compilation, _) => ReferencesApacheArrow(compilation)
         );
 
-        IncrementalValuesProvider<(TargetParserResult Result, bool ArrowReferenced)> arrowTargets =
-            targets.Combine(arrowReferenced);
+        IncrementalValuesProvider<(
+            (TargetParserResult Result, bool ArrowReferenced) Left,
+            bool Lake
+        )> arrowTargets = targets.Combine(arrowReferenced).Combine(lakeParquet);
 
         context.RegisterSourceOutput(
             arrowTargets,
-            static (spc, pair) =>
+            static (spc, triple) =>
             {
+                (TargetParserResult Result, bool ArrowReferenced) pair = triple.Left;
                 if (!pair.ArrowReferenced || pair.Result.Model is null)
                 {
                     return;
@@ -122,7 +139,11 @@ internal sealed class ParquetIncrementalGenerator : IIncrementalGenerator
                 string prefix = string.IsNullOrEmpty(model.Namespace)
                     ? model.ClassName
                     : $"{model.Namespace}.{model.ClassName}";
-                spc.AddSource($"{prefix}.Arrow.g.cs", ArrowBridgeEmitter.EmitSource(model));
+                string arrowSource = ArrowBridgeEmitter.EmitSource(model);
+                spc.AddSource(
+                    $"{prefix}.Arrow.g.cs",
+                    triple.Lake ? ParquetLibrary.Retarget(arrowSource) : arrowSource
+                );
             }
         );
     }
