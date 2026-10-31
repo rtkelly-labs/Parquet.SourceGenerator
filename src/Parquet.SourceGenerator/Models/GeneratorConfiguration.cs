@@ -12,7 +12,8 @@ namespace Parquet.SourceGenerator.Models;
 internal sealed record GeneratorConfiguration(
     bool FlatOnly,
     string GeneratorVersion,
-    DiagnosticInfo? ConfigurationDiagnostic = null
+    DiagnosticInfo? ConfigurationDiagnostic = null,
+    bool LakeParquet = false
 )
 {
     public static GeneratorConfiguration Default { get; } =
