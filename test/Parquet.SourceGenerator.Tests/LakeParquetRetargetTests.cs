@@ -135,6 +135,15 @@ public sealed class LakeParquetRetargetTests
     }
 
     [Fact]
+    public void LakeParquetConsumersSkipTheDecimalRestore()
+    {
+        Generate(ParquetNet())
+            .ShouldContain("ParquetDecimalScale.RestoreIntegerScaled(", Case.Sensitive);
+        Generate(LakeParquetStub())
+            .ShouldNotContain("ParquetDecimalScale.RestoreIntegerScaled(", Case.Sensitive);
+    }
+
+    [Fact]
     public void ParquetNetConsumersReadStringsAsChars()
     {
         string code = Generate(ParquetNet());

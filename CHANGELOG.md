@@ -21,6 +21,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   chars: half the memory per page, the length limit is a byte-length check rather than a re-encoding count,
   and each value is decoded once, into its string or, with `DeduplicateStrings`, into a stack or rented buffer
   so cache hits still allocate nothing. Parquet.Net consumers keep the UTF-16 path.
+- **No decimal restore on Lake.Parquet.** Lake.Parquet decodes INT32- and INT64-backed decimals from their bits, exactly
+  on every runtime, so generated readers for its consumers no longer pass decimal columns through
+  `ParquetDecimalScale` (the .NET 11 repair for Parquet.Net, below). Values and column scales are unchanged.
 
 ### Fixed
 
