@@ -119,6 +119,34 @@ public sealed class LakeParquetRetargetTests
     }
 
     [Fact]
+    public void LakeParquetConsumersReadStringsAsUtf8()
+    {
+        string code = Generate(LakeParquetStub());
+
+        code.ShouldContain(
+            "global::System.Memory<global::System.ReadOnlyMemory<byte>>(raw, 0, rowCount)",
+            Case.Sensitive
+        );
+        code.ShouldContain("DeduplicateUtf8(", Case.Sensitive);
+        code.ShouldNotContain(
+            "global::System.Memory<global::System.ReadOnlyMemory<char>>(raw, 0, rowCount)",
+            Case.Sensitive
+        );
+    }
+
+    [Fact]
+    public void ParquetNetConsumersReadStringsAsChars()
+    {
+        string code = Generate(ParquetNet());
+
+        code.ShouldContain(
+            "global::System.Memory<global::System.ReadOnlyMemory<char>>(raw, 0, rowCount)",
+            Case.Sensitive
+        );
+        code.ShouldNotContain("DeduplicateUtf8(", Case.Sensitive);
+    }
+
+    [Fact]
     public void ReferencingBothKeepsParquetNet()
     {
         string code = Generate(ParquetNet(), LakeParquetStub());

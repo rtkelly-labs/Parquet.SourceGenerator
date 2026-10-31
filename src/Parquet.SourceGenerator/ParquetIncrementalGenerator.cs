@@ -96,7 +96,10 @@ internal sealed class ParquetIncrementalGenerator : IIncrementalGenerator
                         ? result.Model.ClassName
                         : $"{result.Model.Namespace}.{result.Model.ClassName}";
                     string hintName = $"{prefix}.ParquetSerializer.g.cs";
-                    string sourceCode = CodeEmitter.EmitSource(result.Model, pair.Item2);
+                    string sourceCode = CodeEmitter.EmitSource(
+                        result.Model,
+                        lake ? pair.Item2 with { LakeParquet = true } : pair.Item2
+                    );
                     spc.AddSource(
                         hintName,
                         lake ? ParquetLibrary.Retarget(sourceCode) : sourceCode

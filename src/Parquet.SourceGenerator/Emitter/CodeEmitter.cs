@@ -69,7 +69,10 @@ internal static class CodeEmitter
 
         if (StringDeduplicatorComponent.HasStringProperties(model))
         {
-            StringDeduplicatorComponent.EmitStringDeduplicator(builder);
+            StringDeduplicatorComponent.EmitStringDeduplicator(
+                builder,
+                utf8: configuration.LakeParquet
+            );
             builder.AppendLine();
         }
 

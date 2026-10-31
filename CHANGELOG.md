@@ -16,6 +16,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   library from the consumer's references, and emits exactly what it did before for Parquet.Net, or when both are
   referenced. The attributes were already recognised under any namespace; `Interval` members are recognised
   under the fork's namespace too.
+- **UTF-8 string reads on Lake.Parquet.** Generated readers for a Lake.Parquet consumer read flat string columns
+  as their stored UTF-8 bytes (a string field's physical type in Lake.Parquet) instead of a page of decoded
+  chars: half the memory per page, the length limit is a byte-length check rather than a re-encoding count,
+  and each value is decoded once, into its string or, with `DeduplicateStrings`, into a stack or rented buffer
+  so cache hits still allocate nothing. Parquet.Net consumers keep the UTF-16 path.
 
 ### Fixed
 
