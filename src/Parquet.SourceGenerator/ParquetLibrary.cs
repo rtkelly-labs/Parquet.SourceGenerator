@@ -39,7 +39,17 @@ internal static class ParquetLibrary
         return lake;
     }
 
-    /// <summary>Rewrites emitted code's Parquet.Net names to Lake.Parquet's.</summary>
+    // a whole emitted line restoring an INT32/INT64-backed decimal column (ParquetDecimalScale)
+    private static readonly Regex DecimalRestore = new(
+        @"^[ \t]*global::Parquet\.SourceGenerator\.ParquetDecimalScale\.RestoreIntegerScaled\(.*\);[ \t]*\r?\n",
+        RegexOptions.CultureInvariant | RegexOptions.Multiline
+    );
+
+    /// <summary>
+    /// Rewrites emitted code for Lake.Parquet: its names in place of Parquet.Net's, and no decimal restore. Lake.Parquet
+    /// decodes INT32/INT64-backed decimals from their bits, exactly on every runtime (its lake(0034)), so the pass that
+    /// repairs Parquet.Net's inexact decoding on .NET 11 has nothing to do.
+    /// </summary>
     public static string Retarget(string source) =>
-        ParquetRoot.Replace(source, "global::Lake.Parquet.");
+        ParquetRoot.Replace(DecimalRestore.Replace(source, string.Empty), "global::Lake.Parquet.");
 }
