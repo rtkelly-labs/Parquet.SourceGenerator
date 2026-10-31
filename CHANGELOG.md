@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **Lake.Parquet as the Parquet library.** A project that references
+  [Lake.Parquet](https://github.com/rtkelly-labs/parquet-dotnet) (the Parquet.Net fork with the same API in the
+  `Lake.Parquet` namespace) instead of Parquet.Net now gets generated code that calls it: the generator picks the
+  library from the consumer's references, and emits exactly what it did before for Parquet.Net, or when both are
+  referenced. The attributes were already recognised under any namespace; `Interval` members are recognised
+  under the fork's namespace too.
+
 ### Fixed
 
 - **Decimals read wrong on .NET 11.** Parquet.Net decodes INT32- and INT64-backed decimals through

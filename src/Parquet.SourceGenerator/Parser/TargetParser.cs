@@ -2194,6 +2194,7 @@ internal static class TargetParser
         "System.ReadOnlyMemory<byte>",
         "System.ReadOnlyMemory<char>",
         "Parquet.File.Values.Primitives.Interval",
+        "Lake.Parquet.File.Values.Primitives.Interval",
     };
 
     /// <summary>
