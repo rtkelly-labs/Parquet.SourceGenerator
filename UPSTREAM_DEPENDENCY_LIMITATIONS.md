@@ -1,14 +1,33 @@
 # Upstream Dependency Limitations
 
-## Upstream Fork & Tracking Pipeline (`rtkelly-labs/parquet-dotnet`)
+## Upstream Fork: `rtkelly-labs/parquet-dotnet`, published as `Lake.Parquet`
 
-To prototype, verify, and stage enhancements addressing the architectural limitations below, an official fork is maintained at:
-**[rtkelly-labs/parquet-dotnet](https://github.com/rtkelly-labs/parquet-dotnet)** (forked from `aloneguid/parquet-dotnet`).
+The limitations below are fixed, measured and shipped in a fork of upstream:
+**[rtkelly-labs/parquet-dotnet](https://github.com/rtkelly-labs/parquet-dotnet)**, forked from
+`aloneguid/parquet-dotnet` and published to NuGet as **`Lake.Parquet`** (namespace `Lake.Parquet`,
+independent semver from 0.1.0). It carries upstream unchanged plus only the changes evaluated against
+upstream. The fork's README and [vision](https://github.com/rtkelly-labs/parquet-dotnet/blob/master/docs/vision.md)
+explain it, and its README credits upstream first.
+
+- **One record per change.** Every change the fork carries on top of upstream has a record in its
+  [`docs/changes/`](https://github.com/rtkelly-labs/parquet-dotnet/tree/master/docs/changes), with its
+  upstream status (`fork-only`, `proposed-upstream`, `upstreamed`, `superseded`), so it is dropped
+  once upstream has it or an equivalent, whoever raised it there. A workstream below becomes a record
+  when it lands in the fork.
+- **Upstream is merged in, never rebased.** Syncs are merge commits, so this is the one estate repo
+  that allows them. rig governs the fork: its `docs/forks.md` has the rules, and
+  `repo-governance fork-status` / `fork-sync` enforce them.
+- **Built under its own name without renaming the tree.** Source keeps upstream's `Parquet`
+  namespace so merges stay conflict-free; CI renames a copy to `Lake.Parquet` and runs upstream's
+  test suite against it.
+- **Measured here.** The cross-library benchmarks
+  (`benchmarks/Parquet.SourceGenerator.CrossLibraryBenchmarks`) find the decoder gaps; a fix's record
+  in the fork carries its numbers against upstream.
 
 ### Policy & Contribution Guidelines
-Upstream `aloneguid/parquet-dotnet` maintains an explicit policy against LLM-generated pull requests, issues, and discussions, welcoming users to maintain independent forks. Consequently:
-- `rtkelly-labs/parquet-dotnet` serves as the primary repository for staging, validating, and testing fixes against `Parquet.SourceGenerator`.
-- Any pull requests submitted upstream to `aloneguid/parquet-dotnet` must be authored, reviewed, and submitted manually by human maintainers.
+Upstream `aloneguid/parquet-dotnet` does not accept LLM-generated pull requests, issues or discussions, and blocks accounts that send them. Consequently:
+- Agent work happens on the fork. Nothing an agent produced is filed upstream.
+- Any issue or pull request raised upstream is written and submitted by a person.
 
 ### Targeted Workstreams
 1. **Security & Bounded Allocations**: Add bounded list/binary reading to `ThriftCompactProtocolReader` and `ParquetReaderOptions.MaxDecompressedPageSize` to eliminate untrusted allocation amplification at the source.

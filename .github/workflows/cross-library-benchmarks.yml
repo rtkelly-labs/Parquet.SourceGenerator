@@ -1,0 +1,98 @@
+name: Cross-Library Benchmarks
+
+# Parquet.SourceGenerator against Parquet.Net, ParquetSharp, DuckDB.NET and Polars.NET on the
+# provenanced datasets (benchmarks/Parquet.SourceGenerator.CrossLibraryBenchmarks/README.md).
+# Informational, not a gate: it runs only when dispatched, compares libraries within one run, and
+# writes nothing back. Its own workflow so the native comparands never enter the regression gate's
+# dependency graph or its schedule.
+on:
+  workflow_dispatch:
+    inputs:
+      filter:
+        description: 'BenchmarkDotNet filter pattern (e.g. *TypedRead*, *Columnar*)'
+        required: false
+        default: '*'
+      target_branch:
+        description: 'Branch to benchmark (defaults to the dispatching ref)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  cross-library:
+    name: Cross-library read benchmarks
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.target_branch || github.ref_name }}
+          lfs: true
+          persist-credentials: false
+
+      - name: Setup .NET 10 SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore dependencies
+        run: dotnet restore benchmarks/Parquet.SourceGenerator.CrossLibraryBenchmarks/Parquet.SourceGenerator.CrossLibraryBenchmarks.csproj --locked-mode
+
+      - name: Build benchmarks (Release)
+        run: dotnet build benchmarks/Parquet.SourceGenerator.CrossLibraryBenchmarks/Parquet.SourceGenerator.CrossLibraryBenchmarks.csproj --configuration Release --no-restore
+
+      # Every comparand must return the same rows before its timing means anything: a reader that
+      # drops nulls or truncates a decimal would otherwise just look fast.
+      - name: Validate comparands agree
+        run: dotnet run -c Release --project benchmarks/Parquet.SourceGenerator.CrossLibraryBenchmarks/Parquet.SourceGenerator.CrossLibraryBenchmarks.csproj --no-build -- --validate
+
+      - name: Execute benchmarks
+        env:
+          FILTER: ${{ inputs.filter }}
+        run: |
+          set -euo pipefail
+          filter="${FILTER:-*}"
+          if ! [[ "$filter" =~ ^[a-zA-Z0-9_.*~-]+$ ]]; then
+            echo "::error::Filter '$filter' may contain only letters, digits and _ . * ~ -"
+            exit 1
+          fi
+          # No --job: it would add a second, out-of-process job beside each class's [InProcess] one,
+          # and that toolchain cannot build this project's project references.
+          dotnet run -c Release --project benchmarks/Parquet.SourceGenerator.CrossLibraryBenchmarks/Parquet.SourceGenerator.CrossLibraryBenchmarks.csproj --no-build -- \
+            --filter "$filter" --exporters github --artifacts BenchmarkDotNet.Artifacts/cross-library
+
+      - name: Publish results to the job summary
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          reports=(BenchmarkDotNet.Artifacts/cross-library/results/*-report-github.md)
+          if [ "${#reports[@]}" -eq 0 ]; then
+            echo "::error::No benchmark reports were produced; the filter matched nothing."
+            exit 1
+          fi
+          {
+            echo "## Cross-library read benchmarks"
+            echo
+            echo "Runner: $(nproc) cores, $(lscpu | sed -n 's/^Model name:[[:space:]]*//p'). Read ratios within a table; a shared runner's absolute times are noisy."
+            for report in "${reports[@]}"; do
+              echo
+              echo "### $(basename "$report" -report-github.md)"
+              echo
+              cat "$report"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: cross-library-benchmark-results
+          path: |
+            BenchmarkDotNet.Artifacts/cross-library/results/*.md
+            BenchmarkDotNet.Artifacts/cross-library/results/*.csv
+            BenchmarkDotNet.Artifacts/cross-library/results/*.html
+            BenchmarkDotNet.Artifacts/cross-library/*.log
+          if-no-files-found: warn
