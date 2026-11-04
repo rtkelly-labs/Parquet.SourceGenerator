@@ -1,0 +1,9 @@
+{
+  "waivers": [
+    {
+      "check": "docs-index",
+      "path": "docs/assets",
+      "reason": "Image assets for the docs; its README describes the favicon set, not something an agent reads to learn the project."
+    }
+  ]
+}

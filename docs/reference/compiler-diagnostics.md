@@ -270,7 +270,7 @@ This document details all diagnostic codes, their severity, rationale, and remed
 
 - **Disabled-feature omission diagnostic (#226).** Reporting the cause when a member is missing
   because a feature is disabled is deferred until the feature-profile and configuration state it
-  would read is settled. See [document 37](37-DISABLED-FEATURE-DIAGNOSTIC-SCOPE-226.md).
+  would read is settled. See [document 37](https://github.com/rtkelly-labs/Parquet.SourceGenerator/blob/e4d46b90cee76d9b3cee0b0fd0452aa386415ef1/docs/37-DISABLED-FEATURE-DIAGNOSTIC-SCOPE-226.md).
 
 ---
 

@@ -27,7 +27,7 @@ While synthetic baselines (`ScaleEvent`) test raw pipe throughput with sequentia
 * **Categorical Dictionary Encoding**: Low and medium cardinality text columns encoded with Parquet `PLAIN_DICTIONARY` and `RLE_DICTIONARY`.
 * **Multi-Codec Compression**: Compression ratios and throughput across Snappy, Zstandard (Fastest & Optimal), and Uncompressed.
 
-The suite evaluates three fixed public datasets tracked under **Git LFS** with full cryptographic SHA-256 provenance in [`benchmarks/data/provenance.json`](../benchmarks/data/provenance.json) and [`benchmarks/data/PROVENANCE.md`](../benchmarks/data/PROVENANCE.md):
+The suite evaluates three fixed public datasets tracked under **Git LFS** with full cryptographic SHA-256 provenance in [`benchmarks/data/provenance.json`](../../benchmarks/data/provenance.json) and [`benchmarks/data/PROVENANCE.md`](../../benchmarks/data/PROVENANCE.md):
 
 | Dataset | File | Rows | Columns | Profiles & Encodings | Source & License |
 |:--- |:--- |:---:|:---:|:--- |:--- |

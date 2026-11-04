@@ -5,7 +5,7 @@ records how schema evolution behaves across *producer versions* and *schema diff
 evidence for each claim lives.
 
 The executable form of everything below is
-[`test/Parquet.SourceGenerator.Tests/VersionAndSchemaEvolutionMatrixTests.cs`](../test/Parquet.SourceGenerator.Tests/VersionAndSchemaEvolutionMatrixTests.cs).
+[`test/Parquet.SourceGenerator.Tests/VersionAndSchemaEvolutionMatrixTests.cs`](../../test/Parquet.SourceGenerator.Tests/VersionAndSchemaEvolutionMatrixTests.cs).
 Each cell is declared — producer, producer version, consumer, schema case, expected outcome — and
 the test theory is driven off the declaration, so a cell cannot quietly stop being exercised. The
 producer and format versions in the generated report are read out of each file's own footer
@@ -71,7 +71,7 @@ the matrix rather than being assumed equivalent to the sequential one.
 A single test assembly can reference exactly one Parquet.Net, so nothing in the solution can prove
 that a file written against 6.x is readable by a consumer pinned to 4.25. That leg is covered by the
 two package-consumption projects, which reference different Parquet.Net versions and compile the
-same shared model, [`test/CrossVersionInterop/InteropModels.cs`](../test/CrossVersionInterop/InteropModels.cs):
+same shared model, [`test/CrossVersionInterop/InteropModels.cs`](../../test/CrossVersionInterop/InteropModels.cs):
 
 - `PackageConsumption --write-interop <path>` → `PackageConsumptionLegacy --read-interop <path>`
 - `PackageConsumptionLegacy --write-interop <path>` → `PackageConsumption --read-interop <path>`
