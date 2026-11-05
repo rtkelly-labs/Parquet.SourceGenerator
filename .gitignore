@@ -293,8 +293,10 @@ node_modules/
 **/*.Server/ModelManifest.xml
 _Pvt_Extensions
 
-# Paket dependency manager
+# Paket dependency manager. paket.dependencies, paket.lock, paket.references and
+# .paket/Paket.Restore.targets are committed; everything else Paket writes is local.
 .paket/paket.exe
+.paket/*.cached
 paket-files/
 
 # FAKE - F# Make

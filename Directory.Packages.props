@@ -1,11 +1,18 @@
 <Project>
-    <PropertyGroup>
+    <!--
+      Paket pilot (docs/architecture/adrs/0004-paket-pilot.md): a project with a paket.references
+      file (IsPaketManaged, set in Directory.Build.props) takes its packages and exact versions from
+      paket.lock, so Central Package Management and these PackageVersion items are off for that
+      project only. Paket.Restore.targets supplies its own PackageVersion items, which would
+      otherwise duplicate these (NU1506).
+    -->
+    <PropertyGroup Condition="'$(IsPaketManaged)' != 'true'">
         <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
         <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
         <CentralPackageVersionOverrideEnabled>true</CentralPackageVersionOverrideEnabled>
     </PropertyGroup>
 
-    <ItemGroup>
+    <ItemGroup Condition="'$(IsPaketManaged)' != 'true'">
         <!-- Roslyn Compiler & Analyzer Dependencies -->
         <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" />
         <PackageVersion Include="Microsoft.CodeAnalysis.Analyzers" Version="5.9.0" />
