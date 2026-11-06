@@ -46,7 +46,6 @@ public sealed class SerializerOptionsTests
 
         options.MaxDictionaryEntries.ShouldBe(1_000_000);
         options.MaxStringLengthBytes.ShouldBe(1_048_576);
-        options.MaxAllocationBytes.ShouldBe(256L * 1024 * 1024);
     }
 
     [Fact]
@@ -132,9 +131,11 @@ public sealed class SerializerOptionsTests
             );
             stream.Position = 0;
 
-            CompressibleRecord[] read = await CompressibleRecordParquet.From(stream).ToArrayAsync();
+            List<CompressibleRecord> read = await CompressibleRecordParquet
+                .From(stream)
+                .ToListAsync();
 
-            read.Length.ShouldBe(2);
+            read.Count.ShouldBe(2);
             read[0].Payload.ShouldBe("first");
             read[1].Payload.ShouldBe("second");
         }
@@ -152,7 +153,7 @@ public sealed class SerializerOptionsTests
             CompressibleRecordParquet
                 .From(new MemoryStream(bytes))
                 .WithOptions(options)
-                .ToArrayAsync()
+                .ToListAsync()
         );
         streamException.Message.ShouldContain("uncompressed size");
         streamException.Message.ShouldContain("exceeding maximum allowed 1");
@@ -169,7 +170,7 @@ public sealed class SerializerOptionsTests
                 .From(new ReadOnlyMemory<byte>(bytes))
                 .WithOptions(options)
                 .Parallel()
-                .ToArrayAsync()
+                .ToListAsync()
         );
 
         await Should.ThrowAsync<InvalidDataException>(async () =>
@@ -181,18 +182,6 @@ public sealed class SerializerOptionsTests
                     .AsAsyncEnumerable()
             ) { }
         });
-
-        // #358: the columnar batch reader sits behind the same guarded stream as every other path.
-        var batchException = await Should.ThrowAsync<InvalidDataException>(async () =>
-        {
-            await foreach (
-                var _ in CompressibleRecordParquet
-                    .From(new MemoryStream(bytes))
-                    .WithOptions(options)
-                    .AsBatches()
-            ) { }
-        });
-        batchException.Message.ShouldContain("exceeding maximum allowed 1");
     }
 
     [Fact]
@@ -211,7 +200,7 @@ public sealed class SerializerOptionsTests
             CompressibleRecordParquet
                 .From(new MemoryStream(written.ToArray()))
                 .WithOptions(options)
-                .ToArrayAsync()
+                .ToListAsync()
         );
 
         exception.Message.ShouldContain("expands from");
@@ -237,7 +226,7 @@ public sealed class SerializerOptionsTests
         await written.WriteParquetAsync(stream);
         stream.Position = 0;
 
-        MicrosecondRecord[] read = await MicrosecondRecordParquet.From(stream).ToArrayAsync();
+        List<MicrosecondRecord> read = await MicrosecondRecordParquet.From(stream).ToListAsync();
 
         read.ShouldHaveSingleItem();
 

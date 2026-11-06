@@ -184,17 +184,17 @@ public sealed class GeneratedTypeMatrixTests
         List<GeneratedTypeMatrixRecord> expected = RequiredRows();
         byte[] bytes = await WriteRequiredAsync(expected, compressionMethod, rowGroupSize: 2);
 
-        GeneratedTypeMatrixRecord[] sequential = await GeneratedTypeMatrixRecordParquet
+        List<GeneratedTypeMatrixRecord> sequential = await GeneratedTypeMatrixRecordParquet
             .From(new MemoryStream(bytes))
-            .ToArrayAsync();
+            .ToListAsync();
         GeneratedTypeMatrixRecord[] array = await GeneratedTypeMatrixRecordParquet
             .From(new MemoryStream(bytes))
             .ToArrayAsync();
-        GeneratedTypeMatrixRecord[] parallel = await GeneratedTypeMatrixRecordParquet
+        List<GeneratedTypeMatrixRecord> parallel = await GeneratedTypeMatrixRecordParquet
             .From(bytes)
             .WithOptions(new ParquetSerializerOptions { MaxDegreeOfParallelism = 2 })
             .Parallel()
-            .ToArrayAsync();
+            .ToListAsync();
         GeneratedTypeMatrixRecord[] parallelArray = await GeneratedTypeMatrixRecordParquet
             .From(bytes)
             .WithOptions(new ParquetSerializerOptions { MaxDegreeOfParallelism = 2 })
@@ -258,15 +258,16 @@ public sealed class GeneratedTypeMatrixTests
             rowGroupSize: 1
         );
 
-        NullableGeneratedTypeMatrixRecord[] actual = await NullableGeneratedTypeMatrixRecordParquet
-            .From(new MemoryStream(bytes))
-            .ToArrayAsync();
-        NullableGeneratedTypeMatrixRecord[] parallel =
+        List<NullableGeneratedTypeMatrixRecord> actual =
+            await NullableGeneratedTypeMatrixRecordParquet
+                .From(new MemoryStream(bytes))
+                .ToListAsync();
+        List<NullableGeneratedTypeMatrixRecord> parallel =
             await NullableGeneratedTypeMatrixRecordParquet
                 .From(bytes)
                 .WithOptions(new ParquetSerializerOptions { MaxDegreeOfParallelism = 3 })
                 .Parallel()
-                .ToArrayAsync();
+                .ToListAsync();
 
         AssertEquivalent(expected, actual);
         AssertEquivalent(expected, parallel);
@@ -282,7 +283,7 @@ public sealed class GeneratedTypeMatrixTests
     )
     {
         using var stream = new MemoryStream();
-        await ((IEnumerable<GeneratedTypeMatrixRecord>)rows).WriteParquetAsync(
+        await ((IEnumerable<GeneratedTypeMatrixRecord>)rows).WriteParquetBatchedAsync(
             stream,
             new ParquetSerializerOptions
             {
@@ -300,7 +301,7 @@ public sealed class GeneratedTypeMatrixTests
     )
     {
         using var stream = new MemoryStream();
-        await ((IEnumerable<NullableGeneratedTypeMatrixRecord>)rows).WriteParquetAsync(
+        await ((IEnumerable<NullableGeneratedTypeMatrixRecord>)rows).WriteParquetBatchedAsync(
             stream,
             new ParquetSerializerOptions
             {

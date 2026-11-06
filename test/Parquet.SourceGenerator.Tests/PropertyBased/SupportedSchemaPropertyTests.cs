@@ -248,10 +248,10 @@ public sealed class SupportedSchemaPropertyTests
         );
 
         using var stream = new MemoryStream(bytes, writable: false);
-        FuzzWideRecord[] read = await FuzzWideRecordParquet.From(stream).ToArrayAsync();
+        List<FuzzWideRecord> read = await FuzzWideRecordParquet.From(stream).ToListAsync();
 
-        read.Length.ShouldBe(rows.Count);
-        read.ShouldAllBe(r => r.OptText == null);
+        read.Count.ShouldBe(rows.Count);
+        read.ForEach(r => r.OptText.ShouldBeNull());
 
         // The columns the file does carry must be unaffected by the absent one.
         read.Select(r => r.I64).ToList().ShouldBe(rows.Select(r => r.I64).ToList());
@@ -273,7 +273,7 @@ public sealed class SupportedSchemaPropertyTests
 
         using var stream = new MemoryStream(bytes, writable: false);
         InvalidDataException exception = await Should.ThrowAsync<InvalidDataException>(async () =>
-            await FuzzWideRecordParquet.From(stream).ToArrayAsync()
+            await FuzzWideRecordParquet.From(stream).ToListAsync()
         );
 
         exception.Message.ShouldContain("i64", Case.Sensitive);

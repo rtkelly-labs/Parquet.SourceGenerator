@@ -67,10 +67,9 @@ public sealed class PyArrowInteropTests
     [Trait("Category", "ExternalInterop")]
     public async Task GeneratedReaderReadsPyArrowCanonicalFixture()
     {
-        string? path = ExternalInteropInput.Resolve("PARQUET_PYARROW_INTEROP_INPUT");
-        // A plain local run stays self-contained and returns here. Under CI (or
-        // PARQUET_REQUIRE_EXTERNAL_INTEROP=1) an unset input fails inside Resolve instead.
-        if (path is null)
+        string? path = Environment.GetEnvironmentVariable("PARQUET_PYARROW_INTEROP_INPUT");
+        // The regular suite remains self-contained; CI's ExternalInterop job supplies the fixture.
+        if (string.IsNullOrWhiteSpace(path))
         {
             return;
         }
@@ -78,9 +77,9 @@ public sealed class PyArrowInteropTests
         System.IO.File.Exists(path).ShouldBeTrue($"PyArrow fixture does not exist: {path}");
 
         await using var stream = System.IO.File.OpenRead(path!);
-        PyArrowInteropRecord[] actual = await PyArrowInteropRecordParquet
+        List<PyArrowInteropRecord> actual = await PyArrowInteropRecordParquet
             .From(stream)
-            .ToArrayAsync();
+            .ToListAsync();
 
         ParquetCompatibilityOracle.AssertEquivalent(
             ExpectedRows(),
@@ -93,15 +92,17 @@ public sealed class PyArrowInteropTests
     [Trait("Category", "ExternalInterop")]
     public async Task GeneratedReaderReadsDuckDbCanonicalFixture()
     {
-        string? path = ExternalInteropInput.Resolve("DUCKDB_INTEROP_INPUT");
-        if (path is null)
+        string? path = Environment.GetEnvironmentVariable("DUCKDB_INTEROP_INPUT");
+        if (string.IsNullOrWhiteSpace(path))
         {
             return;
         }
 
         System.IO.File.Exists(path).ShouldBeTrue($"DuckDB fixture does not exist: {path}");
         await using var stream = System.IO.File.OpenRead(path);
-        DuckDbInteropRecord[] actual = await DuckDbInteropRecordParquet.From(stream).ToArrayAsync();
+        List<DuckDbInteropRecord> actual = await DuckDbInteropRecordParquet
+            .From(stream)
+            .ToListAsync();
 
         ParquetCompatibilityOracle.AssertEquivalent(
             ExpectedDuckDbRows(),

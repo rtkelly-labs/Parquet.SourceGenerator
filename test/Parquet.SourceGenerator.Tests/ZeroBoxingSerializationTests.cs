@@ -230,9 +230,9 @@ public class ZeroBoxingSerializationTests
         await items.WriteParquetAsync(stream);
 
         stream.Position = 0;
-        ZeroBoxingRecord[] results = await ZeroBoxingRecordParquet.From(stream).ToArrayAsync();
+        List<ZeroBoxingRecord> results = await ZeroBoxingRecordParquet.From(stream).ToListAsync();
 
-        results.Length.ShouldBe(items.Count);
+        results.Count.ShouldBe(items.Count);
 
         for (int i = 0; i < items.Count; i++)
         {
@@ -264,9 +264,9 @@ public class ZeroBoxingSerializationTests
         await items.WriteParquetAsync(stream);
 
         stream.Position = 0;
-        ZeroBoxingRecord[] results = await ZeroBoxingRecordParquet.From(stream).ToArrayAsync();
+        List<ZeroBoxingRecord> results = await ZeroBoxingRecordParquet.From(stream).ToListAsync();
 
-        results.Length.ShouldBe(count);
+        results.Count.ShouldBe(count);
 
         for (int i = 0; i < count; i++)
         {

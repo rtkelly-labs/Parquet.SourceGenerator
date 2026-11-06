@@ -19,8 +19,19 @@ namespace Parquet.SourceGenerator.Tests;
 #pragma warning disable CA1835 // the array overload is the reference behaviour under test
 public sealed class DecompressionGuardStreamContractTests
 {
-    private static ParquetDecompressionGuardStream CreateGuard(Stream inner) =>
-        new ParquetDecompressionGuardStream(inner, int.MaxValue, int.MaxValue);
+    private static readonly Type GuardType = typeof(BufferModel)
+        .Assembly.GetTypes()
+        .First(t => t.Name == "DecompressionGuardStream");
+
+    private static Stream CreateGuard(Stream inner) =>
+        (Stream)
+            Activator.CreateInstance(
+                GuardType,
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
+                binder: null,
+                args: new object[] { inner, int.MaxValue, int.MaxValue },
+                culture: null
+            )!;
 
     private static byte[] Sample() => Enumerable.Range(0, 64).Select(i => (byte)i).ToArray();
 
@@ -77,7 +88,7 @@ public sealed class DecompressionGuardStreamContractTests
     }
 
     [Fact]
-    public void EmitsHoistedCreateGuardedReadStreamCall()
+    public void MemoryOverloadsAreGatedForNet472()
     {
         var model = new TargetClassModel(
             Namespace: "TestNamespace",
@@ -86,6 +97,17 @@ public sealed class DecompressionGuardStreamContractTests
         );
 
         string source = CodeEmitter.EmitSource(model);
-        source.ShouldContain("ParquetDecompressionGuardStream CreateGuardedReadStream(");
+        int gate = source.IndexOf(
+            "#if NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER",
+            StringComparison.Ordinal
+        );
+        int overload = source.IndexOf(
+            "ReadAsync(global::System.Memory<byte>",
+            StringComparison.Ordinal
+        );
+        int end = source.IndexOf("#endif", gate, StringComparison.Ordinal);
+
+        gate.ShouldBeGreaterThanOrEqualTo(0);
+        overload.ShouldBeInRange(gate, end);
     }
 }

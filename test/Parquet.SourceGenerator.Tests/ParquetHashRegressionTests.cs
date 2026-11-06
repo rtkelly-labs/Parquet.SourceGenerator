@@ -13,7 +13,7 @@ namespace Parquet.SourceGenerator.Tests;
 /// <summary>
 /// Cryptographic hash-based regression suite for Parquet generation and dataset integrity.
 /// Guarantees:
-/// 1. Source-generated serialization (WriteParquetAsync, WriteParquetAsync) produces
+/// 1. Source-generated serialization (WriteParquetAsync, WriteParquetBatchedAsync) produces
 ///    strictly bit-for-bit deterministic output across repeated executions.
 /// 2. Serialized output for canonical models matches pinned golden SHA-256 hashes, catching any
 ///    unintended codec, dictionary, schema, or structural binary changes.
@@ -143,19 +143,21 @@ public sealed class ParquetHashRegressionTests
     [InlineData(25)]
     [InlineData(50)]
     [InlineData(100)]
-    public async Task WriteParquetAsyncIsBitForBitDeterministicAcrossRowGroupSizes(int rowGroupSize)
+    public async Task WriteParquetBatchedAsyncIsBitForBitDeterministicAcrossRowGroupSizes(
+        int rowGroupSize
+    )
     {
         var records = CreateDeterministicUserRecords(100);
 
         using var stream1 = new MemoryStream();
-        await records.WriteParquetAsync(
+        await records.WriteParquetBatchedAsync(
             stream1,
             new ParquetSerializerOptions { RowGroupSize = rowGroupSize }
         );
         byte[] bytes1 = stream1.ToArray();
 
         using var stream2 = new MemoryStream();
-        await records.WriteParquetAsync(
+        await records.WriteParquetBatchedAsync(
             stream2,
             new ParquetSerializerOptions { RowGroupSize = rowGroupSize }
         );
@@ -247,11 +249,14 @@ public sealed class ParquetHashRegressionTests
     }
 
     [Fact]
-    public async Task UserRecordsWriteParquetAsyncMatchesGoldenHash()
+    public async Task UserRecordsWriteParquetBatchedAsyncMatchesGoldenHash()
     {
         var records = CreateDeterministicUserRecords(100);
         using var stream = new MemoryStream();
-        await records.WriteParquetAsync(stream, new ParquetSerializerOptions { RowGroupSize = 25 });
+        await records.WriteParquetBatchedAsync(
+            stream,
+            new ParquetSerializerOptions { RowGroupSize = 25 }
+        );
 
         string actualHash = ComputeSha256(stream);
         actualHash.ShouldBe("02738967a4061950a3881e82d2c3db63bdc1949dade0cbafead52347c2069af2");
@@ -284,7 +289,7 @@ public sealed class ParquetHashRegressionTests
     {
         string filePath = Path.Combine(BenchmarkDataRoot, "tpch_lineitem_sf001.parquet");
         await using var readStream = System.IO.File.OpenRead(filePath);
-        var allRecords = await TpchLineItemRecordParquet.From(readStream).ToArrayAsync();
+        var allRecords = await TpchLineItemRecordParquet.From(readStream).ToListAsync();
         var slice = allRecords.Take(200).ToList();
 
         using var stream1 = new MemoryStream();
@@ -320,7 +325,7 @@ public sealed class ParquetHashRegressionTests
     {
         string filePath = Path.Combine(BenchmarkDataRoot, "adult_census_income.parquet");
         await using var readStream = System.IO.File.OpenRead(filePath);
-        var allRecords = await AdultCensusRecordParquet.From(readStream).ToArrayAsync();
+        var allRecords = await AdultCensusRecordParquet.From(readStream).ToListAsync();
         var slice = allRecords.Take(200).ToList();
 
         using var stream1 = new MemoryStream();
@@ -356,7 +361,7 @@ public sealed class ParquetHashRegressionTests
     {
         string filePath = Path.Combine(BenchmarkDataRoot, "diamonds.parquet");
         await using var readStream = System.IO.File.OpenRead(filePath);
-        var allRecords = await DiamondRecordParquet.From(readStream).ToArrayAsync();
+        var allRecords = await DiamondRecordParquet.From(readStream).ToListAsync();
         var slice = allRecords.Take(200).ToList();
 
         using var stream1 = new MemoryStream();

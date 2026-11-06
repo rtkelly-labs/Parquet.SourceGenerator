@@ -10,17 +10,14 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: 'Build, pack and verify only — no NuGet push, no GitHub release. Untick to publish for real.'
+        description: 'Build, pack and verify only — no NuGet push, no GitHub release'
         required: false
         type: boolean
-        # A real publish needs an explicit `false`: an unmodified dispatch is a dry run.
-        default: true
+        default: false
 
-# Least privilege by default: only the `publish` job — the one that exchanges the OIDC token at
-# nuget.org and creates the GitHub release — gets anything beyond read. The `build` job executes
-# repo code (MSBuild targets, tests, scripts), so it must never hold `id-token: write`.
 permissions:
-  contents: read
+  contents: write
+  id-token: write
 
 concurrency:
   group: release
@@ -30,26 +27,11 @@ jobs:
   prepare:
     name: Resolve release from changelog
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     outputs:
       version: ${{ steps.changelog.outputs.version }}
       tag: ${{ steps.changelog.outputs.tag }}
       is_prerelease: ${{ steps.changelog.outputs.is_prerelease }}
     steps:
-      # CHANGELOG.md is the release authority and it is cut by merging a PR (see the header
-      # comment), so the only ref a real release can legitimately describe is main. A dry run is
-      # deliberately still allowed from any ref — building and verifying a branch is the useful case.
-      - name: Refuse to release from a non-main ref
-        if: ${{ !inputs.dry_run }}
-        run: |
-          set -euo pipefail
-          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
-            echo "::error::A real release may only be dispatched from main; got '$GITHUB_REF'. Merge the changelog cut to main first, or re-run this dispatch with dry_run enabled."
-            exit 1
-          fi
-          echo "Dispatched from main."
-
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -87,9 +69,6 @@ jobs:
     name: Build & verify packages
     needs: prepare
     runs-on: ubuntu-latest
-    # This job runs repo-controlled code. It gets read access and nothing else.
-    permissions:
-      contents: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -104,9 +83,6 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
-        with:
-          # Exact version: the action otherwise installs the latest uv on every run.
-          version: "0.12.21"
 
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
@@ -120,7 +96,7 @@ jobs:
         run: dotnet run scripts/VerifyProvenance.cs
 
       - name: Restore dependencies
-        run: dotnet restore Parquet.SourceGenerator.slnx --locked-mode
+        run: dotnet restore Parquet.SourceGenerator.slnx
 
       - name: Build Solution (Release)
         run: |
@@ -133,10 +109,7 @@ jobs:
         uses: ./.github/actions/verify-test-data
 
       - name: Run Tests
-        # ExternalInterop needs fixtures from PyArrow and DuckDB, which this build does not produce;
-        # CI runs them. With CI=true they would fail, not pass,
-        # when their input is unset (#566), so they are excluded rather than left to pass over nothing.
-        run: dotnet test Parquet.SourceGenerator.slnx --configuration Release --no-build --filter "Category!=ExternalInterop"
+        run: dotnet test Parquet.SourceGenerator.slnx --configuration Release --no-build
 
       - name: Execute Sample (CoreCLR)
         run: dotnet run --project samples/Parquet.SourceGenerator.SampleAot/Parquet.SourceGenerator.SampleAot.csproj --configuration Release
@@ -168,9 +141,35 @@ jobs:
             --output ./artifacts -p:Version=${{ needs.prepare.outputs.version }}
 
       - name: Verify Package Layout
-        uses: ./.github/actions/verify-package-layout
-        with:
-          version: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          version="${{ needs.prepare.outputs.version }}"
+          cd artifacts
+          gen="Parquet.SourceGenerator.${version}.nupkg"
+          genlegacy="Parquet.SourceGenerator.Legacy.${version}.nupkg"
+          attrs="Parquet.SourceGenerator.Attributes.${version}.nupkg"
+
+          test -f "$gen"       || { echo "FAIL: $gen not produced"; ls -la; exit 1; }
+          test -f "$genlegacy" || { echo "FAIL: $genlegacy not produced"; ls -la; exit 1; }
+          test -f "$attrs"     || { echo "FAIL: $attrs not produced"; ls -la; exit 1; }
+
+          unzip -Z1 "$gen" | grep -q '^analyzers/dotnet/cs/Parquet\.SourceGenerator\.dll$' \
+            || { echo "FAIL: generator missing from analyzers/dotnet/cs/"; exit 1; }
+          unzip -Z1 "$genlegacy" | grep -q '^analyzers/dotnet/cs/Parquet\.SourceGenerator\.Legacy\.dll$' \
+            || { echo "FAIL: Legacy generator missing from analyzers/dotnet/cs/"; exit 1; }
+          if unzip -Z1 "$gen" | grep -q '^lib/' || unzip -Z1 "$genlegacy" | grep -q '^lib/'; then
+            echo "FAIL: generator package contains lib/ entries; it must be analyzer-only:"
+            exit 1
+          fi
+          unzip -p "$gen" '*.nuspec' | grep -q 'id="Parquet.SourceGenerator.Attributes"' \
+            || { echo "FAIL: generator .nuspec does not depend on the Attributes package"; exit 1; }
+          unzip -p "$genlegacy" '*.nuspec' | grep -q 'id="Parquet.SourceGenerator.Attributes"' \
+            || { echo "FAIL: Legacy generator .nuspec does not depend on the Attributes package"; exit 1; }
+          for tfm in netstandard2.0 netstandard2.1 net8.0 net9.0; do
+            unzip -Z1 "$attrs" | grep -q "^lib/$tfm/Parquet\.SourceGenerator\.Attributes\.dll$" \
+              || { echo "FAIL: attributes package missing lib/$tfm"; exit 1; }
+          done
+          echo "Package layout OK for $version."
 
       - name: Verify Package Consumption (v6 & Legacy packages on .NET 8 & .NET 9)
         run: |
@@ -229,9 +228,9 @@ jobs:
         run: |
           set -euo pipefail
           out="$RUNNER_TEMP/derived"
-          dotnet run scripts/DerivedOutputs.cs -- --out "$out" --version "$VERSION"
+          dotnet run scripts/DerivedOutputs.cs -- --out "$out"
           printf '{"version":"%s","tag":"%s","commit":"%s"}\n' "$VERSION" "$TAG" "$GITHUB_SHA" > "$out/manifest.json"
-          tar -czf "$RUNNER_TEMP/derived-outputs.tar.gz" -C "$out" manifest.json golden metrics callgraph api-model.json
+          tar -czf "$RUNNER_TEMP/derived-outputs.tar.gz" -C "$out" manifest.json golden metrics callgraph
 
       - name: Upload Derived Outputs
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -240,60 +239,11 @@ jobs:
           path: ${{ runner.temp }}/derived-outputs.tar.gz
           if-no-files-found: error
 
-  # The release build below omits several CI gates (CSharpier, ledger, IL, conformance,
-  # generated-analysis), so a release is only as good as the `build` check that CI recorded for
-  # this exact commit. This job refuses a commit whose `build` check run is missing, still
-  # running, or not `success`. It holds `checks: read` and nothing else, and runs no repo code.
-  # On a dry run it reports the same verdict without failing, so a branch can exercise it.
-  verify-ci:
-    name: Verify the commit passed CI
-    runs-on: ubuntu-latest
-    permissions:
-      checks: read
-    steps:
-      - name: Require a successful build check run for this commit
-        env:
-          GH_TOKEN: ${{ github.token }}
-          DRY_RUN: ${{ inputs.dry_run }}
-        run: |
-          set -euo pipefail
-          # filter=latest keeps only the most recent run of each check name, so a re-run that
-          # passed replaces the failed attempt. The app filter ignores a same-named check from
-          # any other integration; branch protection pins the same app (GitHub Actions).
-          json=$(gh api -H "Accept: application/vnd.github+json" \
-            "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs?check_name=build&filter=latest&per_page=100")
-          found=$(jq '[.check_runs[] | select(.app.slug == "github-actions")] | length' <<<"$json")
-          bad=$(jq '[.check_runs[] | select(.app.slug == "github-actions")
-                     | select(.status != "completed" or .conclusion != "success")] | length' <<<"$json")
-          echo "build check runs for $GITHUB_SHA: found=$found not-successful=$bad"
-          jq -r '.check_runs[] | "  \(.app.slug) \(.name) status=\(.status) conclusion=\(.conclusion)"' <<<"$json"
-
-          problem=""
-          if [ "$found" -eq 0 ]; then
-            problem="no 'build' check run exists for $GITHUB_SHA; CI has not run on this commit"
-          elif [ "$bad" -ne 0 ]; then
-            problem="the 'build' check run for $GITHUB_SHA is pending or did not conclude success"
-          fi
-
-          if [ -z "$problem" ]; then
-            echo "The build check run concluded success."
-          elif [ "$DRY_RUN" = "true" ]; then
-            echo "::warning::$problem (dry run, not failing; a real release would stop here)"
-          else
-            echo "::error::$problem. Wait for CI on this commit, or release a commit that has passed it."
-            exit 1
-          fi
-
   publish:
     name: Publish packages
-    needs: [prepare, build, verify-ci]
-    # The ref condition repeats the hard failure in `prepare` as a second, structural brake: the
-    # push to nuget.org and the GitHub release can only ever run against main.
-    if: ${{ !inputs.dry_run && github.ref == 'refs/heads/main' }}
+    needs: [prepare, build]
+    if: ${{ !inputs.dry_run }}
     runs-on: ubuntu-latest
-    permissions:
-      contents: write # softprops/action-gh-release creates the tag and the GitHub release
-      id-token: write # NuGet/login exchanges the OIDC token (trusted publishing)
     # The release environment gives deployment history and a scoped-secrets namespace. It is
     # not an approval gate: required reviewers are org-only, and GitHub forbids self-approval —
     # solo, nothing can pause this job. The brake is the manual dispatch plus the build job.

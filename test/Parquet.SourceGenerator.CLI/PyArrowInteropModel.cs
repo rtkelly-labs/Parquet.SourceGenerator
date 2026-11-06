@@ -84,7 +84,7 @@ public static class PyArrowInteropGenerator
         };
 
         await using var stream = System.IO.File.Create(outputPath);
-        await rows.WriteParquetAsync(
+        await rows.WriteParquetBatchedAsync(
             stream,
             new ParquetSerializerOptions
             {

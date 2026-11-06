@@ -67,9 +67,9 @@ public class NullVsEmptyAndLargePayloadTests
         await original.WriteParquetAsync(stream);
 
         stream.Position = 0;
-        PayloadSemanticsModel[] read = await PayloadSemanticsModelParquet
+        List<PayloadSemanticsModel> read = await PayloadSemanticsModelParquet
             .From(stream)
-            .ToArrayAsync();
+            .ToListAsync();
 
         ParquetCompatibilityOracle.AssertEquivalent(original, read);
     }
@@ -165,11 +165,11 @@ public class NullVsEmptyAndLargePayloadTests
         await items.WriteParquetAsync(stream);
 
         stream.Position = 0;
-        PayloadSemanticsModel[] results = await PayloadSemanticsModelParquet
+        List<PayloadSemanticsModel> results = await PayloadSemanticsModelParquet
             .From(stream)
-            .ToArrayAsync();
+            .ToListAsync();
 
-        results.Length.ShouldBe(items.Count);
+        results.Count.ShouldBe(items.Count);
 
         for (int i = 0; i < items.Count; i++)
         {
@@ -242,11 +242,11 @@ public class NullVsEmptyAndLargePayloadTests
 
         // 1. Sequential Read
         stream.Position = 0;
-        PayloadSemanticsModel[] sequentialResults = await PayloadSemanticsModelParquet
+        List<PayloadSemanticsModel> sequentialResults = await PayloadSemanticsModelParquet
             .From(stream)
-            .ToArrayAsync();
+            .ToListAsync();
 
-        sequentialResults.Length.ShouldBe(items.Count);
+        sequentialResults.Count.ShouldBe(items.Count);
         for (int i = 0; i < items.Count; i++)
         {
             sequentialResults[i].Id.ShouldBe(items[i].Id);
@@ -258,12 +258,12 @@ public class NullVsEmptyAndLargePayloadTests
 
         // 2. Parallel Read
         stream.Position = 0;
-        PayloadSemanticsModel[] parallelResults = await PayloadSemanticsModelParquet
+        List<PayloadSemanticsModel> parallelResults = await PayloadSemanticsModelParquet
             .From(stream.ToArray())
             .Parallel()
-            .ToArrayAsync();
+            .ToListAsync();
 
-        parallelResults.Length.ShouldBe(items.Count);
+        parallelResults.Count.ShouldBe(items.Count);
         for (int i = 0; i < items.Count; i++)
         {
             parallelResults[i].Id.ShouldBe(items[i].Id);

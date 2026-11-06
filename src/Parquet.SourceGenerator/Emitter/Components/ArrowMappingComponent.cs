@@ -143,15 +143,7 @@ internal static class ArrowMappingComponent
                         + ".Decimal128Type)dataType).Precision + \",\" + (("
                         + TypesNs
                         + ".Decimal128Type)dataType).Scale + \").\"",
-                    // Never Decimal128Array.GetValue: it rounds a value with more significant digits
-                    // than System.Decimal holds. The helper reads the unscaled integer exactly and
-                    // refuses anything past System.Decimal's 96-bit mantissa.
-                    ConvertExpression =
-                        "ArrowDecimalExact({ARR}, {I}, "
-                        + scale.ToString(System.Globalization.CultureInfo.InvariantCulture)
-                        + ", "
-                        + EmittedText.Literal(prop.ParquetColumnName)
-                        + ")",
+                    ConvertExpression = "{ARR}.GetValue({I})!.Value",
                 };
             }
 

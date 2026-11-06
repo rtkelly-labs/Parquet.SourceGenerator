@@ -62,7 +62,7 @@ public sealed class BenchmarkBaselineEquivalenceTests
             .ToList();
 
         using var stream = new MemoryStream();
-        await original.WriteParquetAsync(
+        await original.WriteParquetBatchedAsync(
             stream,
             new ParquetSerializerOptions { RowGroupSize = 20 }
         );
@@ -70,11 +70,11 @@ public sealed class BenchmarkBaselineEquivalenceTests
 
         // 1. Verify Source Generator deserializes every single field correctly
         using var sgStream = new MemoryStream(bytes);
-        BenchmarkScaleModel[] sgResult = await BenchmarkScaleModelParquet
+        List<BenchmarkScaleModel> sgResult = await BenchmarkScaleModelParquet
             .From(sgStream)
-            .ToArrayAsync();
+            .ToListAsync();
 
-        sgResult.Length.ShouldBe(count);
+        sgResult.Count.ShouldBe(count);
         for (int i = 0; i < count; i++)
         {
             sgResult[i].Id.ShouldBe(original[i].Id);
@@ -114,7 +114,7 @@ public sealed class BenchmarkBaselineEquivalenceTests
             .ToList();
 
         using var stream = new MemoryStream();
-        await original.WriteParquetAsync(
+        await original.WriteParquetBatchedAsync(
             stream,
             new ParquetSerializerOptions { RowGroupSize = 10 }
         );
@@ -122,16 +122,16 @@ public sealed class BenchmarkBaselineEquivalenceTests
 
         // Source generator read
         using var sgStream = new MemoryStream(bytes);
-        BenchmarkGuidModel[] sgResult = await BenchmarkGuidModelParquet
+        List<BenchmarkGuidModel> sgResult = await BenchmarkGuidModelParquet
             .From(sgStream)
-            .ToArrayAsync();
+            .ToListAsync();
 
         // Reflection baseline read
         using var baselineStream = new MemoryStream(bytes);
         DeserializationResult<BenchmarkGuidModel> baselineResult =
             await ParquetSerializer.DeserializeAsync<BenchmarkGuidModel>(baselineStream);
 
-        sgResult.Length.ShouldBe(count);
+        sgResult.Count.ShouldBe(count);
         baselineResult.Data.Count.ShouldBe(count);
 
         for (int i = 0; i < count; i++)
@@ -162,14 +162,17 @@ public sealed class BenchmarkBaselineEquivalenceTests
             .ToList();
 
         using var ms = new MemoryStream();
-        await data.WriteParquetAsync(ms, new ParquetSerializerOptions { RowGroupSize = 2_000 });
+        await data.WriteParquetBatchedAsync(
+            ms,
+            new ParquetSerializerOptions { RowGroupSize = 2_000 }
+        );
         byte[] bytes = ms.ToArray();
 
         // Warmup
         using (var s = new MemoryStream(bytes))
         {
             await ParquetSerializer.DeserializeAsync<BenchmarkScaleModel>(s);
-            await BenchmarkScaleModelParquet.From(s).ToArrayAsync();
+            await BenchmarkScaleModelParquet.From(s).ToListAsync();
         }
 
         // Measure reflection baseline

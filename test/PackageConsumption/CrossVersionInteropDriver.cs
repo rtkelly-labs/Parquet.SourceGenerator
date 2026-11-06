@@ -66,7 +66,7 @@ internal static class CrossVersionInteropDriver
         }
 
         using var stream = File.OpenRead(path);
-        InteropRowEvolved[] read = await InteropRowEvolvedParquet.From(stream).ToArrayAsync();
+        List<InteropRowEvolved> read = await InteropRowEvolvedParquet.From(stream).ToListAsync();
 
         string? failure = InteropVerification.Verify(read, CanonicalRows);
         if (failure is not null)
@@ -76,7 +76,7 @@ internal static class CrossVersionInteropDriver
         }
 
         Console.WriteLine(
-            $"{Backend} read {read.Length} rows written by {producerBackend}: columns resolved by name, "
+            $"{Backend} read {read.Count} rows written by {producerBackend}: columns resolved by name, "
                 + "added_note/added_count absent from the file and materialised as null."
         );
 
@@ -86,7 +86,7 @@ internal static class CrossVersionInteropDriver
             consumer: Backend,
             schemaCase: "column-reordering+missing-optional-columns",
             outcome: "CompatibleWithNulls",
-            detail: $"{read.Length} rows"
+            detail: $"{read.Count} rows"
         );
         return 0;
     }

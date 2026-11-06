@@ -156,55 +156,6 @@ internal static class DiagnosticDescriptors
     );
 
     /// <summary>
-    /// PARQ020: Abstract target types are not supported.
-    /// </summary>
-    /// <remarks>
-    /// The read path constructs rows with <c>new T { ... }</c>, which an abstract class cannot
-    /// satisfy (CS0144 inside generated code). An abstract base is still a valid source of
-    /// inherited columns for a concrete target.
-    /// </remarks>
-    public static readonly DiagnosticDescriptor AbstractTypeNotSupported = new(
-        id: "PARQ020",
-        title: "Abstract type cannot be Parquet-serializable",
-        messageFormat: "The type '{0}' is abstract. [ParquetSerializable] needs a concrete type because generated code constructs rows with 'new'; put the attribute on a derived type, whose inherited members are included",
-        category: "ParquetSourceGenerator",
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true
-    );
-
-    /// <summary>
-    /// PARQ021: Ref struct target types are not supported.
-    /// </summary>
-    /// <remarks>
-    /// Generated code stores rows in <c>List&lt;T&gt;</c>, arrays and tasks, none of which can hold
-    /// a ref struct (CS0306 and CS8345 across the generated file).
-    /// </remarks>
-    public static readonly DiagnosticDescriptor RefStructNotSupported = new(
-        id: "PARQ021",
-        title: "Ref struct cannot be Parquet-serializable",
-        messageFormat: "The type '{0}' is a ref struct. [ParquetSerializable] supports types that can be stored in lists and arrays; declare an ordinary struct or class instead",
-        category: "ParquetSourceGenerator",
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true
-    );
-
-    /// <summary>
-    /// PARQ022: File-local target types are not supported.
-    /// </summary>
-    /// <remarks>
-    /// Generated code lives in another file and names the target in public signatures; a
-    /// <c>file</c> type is visible only in its own file (CS9051 in generated code).
-    /// </remarks>
-    public static readonly DiagnosticDescriptor FileLocalTypeNotSupported = new(
-        id: "PARQ022",
-        title: "File-local type cannot be Parquet-serializable",
-        messageFormat: "The type '{0}' is file-local. [ParquetSerializable] types are named from generated code in another file; remove the 'file' modifier",
-        category: "ParquetSourceGenerator",
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true
-    );
-
-    /// <summary>
     /// PARQ011: The member's type is supported by Parquet.Net 6 but not by the 4.x/5.x API.
     /// </summary>
     /// <remarks>
@@ -276,54 +227,12 @@ internal static class DiagnosticDescriptors
     );
 
     /// <summary>
-    /// PARQ016: Two targets flatten to the same generated type names.
+    /// PARQ015: A configured generator feature level is not a defined value.
     /// </summary>
-    /// <remarks>
-    /// Generated types live at namespace scope and are named after the target's containing-type
-    /// path with the dots removed, so <c>A.BC</c> and <c>AB.C</c> both produce
-    /// <c>ABCParquetExtensions</c>, <c>ABCRowGroupMetadata</c> and the rest. Without this rule the
-    /// build failed with a cascade of CS0101 errors inside generated files, naming neither
-    /// declaration. Found while building Arrow.SourceGenerator, which nests its companions instead.
-    /// </remarks>
-    public static readonly DiagnosticDescriptor GeneratedNameCollision = new(
-        id: "PARQ016",
-        title: "Generated type names collide",
-        messageFormat: "The types '{0}' and '{1}' both generate types named '{2}…' in namespace '{3}'. Rename one of them",
-        category: "ParquetSourceGenerator",
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true
-    );
-
-    /// <summary>
-    /// PARQ023: The member sets a column option the Parquet.Net 4.x/5.x backend cannot write.
-    /// </summary>
-    /// <remarks>
-    /// Reported only by the classic (v4/v5) backend. <c>FieldId</c> needs <c>DataField.FieldId</c>,
-    /// which 4.x/5.x do not have; <c>AdjustedToUtc = false</c> needs <c>DateTimeFormat.Timestamp</c>
-    /// and <c>DateTimeTimeUnit</c>, which only 4.25 onwards have. Rejecting the member, rather than
-    /// dropping the option, keeps a column from silently losing its ID or becoming UTC-adjusted.
-    /// </remarks>
-    public static readonly DiagnosticDescriptor ColumnOptionUnsupportedOnClassicApi = new(
-        id: "PARQ023",
-        title: "Column option is not supported by the Parquet.Net 4.x/5.x backend",
-        messageFormat: "The member '{0}' on type '{1}' sets {2}, which the Parquet.Net 4.x/5.x backend cannot write. Use the Parquet.SourceGenerator package instead, or remove the option",
-        category: "ParquetSourceGenerator",
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true
-    );
-
-    /// <summary>
-    /// PARQ024: Two columns of one schema declare the same Parquet field ID.
-    /// </summary>
-    /// <remarks>
-    /// A field ID names exactly one column of the schema; readers that resolve columns by ID, such
-    /// as Apache Iceberg, cannot tell two columns with the same ID apart. Reported once per
-    /// duplicated ID, naming every column (by its dotted path) that declares it.
-    /// </remarks>
-    public static readonly DiagnosticDescriptor DuplicateFieldId = new(
-        id: "PARQ024",
-        title: "Duplicate Parquet field ID",
-        messageFormat: "The Parquet field ID {0} is declared by more than one column of type '{1}' ({2}). Field IDs must be unique across the schema",
+    public static readonly DiagnosticDescriptor InvalidFeatureLevel = new(
+        id: "PARQ015",
+        title: "Invalid generator feature level",
+        messageFormat: "The configured ParquetGeneratorFeatureLevel '{0}' is not defined. Use Level1Flat, Level2CompoundPreview, or Level3ModernCSharp",
         category: "ParquetSourceGenerator",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true

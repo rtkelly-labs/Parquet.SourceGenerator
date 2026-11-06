@@ -5,8 +5,6 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using BenchmarkDotNet.Attributes;
-using BenchmarkDotNet.Configs;
-using BenchmarkDotNet.Exporters.Json;
 using BenchmarkDotNet.Jobs;
 using BenchmarkDotNet.Running;
 using Parquet.Serialization;
@@ -99,7 +97,7 @@ public class ScalingSerializationBenchmark
     public async Task SourceGeneratorWriteBatchedAsync()
     {
         using var stream = new MemoryStream();
-        await _data.WriteParquetAsync(
+        await _data.WriteParquetBatchedAsync(
             stream,
             new ParquetSerializerOptions { RowGroupSize = 20_000 }
         );
@@ -135,7 +133,10 @@ public class ScalingDeserializationBenchmark
             .ToList();
 
         using var stream = new MemoryStream();
-        data.WriteParquetAsync(stream, new ParquetSerializerOptions { RowGroupSize = 20_000 })
+        data.WriteParquetBatchedAsync(
+                stream,
+                new ParquetSerializerOptions { RowGroupSize = 20_000 }
+            )
             .GetAwaiter()
             .GetResult();
         _parquetBytes = stream.ToArray();
@@ -173,27 +174,20 @@ public class ScalingDeserializationBenchmark
     /// <summary>
     /// Source generator sequential deserializer — Native AOT compatible, ArrayPool buffers.
     /// </summary>
-    /// <remarks>
-    /// Measured the <c>List&lt;T&gt;</c> terminal until #479 removed it; it now measures the array
-    /// path (the same path as <see cref="SourceGeneratorReadArrayAsync"/>). The name is kept because
-    /// the benchmark summary and the regression history key on it. The same applies to the
-    /// <c>...BufferAsync</c> and <c>...ParallelBufferAsync</c> benchmarks below and to the
-    /// formerly <c>List</c>-returning read benchmarks in the dataset and deduplication suites.
-    /// </remarks>
     [Benchmark]
-    public async Task<ScaleEvent[]> SourceGeneratorReadAsync()
+    public async Task<List<ScaleEvent>> SourceGeneratorReadAsync()
     {
         using var stream = new MemoryStream(_parquetBytes);
-        return await ScaleEventParquet.From(stream).ToArrayAsync();
+        return await ScaleEventParquet.From(stream).ToListAsync();
     }
 
     /// <summary>
     /// Source generator sequential deserializer over a byte buffer — no stream wrapper allocation.
     /// </summary>
     [Benchmark]
-    public async Task<ScaleEvent[]> SourceGeneratorReadBufferAsync()
+    public async Task<List<ScaleEvent>> SourceGeneratorReadBufferAsync()
     {
-        return await ScaleEventParquet.From(new ReadOnlyMemory<byte>(_parquetBytes)).ToArrayAsync();
+        return await ScaleEventParquet.From(new ReadOnlyMemory<byte>(_parquetBytes)).ToListAsync();
     }
 
     /// <summary>
@@ -207,13 +201,13 @@ public class ScalingDeserializationBenchmark
     /// obvious in the allocation column here.
     /// </remarks>
     [Benchmark]
-    public async Task<ScaleEvent[]> SourceGeneratorReadParallelBufferAsync()
+    public async Task<List<ScaleEvent>> SourceGeneratorReadParallelBufferAsync()
     {
         return await ScaleEventParquet
             .From(new ReadOnlyMemory<byte>(_parquetBytes))
             .WithOptions(new ParquetSerializerOptions { MaxDegreeOfParallelism = 4 })
             .Parallel()
-            .ToArrayAsync();
+            .ToListAsync();
     }
 
     /// <summary>
@@ -344,13 +338,6 @@ internal static class Program
             benchmarkArgs.Add(args[i]);
         }
 
-        // The regression gate (tools/BenchmarkSummaryGenerator --baseline) reads the compressed JSON
-        // export: it carries the benchmark type and the full parameter set, and exact allocated
-        // bytes, none of which the CSV column order or its rounded units can give it reliably.
-        IConfig config = DefaultConfig.Instance.AddExporter(JsonExporter.FullCompressed);
-
-        BenchmarkSwitcher
-            .FromAssembly(typeof(Program).Assembly)
-            .Run(benchmarkArgs.ToArray(), config);
+        BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(benchmarkArgs.ToArray());
     }
 }

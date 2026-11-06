@@ -217,11 +217,7 @@ public class TpchLineItemBenchmark
         _rawBytes = System.IO.File.ReadAllBytes(dataPath);
 
         using var ms = new MemoryStream(_rawBytes);
-        // The write benchmarks below measure the List<T> write path, so the fixture stays a List;
-        // since #479 the reader materialises an array and the caller converts it.
-        _records = new List<BenchmarkTpchLineItem>(
-            BenchmarkTpchLineItemParquet.From(ms).ToArrayAsync().GetAwaiter().GetResult()
-        );
+        _records = BenchmarkTpchLineItemParquet.From(ms).ToListAsync().GetAwaiter().GetResult();
 
         if (_records.Count != 60175)
         {
@@ -240,20 +236,20 @@ public class TpchLineItemBenchmark
     }
 
     [Benchmark]
-    public async Task<BenchmarkTpchLineItem[]> SourceGeneratorTpchReadAsync()
+    public async Task<List<BenchmarkTpchLineItem>> SourceGeneratorTpchReadAsync()
     {
         using var stream = new MemoryStream(_rawBytes);
-        return await BenchmarkTpchLineItemParquet.From(stream).ToArrayAsync();
+        return await BenchmarkTpchLineItemParquet.From(stream).ToListAsync();
     }
 
     [Benchmark]
-    public async Task<BenchmarkTpchLineItem[]> SourceGeneratorTpchReadParallelBufferAsync()
+    public async Task<List<BenchmarkTpchLineItem>> SourceGeneratorTpchReadParallelBufferAsync()
     {
         return await BenchmarkTpchLineItemParquet
             .From(new ReadOnlyMemory<byte>(_rawBytes))
             .WithOptions(new ParquetSerializerOptions { MaxDegreeOfParallelism = 4 })
             .Parallel()
-            .ToArrayAsync();
+            .ToListAsync();
     }
 
     [Benchmark]
@@ -339,11 +335,11 @@ public class AdultCensusBenchmark
         _rawBytes = System.IO.File.ReadAllBytes(dataPath);
 
         using var initStream = new MemoryStream(_rawBytes);
-        // The write benchmarks below measure the List<T> write path, so the fixture stays a List;
-        // since #479 the reader materialises an array and the caller converts it.
-        _records = new List<BenchmarkAdultCensus>(
-            BenchmarkAdultCensusParquet.From(initStream).ToArrayAsync().GetAwaiter().GetResult()
-        );
+        _records = BenchmarkAdultCensusParquet
+            .From(initStream)
+            .ToListAsync()
+            .GetAwaiter()
+            .GetResult();
         _snappyOptions = new ParquetSerializerOptions
         {
             CompressionMethod = ParquetCompressionMethod.Snappy,
@@ -359,20 +355,20 @@ public class AdultCensusBenchmark
     }
 
     [Benchmark]
-    public async Task<BenchmarkAdultCensus[]> SourceGeneratorCensusReadAsync()
+    public async Task<List<BenchmarkAdultCensus>> SourceGeneratorCensusReadAsync()
     {
         using var stream = new MemoryStream(_rawBytes);
-        return await BenchmarkAdultCensusParquet.From(stream).ToArrayAsync();
+        return await BenchmarkAdultCensusParquet.From(stream).ToListAsync();
     }
 
     [Benchmark]
-    public async Task<BenchmarkAdultCensus[]> SourceGeneratorCensusReadParallelBufferAsync()
+    public async Task<List<BenchmarkAdultCensus>> SourceGeneratorCensusReadParallelBufferAsync()
     {
         return await BenchmarkAdultCensusParquet
             .From(new ReadOnlyMemory<byte>(_rawBytes))
             .WithOptions(new ParquetSerializerOptions { MaxDegreeOfParallelism = 4 })
             .Parallel()
-            .ToArrayAsync();
+            .ToListAsync();
     }
 
     [Benchmark]
@@ -440,20 +436,20 @@ public class DiamondsBenchmark
     }
 
     [Benchmark]
-    public async Task<BenchmarkDiamonds[]> SourceGeneratorDiamondsReadAsync()
+    public async Task<List<BenchmarkDiamonds>> SourceGeneratorDiamondsReadAsync()
     {
         using var stream = new MemoryStream(_rawBytes);
-        return await BenchmarkDiamondsParquet.From(stream).ToArrayAsync();
+        return await BenchmarkDiamondsParquet.From(stream).ToListAsync();
     }
 
     [Benchmark]
-    public async Task<BenchmarkDiamonds[]> SourceGeneratorDiamondsReadParallelBufferAsync()
+    public async Task<List<BenchmarkDiamonds>> SourceGeneratorDiamondsReadParallelBufferAsync()
     {
         return await BenchmarkDiamondsParquet
             .From(new ReadOnlyMemory<byte>(_rawBytes))
             .WithOptions(new ParquetSerializerOptions { MaxDegreeOfParallelism = 4 })
             .Parallel()
-            .ToArrayAsync();
+            .ToListAsync();
     }
 
     [Benchmark]

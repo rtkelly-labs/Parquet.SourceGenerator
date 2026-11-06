@@ -130,33 +130,33 @@ public class EmittedConfigureAwaitTests
         {
             using var stream = new MemoryStream();
             items
-                .WriteParquetAsync(stream, new ParquetSerializerOptions { RowGroupSize = 5 })
+                .WriteParquetBatchedAsync(stream, new ParquetSerializerOptions { RowGroupSize = 5 })
                 .GetAwaiter()
                 .GetResult();
 
             stream.Position = 0;
-            StreamingChunkModel[] sequential = StreamingChunkModelParquet
+            List<StreamingChunkModel> sequential = StreamingChunkModelParquet
                 .From(stream)
-                .ToArrayAsync()
+                .ToListAsync()
                 .GetAwaiter()
                 .GetResult();
-            sequential.Length.ShouldBe(items.Count);
+            sequential.Count.ShouldBe(items.Count);
 
             // Buffer-backed builder: the await foreach over ReadEnumerableCoreAsync (#423).
-            StreamingChunkModel[] fromBytes = StreamingChunkModelParquet
+            List<StreamingChunkModel> fromBytes = StreamingChunkModelParquet
                 .From(stream.ToArray())
-                .ToArrayAsync()
+                .ToListAsync()
                 .GetAwaiter()
                 .GetResult();
-            fromBytes.Length.ShouldBe(items.Count);
+            fromBytes.Count.ShouldBe(items.Count);
 
-            StreamingChunkModel[] parallel = StreamingChunkModelParquet
+            List<StreamingChunkModel> parallel = StreamingChunkModelParquet
                 .From(stream.ToArray())
                 .Parallel()
-                .ToArrayAsync()
+                .ToListAsync()
                 .GetAwaiter()
                 .GetResult();
-            parallel.Length.ShouldBe(items.Count);
+            parallel.Count.ShouldBe(items.Count);
         });
     }
 }

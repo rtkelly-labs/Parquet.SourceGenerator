@@ -96,9 +96,10 @@ public sealed class JsonSerializationAttributesTests
         using var ms = new MemoryStream();
         await items.WriteParquetAsync(ms);
 
-        // Read from the buffer (sequential)
-        var readList = await JsonAnnotatedModelParquet.From(ms.ToArray()).ToArrayAsync();
-        readList.Length.ShouldBe(count);
+        // Read list
+        ms.Position = 0;
+        var readList = await JsonAnnotatedModelParquet.From(ms).ToListAsync();
+        readList.Count.ShouldBe(count);
         for (int i = 0; i < count; i++)
         {
             readList[i].Id.ShouldBe(items[i].Id);
@@ -116,8 +117,8 @@ public sealed class JsonSerializationAttributesTests
 
         // Read parallel
         byte[] bytes = ms.ToArray();
-        var parallelList = await JsonAnnotatedModelParquet.From(bytes).Parallel().ToArrayAsync();
-        parallelList.Length.ShouldBe(count);
+        var parallelList = await JsonAnnotatedModelParquet.From(bytes).Parallel().ToListAsync();
+        parallelList.Count.ShouldBe(count);
         parallelList[10].Score.ShouldBe(items[10].Score);
 
         // Read stream
@@ -174,8 +175,8 @@ public sealed class JsonSerializationAttributesTests
         await Parquet.Serialization.ParquetSerializer.SerializeAsync(data, msReflection);
         msReflection.Position = 0;
 
-        var generatorResult = await JsonAnnotatedModelParquet.From(msReflection).ToArrayAsync();
-        generatorResult.Length.ShouldBe(2);
+        var generatorResult = await JsonAnnotatedModelParquet.From(msReflection).ToListAsync();
+        generatorResult.Count.ShouldBe(2);
         generatorResult[1].Id.ShouldBe(102);
         generatorResult[1].Name.ShouldBe("Bob");
         generatorResult[1].Score.ShouldBe(88.0);

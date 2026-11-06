@@ -60,7 +60,7 @@ namespace Parquet.SourceGenerator.Tests
                 salesStream
             );
             salesStream.Position = 0;
-            var sales = await Sales.SharedNameParquet.From(salesStream).ToArrayAsync();
+            var sales = await Sales.SharedNameParquet.From(salesStream).ToListAsync();
 
             using var billingStream = new System.IO.MemoryStream();
             await Billing.SharedNameParquetExtensions.WriteParquetAsync(
@@ -71,7 +71,7 @@ namespace Parquet.SourceGenerator.Tests
                 billingStream
             );
             billingStream.Position = 0;
-            var billing = await Billing.SharedNameParquet.From(billingStream).ToArrayAsync();
+            var billing = await Billing.SharedNameParquet.From(billingStream).ToListAsync();
 
             sales[0].OrderId.ShouldBe(42);
             billing[0].InvoiceId.ShouldBe(99);
