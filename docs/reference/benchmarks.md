@@ -195,25 +195,30 @@ operation count from the runner's speed: the same code ran 1024 operations on on
 on a faster one, and the raw counts doubled with it.
 
 **Methodology.** The `methodology` string names the BenchmarkDotNet version, the runtime
-`major.minor`, the OS family and the architecture, plus the measure. `time.json` also names the
-processor model. Diffra compares two payloads only when scope and methodology match exactly, so a
-baseline from another architecture, or a time baseline from another CPU model, is reported as
+`major.minor`, the OS family and the architecture, plus the measure. `gc.json` and `time.json` also
+name the processor model. Diffra compares two payloads only when scope and methodology match exactly, so a
+baseline from another architecture, or a GC or time baseline from another CPU model, is reported as
 `incompatible` rather than as a change. The runtime patch version is left out because the runner
 image moves it every few weeks.
 
 **Why these budgets.** They come from the six non-skipped gate runs between 2026-10-02 and
-2026-11-01 (runners on three EPYC models, .NET 8.0.31 to 8.0.33):
+2026-11-01 (runners on three EPYC models, .NET 8.0.31 to 8.0.33), and one gate-only run on this change
+(2026-11-06, an Intel Xeon runner, code unchanged from the 2026-11-01 run):
 
-- *Allocations.* Two runs of the same commit, five weeks apart, gave byte-identical allocations for
-  15 of 17 cases. The rest drifted by 44 to 173 B, all in the 10,000-row async writes. Across five
+- *Allocations.* Two runs of the same commit a week apart, across a .NET 8 patch update, gave
+  byte-identical allocations for 13 of 17 cases. The other four drifted by 44 to 173 B, all of them
+  10,000-row writes. Across five
   runs spanning source changes the largest spread was 243 B (0.02% of that case). Cases that allocate a few bytes
   per operation (`TransposeOnly`, 0 to 3 B) are amortisation artefacts. A 1024 B fail budget is
   about 4× the worst drift, and is absolute only: a relative threshold would misfire on the 0 to 3 B
-  cases, because Diffra applies absolute and relative thresholds as either-or.
+  cases, because Diffra applies absolute and relative thresholds as either-or. The Xeon run against
+  the 2026-11-01 EPYC run, on unchanged code, moved five cases by 1 to 152 B: within the warn budget.
 - *GC counts.* Gen0 per 1000 operations varied by 0 to 9%. Gen1 and gen2 vary more: up to 28%
   (19.5 collections per 1000 operations absolute) and 17% respectively on the 10,000-row columnar
   write. The budget sits just above that. A gen2 count that goes from zero to anything is
-  `needs-review`, which is intended.
+  `needs-review`, which is intended. GC counts are not portable across CPUs: on the Xeon runner the
+  same code ran 50 to 80% fewer gen0 collections than on EPYC (the runtime sizes the gen0 budget
+  from the CPU cache), so, like time, GC counts compare only within one processor model.
 - *Time.* The same code ran 1.7 to 2.1× apart across CPU models, and up to about 10% apart on the
   same commit and model. Time is a trend to watch, not a gate. The 25% warning applies only within
   one CPU model, because the methodology makes any other comparison `incompatible`.

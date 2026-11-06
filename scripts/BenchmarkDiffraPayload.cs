@@ -35,8 +35,10 @@ using System.Text.Json;
 //
 // The methodology string carries everything that changes what a number means: the
 // BenchmarkDotNet version, the runtime major.minor, the OS and the architecture, and for
-// time the processor. Diffra compares two payloads only when scope and methodology match
-// exactly, so an Arm64 baseline against an X64 run is `incompatible`, not a 6% "change".
+// GC counts and time the processor. The runtime sizes its gen0 budget from the CPU cache, so
+// the same code ran 2 to 5 times fewer gen0 collections on a Xeon than on an EPYC. Diffra
+// compares two payloads only when scope and methodology match exactly, so an Arm64
+// baseline against an X64 run is `incompatible`, not a 6% "change".
 //
 // Usage: dotnet run scripts/BenchmarkDiffraPayload.cs -- <results-dir> <output-dir> [--scope <scope>]
 // Exit codes: 0 written, 1 nothing to emit or unreadable results, 2 usage.
@@ -195,7 +197,7 @@ Write(
 );
 Write(
     "gc.json",
-    $"{environment};gc-collections-per-1000-ops-{MethodologyVersion}",
+    $"{environment};{processor};gc-collections-per-1000-ops-{MethodologyVersion}",
     c =>
         [
             ("gen0CollectionsPer1000Ops", Value.Fraction(c.Gen0PerThousand, "count/1000-ops")),

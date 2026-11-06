@@ -117,6 +117,10 @@ public sealed class BenchmarkDiffraPayloadTests : IDisposable
 
         using (JsonDocument gc = ReadPayload("gc.json"))
         {
+            // The gen0 budget follows the CPU cache, so GC counts compare per processor model.
+            gc.RootElement.GetProperty("methodology")
+                .GetString()
+                .ShouldEndWith(";AMD EPYC 9V74;gc-collections-per-1000-ops-v1");
             JsonElement metrics = gc.RootElement.GetProperty("metrics").GetProperty(Key);
 
             // Normalised per 1000 operations, and a string because Diffra's canonical JSON
