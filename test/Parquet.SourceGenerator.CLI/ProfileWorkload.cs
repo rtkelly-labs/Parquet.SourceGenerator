@@ -52,11 +52,11 @@ public static class ProfileWorkload
             totalBytesWritten += ms.Length;
 
             ms.Position = 0;
-            ProfileEvent[] readItems = await ProfileEventParquet.From(ms).ToArrayAsync();
-            if (readItems.Length != rowCount)
+            List<ProfileEvent> readItems = await ProfileEventParquetExtensions.ReadParquetAsync(ms);
+            if (readItems.Count != rowCount)
             {
                 throw new InvalidOperationException(
-                    $"Mismatch at iteration {iteration}: expected {rowCount}, got {readItems.Length}"
+                    $"Mismatch at iteration {iteration}: expected {rowCount}, got {readItems.Count}"
                 );
             }
 

@@ -1,6 +1,5 @@
 using System.Globalization;
 using Parquet.SourceGenerator.ApiGates;
-using Shouldly;
 using Xunit;
 
 namespace Parquet.SourceGenerator.Tests;
@@ -61,9 +60,9 @@ public sealed class GeneratedApiBaselineTests
         string baseline = GeneratedApiBaseline.Create(Sample);
 
         string[] lines = baseline.Split('\n');
-        lines[0].ShouldBe(GeneratedApiBaseline.NullableHeader);
-        lines[^1].ShouldBe(string.Empty);
-        lines[1..^1].ShouldAllBe(line => !string.IsNullOrWhiteSpace(line));
+        Assert.Equal(GeneratedApiBaseline.NullableHeader, lines[0]);
+        Assert.Equal(string.Empty, lines[^1]);
+        Assert.All(lines[1..^1], line => Assert.False(string.IsNullOrWhiteSpace(line)));
     }
 
     [Fact]
@@ -71,21 +70,28 @@ public sealed class GeneratedApiBaselineTests
     {
         string baseline = GeneratedApiBaseline.Create(Sample);
 
-        baseline.ShouldContain(
+        Assert.Contains(
             "static Sample.Space.Widget.ReadAsync(System.IO.Stream stream, int maxDegreeOfParallelism = -1, "
                 + "System.Threading.CancellationToken cancellationToken = default) -> "
                 + "System.Threading.Tasks.Task<System.Collections.Generic.List<int>>\n",
-            Case.Sensitive
+            baseline,
+            StringComparison.Ordinal
         );
-        baseline.ShouldContain(
+        Assert.Contains(
             "static Sample.Space.Widget.Write(this System.IO.Stream stream, string? label) -> void\n",
-            Case.Sensitive
+            baseline,
+            StringComparison.Ordinal
         );
-        baseline.ShouldContain(
+        Assert.Contains(
             "static readonly Sample.Space.Widget.Schema -> Parquet.Schema.ParquetSchema\n",
-            Case.Sensitive
+            baseline,
+            StringComparison.Ordinal
         );
-        baseline.ShouldContain("const Sample.Space.Widget.Limit = 512 -> int\n", Case.Sensitive);
+        Assert.Contains(
+            "const Sample.Space.Widget.Limit = 512 -> int\n",
+            baseline,
+            StringComparison.Ordinal
+        );
     }
 
     [Fact]
@@ -93,10 +99,22 @@ public sealed class GeneratedApiBaselineTests
     {
         string baseline = GeneratedApiBaseline.Create(Sample);
 
-        baseline.ShouldContain("Sample.Space.Widget.Batch\n", Case.Sensitive);
-        baseline.ShouldContain("Sample.Space.Widget.Batch.RowCount.get -> int\n", Case.Sensitive);
-        baseline.ShouldContain("Sample.Space.Widget.Batch.Label.get -> string?\n", Case.Sensitive);
-        baseline.ShouldContain("Sample.Space.Widget.Batch.Label.init -> void\n", Case.Sensitive);
+        Assert.Contains("Sample.Space.Widget.Batch\n", baseline, StringComparison.Ordinal);
+        Assert.Contains(
+            "Sample.Space.Widget.Batch.RowCount.get -> int\n",
+            baseline,
+            StringComparison.Ordinal
+        );
+        Assert.Contains(
+            "Sample.Space.Widget.Batch.Label.get -> string?\n",
+            baseline,
+            StringComparison.Ordinal
+        );
+        Assert.Contains(
+            "Sample.Space.Widget.Batch.Label.init -> void\n",
+            baseline,
+            StringComparison.Ordinal
+        );
     }
 
     [Fact]
@@ -104,11 +122,11 @@ public sealed class GeneratedApiBaselineTests
     {
         string baseline = GeneratedApiBaseline.Create(Sample);
 
-        baseline.ShouldNotContain("Hidden", Case.Sensitive);
-        baseline.ShouldNotContain("NotApi", Case.Sensitive);
-        baseline.ShouldNotContain("AlsoNotApi", Case.Sensitive);
+        Assert.DoesNotContain("Hidden", baseline, StringComparison.Ordinal);
+        Assert.DoesNotContain("NotApi", baseline, StringComparison.Ordinal);
+        Assert.DoesNotContain("AlsoNotApi", baseline, StringComparison.Ordinal);
         // The internal constructor of a public struct is not public surface either.
-        baseline.ShouldNotContain("Widget.Batch.Batch(", Case.Sensitive);
+        Assert.DoesNotContain("Widget.Batch.Batch(", baseline, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -140,10 +158,10 @@ public sealed class GeneratedApiBaselineTests
             CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
             string invariant = GeneratedApiBaseline.Create(CaseSensitive);
 
-            turkish.ShouldBe(invariant);
+            Assert.Equal(invariant, turkish);
 
             string[] members = turkish.Split('\n').Skip(1).Where(line => line.Length > 0).ToArray();
-            members.OrderBy(line => line, StringComparer.Ordinal).ToArray().ShouldBe(members);
+            Assert.Equal(members.OrderBy(line => line, StringComparer.Ordinal).ToArray(), members);
         }
         finally
         {
@@ -154,62 +172,7 @@ public sealed class GeneratedApiBaselineTests
     [Fact]
     public void RenderingIsStableAcrossRepeatedRuns()
     {
-        GeneratedApiBaseline.Create(Sample).ShouldBe(GeneratedApiBaseline.Create(Sample));
-    }
-
-    [Fact]
-    public void ShapeSummaryCountsPublicCallableParameterSlots()
-    {
-        string summary = GeneratedApiBaseline.CreateShapeSummary(Sample);
-
-        summary.ShouldBe(GeneratedApiBaseline.ShapeSummaryHeader + "\nMEMBERS=9 PARAMETERS=5\n");
-        GeneratedApiBaseline.CountParameterSlots(Sample).ShouldBe(5);
-    }
-
-    [Fact]
-    public void ParameterMetricMakesAChangedSignatureNumericWithoutChangingMemberCount()
-    {
-        const string Before = """
-            namespace N;
-
-            public static class Reader
-            {
-                public static void Read(System.IO.Stream stream, int max = -1) { }
-            }
-            """;
-        const string After = """
-            namespace N;
-
-            public static class Reader
-            {
-                public static void Read(System.IO.Stream stream) { }
-            }
-            """;
-
-        GeneratedApiBaseline
-            .CountMembers(GeneratedApiBaseline.Create(Before))
-            .ShouldBe(GeneratedApiBaseline.CountMembers(GeneratedApiBaseline.Create(After)));
-        GeneratedApiBaseline
-            .CreateShapeSummary(Before)
-            .ShouldBe(GeneratedApiBaseline.ShapeSummaryHeader + "\nMEMBERS=2 PARAMETERS=2\n");
-        GeneratedApiBaseline
-            .CreateShapeSummary(After)
-            .ShouldBe(GeneratedApiBaseline.ShapeSummaryHeader + "\nMEMBERS=2 PARAMETERS=1\n");
-    }
-
-    [Fact]
-    public void ParameterMetricCountsSyntaxParametersRatherThanCommasInGenericTypes()
-    {
-        const string GenericParameter = """
-            namespace N;
-
-            public static class Reader
-            {
-                public static void Read(System.Collections.Generic.Dictionary<string, int> values) { }
-            }
-            """;
-
-        GeneratedApiBaseline.CountParameterSlots(GenericParameter).ShouldBe(1);
+        Assert.Equal(GeneratedApiBaseline.Create(Sample), GeneratedApiBaseline.Create(Sample));
     }
 
     [Fact]
@@ -231,11 +194,11 @@ public sealed class GeneratedApiBaselineTests
 
         string baseline = GeneratedApiBaseline.Create(Partials);
 
-        GeneratedApiBaseline.CountMembers(baseline).ShouldBe(3);
-        baseline
-            .Split('\n')
-            .Count(l => string.Equals(l, "N.T", StringComparison.Ordinal))
-            .ShouldBe(1);
+        Assert.Equal(3, GeneratedApiBaseline.CountMembers(baseline));
+        Assert.Equal(
+            1,
+            baseline.Split('\n').Count(l => string.Equals(l, "N.T", StringComparison.Ordinal))
+        );
     }
 
     [Fact]
@@ -255,9 +218,9 @@ public sealed class GeneratedApiBaselineTests
 
         string baseline = GeneratedApiBaseline.Create(Enums);
 
-        baseline.ShouldContain("N.E.Zero = 0 -> N.E\n", Case.Sensitive);
-        baseline.ShouldContain("N.E.One = 1 -> N.E\n", Case.Sensitive);
-        baseline.ShouldContain("N.E.Ten = 10 -> N.E\n", Case.Sensitive);
-        baseline.ShouldContain("N.E.Eleven = 11 -> N.E\n", Case.Sensitive);
+        Assert.Contains("N.E.Zero = 0 -> N.E\n", baseline, StringComparison.Ordinal);
+        Assert.Contains("N.E.One = 1 -> N.E\n", baseline, StringComparison.Ordinal);
+        Assert.Contains("N.E.Ten = 10 -> N.E\n", baseline, StringComparison.Ordinal);
+        Assert.Contains("N.E.Eleven = 11 -> N.E\n", baseline, StringComparison.Ordinal);
     }
 }

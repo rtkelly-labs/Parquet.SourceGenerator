@@ -1,7 +1,5 @@
 # PARQUET.SOURCEGENERATOR
 
-Docs: start at [docs/index.md](docs/index.md), which links every guide, reference and architecture page.
-
 ## 🛑 Repository Conventions & Workflow Policy
 
 1. **Squash Merge Only**: All pull requests must be merged into `main` using **Squash and Merge** exclusively.
@@ -20,32 +18,14 @@ Docs: start at [docs/index.md](docs/index.md), which links every guide, referenc
    The `--disable-parallel` flag is strictly required to prevent package extraction race conditions between CLI tools sharing package name prefixes.
 10. **Diagnostics Invocation**: Always execute installed tools via `dotnet tool run <command>` (e.g. `dotnet tool run ilspycmd`, `dotnet tool run dotnet-inspect`, `dotnet tool run dotnet-dump`) or via dedicated repository runners (`scripts/InterrogateIL.cs`, `scripts/TriageMemoryDump.cs`).
 
-11. **API Change Contract**: Two API surfaces are governed by catalogues — the shipped package API
+11. **API Change Contract**: Three API surfaces are governed — the emitted consumer API
+    (`*.api.txt` beside each golden file, gated by `PARQAPI001`), the shipped package API
     (`PublicAPI.Unshipped.txt`, gated by `RS0016`) and internal seams (`src/api/seams.txt`, gated
-    by `PARQAPI002`). Nothing enters either without **both** a catalogue line and a
-    `docs/api/LEDGER.md` entry recording its semver bucket. Both gates are **build errors**, not
-    test failures. The emitted consumer API is not checked in: CI derives each golden model's
-    `.g.cs` and `.api.txt` from the emitter and posts their diff against the merge base as a sticky
-    PR comment (`derived` job, `scripts/DerivedOutputs.cs`) — review that section. A ledger entry
-    marked `**Unapproved-by-design:**` suppresses the build error for spikes and cannot merge to
-    `main`. Full rule: `docs/architecture/api-governance.md`.
+    by `PARQAPI002`). Nothing enters any of them without **both** a catalogue line and a
+    `docs/api/LEDGER.md` entry recording its semver bucket. All three gates are **build errors**,
+    not test failures. Body, performance and comment changes alter the golden `.g.cs` but not the
+    `.api.txt`, and are not API changes. A ledger entry marked `**Unapproved-by-design:**`
+    suppresses the build error for spikes and cannot merge to `main`. Full rule:
+    `docs/18-API-CHANGE-CONTRACT.md`.
 
 12. **Upstream Dependency Limitations**: Track package limitations and candidate upstream improvements in `UPSTREAM_DEPENDENCY_LIMITATIONS.md`, not in this file.
-
-13. **Derived outputs are not committed**: emitted golden source and API, code metrics,
-    duplication and call-graph edges are generated from the code (`dotnet run
-    scripts/DerivedOutputs.cs`, output in gitignored `artifacts/`) and published by CI as the
-    `derived-outputs` artifact. Never commit them.
-
-14. **Emitted-code analyzer gate**: every analyzer `src/` runs also runs over the golden models'
-    emitted source (`analysis/`, CI job `generated-analysis`, aggregated by the required `build`
-    check). Any finding fails it and the baseline (`analysis/GeneratedCodeBaseline.props`) is empty.
-    Fix the emitter; never add a baseline entry, `NoWarn` or an `.editorconfig` downgrade. Run it
-    locally with `dotnet run scripts/GeneratedCodeAnalysis.cs` after publishing the golden outputs.
-    Gate details: `docs/internals/ci-gate-matrix.md`.
-
-15. **CI gate matrix**: `docs/internals/ci-gate-matrix.md` records what each gate protects, where it
-    runs and whether a required check reaches it. A new CI job in `ci.yml` must be added to the
-    `build` aggregate's `needs` and result check (`CiGateIntegrityTests` fails otherwise), and a
-    new gate needs a positive control or an "examined N" assertion so it cannot pass on nothing.
-16. **Script Language Policy**: Automation scripts in `scripts/` MUST use the repository's approved language stack (C# `.cs` for .NET). Alien scripting runtimes (`.py`, `.sh`, `.ps1`) are strictly prohibited and gated by CI (with the sole exception of `scripts/generate_test_data.py` for cross-engine format generation).

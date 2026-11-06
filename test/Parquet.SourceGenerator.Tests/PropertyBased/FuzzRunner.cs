@@ -117,14 +117,14 @@ public static class FuzzRunner
         );
 
         using var stream = new MemoryStream(bytes, writable: false);
-        FuzzWideRecord[] actual = await FuzzWideRecordParquet
-            .From(stream)
-            .WithOptions(BuildOptions(fuzzCase))
-            .ToArrayAsync();
+        List<FuzzWideRecord> actual = await FuzzWideRecordParquetExtensions.ReadParquetAsync(
+            stream,
+            BuildOptions(fuzzCase)
+        );
 
-        if (actual.Length != rows.Count)
+        if (actual.Count != rows.Count)
         {
-            return $"row count: expected {rows.Count}, generated reader produced {actual.Length}";
+            return $"row count: expected {rows.Count}, generated reader produced {actual.Count}";
         }
 
         foreach (FuzzColumn column in FuzzColumns.All)
@@ -150,14 +150,14 @@ public static class FuzzRunner
         byte[] bytes = await WriteWithGeneratedWriterAsync(rows, fuzzCase);
 
         using var stream = new MemoryStream(bytes, writable: false);
-        FuzzWideRecord[] actual = await FuzzWideRecordParquet
-            .From(stream)
-            .WithOptions(BuildOptions(fuzzCase))
-            .ToArrayAsync();
+        List<FuzzWideRecord> actual = await FuzzWideRecordParquetExtensions.ReadParquetAsync(
+            stream,
+            BuildOptions(fuzzCase)
+        );
 
-        if (actual.Length != rows.Count)
+        if (actual.Count != rows.Count)
         {
-            return $"row count: expected {rows.Count}, generated reader produced {actual.Length}";
+            return $"row count: expected {rows.Count}, generated reader produced {actual.Count}";
         }
 
         foreach (FuzzColumn column in FuzzColumns.All)
@@ -184,7 +184,7 @@ public static class FuzzRunner
     )
     {
         using var stream = new MemoryStream();
-        await rows.WriteParquetAsync(
+        await rows.WriteParquetBatchedAsync(
             stream,
             options: BuildOptions(fuzzCase),
             cancellationToken: cancellationToken

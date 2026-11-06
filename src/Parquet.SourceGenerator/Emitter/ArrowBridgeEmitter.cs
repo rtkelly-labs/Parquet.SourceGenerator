@@ -1,5 +1,4 @@
 using System.Text;
-using Parquet.SourceGenerator.Emitter.Columnar;
 using Parquet.SourceGenerator.Emitter.Components;
 using Parquet.SourceGenerator.Models;
 
@@ -48,64 +47,15 @@ internal static class ArrowBridgeEmitter
 
         builder.AppendLine($"public static partial class {extensionsClassName}");
         builder.AppendLine("{");
-        builder.AppendLine($"    /// <summary>");
-        builder.AppendLine(
-            $"    /// Writes one Apache Arrow <c>RecordBatch</c> as a single Parquet row group using the"
-        );
-        builder.AppendLine(
-            $"    /// <c>{model.ClassName}</c> schema. Columns are matched by name and validated strictly;"
-        );
-        builder.AppendLine(
-            "    /// fixed-width Arrow buffers are handed to the writer without a copy or an ArrayPool rental."
-        );
-        builder.AppendLine("    /// </summary>");
-        builder.AppendLine(
-            "    /// <remarks>Call it qualified — it is a plain static method, not an extension.</remarks>"
-        );
-        builder.AppendLine(
-            $"    /// <remarks>Requires Apache.Arrow {ArrowMappingComponent.SupportedArrowFloor} or later.</remarks>"
-        );
-        builder.AppendLine(
-            "    public static global::System.Threading.Tasks.Task WriteParquetRowGroupAsync("
-        );
-        builder.AppendLine("        global::Parquet.ParquetWriter writer,");
-        builder.AppendLine("        global::Apache.Arrow.RecordBatch batch,");
-        builder.AppendLine(
-            "        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,"
-        );
-        builder.AppendLine(
-            "        global::System.Threading.CancellationToken cancellationToken = default)"
-        );
-        builder.AppendLine("    {");
-        builder.AppendLine("#if NET6_0_OR_GREATER");
-        builder.AppendLine("        global::System.ArgumentNullException.ThrowIfNull(writer);");
-        builder.AppendLine("        global::System.ArgumentNullException.ThrowIfNull(batch);");
-        builder.AppendLine("#else");
-        builder.AppendLine(
-            "        if (writer is null) throw new global::System.ArgumentNullException(nameof(writer));"
-        );
-        builder.AppendLine(
-            "        if (batch is null) throw new global::System.ArgumentNullException(nameof(batch));"
-        );
-        builder.AppendLine("#endif");
-        builder.AppendLine(
-            "        return ArrowBridge.WriteParquetRowGroupAsync(writer, batch, options, cancellationToken);"
-        );
-        builder.AppendLine("    }");
-        builder.AppendLine();
-        builder.AppendLine("    private static class ArrowBridge");
-        builder.AppendLine("    {");
 
         bool needsEpoch = false;
         bool needsGuid = false;
-        bool needsDecimal = false;
         bool needsFixedWidthView = false;
         for (int i = 0; i < model.Properties.Length; i++)
         {
             ArrowLeafMapping map = ArrowMappingComponent.TryMap(model.Properties[i])!;
             needsEpoch |= map.ConvertExpression?.Contains("_arrowUnixEpoch") == true;
             needsGuid |= map.ConvertExpression?.Contains("ArrowGuidFromBigEndian") == true;
-            needsDecimal |= map.ConvertExpression?.Contains("ArrowDecimalExact") == true;
             needsFixedWidthView |=
                 map.Mode == ArrowExtractionMode.Direct && !model.Properties[i].IsNullable;
         }
@@ -113,23 +63,21 @@ internal static class ArrowBridgeEmitter
         if (needsEpoch)
         {
             builder.AppendLine(
-                "        // Unspecified kind on purpose: it is the kind DateOnly.ToDateTime produces on the"
+                "    // Unspecified kind on purpose: it is the kind DateOnly.ToDateTime produces on the"
             );
             builder.AppendLine(
-                "        // POCO write path, so both paths hand Parquet.Net identical DateTime values."
+                "    // POCO write path, so both paths hand Parquet.Net identical DateTime values."
             );
             builder.AppendLine(
-                "        private static readonly global::System.DateTime _arrowUnixEpoch ="
+                "    private static readonly global::System.DateTime _arrowUnixEpoch ="
             );
             builder.AppendLine(
-                "            new global::System.DateTime(1970, 1, 1, 0, 0, 0, global::System.DateTimeKind.Unspecified);"
+                "        new global::System.DateTime(1970, 1, 1, 0, 0, 0, global::System.DateTimeKind.Unspecified);"
             );
             builder.AppendLine();
         }
 
         EmitValidation(builder, model);
-        builder.AppendLine();
-        EmitStructuralHelpers(builder, model);
         builder.AppendLine();
         EmitWriteRowGroup(builder, model);
 
@@ -145,13 +93,6 @@ internal static class ArrowBridgeEmitter
             EmitGuidHelper(builder);
         }
 
-        if (needsDecimal)
-        {
-            builder.AppendLine();
-            EmitDecimalHelper(builder);
-        }
-
-        builder.AppendLine("    }");
         builder.AppendLine("}");
 
         return builder.ToString();
@@ -163,16 +104,36 @@ internal static class ArrowBridgeEmitter
 
     private static void EmitValidation(StringBuilder builder, TargetClassModel model)
     {
+        builder.AppendLine("    /// <summary>");
+        builder.AppendLine(
+            "    /// Validates an Arrow <c>RecordBatch</c> against the generated Parquet schema by field"
+        );
+        builder.AppendLine(
+            "    /// name, then by physical/logical type. Every offending field is reported at once — no"
+        );
+        builder.AppendLine("    /// column is silently coerced.");
+        builder.AppendLine("    /// </summary>");
+        builder.AppendLine("    private static void ValidateArrowRecordBatch(");
+        builder.AppendLine("        global::Apache.Arrow.RecordBatch batch)");
+        builder.AppendLine("    {");
+        builder.AppendLine(
+            "        global::System.Collections.Generic.List<string> errors = new global::System.Collections.Generic.List<string>();"
+        );
+
         for (int i = 0; i < model.Properties.Length; i++)
         {
             PropertyModel prop = model.Properties[i];
             ArrowLeafMapping map = ArrowMappingComponent.TryMap(prop)!;
-            string name = EmittedText.Literal(prop.ParquetColumnName);
-            string label = EmittedText.Literal(prop.ParquetColumnName + ": ");
-
-            builder.AppendLine(
-                $"        private static void ValidateArrowColumn_{i}(global::Apache.Arrow.RecordBatch batch, global::System.Collections.Generic.List<string> errors)"
+            string name = Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(
+                prop.ParquetColumnName,
+                quote: true
             );
+            string label = Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(
+                prop.ParquetColumnName + ": ",
+                quote: true
+            );
+
+            builder.AppendLine();
             builder.AppendLine("        {");
             builder.AppendLine(
                 $"            int index = batch.Schema.GetFieldIndex({name}, global::System.StringComparer.Ordinal);"
@@ -181,15 +142,6 @@ internal static class ArrowBridgeEmitter
             builder.AppendLine("            {");
             builder.AppendLine(
                 $"                errors.Add({label} + \"column is missing from the Arrow schema (expected {map.ExpectedDescription}).\");"
-            );
-            builder.AppendLine("            }");
-            // A duplicated name would otherwise resolve to its first occurrence, silently.
-            builder.AppendLine(
-                $"            else if (ArrowFieldOccurrences(batch.Schema, {name}) > 1)"
-            );
-            builder.AppendLine("            {");
-            builder.AppendLine(
-                $"                errors.Add({label} + \"column appears \" + ArrowFieldOccurrences(batch.Schema, {name}) + \" times in the Arrow schema, so it is ambiguous.\");"
             );
             builder.AppendLine("            }");
             builder.AppendLine("            else");
@@ -216,15 +168,6 @@ internal static class ArrowBridgeEmitter
                 $"                    errors.Add({label} + \"expected Arrow {map.ExpectedDescription}, found \" + dataType.Name + \".\");"
             );
             builder.AppendLine("                }");
-            // The schema is only a claim about the column; the cast below trusts the array.
-            builder.AppendLine(
-                "                else if (column.Data.DataType.TypeId != dataType.TypeId)"
-            );
-            builder.AppendLine("                {");
-            builder.AppendLine(
-                $"                    errors.Add({label} + \"the schema declares \" + dataType.Name + \" but the column holds \" + column.Data.DataType.Name + \".\");"
-            );
-            builder.AppendLine("                }");
 
             if (map.ParameterCheck is not null)
             {
@@ -232,16 +175,6 @@ internal static class ArrowBridgeEmitter
                 builder.AppendLine("                {");
                 builder.AppendLine(
                     $"                    errors.Add({label} + {map.ParameterMessage});"
-                );
-                builder.AppendLine("                }");
-                // Same type id is not same type: the values are decoded with the array's own
-                // parameters (unit, scale, width), so those must match too, not just the schema's.
-                builder.AppendLine(
-                    $"                else if (!({OnArrayType(map.ParameterCheck)}))"
-                );
-                builder.AppendLine("                {");
-                builder.AppendLine(
-                    $"                    errors.Add({label} + \"the column's array disagrees with its schema field: \" + {OnArrayType(map.ParameterMessage!)});"
                 );
                 builder.AppendLine("                }");
             }
@@ -253,18 +186,6 @@ internal static class ArrowBridgeEmitter
             );
             builder.AppendLine("                }");
 
-            if (map.Mode is ArrowExtractionMode.Utf8 or ArrowExtractionMode.Binary)
-            {
-                builder.AppendLine(
-                    "                else if (!ArrowOffsetsSound((global::Apache.Arrow.BinaryArray)column))"
-                );
-                builder.AppendLine("                {");
-                builder.AppendLine(
-                    $"                    errors.Add({label} + \"offsets decrease or run past the value buffer.\");"
-                );
-                builder.AppendLine("                }");
-            }
-
             if (!prop.IsNullable)
             {
                 builder.AppendLine("                else if (column.NullCount > 0)");
@@ -273,179 +194,26 @@ internal static class ArrowBridgeEmitter
                     $"                    errors.Add({label} + \"the Parquet column is required but the Arrow column carries \" + column.NullCount + \" null(s).\");"
                 );
                 builder.AppendLine("                }");
-                // NullCount is only a claim; a required column's values are read without a
-                // per-row null check, so a bitmap marking nulls it does not declare would
-                // materialise undefined slots as values.
-                builder.AppendLine("                else if (!ArrowNullCountAgrees(column))");
-                builder.AppendLine("                {");
-                builder.AppendLine(
-                    $"                    errors.Add({label} + \"the Arrow column's validity bitmap marks nulls that its null count does not declare.\");"
-                );
-                builder.AppendLine("                }");
             }
 
             builder.AppendLine("            }");
             builder.AppendLine("        }");
-            builder.AppendLine();
         }
 
-        builder.AppendLine("        /// <summary>");
-        builder.AppendLine(
-            "        /// Validates an Arrow <c>RecordBatch</c> against the generated Parquet schema by field"
-        );
-        builder.AppendLine(
-            "        /// name, then by physical/logical type. Every offending field is reported at once — no"
-        );
-        builder.AppendLine("        /// column is silently coerced.");
-        builder.AppendLine("        /// </summary>");
-        builder.AppendLine("        internal static void ValidateArrowRecordBatch(");
-        builder.AppendLine("            global::Apache.Arrow.RecordBatch batch)");
+        builder.AppendLine();
+        builder.AppendLine("        if (errors.Count > 0)");
         builder.AppendLine("        {");
-        builder.AppendLine(
-            "            global::System.Collections.Generic.List<string> errors = new global::System.Collections.Generic.List<string>();"
+        builder.AppendLine("            throw new global::System.IO.InvalidDataException(");
+        string typeLabel = Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(
+            model.ClassName,
+            quote: true
         );
-        for (int i = 0; i < model.Properties.Length; i++)
-        {
-            builder.AppendLine($"            ValidateArrowColumn_{i}(batch, errors);");
-        }
-        builder.AppendLine();
-        builder.AppendLine("            if (errors.Count > 0)");
-        builder.AppendLine("            {");
-        builder.AppendLine("                throw new global::System.IO.InvalidDataException(");
-        string typeLabel = EmittedText.Literal(model.ClassName);
         builder.AppendLine(
-            $"                    \"Arrow RecordBatch does not match the generated Parquet schema for \" + {typeLabel} + \": \""
+            $"                \"Arrow RecordBatch does not match the generated Parquet schema for \" + {typeLabel} + \": \""
         );
-        builder.AppendLine("                    + string.Join(\" | \", errors));");
-        builder.AppendLine("            }");
+        builder.AppendLine("                + string.Join(\" | \", errors));");
         builder.AppendLine("        }");
-    }
-
-    /// <summary>
-    /// Rewrites a parameter check (or its message) written against the schema field's
-    /// <c>dataType</c> to read the array's own <c>column.Data.DataType</c> instead.
-    /// </summary>
-    private static string OnArrayType(string expression) =>
-        expression.Replace(")dataType)", ")column.Data.DataType)");
-
-    /// <summary>
-    /// Helpers for the structural checks validation performs before any column is cast or sliced.
-    /// Offset soundness is emitted only for models with a Utf8 or Binary column.
-    /// </summary>
-    private static void EmitStructuralHelpers(StringBuilder builder, TargetClassModel model)
-    {
-        builder.AppendLine("        private static int ArrowFieldOccurrences(");
-        builder.AppendLine("            global::Apache.Arrow.Schema schema,");
-        builder.AppendLine("            string name)");
-        builder.AppendLine("        {");
-        builder.AppendLine("            int count = 0;");
-        builder.AppendLine("            for (int i = 0; i < schema.FieldsList.Count; i++)");
-        builder.AppendLine("            {");
-        builder.AppendLine(
-            "                if (string.Equals(schema.FieldsList[i].Name, name, global::System.StringComparison.Ordinal)) count++;"
-        );
-        builder.AppendLine("            }");
-        builder.AppendLine();
-        builder.AppendLine("            return count;");
-        builder.AppendLine("        }");
-
-        bool hasRequired = false;
-        for (int i = 0; i < model.Properties.Length; i++)
-        {
-            hasRequired |= !model.Properties[i].IsNullable;
-        }
-
-        if (hasRequired)
-        {
-            EmitNullCountHelper(builder);
-        }
-
-        bool hasVariableWidth = false;
-        for (int i = 0; i < model.Properties.Length; i++)
-        {
-            hasVariableWidth |=
-                ArrowMappingComponent.TryMap(model.Properties[i])!.Mode
-                    is ArrowExtractionMode.Utf8
-                        or ArrowExtractionMode.Binary;
-        }
-
-        if (!hasVariableWidth)
-        {
-            return;
-        }
-
-        builder.AppendLine();
-        builder.AppendLine("        /// <summary>");
-        builder.AppendLine(
-            "        /// Whether a Utf8/Binary column's offsets are non-decreasing and stay inside its value"
-        );
-        builder.AppendLine(
-            "        /// buffer, so that slicing a row can neither throw nor read another row's bytes."
-        );
-        builder.AppendLine("        /// </summary>");
-        builder.AppendLine(
-            "        private static bool ArrowOffsetsSound(global::Apache.Arrow.BinaryArray array)"
-        );
-        builder.AppendLine("        {");
-        builder.AppendLine("            long slots = (long)array.Offset + array.Length + 1;");
-        builder.AppendLine(
-            "            if (array.ValueOffsetsBuffer.Length < slots * sizeof(int)) return false;"
-        );
-        builder.AppendLine(
-            "            global::System.ReadOnlySpan<int> offsets = array.ValueOffsets;"
-        );
-        builder.AppendLine("            int valuesLength = array.ValueBuffer.Length;");
-        builder.AppendLine("            int previous = offsets[0];");
-        builder.AppendLine(
-            "            if (previous < 0 || previous > valuesLength) return false;"
-        );
-        builder.AppendLine("            for (int k = 1; k < offsets.Length; k++)");
-        builder.AppendLine("            {");
-        builder.AppendLine(
-            "                if (offsets[k] < previous || offsets[k] > valuesLength) return false;"
-        );
-        builder.AppendLine("                previous = offsets[k];");
-        builder.AppendLine("            }");
-        builder.AppendLine();
-        builder.AppendLine("            return true;");
-        builder.AppendLine("        }");
-    }
-
-    private static void EmitNullCountHelper(StringBuilder builder)
-    {
-        builder.AppendLine();
-        builder.AppendLine("        /// <summary>");
-        builder.AppendLine(
-            "        /// Whether a column's declared null count matches the unset bits of its validity"
-        );
-        builder.AppendLine(
-            "        /// bitmap. A negative count means not yet computed, which Apache.Arrow derives from"
-        );
-        builder.AppendLine("        /// the bitmap itself.");
-        builder.AppendLine("        /// </summary>");
-        builder.AppendLine(
-            "        private static bool ArrowNullCountAgrees(global::Apache.Arrow.IArrowArray column)"
-        );
-        builder.AppendLine("        {");
-        builder.AppendLine("            global::Apache.Arrow.ArrayData data = column.Data;");
-        builder.AppendLine(
-            "            if (data.NullCount < 0 || data.Buffers.Length == 0 || data.Buffers[0].IsEmpty) return true;"
-        );
-        builder.AppendLine("            long end = (long)data.Offset + data.Length;");
-        builder.AppendLine(
-            "            global::System.ReadOnlySpan<byte> map = data.Buffers[0].Span;"
-        );
-        builder.AppendLine("            if (map.Length < (end + 7) / 8) return false;");
-        builder.AppendLine("            long unset = 0;");
-        builder.AppendLine("            for (long i = data.Offset; i < end; i++)");
-        builder.AppendLine("            {");
-        builder.AppendLine(
-            "                if ((map[(int)(i >> 3)] & (1 << (int)(i & 7))) == 0) unset++;"
-        );
-        builder.AppendLine("            }");
-        builder.AppendLine();
-        builder.AppendLine("            return unset == data.NullCount;");
-        builder.AppendLine("        }");
+        builder.AppendLine("    }");
     }
 
     // ──────────────────────────────────────────────────────────
@@ -454,22 +222,45 @@ internal static class ArrowBridgeEmitter
 
     private static void EmitWriteRowGroup(StringBuilder builder, TargetClassModel model)
     {
+        builder.AppendLine("    /// <summary>");
         builder.AppendLine(
-            "        internal static async global::System.Threading.Tasks.Task WriteParquetRowGroupAsync("
+            $"    /// Writes one Apache Arrow <c>RecordBatch</c> as a single Parquet row group using the"
+        );
+        builder.AppendLine(
+            $"    /// <c>{model.ClassName}</c> schema. Columns are matched by name and validated strictly;"
+        );
+        builder.AppendLine(
+            "    /// fixed-width Arrow buffers are handed to the writer without a copy or an ArrayPool rental."
+        );
+        builder.AppendLine("    /// </summary>");
+        builder.AppendLine(
+            "    /// <remarks>Call it qualified — it is a plain static method, not an extension.</remarks>"
+        );
+        builder.AppendLine(
+            $"    /// <remarks>Requires Apache.Arrow {ArrowMappingComponent.SupportedArrowFloor} or later.</remarks>"
+        );
+        builder.AppendLine(
+            "    public static async global::System.Threading.Tasks.Task WriteParquetRowGroupAsync("
         );
         // Deliberately NOT an extension method. RecordBatch carries no generic parameter, so an
         // extension overload would collide across every [ParquetSerializable] type in scope — the
         // POCO overload is disambiguated by IReadOnlyCollection<T>, this one could not be. Callers
         // qualify it: FooParquetExtensions.WriteParquetRowGroupAsync(writer, batch).
-        builder.AppendLine("            global::Parquet.ParquetWriter writer,");
-        builder.AppendLine("            global::Apache.Arrow.RecordBatch batch,");
+        builder.AppendLine("        global::Parquet.ParquetWriter writer,");
+        builder.AppendLine("        global::Apache.Arrow.RecordBatch batch,");
         builder.AppendLine(
-            "            global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,"
+            "        global::Parquet.SourceGenerator.ParquetSerializerOptions? options = null,"
         );
         builder.AppendLine(
-            "            global::System.Threading.CancellationToken cancellationToken = default)"
+            "        global::System.Threading.CancellationToken cancellationToken = default)"
         );
-        builder.AppendLine("        {");
+        builder.AppendLine("    {");
+        builder.AppendLine(
+            "        if (writer == null) throw new global::System.ArgumentNullException(nameof(writer));"
+        );
+        builder.AppendLine(
+            "        if (batch == null) throw new global::System.ArgumentNullException(nameof(batch));"
+        );
         builder.AppendLine();
         builder.AppendLine(
             "        // Row-group granularity is the unit of this overload; compression and the other"
@@ -484,68 +275,31 @@ internal static class ArrowBridgeEmitter
         builder.AppendLine("        int count = batch.Length;");
         builder.AppendLine("        if (count == 0) return;");
         builder.AppendLine();
-        for (int i = 0; i < model.Properties.Length; i++)
-        {
-            EmitColumnDeclarations(builder, model.Properties[i], i);
-        }
-        builder.AppendLine();
         builder.AppendLine("        using (var groupWriter = writer.CreateRowGroup())");
         builder.AppendLine("        {");
 
         for (int i = 0; i < model.Properties.Length; i++)
         {
-            builder.AppendLine("            try");
-            builder.AppendLine("            {");
             EmitColumn(builder, model.Properties[i], i);
-            EmitColumnWrite(builder, model.Properties[i], i);
-            builder.AppendLine("            }");
-            builder.AppendLine("            finally");
-            builder.AppendLine("            {");
-            EmitColumnCleanup(builder, model.Properties[i], i);
-            builder.AppendLine("            }");
         }
 
         builder.AppendLine("        }");
         builder.AppendLine("    }");
     }
 
-    private static void EmitColumnWrite(StringBuilder builder, PropertyModel prop, int slot)
-    {
-        string fieldAccess = $"_field_{slot}";
-        if (BufferPoolComponent.UsesWriteAllParts(prop))
-        {
-            string nonNullableElementType = BufferPoolComponent.GetNonNullableBufferType(prop);
-            builder.AppendLine(
-                $"                await groupWriter.WriteAllPartsAsync<{nonNullableElementType}>("
-            );
-            builder.AppendLine($"                    {fieldAccess},");
-            builder.AppendLine($"                    lane_{slot},");
-            builder.AppendLine($"                    levels_{slot}.Slice(0, count),");
-            builder.AppendLine("                    null,");
-            builder.AppendLine(
-                "                    cancellationToken: cancellationToken).ConfigureAwait(false);"
-            );
-            return;
-        }
-
-        string columnElementType = BufferPoolComponent.GetWriteBufferElementType(prop).TrimEnd('?');
-        builder.AppendLine($"                await groupWriter.WriteAsync<{columnElementType}>(");
-        builder.AppendLine($"                    {fieldAccess},");
-        builder.AppendLine($"                    lane_{slot}.Slice(0, count),");
-        builder.AppendLine(
-            "                    cancellationToken: cancellationToken).ConfigureAwait(false);"
-        );
-    }
-
     private static void EmitColumn(StringBuilder builder, PropertyModel prop, int slot)
     {
         ArrowLeafMapping map = ArrowMappingComponent.TryMap(prop)!;
-        string name = EmittedText.Literal(prop.ParquetColumnName);
-        string arr = $"arrow_{slot}";
-        builder.AppendLine();
-        builder.AppendLine(
-            $"            // column {slot}: {EmittedText.Comment(prop.ParquetColumnName)}"
+        string name = Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(
+            prop.ParquetColumnName,
+            quote: true
         );
+        string arr = $"arrow_{slot}";
+        string field = $"_field_{slot}";
+
+        builder.AppendLine();
+        builder.AppendLine($"            // column {slot}: {prop.ParquetColumnName}");
+        builder.AppendLine("            {");
         builder.AppendLine($"                var {arr} = ({map.ArrowArrayType})batch.Column(");
         builder.AppendLine(
             $"                    batch.Schema.GetFieldIndex({name}, global::System.StringComparer.Ordinal));"
@@ -554,83 +308,49 @@ internal static class ArrowBridgeEmitter
         switch (map.Mode)
         {
             case ArrowExtractionMode.Direct when !prop.IsNullable:
-                EmitDirectRequired(builder, map, arr, slot);
+                EmitDirectRequired(builder, map, arr, field);
                 break;
             case ArrowExtractionMode.Utf8:
-                EmitUtf8(builder, prop, arr, slot);
+                EmitUtf8(builder, prop, map, arr, field, slot);
                 break;
             case ArrowExtractionMode.Binary:
-                EmitBinary(builder, prop, arr, slot);
+                EmitBinary(builder, prop, map, arr, field, slot);
                 break;
             case ArrowExtractionMode.Convert when !prop.IsNullable:
-                EmitConvertRequired(builder, map, arr, slot);
+                EmitConvertRequired(builder, map, arr, field, slot);
                 break;
             default:
-                EmitPackedNullable(builder, map, arr, slot);
+                EmitPackedNullable(builder, map, arr, field, slot);
                 break;
         }
-    }
 
-    private static void EmitColumnDeclarations(StringBuilder builder, PropertyModel prop, int slot)
-    {
-        ArrowLeafMapping map = ArrowMappingComponent.TryMap(prop)!;
-
-        switch (map.Mode)
-        {
-            case ArrowExtractionMode.Direct when !prop.IsNullable:
-                return;
-
-            case ArrowExtractionMode.Utf8:
-            {
-                string element = prop.IsNullable
-                    ? "global::System.ReadOnlyMemory<char>?"
-                    : "global::System.ReadOnlyMemory<char>";
-                builder.AppendLine($"        {element}[]? buffer_{slot} = null;");
-                builder.AppendLine($"        char[]? chars_{slot} = null;");
-                return;
-            }
-
-            case ArrowExtractionMode.Binary:
-            {
-                string element = prop.IsNullable
-                    ? "global::System.ReadOnlyMemory<byte>?"
-                    : "global::System.ReadOnlyMemory<byte>";
-                builder.AppendLine($"        {element}[]? buffer_{slot} = null;");
-                return;
-            }
-
-            case ArrowExtractionMode.Convert when !prop.IsNullable:
-                builder.AppendLine($"        {map.ParquetElementType}[]? buffer_{slot} = null;");
-                return;
-
-            default:
-                builder.AppendLine($"        {map.ParquetElementType}[]? packed_{slot} = null;");
-                builder.AppendLine($"        int[]? defLevels_{slot} = null;");
-                builder.AppendLine($"        int nonNullCount_{slot} = 0;");
-                return;
-        }
+        builder.AppendLine("            }");
     }
 
     private static void EmitDirectRequired(
         StringBuilder builder,
         ArrowLeafMapping map,
         string arr,
-        int slot
+        string field
     )
     {
         string t = map.ParquetElementType;
         builder.AppendLine(
             "                // Zero-copy: the Arrow value buffer is reinterpreted in place."
         );
+        builder.AppendLine($"                await groupWriter.WriteAsync<{t}>(");
+        builder.AppendLine($"                    {field},");
         builder.AppendLine(
-            $"                var lane_{slot} = ArrowFixedWidthMemory<{t}>({arr}.ValueBuffer, {arr}.Offset, count);"
+            $"                    ArrowFixedWidthMemory<{t}>({arr}.ValueBuffer, {arr}.Offset, count),"
         );
+        builder.AppendLine("                    cancellationToken: cancellationToken);");
     }
 
     private static void EmitConvertRequired(
         StringBuilder builder,
         ArrowLeafMapping map,
         string arr,
+        string field,
         int slot
     )
     {
@@ -638,8 +358,10 @@ internal static class ArrowBridgeEmitter
         string convert = Substitute(map.ConvertExpression!, arr, "values", "row");
 
         builder.AppendLine(
-            $"                buffer_{slot} = global::System.Buffers.ArrayPool<{t}>.Shared.Rent(count);"
+            $"                var buffer_{slot} = global::System.Buffers.ArrayPool<{t}>.Shared.Rent(count);"
         );
+        builder.AppendLine("                try");
+        builder.AppendLine("                {");
         builder.AppendLine($"                    void Fill_{slot}()");
         builder.AppendLine("                    {");
         if (map.UsesValuesSpan)
@@ -652,15 +374,26 @@ internal static class ArrowBridgeEmitter
         builder.AppendLine("                        }");
         builder.AppendLine("                    }");
         builder.AppendLine($"                    Fill_{slot}();");
+        builder.AppendLine($"                    await groupWriter.WriteAsync<{t}>(");
+        builder.AppendLine($"                        {field},");
         builder.AppendLine(
-            $"                    var lane_{slot} = new global::System.ReadOnlyMemory<{t}>(buffer_{slot}, 0, count);"
+            $"                        new global::System.ReadOnlyMemory<{t}>(buffer_{slot}, 0, count),"
         );
+        builder.AppendLine("                        cancellationToken: cancellationToken);");
+        builder.AppendLine("                }");
+        builder.AppendLine("                finally");
+        builder.AppendLine("                {");
+        builder.AppendLine(
+            $"                    global::System.Buffers.ArrayPool<{t}>.Shared.Return(buffer_{slot}, clearArray: false);"
+        );
+        builder.AppendLine("                }");
     }
 
     private static void EmitPackedNullable(
         StringBuilder builder,
         ArrowLeafMapping map,
         string arr,
+        string field,
         int slot
     )
     {
@@ -678,11 +411,14 @@ internal static class ArrowBridgeEmitter
             "                // for the writer, one def level per row. No caller-supplied levels needed."
         );
         builder.AppendLine(
-            $"                packed_{slot} = global::System.Buffers.ArrayPool<{t}>.Shared.Rent(count);"
+            $"                var packed_{slot} = global::System.Buffers.ArrayPool<{t}>.Shared.Rent(count);"
         );
         builder.AppendLine(
-            $"                defLevels_{slot} = global::System.Buffers.ArrayPool<int>.Shared.Rent(count);"
+            $"                var defLevels_{slot} = global::System.Buffers.ArrayPool<int>.Shared.Rent(count);"
         );
+        builder.AppendLine($"                int nonNullCount_{slot} = 0;");
+        builder.AppendLine("                try");
+        builder.AppendLine("                {");
         builder.AppendLine($"                    void Pack_{slot}()");
         builder.AppendLine("                    {");
         if (needsValues)
@@ -716,15 +452,36 @@ internal static class ArrowBridgeEmitter
         builder.AppendLine("                        }");
         builder.AppendLine("                    }");
         builder.AppendLine($"                    Pack_{slot}();");
+        builder.AppendLine($"                    await groupWriter.WriteAllPartsAsync<{t}>(");
+        builder.AppendLine($"                        {field},");
         builder.AppendLine(
-            $"                    var lane_{slot} = new global::System.ReadOnlyMemory<{t}>(packed_{slot}, 0, nonNullCount_{slot});"
+            $"                        new global::System.ReadOnlyMemory<{t}>(packed_{slot}, 0, nonNullCount_{slot}),"
         );
         builder.AppendLine(
-            $"                    var levels_{slot} = new global::System.ReadOnlyMemory<int>(defLevels_{slot}, 0, count);"
+            $"                        new global::System.ReadOnlyMemory<int>(defLevels_{slot}, 0, count),"
         );
+        builder.AppendLine("                        null,");
+        builder.AppendLine("                        cancellationToken: cancellationToken);");
+        builder.AppendLine("                }");
+        builder.AppendLine("                finally");
+        builder.AppendLine("                {");
+        builder.AppendLine(
+            $"                    global::System.Buffers.ArrayPool<{t}>.Shared.Return(packed_{slot}, clearArray: false);"
+        );
+        builder.AppendLine(
+            $"                    global::System.Buffers.ArrayPool<int>.Shared.Return(defLevels_{slot}, clearArray: false);"
+        );
+        builder.AppendLine("                }");
     }
 
-    private static void EmitUtf8(StringBuilder builder, PropertyModel prop, string arr, int slot)
+    private static void EmitUtf8(
+        StringBuilder builder,
+        PropertyModel prop,
+        ArrowLeafMapping map,
+        string arr,
+        string field,
+        int slot
+    )
     {
         string element = prop.IsNullable
             ? "global::System.ReadOnlyMemory<char>?"
@@ -739,8 +496,11 @@ internal static class ArrowBridgeEmitter
             "                // so N strings cost one rental rather than N string allocations."
         );
         builder.AppendLine(
-            $"                buffer_{slot} = global::System.Buffers.ArrayPool<{element}>.Shared.Rent(count);"
+            $"                var buffer_{slot} = global::System.Buffers.ArrayPool<{element}>.Shared.Rent(count);"
         );
+        builder.AppendLine($"                char[]? chars_{slot} = null;");
+        builder.AppendLine("                try");
+        builder.AppendLine("                {");
         builder.AppendLine($"                    void Fill_{slot}()");
         builder.AppendLine("                    {");
         builder.AppendLine("                        int totalChars = 0;");
@@ -761,7 +521,7 @@ internal static class ArrowBridgeEmitter
         builder.AppendLine("                            }");
         builder.AppendLine("#if NET6_0_OR_GREATER");
         builder.AppendLine(
-            $"                            int written = global::System.Text.Encoding.UTF8.GetChars({arr}.GetBytes(row), global::System.MemoryExtensions.AsSpan(chars_{slot}, pos));"
+            $"                            int written = global::System.Text.Encoding.UTF8.GetChars({arr}.GetBytes(row), chars_{slot}.AsSpan(pos));"
         );
         builder.AppendLine("#else");
         builder.AppendLine($"                            string text = {arr}.GetString(row);");
@@ -778,11 +538,36 @@ internal static class ArrowBridgeEmitter
         builder.AppendLine("                    }");
         builder.AppendLine($"                    Fill_{slot}();");
         builder.AppendLine(
-            $"                    var lane_{slot} = new global::System.ReadOnlyMemory<{element}>(buffer_{slot}, 0, count);"
+            "                    await groupWriter.WriteAsync<global::System.ReadOnlyMemory<char>>("
         );
+        builder.AppendLine($"                        {field},");
+        builder.AppendLine(
+            $"                        new global::System.ReadOnlyMemory<{element}>(buffer_{slot}, 0, count),"
+        );
+        builder.AppendLine("                        cancellationToken: cancellationToken);");
+        builder.AppendLine("                }");
+        builder.AppendLine("                finally");
+        builder.AppendLine("                {");
+        builder.AppendLine(
+            $"                    global::System.Buffers.ArrayPool<{element}>.Shared.Return(buffer_{slot}, clearArray: true);"
+        );
+        builder.AppendLine($"                    if (chars_{slot} != null)");
+        builder.AppendLine("                    {");
+        builder.AppendLine(
+            $"                        global::System.Buffers.ArrayPool<char>.Shared.Return(chars_{slot}, clearArray: false);"
+        );
+        builder.AppendLine("                    }");
+        builder.AppendLine("                }");
     }
 
-    private static void EmitBinary(StringBuilder builder, PropertyModel prop, string arr, int slot)
+    private static void EmitBinary(
+        StringBuilder builder,
+        PropertyModel prop,
+        ArrowLeafMapping map,
+        string arr,
+        string field,
+        int slot
+    )
     {
         string element = prop.IsNullable
             ? "global::System.ReadOnlyMemory<byte>?"
@@ -793,8 +578,10 @@ internal static class ArrowBridgeEmitter
             "                // Each row is a slice of the Arrow value buffer — the payload is never copied."
         );
         builder.AppendLine(
-            $"                buffer_{slot} = global::System.Buffers.ArrayPool<{element}>.Shared.Rent(count);"
+            $"                var buffer_{slot} = global::System.Buffers.ArrayPool<{element}>.Shared.Rent(count);"
         );
+        builder.AppendLine("                try");
+        builder.AppendLine("                {");
         builder.AppendLine($"                    void Fill_{slot}()");
         builder.AppendLine("                    {");
         builder.AppendLine(
@@ -817,77 +604,20 @@ internal static class ArrowBridgeEmitter
         builder.AppendLine("                    }");
         builder.AppendLine($"                    Fill_{slot}();");
         builder.AppendLine(
-            $"                    var lane_{slot} = new global::System.ReadOnlyMemory<{element}>(buffer_{slot}, 0, count);"
+            "                    await groupWriter.WriteAsync<global::System.ReadOnlyMemory<byte>>("
         );
-    }
-
-    private static void EmitColumnCleanup(StringBuilder builder, PropertyModel prop, int slot)
-    {
-        ArrowLeafMapping map = ArrowMappingComponent.TryMap(prop)!;
-
-        switch (map.Mode)
-        {
-            case ArrowExtractionMode.Direct when !prop.IsNullable:
-                return;
-
-            case ArrowExtractionMode.Utf8:
-            {
-                string element = prop.IsNullable
-                    ? "global::System.ReadOnlyMemory<char>?"
-                    : "global::System.ReadOnlyMemory<char>";
-                builder.AppendLine($"            if (buffer_{slot} != null)");
-                builder.AppendLine("            {");
-                builder.AppendLine(
-                    $"                global::System.Buffers.ArrayPool<{element}>.Shared.Return(buffer_{slot}, clearArray: true);"
-                );
-                builder.AppendLine("            }");
-                builder.AppendLine($"            if (chars_{slot} != null)");
-                builder.AppendLine("            {");
-                builder.AppendLine(
-                    $"                global::System.Buffers.ArrayPool<char>.Shared.Return(chars_{slot}, clearArray: false);"
-                );
-                builder.AppendLine("            }");
-                return;
-            }
-
-            case ArrowExtractionMode.Binary:
-            {
-                string element = prop.IsNullable
-                    ? "global::System.ReadOnlyMemory<byte>?"
-                    : "global::System.ReadOnlyMemory<byte>";
-                builder.AppendLine($"            if (buffer_{slot} != null)");
-                builder.AppendLine("            {");
-                builder.AppendLine(
-                    $"                global::System.Buffers.ArrayPool<{element}>.Shared.Return(buffer_{slot}, clearArray: true);"
-                );
-                builder.AppendLine("            }");
-                return;
-            }
-
-            case ArrowExtractionMode.Convert when !prop.IsNullable:
-                builder.AppendLine($"            if (buffer_{slot} != null)");
-                builder.AppendLine("            {");
-                builder.AppendLine(
-                    $"                global::System.Buffers.ArrayPool<{map.ParquetElementType}>.Shared.Return(buffer_{slot}, clearArray: false);"
-                );
-                builder.AppendLine("            }");
-                return;
-
-            default:
-                builder.AppendLine($"            if (packed_{slot} != null)");
-                builder.AppendLine("            {");
-                builder.AppendLine(
-                    $"                global::System.Buffers.ArrayPool<{map.ParquetElementType}>.Shared.Return(packed_{slot}, clearArray: false);"
-                );
-                builder.AppendLine("            }");
-                builder.AppendLine($"            if (defLevels_{slot} != null)");
-                builder.AppendLine("            {");
-                builder.AppendLine(
-                    $"                global::System.Buffers.ArrayPool<int>.Shared.Return(defLevels_{slot}, clearArray: false);"
-                );
-                builder.AppendLine("            }");
-                return;
-        }
+        builder.AppendLine($"                        {field},");
+        builder.AppendLine(
+            $"                        new global::System.ReadOnlyMemory<{element}>(buffer_{slot}, 0, count),"
+        );
+        builder.AppendLine("                        cancellationToken: cancellationToken);");
+        builder.AppendLine("                }");
+        builder.AppendLine("                finally");
+        builder.AppendLine("                {");
+        builder.AppendLine(
+            $"                    global::System.Buffers.ArrayPool<{element}>.Shared.Return(buffer_{slot}, clearArray: true);"
+        );
+        builder.AppendLine("                }");
     }
 
     // ──────────────────────────────────────────────────────────
@@ -984,84 +714,6 @@ internal static class ArrowBridgeEmitter
         builder.AppendLine("        }");
         builder.AppendLine("    }");
         builder.AppendLine("#endif");
-    }
-
-    /// <summary>
-    /// Emits the exact Decimal128 reader. Portable by construction — plain shifts over the 16
-    /// little-endian bytes, no <c>Int128</c> and no <c>BinaryPrimitives</c> — because the bridge is
-    /// emitted into any compilation that references Apache.Arrow, netstandard2.0 included.
-    /// </summary>
-    private static void EmitDecimalHelper(StringBuilder builder)
-    {
-        builder.AppendLine("    /// <summary>");
-        builder.AppendLine(
-            "    /// Reads one Decimal128 value exactly: the 128-bit two's-complement unscaled integer is"
-        );
-        builder.AppendLine(
-            "    /// accepted only when it is exactly representable in System.Decimal. Never rounds."
-        );
-        builder.AppendLine("    /// </summary>");
-        builder.AppendLine("    private static decimal ArrowDecimalExact(");
-        builder.AppendLine("        global::Apache.Arrow.Decimal128Array array,");
-        builder.AppendLine("        int index,");
-        builder.AppendLine("        int scale,");
-        builder.AppendLine("        string column)");
-        builder.AppendLine("    {");
-        builder.AppendLine(
-            "        global::System.ReadOnlySpan<byte> bytes = array.GetBytes(index);"
-        );
-        builder.AppendLine("        ulong low = 0;");
-        builder.AppendLine("        ulong high = 0;");
-        builder.AppendLine("        for (int k = 7; k >= 0; k--)");
-        builder.AppendLine("        {");
-        builder.AppendLine("            low = (low << 8) | bytes[k];");
-        builder.AppendLine("            high = (high << 8) | bytes[k + 8];");
-        builder.AppendLine("        }");
-        builder.AppendLine();
-        builder.AppendLine("        bool negative = (high & 0x8000000000000000UL) != 0;");
-        builder.AppendLine("        if (negative)");
-        builder.AppendLine("        {");
-        builder.AppendLine("            low = unchecked(~low + 1UL);");
-        builder.AppendLine("            high = unchecked(~high + (low == 0UL ? 1UL : 0UL));");
-        builder.AppendLine("        }");
-        builder.AppendLine();
-        builder.AppendLine(
-            "        // A wide unscaled integer can still be exact: strip trailing decimal zeros (reducing the"
-        );
-        builder.AppendLine(
-            "        // scale) until the magnitude fits 96 bits and the scale fits 28; 10^19 at scale 18 is 10^37."
-        );
-        builder.AppendLine("        while ((high >> 32) != 0UL || scale > 28)");
-        builder.AppendLine("        {");
-        builder.AppendLine("            ulong remainder = high >> 32;");
-        builder.AppendLine("            ulong q3 = remainder / 10UL;");
-        builder.AppendLine(
-            "            remainder = ((remainder % 10UL) << 32) | (high & 0xFFFFFFFFUL);"
-        );
-        builder.AppendLine("            ulong q2 = remainder / 10UL;");
-        builder.AppendLine("            remainder = ((remainder % 10UL) << 32) | (low >> 32);");
-        builder.AppendLine("            ulong q1 = remainder / 10UL;");
-        builder.AppendLine(
-            "            remainder = ((remainder % 10UL) << 32) | (low & 0xFFFFFFFFUL);"
-        );
-        builder.AppendLine("            ulong q0 = remainder / 10UL;");
-        builder.AppendLine("            if (scale == 0 || remainder % 10UL != 0UL)");
-        builder.AppendLine("            {");
-        builder.AppendLine("                throw new global::System.IO.InvalidDataException(");
-        builder.AppendLine(
-            "                    column + \": row \" + index + \" holds a Decimal128 value outside the range of System.Decimal; it is refused rather than rounded.\");"
-        );
-        builder.AppendLine("            }");
-        builder.AppendLine();
-        builder.AppendLine("            high = (q3 << 32) | q2;");
-        builder.AppendLine("            low = (q1 << 32) | q0;");
-        builder.AppendLine("            scale--;");
-        builder.AppendLine("        }");
-        builder.AppendLine();
-        builder.AppendLine(
-            "        return unchecked(new decimal((int)(uint)low, (int)(uint)(low >> 32), (int)(uint)high, negative, (byte)scale));"
-        );
-        builder.AppendLine("    }");
     }
 
     private static void EmitGuidHelper(StringBuilder builder)

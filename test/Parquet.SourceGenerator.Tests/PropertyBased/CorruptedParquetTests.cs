@@ -6,10 +6,19 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Parquet.Schema;
-using Shouldly;
 using Xunit;
 
 namespace Parquet.SourceGenerator.Tests.PropertyBased;
+
+/// <summary>
+/// Serialises the corruption suite against every other collection so its allocation ceiling is
+/// measured against a quiet process rather than whatever else happened to be running.
+/// </summary>
+[CollectionDefinition(Name, DisableParallelization = true)]
+public sealed class CorruptedParquetSuite
+{
+    public const string Name = "corrupted-parquet";
+}
 
 /// <summary>
 /// Controlled corruption of otherwise valid Parquet files.
@@ -21,7 +30,7 @@ namespace Parquet.SourceGenerator.Tests.PropertyBased;
 /// data that differs from the truth without saying so. Silent corruption is the only outcome that is
 /// always a bug.
 /// </remarks>
-[Collection(AllocationMeasurementSuite.Name)]
+[Collection(CorruptedParquetSuite.Name)]
 public sealed class CorruptedParquetTests
 {
     /// <summary>How long a read of a small corrupt file may take before it counts as a hang.</summary>
@@ -138,7 +147,8 @@ public sealed class CorruptedParquetTests
 
         ReadOutcome outcome = await ReadAsync(damaged);
 
-        outcome.TimedOut.ShouldBeFalse(
+        Assert.False(
+            outcome.TimedOut,
             $"bit flips (seed {seed}): read did not finish within {ReadTimeout}."
         );
         AssertBoundedFailure($"bit flips (seed {seed})", outcome);
@@ -234,8 +244,9 @@ public sealed class CorruptedParquetTests
     {
         ReadOutcome outcome = await ReadAsync(bytes);
 
-        outcome.TimedOut.ShouldBeFalse($"{description}: read did not finish within {ReadTimeout}.");
-        outcome.Exception.ShouldNotBeNull(
+        Assert.False(outcome.TimedOut, $"{description}: read did not finish within {ReadTimeout}.");
+        Assert.True(
+            outcome.Exception is not null,
             $"{description}: the reader accepted a file it cannot possibly interpret correctly."
         );
         AssertBoundedFailure(description, outcome);
@@ -250,7 +261,7 @@ public sealed class CorruptedParquetTests
     {
         ReadOutcome outcome = await ReadAsync(bytes);
 
-        outcome.TimedOut.ShouldBeFalse($"{description}: read did not finish within {ReadTimeout}.");
+        Assert.False(outcome.TimedOut, $"{description}: read did not finish within {ReadTimeout}.");
         AssertBoundedFailure(description, outcome);
 
         if (outcome.Exception is not null)
@@ -258,9 +269,9 @@ public sealed class CorruptedParquetTests
             return;
         }
 
-        IReadOnlyList<FuzzWideRecord> actual = outcome.Rows!;
-        actual.Count.ShouldBe(
-            expected.Count,
+        List<FuzzWideRecord> actual = outcome.Rows!;
+        Assert.True(
+            actual.Count == expected.Count,
             $"{description}: read succeeded but returned {actual.Count} rows instead of "
                 + $"{expected.Count}. A corrupt file must be rejected, not silently truncated."
         );
@@ -275,23 +286,24 @@ public sealed class CorruptedParquetTests
             {
                 object? want = column.NormalizedValue(expected[i]);
                 object? got = column.NormalizedValue(actual[i]);
-                FuzzCompare
-                    .Equal(want, got)
-                    .ShouldBeTrue(
-                        $"{description}: read succeeded but column '{column.Name}' row {i} came back as "
-                            + $"{FuzzValues.Describe(got)} instead of {FuzzValues.Describe(want)}. "
-                            + "A corrupt file must never be accepted with changed values."
-                    );
+                Assert.True(
+                    FuzzCompare.Equal(want, got),
+                    $"{description}: read succeeded but column '{column.Name}' row {i} came back as "
+                        + $"{FuzzValues.Describe(got)} instead of {FuzzValues.Describe(want)}. "
+                        + "A corrupt file must never be accepted with changed values."
+                );
             }
         }
     }
 
     private static void AssertBoundedFailure(string description, ReadOutcome outcome)
     {
-        (outcome.Exception is OutOfMemoryException).ShouldBeFalse(
+        Assert.False(
+            outcome.Exception is OutOfMemoryException,
             $"{description}: the reader exhausted memory rather than rejecting the file."
         );
-        (outcome.AllocatedBytes < AllocationCeilingBytes).ShouldBeTrue(
+        Assert.True(
+            outcome.AllocatedBytes < AllocationCeilingBytes,
             $"{description}: reading allocated "
                 + $"{(outcome.AllocatedBytes / (1024.0 * 1024.0)).ToString("F1", CultureInfo.InvariantCulture)} MB, "
                 + $"over the {AllocationCeilingBytes / (1024 * 1024)} MB ceiling for a file of "
@@ -301,10 +313,18 @@ public sealed class CorruptedParquetTests
 
     private static async Task<ReadOutcome> ReadAsync(byte[] bytes)
     {
+        long before = GC.GetTotalAllocatedBytes(precise: true);
         using var cts = new CancellationTokenSource(ReadTimeout);
 
-        Task<AllocationMeasurementResult<ReadOutcome>> read = Task.Run(
-            () => AllocationMeasurement.MeasureAsync(() => ReadAttemptAsync(bytes, cts.Token)),
+        Task<List<FuzzWideRecord>> read = Task.Run(
+            async () =>
+            {
+                using var stream = new MemoryStream(bytes, writable: false);
+                return await FuzzWideRecordParquetExtensions.ReadParquetAsync(
+                    stream,
+                    cancellationToken: cts.Token
+                );
+            },
             CancellationToken.None
         );
 
@@ -314,31 +334,19 @@ public sealed class CorruptedParquetTests
             return new ReadOutcome(null, null, TimedOut: true, 0);
         }
 
-        AllocationMeasurementResult<ReadOutcome> measurement = await read;
-        return measurement.Result with { AllocatedBytes = measurement.AllocatedBytes };
-    }
-
-    private static async Task<ReadOutcome> ReadAttemptAsync(
-        byte[] bytes,
-        CancellationToken cancellationToken
-    )
-    {
+        long allocated = GC.GetTotalAllocatedBytes(precise: true) - before;
         try
         {
-            using var stream = new MemoryStream(bytes, writable: false);
-            FuzzWideRecord[] rows = await FuzzWideRecordParquet
-                .From(stream)
-                .ToArrayAsync(cancellationToken);
-            return new ReadOutcome(rows, null, TimedOut: false, 0);
+            return new ReadOutcome(await read, null, TimedOut: false, allocated);
         }
         catch (Exception ex)
         {
-            return new ReadOutcome(null, ex, TimedOut: false, 0);
+            return new ReadOutcome(null, ex, TimedOut: false, allocated);
         }
     }
 
     private sealed record ReadOutcome(
-        IReadOnlyList<FuzzWideRecord>? Rows,
+        List<FuzzWideRecord>? Rows,
         Exception? Exception,
         bool TimedOut,
         long AllocatedBytes

@@ -97,11 +97,11 @@ internal static class PropertyMappingComponent
             PropertyModel prop = model.Properties[0];
             builder.AppendLine($"{indent}#if NET6_0_OR_GREATER");
             builder.AppendLine(
-                $"{indent}if (global::System.Runtime.CompilerServices.Unsafe.SizeOf<{EmittedText.Ident(model.ClassName)}>() == global::System.Runtime.CompilerServices.Unsafe.SizeOf<{elemType}>())"
+                $"{indent}if (global::System.Runtime.CompilerServices.Unsafe.SizeOf<{model.ClassName}>() == global::System.Runtime.CompilerServices.Unsafe.SizeOf<{elemType}>())"
             );
             builder.AppendLine($"{indent}{{");
             builder.AppendLine(
-                $"{indent}    global::System.Runtime.InteropServices.MemoryMarshal.Cast<{elemType}, {EmittedText.Ident(model.ClassName)}>({bufferPrefix}0.AsSpan(0, {rowCountVar})).CopyTo({targetArrayVar}.AsSpan({startOffsetVar}, {rowCountVar}));"
+                $"{indent}    global::System.Runtime.InteropServices.MemoryMarshal.Cast<{elemType}, {model.ClassName}>({bufferPrefix}0.AsSpan(0, {rowCountVar})).CopyTo({targetArrayVar}.AsSpan({startOffsetVar}, {rowCountVar}));"
             );
             builder.AppendLine($"{indent}}}");
             builder.AppendLine($"{indent}else");
@@ -111,7 +111,7 @@ internal static class PropertyMappingComponent
             );
             builder.AppendLine($"{indent}    {{");
             builder.AppendLine(
-                $"{indent}        {targetArrayVar}[{startOffsetVar} + {indexVar}] = new {EmittedText.Ident(model.ClassName)} {{ {EmittedText.Ident(prop.Name)} = {bufferPrefix}0[{indexVar}] }};"
+                $"{indent}        {targetArrayVar}[{startOffsetVar} + {indexVar}] = new {model.ClassName} {{ {prop.Name} = {bufferPrefix}0[{indexVar}] }};"
             );
             builder.AppendLine($"{indent}    }}");
             builder.AppendLine($"{indent}}}");
@@ -121,7 +121,7 @@ internal static class PropertyMappingComponent
             );
             builder.AppendLine($"{indent}{{");
             builder.AppendLine(
-                $"{indent}    {targetArrayVar}[{startOffsetVar} + {indexVar}] = new {EmittedText.Ident(model.ClassName)} {{ {EmittedText.Ident(prop.Name)} = {bufferPrefix}0[{indexVar}] }};"
+                $"{indent}    {targetArrayVar}[{startOffsetVar} + {indexVar}] = new {model.ClassName} {{ {prop.Name} = {bufferPrefix}0[{indexVar}] }};"
             );
             builder.AppendLine($"{indent}}}");
             builder.AppendLine($"{indent}#endif");
@@ -225,8 +225,8 @@ internal static class PropertyMappingComponent
         if (prop.Kind == PropertyKind.TimeOnly)
         {
             return prop.IsNullable
-                ? $"{valueExpression} is null ? (global::System.TimeOnly?)null : ReadTimeOnly({valueExpression}.Value)"
-                : $"ReadTimeOnly({valueExpression})";
+                ? $"{valueExpression} is null ? (global::System.TimeOnly?)null : new global::System.TimeOnly({valueExpression}.Value * 10L)"
+                : $"new global::System.TimeOnly({valueExpression} * 10L)";
         }
 
         if (prop.Kind == PropertyKind.DateOnly)
@@ -253,35 +253,6 @@ internal static class PropertyMappingComponent
     /// target[targetOffset + index] = new T { Prop1 = ..., Prop2 = ... };
     /// </summary>
     public static void EmitObjectMaterialization(
-        IndentedWriter writer,
-        TargetClassModel model,
-        string targetArray,
-        string offsetExpr,
-        string indexVar,
-        string bufferPrefix = "buffer_"
-    )
-    {
-        string targetSlot = string.IsNullOrEmpty(offsetExpr)
-            ? $"{targetArray}[{indexVar}]"
-            : $"{targetArray}[{offsetExpr} + {indexVar}]";
-
-        writer.Line($"{targetSlot} = new {EmittedText.Ident(model.ClassName)}");
-        writer.Line("{");
-
-        using (writer.Indent())
-        {
-            for (int i = 0; i < model.Properties.Length; i++)
-            {
-                PropertyModel prop = model.Properties[i];
-                string readExpr = GetReadExpression(prop, $"{bufferPrefix}{i}[{indexVar}]");
-                writer.Line($"{EmittedText.Ident(prop.Name)} = {readExpr},");
-            }
-        }
-
-        writer.Line("};");
-    }
-
-    public static void EmitObjectMaterialization(
         StringBuilder builder,
         TargetClassModel model,
         string targetArray,
@@ -289,41 +260,29 @@ internal static class PropertyMappingComponent
         string indexVar,
         string bufferPrefix = "buffer_",
         string indent = "                "
-    ) =>
-        EmitObjectMaterialization(
-            new IndentedWriter(builder) { IndentLevel = indent.Length / 4 },
-            model,
-            targetArray,
-            offsetExpr,
-            indexVar,
-            bufferPrefix
-        );
+    )
+    {
+        string targetSlot = string.IsNullOrEmpty(offsetExpr)
+            ? $"{targetArray}[{indexVar}]"
+            : $"{targetArray}[{offsetExpr} + {indexVar}]";
+
+        builder.AppendLine($"{indent}{targetSlot} = new {model.ClassName}");
+        builder.AppendLine($"{indent}{{");
+
+        for (int i = 0; i < model.Properties.Length; i++)
+        {
+            PropertyModel prop = model.Properties[i];
+            string readExpr = GetReadExpression(prop, $"{bufferPrefix}{i}[{indexVar}]");
+            builder.AppendLine($"{indent}    {prop.Name} = {readExpr},");
+        }
+
+        builder.AppendLine($"{indent}}};");
+    }
 
     /// <summary>
     /// Emits property extraction from an item into column buffers:
     /// buffer_{i}[index] = item.Prop;
     /// </summary>
-    public static void EmitPropertyAssignments(
-        IndentedWriter writer,
-        TargetClassModel model,
-        string itemVar = "item",
-        string indexVar = "i",
-        string bufferPrefix = "buffer_",
-        bool useMemoryForTextAndBinary = true
-    )
-    {
-        for (int p = 0; p < model.Properties.Length; p++)
-        {
-            PropertyModel prop = model.Properties[p];
-            string writeExpr = GetWriteExpression(
-                prop,
-                $"{itemVar}.{EmittedText.Ident(prop.Name)}",
-                useMemoryForTextAndBinary
-            );
-            writer.Line($"{bufferPrefix}{p}[{indexVar}] = {writeExpr};");
-        }
-    }
-
     public static void EmitPropertyAssignments(
         StringBuilder builder,
         TargetClassModel model,
@@ -332,36 +291,17 @@ internal static class PropertyMappingComponent
         string bufferPrefix = "buffer_",
         string indent = "                    ",
         bool useMemoryForTextAndBinary = true
-    ) =>
-        EmitPropertyAssignments(
-            new IndentedWriter(builder) { IndentLevel = indent.Length / 4 },
-            model,
-            itemVar,
-            indexVar,
-            bufferPrefix,
-            useMemoryForTextAndBinary
-        );
-
-    /// <summary>
-    /// Emits <c>ReadTimeOnly</c>, which builds a <c>TimeOnly</c> from a file-controlled
-    /// <c>TIME_MICROS</c> value. Unchecked, an out-of-range value throws
-    /// <c>ArgumentOutOfRangeException</c>, and one that wraps on the multiply yields a wrong time of day
-    /// with no error (#371). The classic backend does not map
-    /// <c>TimeOnly</c> columns (its read buffer is a <c>TimeOnly[]</c>, which this expression cannot index),
-    /// so only the modern emitter emits it.
-    /// </summary>
-    public static void EmitReadTimeOnlyHelper(StringBuilder builder)
+    )
     {
-        builder.AppendLine("    private static global::System.TimeOnly ReadTimeOnly(long micros)");
-        builder.AppendLine("    {");
-        builder.AppendLine("        if ((ulong)micros > 86_399_999_999UL)");
-        builder.AppendLine("        {");
-        builder.AppendLine(
-            "            throw new global::System.IO.InvalidDataException($\"TIME_MICROS value {micros} is outside one day.\");"
-        );
-        builder.AppendLine("        }");
-        builder.AppendLine();
-        builder.AppendLine("        return new global::System.TimeOnly(micros * 10L);");
-        builder.AppendLine("    }");
+        for (int p = 0; p < model.Properties.Length; p++)
+        {
+            PropertyModel prop = model.Properties[p];
+            string writeExpr = GetWriteExpression(
+                prop,
+                $"{itemVar}.{prop.Name}",
+                useMemoryForTextAndBinary
+            );
+            builder.AppendLine($"{indent}{bufferPrefix}{p}[{indexVar}] = {writeExpr};");
+        }
     }
 }

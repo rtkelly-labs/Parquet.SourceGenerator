@@ -1,0 +1,93 @@
+#nullable enable
+override Parquet.SourceGenerator.Models.DiagnosticInfo.GetHashCode() -> int
+override Parquet.SourceGenerator.Models.EquatableArray<T>.Equals(object? obj) -> bool
+override Parquet.SourceGenerator.Models.EquatableArray<T>.GetHashCode() -> int
+Parquet.SourceGenerator.Diagnostics.DiagnosticDescriptors
+Parquet.SourceGenerator.Emitter.CodeEmitter
+Parquet.SourceGenerator.Models.DiagnosticInfo
+Parquet.SourceGenerator.Models.DiagnosticInfo.Descriptor.get -> Microsoft.CodeAnalysis.DiagnosticDescriptor!
+Parquet.SourceGenerator.Models.DiagnosticInfo.Descriptor.init -> void
+Parquet.SourceGenerator.Models.DiagnosticInfo.DiagnosticInfo() -> void
+Parquet.SourceGenerator.Models.DiagnosticInfo.DiagnosticInfo(Microsoft.CodeAnalysis.DiagnosticDescriptor! Descriptor, Microsoft.CodeAnalysis.Location! Location, string![]! MessageArgs) -> void
+Parquet.SourceGenerator.Models.DiagnosticInfo.Equals(Parquet.SourceGenerator.Models.DiagnosticInfo other) -> bool
+Parquet.SourceGenerator.Models.DiagnosticInfo.Location.get -> Microsoft.CodeAnalysis.Location!
+Parquet.SourceGenerator.Models.DiagnosticInfo.Location.init -> void
+Parquet.SourceGenerator.Models.DiagnosticInfo.MessageArgs.get -> string![]!
+Parquet.SourceGenerator.Models.DiagnosticInfo.MessageArgs.init -> void
+Parquet.SourceGenerator.Models.DiagnosticInfo.ToDiagnostic() -> Microsoft.CodeAnalysis.Diagnostic!
+Parquet.SourceGenerator.Models.EquatableArray<T>
+Parquet.SourceGenerator.Models.EquatableArray<T>.AsSpan() -> System.ReadOnlySpan<T>
+Parquet.SourceGenerator.Models.EquatableArray<T>.Equals(Parquet.SourceGenerator.Models.EquatableArray<T> other) -> bool
+Parquet.SourceGenerator.Models.EquatableArray<T>.EquatableArray() -> void
+Parquet.SourceGenerator.Models.EquatableArray<T>.EquatableArray(T[]! array) -> void
+Parquet.SourceGenerator.Models.EquatableArray<T>.GetEnumerator() -> System.Collections.Generic.IEnumerator<T>!
+Parquet.SourceGenerator.Models.EquatableArray<T>.Length.get -> int
+Parquet.SourceGenerator.Models.EquatableArray<T>.this[int index].get -> T
+Parquet.SourceGenerator.Models.PropertyKind
+Parquet.SourceGenerator.Models.PropertyKind.ByteArray = 6 -> Parquet.SourceGenerator.Models.PropertyKind
+Parquet.SourceGenerator.Models.PropertyKind.DateTime = 2 -> Parquet.SourceGenerator.Models.PropertyKind
+Parquet.SourceGenerator.Models.PropertyKind.Decimal = 1 -> Parquet.SourceGenerator.Models.PropertyKind
+Parquet.SourceGenerator.Models.PropertyKind.Enum = 5 -> Parquet.SourceGenerator.Models.PropertyKind
+Parquet.SourceGenerator.Models.PropertyKind.Guid = 4 -> Parquet.SourceGenerator.Models.PropertyKind
+Parquet.SourceGenerator.Models.PropertyKind.Primitive = 0 -> Parquet.SourceGenerator.Models.PropertyKind
+Parquet.SourceGenerator.Models.PropertyKind.TimeSpan = 3 -> Parquet.SourceGenerator.Models.PropertyKind
+Parquet.SourceGenerator.Models.PropertyModel
+Parquet.SourceGenerator.Models.PropertyModel.DecimalPrecision.get -> int?
+Parquet.SourceGenerator.Models.PropertyModel.DecimalPrecision.init -> void
+Parquet.SourceGenerator.Models.PropertyModel.DecimalScale.get -> int?
+Parquet.SourceGenerator.Models.PropertyModel.DecimalScale.init -> void
+Parquet.SourceGenerator.Models.PropertyModel.EnumUnderlyingTypeName.get -> string?
+Parquet.SourceGenerator.Models.PropertyModel.EnumUnderlyingTypeName.init -> void
+Parquet.SourceGenerator.Models.PropertyModel.IsNullable.get -> bool
+Parquet.SourceGenerator.Models.PropertyModel.IsNullable.init -> void
+Parquet.SourceGenerator.Models.PropertyModel.Kind.get -> Parquet.SourceGenerator.Models.PropertyKind
+Parquet.SourceGenerator.Models.PropertyModel.Kind.init -> void
+Parquet.SourceGenerator.Models.PropertyModel.Name.get -> string!
+Parquet.SourceGenerator.Models.PropertyModel.Name.init -> void
+Parquet.SourceGenerator.Models.PropertyModel.Order.get -> int
+Parquet.SourceGenerator.Models.PropertyModel.Order.init -> void
+Parquet.SourceGenerator.Models.PropertyModel.ParquetColumnName.get -> string!
+Parquet.SourceGenerator.Models.PropertyModel.ParquetColumnName.init -> void
+Parquet.SourceGenerator.Models.PropertyModel.PropertyModel(string! Name, string! ParquetColumnName, string! TypeName, string? TimestampUnit, string? EnumUnderlyingTypeName, int Order, int? DecimalPrecision, int? DecimalScale, Parquet.SourceGenerator.Models.PropertyKind Kind, bool IsNullable) -> void
+Parquet.SourceGenerator.Models.PropertyModel.TimestampUnit.get -> string?
+Parquet.SourceGenerator.Models.PropertyModel.TimestampUnit.init -> void
+Parquet.SourceGenerator.Models.PropertyModel.TypeName.get -> string!
+Parquet.SourceGenerator.Models.PropertyModel.TypeName.init -> void
+Parquet.SourceGenerator.Models.TargetClassModel
+Parquet.SourceGenerator.Models.TargetClassModel.ClassName.get -> string!
+Parquet.SourceGenerator.Models.TargetClassModel.ClassName.init -> void
+Parquet.SourceGenerator.Models.TargetClassModel.Namespace.get -> string!
+Parquet.SourceGenerator.Models.TargetClassModel.Namespace.init -> void
+Parquet.SourceGenerator.Models.TargetClassModel.Properties.get -> Parquet.SourceGenerator.Models.EquatableArray<Parquet.SourceGenerator.Models.PropertyModel!>
+Parquet.SourceGenerator.Models.TargetClassModel.Properties.init -> void
+Parquet.SourceGenerator.Models.TargetClassModel.TargetClassModel(string! Namespace, string! ClassName, Parquet.SourceGenerator.Models.EquatableArray<Parquet.SourceGenerator.Models.PropertyModel!> Properties) -> void
+Parquet.SourceGenerator.ParquetIncrementalGenerator
+Parquet.SourceGenerator.ParquetIncrementalGenerator.Initialize(Microsoft.CodeAnalysis.IncrementalGeneratorInitializationContext context) -> void
+Parquet.SourceGenerator.ParquetIncrementalGenerator.ParquetIncrementalGenerator() -> void
+Parquet.SourceGenerator.Parser.ParquetApiLevel
+Parquet.SourceGenerator.Parser.ParquetApiLevel.V4 = 1 -> Parquet.SourceGenerator.Parser.ParquetApiLevel
+Parquet.SourceGenerator.Parser.ParquetApiLevel.V6 = 0 -> Parquet.SourceGenerator.Parser.ParquetApiLevel
+Parquet.SourceGenerator.Parser.TargetParser
+Parquet.SourceGenerator.Parser.TargetParserResult
+Parquet.SourceGenerator.Parser.TargetParserResult.Diagnostics.get -> Parquet.SourceGenerator.Models.EquatableArray<Parquet.SourceGenerator.Models.DiagnosticInfo>
+Parquet.SourceGenerator.Parser.TargetParserResult.Diagnostics.init -> void
+Parquet.SourceGenerator.Parser.TargetParserResult.Model.get -> Parquet.SourceGenerator.Models.TargetClassModel?
+Parquet.SourceGenerator.Parser.TargetParserResult.Model.init -> void
+Parquet.SourceGenerator.Parser.TargetParserResult.TargetParserResult(Parquet.SourceGenerator.Models.TargetClassModel? Model, Parquet.SourceGenerator.Models.EquatableArray<Parquet.SourceGenerator.Models.DiagnosticInfo> Diagnostics) -> void
+static Parquet.SourceGenerator.Emitter.CodeEmitter.EmitSource(Parquet.SourceGenerator.Models.TargetClassModel! model) -> string!
+static Parquet.SourceGenerator.Models.EquatableArray<T>.Empty.get -> Parquet.SourceGenerator.Models.EquatableArray<T>
+static Parquet.SourceGenerator.Models.EquatableArray<T>.operator !=(Parquet.SourceGenerator.Models.EquatableArray<T> left, Parquet.SourceGenerator.Models.EquatableArray<T> right) -> bool
+static Parquet.SourceGenerator.Models.EquatableArray<T>.operator ==(Parquet.SourceGenerator.Models.EquatableArray<T> left, Parquet.SourceGenerator.Models.EquatableArray<T> right) -> bool
+static Parquet.SourceGenerator.Parser.TargetParser.GetTargetModel(Microsoft.CodeAnalysis.GeneratorSyntaxContext context) -> Parquet.SourceGenerator.Parser.TargetParserResult!
+static Parquet.SourceGenerator.Parser.TargetParser.GetTargetModel(Microsoft.CodeAnalysis.GeneratorSyntaxContext context, Parquet.SourceGenerator.Parser.ParquetApiLevel apiLevel) -> Parquet.SourceGenerator.Parser.TargetParserResult!
+static readonly Parquet.SourceGenerator.Diagnostics.DiagnosticDescriptors.DuplicateColumnName -> Microsoft.CodeAnalysis.DiagnosticDescriptor!
+static readonly Parquet.SourceGenerator.Diagnostics.DiagnosticDescriptors.GenericTypeNotSupported -> Microsoft.CodeAnalysis.DiagnosticDescriptor!
+static readonly Parquet.SourceGenerator.Diagnostics.DiagnosticDescriptors.InvalidDecimalPrecisionScale -> Microsoft.CodeAnalysis.DiagnosticDescriptor!
+static readonly Parquet.SourceGenerator.Diagnostics.DiagnosticDescriptors.MemberNotAssignable -> Microsoft.CodeAnalysis.DiagnosticDescriptor!
+static readonly Parquet.SourceGenerator.Diagnostics.DiagnosticDescriptors.MustBePartial -> Microsoft.CodeAnalysis.DiagnosticDescriptor!
+static readonly Parquet.SourceGenerator.Diagnostics.DiagnosticDescriptors.NestedTypeNotSupported -> Microsoft.CodeAnalysis.DiagnosticDescriptor!
+static readonly Parquet.SourceGenerator.Diagnostics.DiagnosticDescriptors.NonPublicPropertyIgnored -> Microsoft.CodeAnalysis.DiagnosticDescriptor!
+static readonly Parquet.SourceGenerator.Diagnostics.DiagnosticDescriptors.NoParameterlessConstructor -> Microsoft.CodeAnalysis.DiagnosticDescriptor!
+static readonly Parquet.SourceGenerator.Diagnostics.DiagnosticDescriptors.NoPropertiesFound -> Microsoft.CodeAnalysis.DiagnosticDescriptor!
+static readonly Parquet.SourceGenerator.Diagnostics.DiagnosticDescriptors.TypeUnsupportedOnClassicApi -> Microsoft.CodeAnalysis.DiagnosticDescriptor!
+static readonly Parquet.SourceGenerator.Diagnostics.DiagnosticDescriptors.UnsupportedPropertyType -> Microsoft.CodeAnalysis.DiagnosticDescriptor!

@@ -10,21 +10,21 @@
       "rollForward": false
     },
     "ilspycmd": {
-      "version": "11.2.0.10050",
+      "version": "11.0.0.9375",
       "commands": [
         "ilspycmd"
       ],
       "rollForward": false
     },
     "dotnet-dump": {
-      "version": "10.0.745401",
+      "version": "10.0.731102",
       "commands": [
         "dotnet-dump"
       ],
       "rollForward": false
     },
     "dotnet-inspect": {
-      "version": "0.27.0",
+      "version": "0.25.0",
       "commands": [
         "dotnet-inspect"
       ],

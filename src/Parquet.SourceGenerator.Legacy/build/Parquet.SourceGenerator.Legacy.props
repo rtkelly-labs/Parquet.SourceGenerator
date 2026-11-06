@@ -1,6 +1,0 @@
-<Project>
-    <ItemGroup>
-        <CompilerVisibleProperty Include="ParquetGeneratorFlatOnly" />
-        <CompilerVisibleProperty Include="ParquetGeneratorFeatureLevel" />
-    </ItemGroup>
-</Project>

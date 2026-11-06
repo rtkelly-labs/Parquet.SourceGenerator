@@ -11,7 +11,7 @@ namespace Parquet.SourceGenerator.Tests;
 /// <summary>
 /// M3a of issue #176: row-level lists/arrays with leaf elements. Null-vs-empty list
 /// distinction, null elements, element conversions (string, Guid, byte[], DateTime?),
-/// and the repetition-level entry walk — per docs/guides/nested-types.md §1.
+/// and the repetition-level entry walk — per docs/15 §1.
 /// </summary>
 public sealed class NestedListRoundTripTests
 {
@@ -69,9 +69,9 @@ public sealed class NestedListRoundTripTests
         var ms = new MemoryStream();
         await ListRowParquetExtensions.WriteParquetAsync(rows, ms);
         ms.Position = 0;
-        var back = await ListRowParquet.From(ms).ToArrayAsync();
+        var back = await ListRowParquetExtensions.ReadParquetAsync(ms);
 
-        back.Length.ShouldBe(4);
+        back.Count.ShouldBe(4);
         back[0].Tags!.ToArray().ShouldBe(expectedTags0);
         back[0].Scores!.ToArray().ShouldBe(expectedScores0);
         back[0].Keys!.ShouldBe(new[] { g1, g2 });
@@ -115,9 +115,9 @@ public sealed class NestedListRoundTripTests
             .ToList();
 
         var ms = new MemoryStream();
-        await rows.WriteParquetAsync(ms, new ParquetSerializerOptions { RowGroupSize = 7 });
+        await rows.WriteParquetBatchedAsync(ms, new ParquetSerializerOptions { RowGroupSize = 7 });
         ms.Position = 0;
-        var back = await ListRowParquet.From(ms.ToArray()).Parallel().ToArrayAsync();
+        var back = await ListRowParquetExtensions.ReadParquetParallelArrayAsync(ms);
 
         back.Length.ShouldBe(50);
         for (int i = 0; i < 50; i++)
@@ -210,7 +210,7 @@ public sealed partial record ListRow
         await TripRowParquetExtensions.WriteParquetAsync(rows, ms);
         ms.Position = 0;
 
-        var back = await TripRowParquet.From(ms.ToArray()).Parallel().ToArrayAsync();
+        var back = await TripRowParquetExtensions.ReadParquetParallelArrayAsync(ms);
 
         back.Length.ShouldBe(4);
         back[0].Stops.ShouldBeNull();
@@ -262,10 +262,10 @@ public sealed partial record ListRow
         }
 
         var ms = new MemoryStream();
-        await rows.WriteParquetAsync(ms, new ParquetSerializerOptions { RowGroupSize = 10 });
+        await rows.WriteParquetBatchedAsync(ms, new ParquetSerializerOptions { RowGroupSize = 10 });
         ms.Position = 0;
 
-        var back = await TripRowParquet.From(ms.ToArray()).Parallel().ToArrayAsync();
+        var back = await TripRowParquetExtensions.ReadParquetParallelArrayAsync(ms);
 
         back.Length.ShouldBe(50);
         for (int i = 0; i < 50; i++)

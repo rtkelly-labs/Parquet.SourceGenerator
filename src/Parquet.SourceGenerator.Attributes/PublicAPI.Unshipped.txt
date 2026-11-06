@@ -1,0 +1,88 @@
+#nullable enable
+Parquet.SourceGenerator.NullableColumnExtractor
+Parquet.SourceGenerator.ParquetColumnAttribute.Deduplicate.get -> bool
+Parquet.SourceGenerator.ParquetColumnAttribute.Deduplicate.set -> void
+Parquet.SourceGenerator.ParquetColumnAttribute.Encoding.get -> Parquet.SourceGenerator.ParquetColumnEncoding
+Parquet.SourceGenerator.ParquetColumnAttribute.Encoding.set -> void
+Parquet.SourceGenerator.ParquetColumnEncoding
+Parquet.SourceGenerator.ParquetColumnEncoding.ByteSplitStream = 3 -> Parquet.SourceGenerator.ParquetColumnEncoding
+Parquet.SourceGenerator.ParquetColumnEncoding.Default = 0 -> Parquet.SourceGenerator.ParquetColumnEncoding
+Parquet.SourceGenerator.ParquetColumnEncoding.DeltaBinaryPacked = 2 -> Parquet.SourceGenerator.ParquetColumnEncoding
+Parquet.SourceGenerator.ParquetColumnEncoding.Dictionary = 1 -> Parquet.SourceGenerator.ParquetColumnEncoding
+Parquet.SourceGenerator.ParquetSerializerOptions.ColumnEncodingHints.get -> System.Collections.Generic.IDictionary<string!, Parquet.SourceGenerator.ParquetColumnEncoding>!
+Parquet.SourceGenerator.ParquetSerializerOptions.DeduplicateStrings.get -> bool
+Parquet.SourceGenerator.ParquetSerializerOptions.DeduplicateStrings.set -> void
+Parquet.SourceGenerator.ParquetSerializerOptions.DictionaryEncodingSampleSize.get -> int?
+Parquet.SourceGenerator.ParquetSerializerOptions.DictionaryEncodingSampleSize.set -> void
+Parquet.SourceGenerator.ParquetSerializerOptions.DictionaryEncodingThreshold.get -> double?
+Parquet.SourceGenerator.ParquetSerializerOptions.DictionaryEncodingThreshold.set -> void
+Parquet.SourceGenerator.ParquetSerializerOptions.MaxAllocationValues.get -> int
+Parquet.SourceGenerator.ParquetSerializerOptions.MaxAllocationValues.set -> void
+Parquet.SourceGenerator.ParquetSerializerOptions.MaxNestingDepth.get -> int
+Parquet.SourceGenerator.ParquetSerializerOptions.MaxNestingDepth.set -> void
+Parquet.SourceGenerator.ParquetSerializerOptions.MaxRowGroupCount.get -> int
+Parquet.SourceGenerator.ParquetSerializerOptions.MaxRowGroupCount.set -> void
+Parquet.SourceGenerator.VectorizedColumnTransforms
+static Parquet.SourceGenerator.NullableColumnExtractor.CompactInPlace<T>(System.Span<T> values, System.ReadOnlySpan<byte> presence) -> int
+static Parquet.SourceGenerator.NullableColumnExtractor.CountPresent(System.ReadOnlySpan<byte> presence) -> int
+static Parquet.SourceGenerator.NullableColumnExtractor.ExpandPresenceToDefinitionLevels(System.ReadOnlySpan<byte> presence, System.Span<int> definitionLevels) -> void
+static Parquet.SourceGenerator.NullableColumnExtractor.ExtractBranchless<T>(System.ReadOnlySpan<T?> source, System.Span<int> definitionLevels, System.Span<T> values) -> int
+static Parquet.SourceGenerator.NullableColumnExtractor.ExtractTwoPass<T>(System.ReadOnlySpan<T?> source, System.Span<byte> presence, System.Span<int> definitionLevels, System.Span<T> values) -> int
+static Parquet.SourceGenerator.VectorizedColumnTransforms.ConvertDateTimeToEpochMilliseconds(System.ReadOnlySpan<System.DateTime> source, System.Span<long> destination) -> void
+static Parquet.SourceGenerator.VectorizedColumnTransforms.ConvertDateTimeToEpochMicroseconds(System.ReadOnlySpan<System.DateTime> source, System.Span<long> destination) -> void
+static Parquet.SourceGenerator.VectorizedColumnTransforms.ConvertEpochMillisecondsToDateTime(System.ReadOnlySpan<long> source, System.Span<System.DateTime> destination) -> void
+static Parquet.SourceGenerator.VectorizedColumnTransforms.ConvertEpochMillisecondsToTicks(System.ReadOnlySpan<long> source, System.Span<long> destination) -> void
+static Parquet.SourceGenerator.VectorizedColumnTransforms.ConvertEpochMicrosecondsToDateTime(System.ReadOnlySpan<long> source, System.Span<System.DateTime> destination) -> void
+static Parquet.SourceGenerator.VectorizedColumnTransforms.ConvertEpochMicrosecondsToTicks(System.ReadOnlySpan<long> source, System.Span<long> destination) -> void
+static Parquet.SourceGenerator.VectorizedColumnTransforms.ConvertTicksToEpochMilliseconds(System.ReadOnlySpan<long> source, System.Span<long> destination) -> void
+static Parquet.SourceGenerator.VectorizedColumnTransforms.ConvertTicksToEpochMicroseconds(System.ReadOnlySpan<long> source, System.Span<long> destination) -> void
+static Parquet.SourceGenerator.VectorizedColumnTransforms.MultiplyScale(System.ReadOnlySpan<double> source, double factor, System.Span<double> destination) -> void
+static Parquet.SourceGenerator.VectorizedColumnTransforms.MultiplyScale(System.ReadOnlySpan<float> source, float factor, System.Span<float> destination) -> void
+static Parquet.SourceGenerator.VectorizedColumnTransforms.Narrow(System.ReadOnlySpan<int> source, System.Span<short> destination) -> void
+static Parquet.SourceGenerator.VectorizedColumnTransforms.Narrow(System.ReadOnlySpan<long> source, System.Span<int> destination) -> void
+static Parquet.SourceGenerator.VectorizedColumnTransforms.UnixEpochTicks.get -> long
+static Parquet.SourceGenerator.VectorizedColumnTransforms.UtcEpochConstant.get -> long
+static Parquet.SourceGenerator.VectorizedColumnTransforms.Widen(System.ReadOnlySpan<byte> source, System.Span<int> destination) -> void
+static Parquet.SourceGenerator.VectorizedColumnTransforms.Widen(System.ReadOnlySpan<int> source, System.Span<long> destination) -> void
+static Parquet.SourceGenerator.VectorizedColumnTransforms.Widen(System.ReadOnlySpan<short> source, System.Span<int> destination) -> void
+Parquet.SourceGenerator.ParquetPruneStatistics
+Parquet.SourceGenerator.ParquetPruneStatistics.ParquetPruneStatistics() -> void
+Parquet.SourceGenerator.ParquetPruneStatistics.FirstRowGroupRead.get -> int
+Parquet.SourceGenerator.ParquetPruneStatistics.FirstRowGroupRead.set -> void
+Parquet.SourceGenerator.ParquetPruneStatistics.LastRowGroupRead.get -> int
+Parquet.SourceGenerator.ParquetPruneStatistics.LastRowGroupRead.set -> void
+Parquet.SourceGenerator.ParquetPruneStatistics.Reset() -> void
+Parquet.SourceGenerator.ParquetPruneStatistics.RowGroupCount.get -> int
+Parquet.SourceGenerator.ParquetPruneStatistics.RowGroupCount.set -> void
+Parquet.SourceGenerator.ParquetPruneStatistics.RowGroupsPruned.get -> int
+Parquet.SourceGenerator.ParquetPruneStatistics.RowGroupsScanned.get -> int
+Parquet.SourceGenerator.ParquetPruneStatistics.RowGroupsScanned.set -> void
+Parquet.SourceGenerator.ParquetPruneStatistics.SortedColumnDetected.get -> bool
+Parquet.SourceGenerator.ParquetPruneStatistics.SortedColumnDetected.set -> void
+Parquet.SourceGenerator.ParquetPruneStatistics.StrictlyMonotonic.get -> bool
+Parquet.SourceGenerator.ParquetPruneStatistics.StrictlyMonotonic.set -> void
+Parquet.SourceGenerator.ParquetSortKeyAttribute
+Parquet.SourceGenerator.ParquetSortKeyAttribute.ParquetSortKeyAttribute() -> void
+Parquet.SourceGenerator.ParquetColumnStatistics
+Parquet.SourceGenerator.ParquetColumnStatistics<T>
+Parquet.SourceGenerator.ParquetColumnStatistics<T>.ParquetColumnStatistics() -> void
+Parquet.SourceGenerator.ParquetColumnStatistics<T>.ParquetColumnStatistics(bool hasMin, T min, bool hasMax, T max, long? nullCount, long? distinctCount) -> void
+Parquet.SourceGenerator.ParquetColumnStatistics<T>.DistinctCount.get -> long?
+Parquet.SourceGenerator.ParquetColumnStatistics<T>.Equals(Parquet.SourceGenerator.ParquetColumnStatistics<T> other) -> bool
+Parquet.SourceGenerator.ParquetColumnStatistics<T>.HasMinMax.get -> bool
+Parquet.SourceGenerator.ParquetColumnStatistics<T>.IsKnownNonNull.get -> bool
+Parquet.SourceGenerator.ParquetColumnStatistics<T>.Max.get -> T?
+Parquet.SourceGenerator.ParquetColumnStatistics<T>.MayContain(T value) -> bool
+Parquet.SourceGenerator.ParquetColumnStatistics<T>.MayContainAny(params T[]? values) -> bool
+Parquet.SourceGenerator.ParquetColumnStatistics<T>.MayContainAtLeast(T threshold) -> bool
+Parquet.SourceGenerator.ParquetColumnStatistics<T>.MayContainAtMost(T threshold) -> bool
+Parquet.SourceGenerator.ParquetColumnStatistics<T>.MayContainBetween(T low, T high) -> bool
+Parquet.SourceGenerator.ParquetColumnStatistics<T>.MayContainGreaterThan(T threshold) -> bool
+Parquet.SourceGenerator.ParquetColumnStatistics<T>.MayContainLessThan(T threshold) -> bool
+Parquet.SourceGenerator.ParquetColumnStatistics<T>.Min.get -> T?
+Parquet.SourceGenerator.ParquetColumnStatistics<T>.NullCount.get -> long?
+override Parquet.SourceGenerator.ParquetColumnStatistics<T>.Equals(object? obj) -> bool
+override Parquet.SourceGenerator.ParquetColumnStatistics<T>.GetHashCode() -> int
+static Parquet.SourceGenerator.ParquetColumnStatistics.FromRaw<T>(object? min, object? max, long? nullCount, long? distinctCount) -> Parquet.SourceGenerator.ParquetColumnStatistics<T>
+static Parquet.SourceGenerator.ParquetColumnStatistics<T>.operator !=(Parquet.SourceGenerator.ParquetColumnStatistics<T> left, Parquet.SourceGenerator.ParquetColumnStatistics<T> right) -> bool
+static Parquet.SourceGenerator.ParquetColumnStatistics<T>.operator ==(Parquet.SourceGenerator.ParquetColumnStatistics<T> left, Parquet.SourceGenerator.ParquetColumnStatistics<T> right) -> bool

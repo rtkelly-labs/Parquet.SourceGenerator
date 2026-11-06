@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using Shouldly;
 using Xunit;
 using IOFile = System.IO.File;
 
@@ -52,7 +51,7 @@ public sealed class SupportedSchemaPropertyTests
             string minimizedFailure = await FuzzRunner.SafeAsync(check, minimized) ?? failure;
             string fixturePath = FuzzConfig.SaveFailure(minimized, $"{name}: {minimizedFailure}");
 
-            throw new ShouldAssertException(
+            Assert.Fail(
                 $"""
                 Property '{name}' failed.
 
@@ -80,7 +79,8 @@ public sealed class SupportedSchemaPropertyTests
 
         string? failure = await FuzzRunner.RunAllAsync(fuzzCase);
 
-        failure.ShouldBeNull(
+        Assert.True(
+            failure is null,
             $"Regression fixture '{fixtureName}' failed again: {failure}\n"
                 + $"  case: {fuzzCase.Describe()}\n"
                 + $"  repro: {fuzzCase.ReproCommand()}"
@@ -109,7 +109,7 @@ public sealed class SupportedSchemaPropertyTests
     [Fact]
     public void FixtureDirectoryIsNotEmpty()
     {
-        Directory.EnumerateFiles(FuzzConfig.FixtureDirectory, "*.json").ShouldNotBeEmpty();
+        Assert.NotEmpty(Directory.EnumerateFiles(FuzzConfig.FixtureDirectory, "*.json"));
     }
 
     [Fact]
@@ -119,24 +119,23 @@ public sealed class SupportedSchemaPropertyTests
         FuzzCase first = FuzzCase.FromSeed(seed);
         FuzzCase second = FuzzCase.FromSeed(seed);
 
-        first.Describe().ShouldBe(second.Describe());
+        Assert.Equal(first.Describe(), second.Describe());
 
         IReadOnlyList<FuzzWideRecord> firstRows = first.BuildRows();
         IReadOnlyList<FuzzWideRecord> secondRows = second.BuildRows();
-        firstRows.Count.ShouldBe(secondRows.Count);
+        Assert.Equal(firstRows.Count, secondRows.Count);
 
         for (int i = 0; i < firstRows.Count; i++)
         {
             foreach (FuzzColumn column in FuzzColumns.All)
             {
-                FuzzCompare
-                    .Equal(
+                Assert.True(
+                    FuzzCompare.Equal(
                         column.NormalizedValue(firstRows[i]),
                         column.NormalizedValue(secondRows[i])
-                    )
-                    .ShouldBeTrue(
-                        $"column '{column.Name}' row {i} differs between two generations of seed {seed}"
-                    );
+                    ),
+                    $"column '{column.Name}' row {i} differs between two generations of seed {seed}"
+                );
             }
         }
     }
@@ -154,15 +153,14 @@ public sealed class SupportedSchemaPropertyTests
         {
             foreach (FuzzColumn column in FuzzColumns.All)
             {
-                FuzzCompare
-                    .Equal(
+                Assert.True(
+                    FuzzCompare.Equal(
                         column.NormalizedValue(fullRows[i]),
                         column.NormalizedValue(shrunkRows[i])
-                    )
-                    .ShouldBeTrue(
-                        $"column '{column.Name}' row {i} changed when the case was shrunk; "
-                            + "shrinking must not perturb the values it keeps"
-                    );
+                    ),
+                    $"column '{column.Name}' row {i} changed when the case was shrunk; "
+                        + "shrinking must not perturb the values it keeps"
+                );
             }
         }
     }
@@ -187,11 +185,12 @@ public sealed class SupportedSchemaPropertyTests
 
         FuzzCase minimized = await FuzzShrinker.ShrinkAsync(failing, StillFails);
 
-        minimized.Columns.ShouldBe(["i32"]);
-        (minimized.RowCount <= 2).ShouldBeTrue(
+        Assert.Equal(["i32"], minimized.Columns);
+        Assert.True(
+            minimized.RowCount <= 2,
             $"expected the shrinker to reach 1-2 rows, reached {minimized.RowCount}"
         );
-        (await StillFails(minimized)).ShouldNotBeNull();
+        Assert.NotNull(await StillFails(minimized));
     }
 
     [Fact]
@@ -199,14 +198,14 @@ public sealed class SupportedSchemaPropertyTests
     {
         // Guards the CI contract: with no environment override the suite always runs this exact
         // seed set, so a green run means the same thing on every machine.
-        FuzzConfig.BaseSeed.ShouldBe(FuzzConfig.DefaultBaseSeed);
-        FuzzConfig.CaseCount.ShouldBe(FuzzConfig.DefaultCaseCount);
+        Assert.Equal(FuzzConfig.DefaultBaseSeed, FuzzConfig.BaseSeed);
+        Assert.Equal(FuzzConfig.DefaultCaseCount, FuzzConfig.CaseCount);
 
         long[] seeds = FuzzConfig.Seeds().ToArray();
-        seeds.Length.ShouldBe(FuzzConfig.DefaultCaseCount);
-        seeds[0].ShouldBe(FuzzConfig.DefaultBaseSeed);
-        seeds.Distinct().Count().ShouldBe(seeds.Length);
-        FuzzConfig.Seeds().ToArray().ShouldBe(seeds);
+        Assert.Equal(FuzzConfig.DefaultCaseCount, seeds.Length);
+        Assert.Equal(FuzzConfig.DefaultBaseSeed, seeds[0]);
+        Assert.Equal(seeds.Length, seeds.Distinct().Count());
+        Assert.Equal(seeds, FuzzConfig.Seeds().ToArray());
     }
 
     [Fact]
@@ -216,7 +215,7 @@ public sealed class SupportedSchemaPropertyTests
 
         FuzzCase round = FuzzCase.FromJson(original.ToJson());
 
-        original.Describe().ShouldBe(round.Describe());
+        Assert.Equal(original.Describe(), round.Describe());
     }
 
     /// <summary>
@@ -248,13 +247,13 @@ public sealed class SupportedSchemaPropertyTests
         );
 
         using var stream = new MemoryStream(bytes, writable: false);
-        FuzzWideRecord[] read = await FuzzWideRecordParquet.From(stream).ToArrayAsync();
+        List<FuzzWideRecord> read = await FuzzWideRecordParquetExtensions.ReadParquetAsync(stream);
 
-        read.Length.ShouldBe(rows.Count);
-        read.ShouldAllBe(r => r.OptText == null);
+        Assert.Equal(rows.Count, read.Count);
+        Assert.All(read, r => Assert.Null(r.OptText));
 
         // The columns the file does carry must be unaffected by the absent one.
-        read.Select(r => r.I64).ToList().ShouldBe(rows.Select(r => r.I64).ToList());
+        Assert.Equal(rows.Select(r => r.I64).ToList(), read.Select(r => r.I64).ToList());
     }
 
     [Fact]
@@ -272,10 +271,10 @@ public sealed class SupportedSchemaPropertyTests
         );
 
         using var stream = new MemoryStream(bytes, writable: false);
-        InvalidDataException exception = await Should.ThrowAsync<InvalidDataException>(async () =>
-            await FuzzWideRecordParquet.From(stream).ToArrayAsync()
+        InvalidDataException exception = await Assert.ThrowsAsync<InvalidDataException>(async () =>
+            await FuzzWideRecordParquetExtensions.ReadParquetAsync(stream)
         );
 
-        exception.Message.ShouldContain("i64", Case.Sensitive);
+        Assert.Contains("i64", exception.Message, StringComparison.Ordinal);
     }
 }

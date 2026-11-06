@@ -16,7 +16,7 @@ namespace Parquet.SourceGenerator.Parser;
 /// never emit code that compiles and writes the wrong bytes.
 /// </remarks>
 [Flags]
-internal enum CompoundKinds
+public enum CompoundKinds
 {
     /// <summary>No compound members. Every compound member is rejected with PARQ006.</summary>
     None = 0,

@@ -19,7 +19,7 @@ public partial record StreamTestModel
 public sealed class ReadStreamTests
 {
     [Fact]
-    public async Task AsAsyncEnumerableStreamsItemsCorrectly()
+    public async Task ReadParquetStreamAsyncStreamsItemsCorrectly()
     {
         var written = new List<StreamTestModel>
         {
@@ -29,11 +29,14 @@ public sealed class ReadStreamTests
         };
 
         using var stream = new MemoryStream();
-        await written.WriteParquetAsync(stream, new ParquetSerializerOptions { RowGroupSize = 2 });
+        await written.WriteParquetBatchedAsync(
+            stream,
+            new ParquetSerializerOptions { RowGroupSize = 2 }
+        );
         stream.Position = 0;
 
         var readItems = new List<StreamTestModel>();
-        await foreach (var item in StreamTestModelParquet.From(stream).AsAsyncEnumerable())
+        await foreach (var item in StreamTestModelParquetExtensions.ReadParquetStreamAsync(stream))
         {
             readItems.Add(item);
         }

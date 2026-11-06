@@ -75,7 +75,6 @@ dotnet_naming_style.prefix_field_with_underscore.capitalization = camel_case
 # Meziantou.Analyzer configuration
 # Silence overly pedantic style and metric rules, while preserving performance and correctness rules
 dotnet_diagnostic.MA0004.severity = none # ConfigureAwait(false)
-# Active audit: evaluate all other Meziantou performance and allocation rules
 dotnet_diagnostic.MA0006.severity = none # Use string.Equals instead of == operator
 dotnet_diagnostic.MA0016.severity = none # Prefer return collection abstraction
 dotnet_diagnostic.MA0026.severity = none # To-do comments
@@ -95,37 +94,22 @@ dotnet_diagnostic.xUnit2013.severity = warning
 dotnet_diagnostic.xUnit2017.severity = warning
 
 # Banned symbols analyzer (RS0030) - migrating xUnit.Assert to Shouldly (#295)
+dotnet_diagnostic.RS0030.severity = none
+
+[test/**/{ParserAndEmitterTests,JsonSerializationAttributesTests,TypeCoverageTests,DecimalAndBinaryTests,ColumnEncodingTests,ColumnAttributeAndLevelTests,BlittableStructTests,BlittableStructPropertyTests,AttributesTests,BoundsCheckEliminationTests,BranchlessDefinitionLevelIlTests,BranchlessNullExtractionTests,ColumnBatchReadTests,DeclarationOrderTests,EagerBufferReturnTests,EmitterEscapingTests,HintNameCollisionTests,SerializerOptionsTests,ReadStreamTests,RowGroupSizingTests,NullBypassReadTests,NullVsEmptyAndLargePayloadTests,ReadBuilderTests,SpanStringDeduplicationTests,StringDeduplicationTests,Utf8StringDeduplicatorPrototypeTests,ZeroBoxingSerializationTests,TestDataIntegrationTests,StreamingChunkLifecycleTests,ParallelReadTests,ColumnarHandoffTests,VectorizedColumnTransformsTests,NestedStructRoundTripTests,NestedListRoundTripTests,SortedRowGroupPruningTests,RowGroupPruningTests,PyArrowInteropTests,IlInterrogationTests,BenchmarkSummaryGeneratorTests,InheritanceTests,ReaderAllocationTests,GeneratedCodeMetricsBaselineTests,BaselineDifferentialTests,MemoryOverloadTests,NullabilityTests,ApiChangeContractTests,SchemaFieldResolutionTests,LegacyCompoundModelParsingTests,CompatibilityTestHarness,ArrowConditionalEmissionTests,NullableColumnExtractorTests}.cs]
 dotnet_diagnostic.RS0030.severity = warning
-
-# Suppress test-irrelevant rules (ConfigureAwait, defensive null validation, uninstantiated test fixtures)
-dotnet_diagnostic.CA2007.severity = none # ConfigureAwait is not needed in test runner execution context
-dotnet_diagnostic.MA0004.severity = none # ConfigureAwait(false)
-dotnet_diagnostic.CA1812.severity = none # Internal class never instantiated (test models and manifests)
-dotnet_diagnostic.CA1062.severity = none # Validate parameter is non-null
-dotnet_diagnostic.CA1031.severity = none # Do not catch generic Exception (negative testing)
-dotnet_diagnostic.CA1822.severity = none # Mark members as static (test methods)
-dotnet_diagnostic.CA1823.severity = none # Unused fields (test constants)
-
-[benchmarks/**.cs]
-dotnet_diagnostic.CA2007.severity = none
-dotnet_diagnostic.MA0004.severity = none
-dotnet_diagnostic.CA1812.severity = none
-dotnet_diagnostic.CA1062.severity = none
-dotnet_diagnostic.CA1031.severity = none
-dotnet_diagnostic.CA1822.severity = none
-dotnet_diagnostic.CA1823.severity = none
 
 [samples/**.cs]
 dotnet_diagnostic.category-Meziantou.severity = none
-dotnet_diagnostic.CA2007.severity = none
+
+
 
 # --------------------------------------------------------------------------------------------
-# Code metrics and strict reliability gates (#251, docs/21-CODE-METRICS.md).
+# Code metrics gates (#251, docs/21-CODE-METRICS.md).
 #
 # Scoped to src/ deliberately. Test, benchmark, sample and tooling code is measured by nothing
 # here: a table-driven test method with forty cases is not a maintainability problem, and gating
-# it would train everyone to suppress the rule. The emitted code is held to the same bar as src/:
-# analysis/*/obj/golden/ is the golden models' generated source (see the last section).
+# it would train everyone to suppress the rule.
 #
 # `warning`, not `error`, matches the repository's stance in Directory.Build.props: warnings are
 # not errors in local builds, and CI passes `-warnaserror` explicitly. These therefore fail CI
@@ -134,50 +118,10 @@ dotnet_diagnostic.CA2007.severity = none
 # Thresholds live in CodeMetricsConfig.txt at the repository root (an AdditionalFile on each src
 # project), not here, because that is the only file these rules read.
 # --------------------------------------------------------------------------------------------
-[{src,analysis/*/obj/golden}/**.cs]
+[src/**.cs]
 # Cyclomatic complexity per method.
 dotnet_diagnostic.CA1502.severity = warning
 # Maintainability index.
 dotnet_diagnostic.CA1505.severity = warning
 # Class coupling.
 dotnet_diagnostic.CA1506.severity = warning
-
-# Strict ConfigureAwait enforcement for library / generator code
-dotnet_diagnostic.CA2007.severity = warning
-dotnet_diagnostic.MA0004.severity = warning
-
-# Attribute design rule tuning
-dotnet_diagnostic.CA1019.severity = none # Allow property setters for named attribute arguments
-dotnet_diagnostic.CA1008.severity = suggestion
-
-# Rules that replace the SonarAnalyzer checks removed by docs/55-SONAR-REMOVAL.md. They share
-# this section so the emitted code is held to them too.
-dotnet_diagnostic.RCS1003.severity = warning # Brace a multi-line if-else body (was S2681)
-dotnet_diagnostic.RCS1163.severity = warning # Unused parameter (was S1172)
-dotnet_diagnostic.RCS1134.severity = warning # Redundant statement, e.g. a trailing return (was S3626)
-dotnet_diagnostic.RCS1132.severity = warning # Override that only calls base (was S1185)
-dotnet_diagnostic.RCS1249.severity = warning # Unnecessary null-forgiving operator (was S8969)
-dotnet_diagnostic.MA0050.severity = warning # Validate arguments before the iterator (was S4456)
-dotnet_diagnostic.MA0067.severity = warning # Guid.Empty over new Guid() (was S4581)
-dotnet_diagnostic.CA1849.severity = warning # Async overload exists (was S6966)
-dotnet_diagnostic.IDE0059.severity = warning # Unnecessary assignment (was S1854)
-
-# --------------------------------------------------------------------------------------------
-# Generated-code analysis (docs/50-GENERATED-CODE-ANALYSIS.md). analysis/*/obj/golden/ holds the
-# golden models' emitted source, copied there by analysis/Directory.Build.targets, and shares the
-# src/ section above. Roslyn classifies it as generated from its `.g.cs` name and
-# `<auto-generated>` header, which stops every analyzer reporting on it; this undoes that.
-# --------------------------------------------------------------------------------------------
-[analysis/*/obj/golden/**.cs]
-generated_code = false
-
-# RCS1003 reports 22 emitted if-else statements, so it stays out of the gate (docs/55-SONAR-REMOVAL.md).
-# RCS1001 (S2681, the rule that fired in emitted code, #551) reports none, so it
-# gates here; in src/ it reports 34 and stays at its default.
-dotnet_diagnostic.RCS1001.severity = warning
-dotnet_diagnostic.RCS1003.severity = suggestion
-
-# The model declarations the emitted code extends are scaffolding the analysis compiles with it,
-# not output. They are not marked generated_code (that would also drop their nullable context).
-[test/Parquet.SourceGenerator.Tests/GoldenModels/**.cs]
-dotnet_analyzer_diagnostic.severity = none

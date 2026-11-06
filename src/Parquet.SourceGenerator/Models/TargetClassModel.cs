@@ -11,11 +11,40 @@ namespace Parquet.SourceGenerator.Models;
 /// pipeline's equality comparisons, so a change to any of them would have invalidated the cache and
 /// re-run generation for no output difference.
 /// </remarks>
-internal sealed record TargetClassModel(
+public sealed record TargetClassModel(
     string Namespace,
     string ClassName,
     EquatableArray<PropertyModel> Properties,
     bool IsValueType = false,
     bool IsUnmanaged = false,
     bool HasSingleInstanceField = false
-) : IEquatable<TargetClassModel>;
+) : IEquatable<TargetClassModel>
+{
+    /// <summary>
+    /// Backwards-compatible constructor overload without single instance field metadata.
+    /// </summary>
+    public TargetClassModel(
+        string Namespace,
+        string ClassName,
+        EquatableArray<PropertyModel> Properties,
+        bool IsValueType,
+        bool IsUnmanaged
+    )
+        : this(Namespace, ClassName, Properties, IsValueType, IsUnmanaged, false)
+    {
+        // Backwards-compatible overload
+    }
+
+    /// <summary>
+    /// Backwards-compatible constructor overload without value type / unmanaged metadata.
+    /// </summary>
+    public TargetClassModel(
+        string Namespace,
+        string ClassName,
+        EquatableArray<PropertyModel> Properties
+    )
+        : this(Namespace, ClassName, Properties, false, false, false)
+    {
+        // Backwards-compatible overload
+    }
+}

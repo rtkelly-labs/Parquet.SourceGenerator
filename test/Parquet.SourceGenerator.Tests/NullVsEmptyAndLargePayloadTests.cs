@@ -67,9 +67,8 @@ public class NullVsEmptyAndLargePayloadTests
         await original.WriteParquetAsync(stream);
 
         stream.Position = 0;
-        PayloadSemanticsModel[] read = await PayloadSemanticsModelParquet
-            .From(stream)
-            .ToArrayAsync();
+        List<PayloadSemanticsModel> read =
+            await PayloadSemanticsModelParquetExtensions.ReadParquetAsync(stream);
 
         ParquetCompatibilityOracle.AssertEquivalent(original, read);
     }
@@ -165,11 +164,10 @@ public class NullVsEmptyAndLargePayloadTests
         await items.WriteParquetAsync(stream);
 
         stream.Position = 0;
-        PayloadSemanticsModel[] results = await PayloadSemanticsModelParquet
-            .From(stream)
-            .ToArrayAsync();
+        List<PayloadSemanticsModel> results =
+            await PayloadSemanticsModelParquetExtensions.ReadParquetAsync(stream);
 
-        results.Length.ShouldBe(items.Count);
+        results.Count.ShouldBe(items.Count);
 
         for (int i = 0; i < items.Count; i++)
         {
@@ -242,11 +240,10 @@ public class NullVsEmptyAndLargePayloadTests
 
         // 1. Sequential Read
         stream.Position = 0;
-        PayloadSemanticsModel[] sequentialResults = await PayloadSemanticsModelParquet
-            .From(stream)
-            .ToArrayAsync();
+        List<PayloadSemanticsModel> sequentialResults =
+            await PayloadSemanticsModelParquetExtensions.ReadParquetAsync(stream);
 
-        sequentialResults.Length.ShouldBe(items.Count);
+        sequentialResults.Count.ShouldBe(items.Count);
         for (int i = 0; i < items.Count; i++)
         {
             sequentialResults[i].Id.ShouldBe(items[i].Id);
@@ -258,12 +255,10 @@ public class NullVsEmptyAndLargePayloadTests
 
         // 2. Parallel Read
         stream.Position = 0;
-        PayloadSemanticsModel[] parallelResults = await PayloadSemanticsModelParquet
-            .From(stream.ToArray())
-            .Parallel()
-            .ToArrayAsync();
+        List<PayloadSemanticsModel> parallelResults =
+            await PayloadSemanticsModelParquetExtensions.ReadParquetParallelAsync(stream);
 
-        parallelResults.Length.ShouldBe(items.Count);
+        parallelResults.Count.ShouldBe(items.Count);
         for (int i = 0; i < items.Count; i++)
         {
             parallelResults[i].Id.ShouldBe(items[i].Id);

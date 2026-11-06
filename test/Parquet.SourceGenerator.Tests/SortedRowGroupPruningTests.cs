@@ -55,12 +55,14 @@ public partial record UnmarkedEvent
 }
 
 /// <summary>
-/// Point lookups and range slices prune row groups using the footer <c>[Min, Max]</c> statistics
-/// via the modern <c>.Where(...)</c> reader API (issue #584, #151).
+/// Issue #151: point lookups and range slices prune row groups using the footer
+/// <c>[Min, Max]</c> statistics.
 /// <para>
 /// The properties worth pinning are correctness first — a pruned read must return exactly
 /// what a full scan returns, including on unsorted data where pruning has to switch itself
-/// off — and only then the observable fact that row groups were skipped.
+/// off — and only then the observable fact that row groups were skipped. The skip count is
+/// asserted through <see cref="ParquetPruneStatistics"/> rather than wall-clock time, which
+/// would make the suite flaky on a loaded runner.
 /// </para>
 /// </summary>
 public sealed class SortedRowGroupPruningTests
@@ -82,7 +84,7 @@ public sealed class SortedRowGroupPruningTests
     private static async Task<byte[]> WriteAsync(List<SortedEvent> rows, int rowGroupSize)
     {
         using var stream = new MemoryStream();
-        await rows.WriteParquetAsync(
+        await rows.WriteParquetBatchedAsync(
             stream,
             new ParquetSerializerOptions { RowGroupSize = rowGroupSize }
         );
@@ -95,114 +97,116 @@ public sealed class SortedRowGroupPruningTests
     public async Task PointLookupOnSortedKeyReadsExactlyOneRowGroup()
     {
         byte[] bytes = await WriteAsync(SortedRows(10_000), rowGroupSize: 100);
-        var scanned = new List<int>();
+        var pruning = new ParquetPruneStatistics();
 
-        SortedEvent[] found = await SortedEventParquet
-            .From(Open(bytes))
-            .Where(m =>
-            {
-                bool match = m.SequenceNumber.MayContain(7_531);
-                if (match)
-                {
-                    scanned.Add(m.RowGroupIndex);
-                }
-                return match;
-            })
-            .ToArrayAsync();
+        List<SortedEvent> found =
+            await SortedEventParquetExtensions.ReadParquetBySequenceNumberAsync(
+                Open(bytes),
+                7_531,
+                pruning
+            );
 
-        scanned.ShouldBe([75]);
-        found.Length.ShouldBe(100);
-        SortedEvent record = found.Single(r => r.SequenceNumber == 7_531);
-        record.SequenceNumber.ShouldBe(7_531);
+        found.Count.ShouldBe(1);
+        found[0].SequenceNumber.ShouldBe(7_531);
+        pruning.SortedColumnDetected.ShouldBeTrue();
+        pruning.StrictlyMonotonic.ShouldBeTrue();
+        pruning.RowGroupCount.ShouldBe(100);
+        pruning.RowGroupsScanned.ShouldBe(1);
+        pruning.RowGroupsPruned.ShouldBe(99);
+        pruning.FirstRowGroupRead.ShouldBe(75);
     }
 
     /// <summary>
-    /// Combined surface: pushdown predicates and point lookups through <c>Where</c> agree on the
-    /// same file. The pushdown result matches client-side filtering over a full scan, and point
-    /// lookup rows sit inside the surviving range.
+    /// #264's combined surface, and the correctness floor for converging the two mechanisms
+    /// onto one footer read: <c>SortedEvent</c> carries BOTH — three sort keys emit the
+    /// binary-search path, the non-key eligible columns emit the predicate zone-map path —
+    /// so one footer is currently read by two independent code paths. Before any merge, all
+    /// three access paths (full scan, pushdown predicate, sorted lookup) must agree on the
+    /// SAME bytes. The <c>SortedShipmentParquetExtensions</c> golden is this test's
+    /// emitted-API twin; together they are what a convergence must keep green.
     /// </summary>
     [Fact]
-    public async Task PredicatePushdownAndPointLookupCoexistOnOneModel()
+    public async Task PredicatePushdownAndSortedLookupCoexistOnOneModel()
     {
         byte[] bytes = await WriteAsync(SortedRows(10_000), rowGroupSize: 100);
 
-        SortedEvent[] all = await SortedEventParquet.From(Open(bytes)).ToArrayAsync();
-        all.Length.ShouldBe(10_000);
+        List<SortedEvent> all = await SortedEventParquetExtensions.ReadParquetAsync(Open(bytes));
+        all.Count.ShouldBe(10_000);
 
         // Predicate path (AcceptRowGroup / RowGroupMetadata): the pushdown result must equal
         // the client-side filter over the full scan — pruning may only remove provably-empty
         // groups, never a matching row.
-        SortedEvent[] viaPredicate = await SortedEventParquet
-            .From(Open(bytes))
-            .Where(meta => meta.SequenceNumber.MayContainAtLeast(9_500))
-            .ToArrayAsync();
+        List<SortedEvent> viaPredicate = await SortedEventParquetExtensions.ReadParquetAsync(
+            Open(bytes),
+            predicate: meta => meta.SequenceNumber.MayContainAtLeast(9_500)
+        );
         viaPredicate
             .Select(e => e.SequenceNumber)
             .ShouldBe(all.Where(e => e.SequenceNumber >= 9_500).Select(e => e.SequenceNumber));
 
-        // Point lookup via Where on the same model.
-        SortedEvent[] viaWhere = await SortedEventParquet
-            .From(Open(bytes))
-            .Where(meta => meta.SequenceNumber.MayContain(9_999))
-            .ToArrayAsync();
-        viaWhere.Length.ShouldBe(100);
-        SortedEvent target = viaWhere.Single(e => e.SequenceNumber == 9_999);
-        target.SequenceNumber.ShouldBe(9_999);
+        // Sorted-lookup path (TryPruneSortedRowGroups / ReadPrunedRangeAsync) on the same
+        // key column and file.
+        var pruning = new ParquetPruneStatistics();
+        List<SortedEvent> viaLookup =
+            await SortedEventParquetExtensions.ReadParquetBySequenceNumberAsync(
+                Open(bytes),
+                9_999,
+                pruning
+            );
+        viaLookup.Count.ShouldBe(1);
+        viaLookup[0].SequenceNumber.ShouldBe(9_999);
 
-        // And the point lookup's row is inside the range predicate's surviving set.
-        viaPredicate.ShouldContain(target);
+        // The two mechanisms must not interfere: the co-located predicate machinery cannot
+        // silently disable sorted binary search, and vice versa.
+        pruning.SortedColumnDetected.ShouldBeTrue();
+        pruning.RowGroupsScanned.ShouldBe(1);
+
+        // And the lookup's row is inside the predicate's surviving set — one key column, one
+        // file, two pruning mechanisms, one consistent answer.
+        viaPredicate.ShouldContain(viaLookup[0]);
     }
 
     [Fact]
     public async Task PointLookupOnAMissingKeyReadsNothingAndReturnsEmpty()
     {
         byte[] bytes = await WriteAsync(SortedRows(1_000), rowGroupSize: 100);
-        var scanned = new List<int>();
+        var pruning = new ParquetPruneStatistics();
 
-        SortedEvent[] found = await SortedEventParquet
-            .From(Open(bytes))
-            .Where(m =>
-            {
-                bool match = m.SequenceNumber.MayContain(50_000);
-                if (match)
-                {
-                    scanned.Add(m.RowGroupIndex);
-                }
-                return match;
-            })
-            .ToArrayAsync();
+        List<SortedEvent> found =
+            await SortedEventParquetExtensions.ReadParquetBySequenceNumberAsync(
+                Open(bytes),
+                50_000,
+                pruning
+            );
 
         found.ShouldBeEmpty();
-        scanned.ShouldBeEmpty();
+        pruning.SortedColumnDetected.ShouldBeTrue();
+        pruning.RowGroupsScanned.ShouldBe(0);
+        pruning.FirstRowGroupRead.ShouldBe(-1);
     }
 
     [Fact]
     public async Task RangeSliceReadsOnlyTheOverlappingRowGroups()
     {
         byte[] bytes = await WriteAsync(SortedRows(10_000), rowGroupSize: 100);
-        var scanned = new List<int>();
+        var pruning = new ParquetPruneStatistics();
 
-        SortedEvent[] viaWhere = await SortedEventParquet
-            .From(Open(bytes))
-            .Where(m =>
-            {
-                bool match = m.SequenceNumber.MayContainBetween(2_050, 2_349);
-                if (match)
-                {
-                    scanned.Add(m.RowGroupIndex);
-                }
-                return match;
-            })
-            .ToArrayAsync();
+        List<SortedEvent> slice =
+            await SortedEventParquetExtensions.ReadParquetSequenceNumberRangeAsync(
+                Open(bytes),
+                2_050,
+                2_349,
+                pruning
+            );
 
+        slice.Count.ShouldBe(300);
+        slice[0].SequenceNumber.ShouldBe(2_050);
+        slice[^1].SequenceNumber.ShouldBe(2_349);
+        pruning.SortedColumnDetected.ShouldBeTrue();
         // Groups 20..23 overlap [2050, 2349]; the other 96 never open.
-        scanned.ShouldBe([20, 21, 22, 23]);
-        List<SortedEvent> inRange = viaWhere
-            .Where(r => r.SequenceNumber >= 2_050 && r.SequenceNumber <= 2_349)
-            .ToList();
-        inRange.Count.ShouldBe(300);
-        inRange[0].SequenceNumber.ShouldBe(2_050);
-        inRange[^1].SequenceNumber.ShouldBe(2_349);
+        pruning.RowGroupsScanned.ShouldBe(4);
+        pruning.FirstRowGroupRead.ShouldBe(20);
+        pruning.LastRowGroupRead.ShouldBe(23);
     }
 
     [Fact]
@@ -216,44 +220,34 @@ public sealed class SortedRowGroupPruningTests
             )
             .ToList();
 
-        SortedEvent[] viaWhere = await SortedEventParquet
-            .From(Open(bytes))
-            .Where(m => m.SequenceNumber.MayContainBetween(1_234, 3_210))
-            .ToArrayAsync();
+        List<SortedEvent> actual =
+            await SortedEventParquetExtensions.ReadParquetSequenceNumberRangeAsync(
+                Open(bytes),
+                1_234,
+                3_210
+            );
 
-        List<SortedEvent> filteredWhere = viaWhere
-            .Where(r => r.SequenceNumber >= 1_234 && r.SequenceNumber <= 3_210)
-            .ToList();
-        filteredWhere.Count.ShouldBe(expected.Count);
-        filteredWhere
-            .Select(r => r.SequenceNumber)
-            .ShouldBe(expected.Select(r => r.SequenceNumber));
-        filteredWhere.Select(r => r.Payload).ShouldBe(expected.Select(r => r.Payload));
+        actual.Count.ShouldBe(expected.Count);
+        actual.Select(r => r.SequenceNumber).ShouldBe(expected.Select(r => r.SequenceNumber));
+        actual.Select(r => r.Payload).ShouldBe(expected.Select(r => r.Payload));
     }
 
     [Fact]
-    public async Task OpenEndedRangePrunesPrecedingRowGroups()
+    public async Task DateTimeKeyPrunesTheSameWayAsAnIntegerKey()
     {
         byte[] bytes = await WriteAsync(SortedRows(2_000), rowGroupSize: 100);
-        var scanned = new List<int>();
+        var pruning = new ParquetPruneStatistics();
 
-        SortedEvent[] viaWhere = await SortedEventParquet
-            .From(Open(bytes))
-            .Where(m =>
-            {
-                bool match = m.SequenceNumber.MayContainAtLeast(1_500);
-                if (match)
-                {
-                    scanned.Add(m.RowGroupIndex);
-                }
-                return match;
-            })
-            .ToArrayAsync();
+        List<SortedEvent> slice = await SortedEventParquetExtensions.ReadParquetTimestampRangeAsync(
+            Open(bytes),
+            Epoch.AddSeconds(1_500),
+            Epoch.AddSeconds(1_599),
+            pruning
+        );
 
-        // 2,000 rows across 20 row groups (0..19). Groups 0..14 hold [0..1499] and are pruned.
-        scanned.ShouldBe([15, 16, 17, 18, 19]);
-        viaWhere.Length.ShouldBe(500);
-        viaWhere.All(r => r.SequenceNumber >= 1_500).ShouldBeTrue();
+        slice.Count.ShouldBe(100);
+        pruning.SortedColumnDetected.ShouldBeTrue();
+        pruning.RowGroupsScanned.ShouldBe(1);
     }
 
     [Fact]
@@ -263,24 +257,19 @@ public sealed class SortedRowGroupPruningTests
         // maximally overlapping, and nothing can be pruned.
         List<SortedEvent> rows = SortedRows(1_000);
         byte[] bytes = await WriteAsync(rows, rowGroupSize: 100);
+        var pruning = new ParquetPruneStatistics();
 
-        var scanned = new List<int>();
-        SortedEvent[] viaWhere = await SortedEventParquet
-            .From(Open(bytes))
-            .Where(m =>
-            {
-                bool match = m.Bucket.MayContain(3);
-                if (match)
-                {
-                    scanned.Add(m.RowGroupIndex);
-                }
-                return match;
-            })
-            .ToArrayAsync();
+        List<SortedEvent> found = await SortedEventParquetExtensions.ReadParquetByBucketAsync(
+            Open(bytes),
+            3,
+            pruning
+        );
 
-        scanned.Count.ShouldBe(10);
-        viaWhere.Length.ShouldBe(1_000);
-        viaWhere.Count(r => r.Bucket == 3).ShouldBe(rows.Count(r => r.Bucket == 3));
+        pruning.SortedColumnDetected.ShouldBeFalse();
+        pruning.RowGroupCount.ShouldBe(10);
+        pruning.RowGroupsScanned.ShouldBe(10);
+        found.Count.ShouldBe(rows.Count(r => r.Bucket == 3));
+        found.ShouldAllBe(r => r.Bucket == 3);
     }
 
     [Fact]
@@ -315,46 +304,37 @@ public sealed class SortedRowGroupPruningTests
         }
 
         byte[] bytes = await WriteAsync(rows, rowGroupSize: 100);
+        var pruning = new ParquetPruneStatistics();
 
-        var scanned = new List<int>();
-        SortedEvent[] viaWhere = await SortedEventParquet
-            .From(Open(bytes))
-            .Where(m =>
-            {
-                bool match = m.SequenceNumber.MayContain(42);
-                if (match)
-                {
-                    scanned.Add(m.RowGroupIndex);
-                }
-                return match;
-            })
-            .ToArrayAsync();
+        List<SortedEvent> found =
+            await SortedEventParquetExtensions.ReadParquetBySequenceNumberAsync(
+                Open(bytes),
+                42,
+                pruning
+            );
 
-        scanned.ShouldBe([0, 1]);
-        viaWhere.Count(r => r.SequenceNumber == 42).ShouldBe(200);
+        found.Count.ShouldBe(200);
+        pruning.SortedColumnDetected.ShouldBeTrue();
+        pruning.StrictlyMonotonic.ShouldBeFalse();
+        pruning.RowGroupsScanned.ShouldBe(2);
     }
 
     [Fact]
     public async Task SingleRowGroupFileIsHandledWithoutPruningAnything()
     {
         byte[] bytes = await WriteAsync(SortedRows(50), rowGroupSize: 1_000);
+        var pruning = new ParquetPruneStatistics();
 
-        var scanned = new List<int>();
-        SortedEvent[] viaWhere = await SortedEventParquet
-            .From(Open(bytes))
-            .Where(m =>
-            {
-                bool match = m.SequenceNumber.MayContain(17);
-                if (match)
-                {
-                    scanned.Add(m.RowGroupIndex);
-                }
-                return match;
-            })
-            .ToArrayAsync();
+        List<SortedEvent> found =
+            await SortedEventParquetExtensions.ReadParquetBySequenceNumberAsync(
+                Open(bytes),
+                17,
+                pruning
+            );
 
-        scanned.ShouldBe([0]);
-        viaWhere.Count(r => r.SequenceNumber == 17).ShouldBe(1);
+        found.Count.ShouldBe(1);
+        pruning.RowGroupCount.ShouldBe(1);
+        pruning.RowGroupsScanned.ShouldBe(1);
     }
 
     [Fact]
@@ -362,25 +342,31 @@ public sealed class SortedRowGroupPruningTests
     {
         byte[] bytes = await WriteAsync(SortedRows(500), rowGroupSize: 100);
 
-        SortedEvent[] viaWhere = await SortedEventParquet
-            .From(Open(bytes))
-            .Where(m => m.SequenceNumber.MayContainBetween(400, 100))
-            .ToArrayAsync();
+        List<SortedEvent> found =
+            await SortedEventParquetExtensions.ReadParquetSequenceNumberRangeAsync(
+                Open(bytes),
+                400,
+                100
+            );
 
-        viaWhere.ShouldBeEmpty();
+        found.ShouldBeEmpty();
     }
 
     [Fact]
-    public void NullStreamThrowsArgumentNullException()
+    public async Task NullStreamThrowsArgumentNullException()
     {
-        Should.Throw<ArgumentNullException>(() => SortedEventParquet.From((Stream)null!));
+        await Should.ThrowAsync<ArgumentNullException>(() =>
+            SortedEventParquetExtensions.ReadParquetBySequenceNumberAsync((Stream)null!, 1)
+        );
     }
 
     /// <summary>
-    /// The opt-in guarantee: unmarked model gains no lookup overloads.
+    /// The opt-in guarantee, asserted against the real generator output rather than the
+    /// emitter: a model with no <c>[ParquetSortKey]</c> gains no public API at all — not the
+    /// lookups, not the range overloads, and not the shared pruning core they forward into.
     /// </summary>
     [Fact]
-    public void UnmarkedModelGetsNoneOfTheLegacyLookupApi()
+    public void UnmarkedModelGetsNoneOfTheLookupApi()
     {
         string[] emitted = typeof(UnmarkedEventParquetExtensions)
             .GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
@@ -394,15 +380,17 @@ public sealed class SortedRowGroupPruningTests
         emitted.ShouldNotContain("TryCompareStatistics");
         emitted.ShouldNotContain("TryCompareStatisticToKey");
 
-        // The ordinary read API is untouched.
-        emitted.ShouldContain("ReadArrayCoreAsync");
+        // The ordinary read API is untouched, so the absence above is opt-in and not a
+        // generator that simply failed to run for this model.
+        emitted.ShouldContain("ReadParquetAsync");
     }
 
     /// <summary>
-    /// Models with <c>[ParquetSortKey]</c> no longer emit legacy flat reads (#584).
+    /// The per-column half of the same guarantee: <c>Payload</c> shares a model with three
+    /// marked columns, and still gets nothing.
     /// </summary>
     [Fact]
-    public void SortedModelEmitsNoLookupOverloads()
+    public void UnmarkedColumnGetsNoLookupOverloads()
     {
         string[] emitted = typeof(SortedEventParquetExtensions)
             .GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
@@ -411,9 +399,6 @@ public sealed class SortedRowGroupPruningTests
 
         emitted.ShouldNotContain("ReadParquetByPayloadAsync");
         emitted.ShouldNotContain("ReadParquetPayloadRangeAsync");
-        emitted.ShouldNotContain("ReadParquetBySequenceNumberAsync");
-        emitted.ShouldNotContain("ReadParquetSequenceNumberRangeAsync");
-        emitted.ShouldNotContain("ReadPrunedRangeAsync");
-        emitted.ShouldNotContain("TryPruneSortedRowGroups");
+        emitted.ShouldContain("ReadParquetBySequenceNumberAsync");
     }
 }

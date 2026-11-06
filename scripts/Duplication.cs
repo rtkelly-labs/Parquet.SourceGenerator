@@ -16,10 +16,9 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 // Duplication.cs
 //
 // Layer 3 of #251. Measures token-level duplication across the hand-written sources under
-// src/ and writes it as a deterministic ordinal report (artifacts/metrics/duplication.txt,
-// gitignored). The report is derived from src/ on demand and published by CI as a build
-// artifact and step summary; it is not checked in and not gated on drift.
-// See docs/internals/code-quality-and-metrics.md for the design and its known limits.
+// src/, checks it in as a deterministic ordinal artifact (metrics/duplication.txt), and gates
+// CI on drift — the `*.api.txt` / `metrics/*.metrics.txt` pattern layers 1 and 2 established.
+// See docs/23-DUPLICATION.md for the design and its known limits.
 //
 // What it computes: for every method body, a stream of normalized token units (identifiers
 // collapse to a placeholder, keywords and operators keep their syntax kind, literals keep
@@ -34,7 +33,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 // Gating on emitted duplication would produce a permanent false positive, and "reported but
 // never gated" was rejected too: there is no decision the number could inform.
 //
-// Calibration (docs/internals/code-quality-and-metrics.md): the settings below were chosen against the repo's
+// Calibration (docs/23-DUPLICATION.md): the settings below were chosen against the repo's
 // demonstrated failure — the hand-rolled copies of ResolveSchemaField that all broke when
 // #196 added a parameter. Run `--root <checkout-of-8d4a097>/src --report -` and the detector
 // names the cross-file pair. A configuration that cannot find the copies that already broke
@@ -42,16 +41,17 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 //
 // Determinism: the Roslyn version that tokenizes is pinned above (same pin as CodeMetrics.cs),
 // file enumeration and every ordering is StringComparer.Ordinal, and the artifact carries no
-// line numbers — position changes that leave duplication intact must not show up when two
-// reports are diffed.
+// line numbers — position changes that leave duplication intact must not trip the gate.
 // -----------------------------------------------------------------------------
 
 const int WindowTokens = 16;
 const int MinSpanTokens = 40;
 
 string srcRoot = Path.Combine("src");
-string reportPath = Path.Combine("artifacts", "metrics", "duplication.txt");
+string baselinePath = Path.Combine("metrics", "duplication.txt");
+string? reportPath = null;
 string? summaryPath = null;
+bool noBaseline = false;
 
 var argv = Environment.GetCommandLineArgs();
 for (int i = 1; i < argv.Length; i++)
@@ -60,12 +60,16 @@ for (int i = 1; i < argv.Length; i++)
     {
         case "--root":
             srcRoot = Require(argv, ref i, "--root");
+            noBaseline = true; // calibrating a foreign tree has no baseline to drift against
             break;
         case "--report":
             reportPath = Require(argv, ref i, "--report");
             break;
         case "--summary":
             summaryPath = Require(argv, ref i, "--summary");
+            break;
+        case "--check":
+            noBaseline = false;
             break;
         default:
             Console.Error.WriteLine($"Unknown argument: {argv[i]}");
@@ -198,22 +202,67 @@ Console.WriteLine(
 
 string artifact = RenderArtifact(final, totalTokens);
 
-if (reportPath == "-")
+if (reportPath is not null)
 {
-    Console.Write(artifact);
-}
-else
-{
-    string? reportDirectory = Path.GetDirectoryName(reportPath);
-    if (!string.IsNullOrEmpty(reportDirectory))
-        Directory.CreateDirectory(reportDirectory);
-    File.WriteAllText(reportPath, artifact);
-    Console.WriteLine($"Wrote {reportPath} ({final.Count} clusters).");
+    if (reportPath == "-")
+        Console.Write(artifact);
+    else
+        File.WriteAllText(reportPath, artifact);
 }
 
+if (noBaseline)
+    return 0;
+
+bool update = string.Equals(
+    Environment.GetEnvironmentVariable("UPDATE_GOLDEN_FILES"),
+    "true",
+    StringComparison.OrdinalIgnoreCase
+);
+
+if (update)
+{
+    Directory.CreateDirectory(Path.GetDirectoryName(baselinePath)!);
+    File.WriteAllText(baselinePath, artifact);
+    Console.WriteLine($"Wrote {baselinePath} ({final.Count} clusters).");
+    return 0;
+}
+
+if (!File.Exists(baselinePath))
+{
+    Console.Error.WriteLine(
+        $"No duplication baseline at {baselinePath}. "
+            + "Create one with UPDATE_GOLDEN_FILES=true dotnet run scripts/Duplication.cs"
+    );
+    return 1;
+}
+
+string current = File.ReadAllText(baselinePath);
+if (current == artifact)
+{
+    Console.WriteLine("Duplication baseline matches.");
+    if (summaryPath is not null)
+        File.WriteAllText(summaryPath, RenderSummary(final, totalTokens, Array.Empty<string>()));
+    return 0;
+}
+
+List<string> added = MissingLines(artifact, current);
+List<string> removed = MissingLines(current, artifact);
+
+var message = new StringBuilder();
+message.AppendLine("Duplication drift: the checked-in baseline no longer matches src/.");
+foreach (string line in added)
+    message.AppendLine($"  + new/changed cluster: {line}");
+foreach (string line in removed)
+    message.AppendLine($"  - gone/shrunk cluster:  {line}");
+message.AppendLine(
+    "Either the duplication is real (fold it, or record the reason in docs/23-DUPLICATION.md)\n"
+        + "or the baseline is stale: UPDATE_GOLDEN_FILES=true dotnet run scripts/Duplication.cs"
+);
+Console.Error.Write(message);
+
 if (summaryPath is not null)
-    File.WriteAllText(summaryPath, RenderSummary(final, totalTokens));
-return 0;
+    File.WriteAllText(summaryPath, RenderSummary(final, totalTokens, added));
+return 1;
 
 static bool InIgnoredDir(string path)
 {
@@ -343,29 +392,28 @@ static string MethodId(CSharpSyntaxNode holder, string rel)
 static string RenderArtifact(List<Cluster> clusters, int totalTokens)
 {
     var sb = new StringBuilder();
-    sb.AppendLine("# Duplication report for hand-written code under src/ (layer 3 of #251).");
-    sb.AppendLine("# Generated by scripts/Duplication.cs. Not checked in.");
-    sb.AppendLine("# Regenerate: dotnet run scripts/Duplication.cs");
+    sb.AppendLine("# Duplication baseline for hand-written code under src/ (layer 3 of #251).");
+    sb.AppendLine("# Generated by scripts/Duplication.cs. Do not edit by hand.");
+    sb.AppendLine("# Refresh: UPDATE_GOLDEN_FILES=true dotnet run scripts/Duplication.cs");
     sb.AppendLine($"# K: cluster — duplicated token span x copies — ordinal-sorted method ids.");
     sb.AppendLine($"# Method ids are RELATIVE-PATH:Type.Method. No line numbers: a refactor that");
-    sb.AppendLine("# moves code without changing overlap must not change this report.");
-    sb.AppendLine(
-        "# Emitted/generated code is out of scope by design (docs/internals/code-quality-and-metrics.md)."
-    );
+    sb.AppendLine("# moves code without changing overlap must not trip this gate.");
+    sb.AppendLine("# Emitted/generated code is out of scope by design (docs/23-DUPLICATION.md).");
     sb.AppendLine($"# totals: clusters={clusters.Count} duplicated-tokens={totalTokens}");
     foreach (Cluster c in clusters)
         sb.AppendLine($"K | span={c.Span} copies={c.Copies} | {c.Key}");
     return sb.ToString();
 }
 
-static string RenderSummary(List<Cluster> clusters, int totalTokens)
+static string RenderSummary(List<Cluster> clusters, int totalTokens, IReadOnlyList<string> added)
 {
     var sb = new StringBuilder();
     sb.AppendLine("## Duplication (layer 3 of #251)");
     sb.AppendLine();
     sb.AppendLine(
         $"**{clusters.Count} clusters, {totalTokens} duplicated tokens.** "
-            + "The full report is in the `code-metrics` build artifact."
+            + "Baseline state: "
+            + (added.Count == 0 ? "match." : $"drift with {added.Count} new/changed cluster(s).")
     );
     sb.AppendLine();
     int shown = 0;
@@ -382,5 +430,21 @@ static string RenderSummary(List<Cluster> clusters, int totalTokens)
 }
 
 static string Truncate(string s, int max) => s.Length <= max ? s : s[..max] + "…";
+
+static List<string> MissingLines(string candidate, string reference)
+{
+    var referenceData = new HashSet<string>(StringComparer.Ordinal);
+    foreach (string line in reference.Split('\n'))
+    {
+        if (line.StartsWith("K |", StringComparison.Ordinal))
+            referenceData.Add(line.TrimEnd('\r'));
+    }
+
+    return candidate
+        .Split('\n')
+        .Select(l => l.TrimEnd('\r'))
+        .Where(l => l.StartsWith("K |", StringComparison.Ordinal) && !referenceData.Contains(l))
+        .ToList();
+}
 
 internal sealed record Cluster(int Span, int Copies, string Key);

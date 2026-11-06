@@ -11,7 +11,7 @@ namespace Parquet.SourceGenerator.Legacy;
 /// Emits zero-reflection schema definitions, column serializers, and deserializers at compile time.
 /// </summary>
 [Generator(LanguageNames.CSharp)]
-internal sealed class ParquetLegacyIncrementalGenerator : IIncrementalGenerator
+public sealed class ParquetLegacyIncrementalGenerator : IIncrementalGenerator
 {
     /// <summary>
     /// Initializes the incremental generator pipeline.
@@ -20,41 +20,17 @@ internal sealed class ParquetLegacyIncrementalGenerator : IIncrementalGenerator
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         // 1. Filter syntax nodes decorated with attributes and extract target model + diagnostics
-        IncrementalValuesProvider<TargetParserResult> targets = context
-            .SyntaxProvider.CreateSyntaxProvider(
+        IncrementalValuesProvider<TargetParserResult> targets =
+            context.SyntaxProvider.CreateSyntaxProvider(
                 predicate: static (s, _) => IsTargetSyntax(s),
-                transform: static (ctx, _) =>
-                    TargetParser.GetPrimaryTargetModel(ctx, ParquetApiLevel.V4)
-            )
-            .Where(static result => result is not null)!;
-
-        // 2. Register source output emission & diagnostic reporting
-        IncrementalValueProvider<GeneratorConfiguration> configuration =
-            context.AnalyzerConfigOptionsProvider.Select(
-                static (options, _) => GeneratorConfiguration.From(options)
+                transform: static (ctx, _) => TargetParser.GetTargetModel(ctx, ParquetApiLevel.V4)
             );
 
+        // 2. Register source output emission & diagnostic reporting
         context.RegisterSourceOutput(
-            configuration,
-            static (spc, config) =>
+            targets,
+            static (spc, result) =>
             {
-                if (config.ConfigurationDiagnostic is DiagnosticInfo diagnostic)
-                {
-                    spc.ReportDiagnostic(diagnostic.ToDiagnostic());
-                }
-            }
-        );
-
-        context.RegisterSourceOutput(
-            targets.Combine(configuration),
-            static (spc, pair) =>
-            {
-                TargetParserResult result = pair.Left;
-                if (pair.Right.ConfigurationDiagnostic is not null)
-                {
-                    return;
-                }
-
                 // Report compiler diagnostics
                 for (int i = 0; i < result.Diagnostics.Length; i++)
                 {
@@ -68,7 +44,7 @@ internal sealed class ParquetLegacyIncrementalGenerator : IIncrementalGenerator
                         ? result.Model.ClassName
                         : $"{result.Model.Namespace}.{result.Model.ClassName}";
                     string hintName = $"{prefix}.ParquetLegacySerializer.g.cs";
-                    string sourceCode = LegacyCodeEmitter.EmitSource(result.Model, pair.Right);
+                    string sourceCode = LegacyCodeEmitter.EmitSource(result.Model);
                     spc.AddSource(hintName, sourceCode);
                 }
             }

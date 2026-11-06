@@ -6,7 +6,6 @@ using System.Reflection;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Parquet.SourceGenerator.Diagnostics;
-using Shouldly;
 using Xunit;
 
 using LegacyModels = LegacyGenerator::Parquet.SourceGenerator.Models;
@@ -23,14 +22,15 @@ public class LegacyEmitterTests
             Prop("Name", "name", "string", LegacyModels::PropertyKind.Primitive, isNullable: true)
         );
 
-        code.ShouldContain("namespace TestNamespace;");
-        code.ShouldContain("public static partial class TestModelParquetLegacyExtensions");
-        code.ShouldContain(
-            "internal static readonly global::Parquet.Schema.ParquetSchema Schema = new global::Parquet.Schema.ParquetSchema("
+        Assert.Contains("namespace TestNamespace;", code);
+        Assert.Contains("public static partial class TestModelParquetLegacyExtensions", code);
+        Assert.Contains(
+            "public static readonly global::Parquet.Schema.ParquetSchema Schema = new global::Parquet.Schema.ParquetSchema(",
+            code
         );
-        code.ShouldContain("new global::Parquet.Data.DataColumn(_field_0, colArray_0)");
-        code.ShouldContain("rgWriter.WriteColumnAsync(col_0, cancellationToken)");
-        code.ShouldContain("rgReader.ReadColumnAsync(field_0, cancellationToken)");
+        Assert.Contains("new global::Parquet.Data.DataColumn(_field_0, colArray_0)", code);
+        Assert.Contains("rgWriter.WriteColumnAsync(col_0, cancellationToken)", code);
+        Assert.Contains("rgReader.ReadColumnAsync(field_0, cancellationToken)", code);
     }
 
     /// <summary>
@@ -51,14 +51,14 @@ public class LegacyEmitterTests
             )
         );
 
-        code.ShouldContain("var colArray_0 = new byte[count][];");
-        code.ShouldNotContain("new byte[][count]");
+        Assert.Contains("var colArray_0 = new byte[count][];", code);
+        Assert.DoesNotContain("new byte[][count]", code);
 
         // The read cast has to name the jagged type, where the rank does belong at the end.
         // The optional column is read through the schema-evolution ternary, so the cast sits on the
         // awaited read rather than on a separate col_0 local.
-        code.ShouldContain("? new byte[groupRows][]");
-        code.ShouldContain("(byte[][])(await rgReader.ReadColumnAsync(field_0");
+        Assert.Contains("? new byte[groupRows][]", code);
+        Assert.Contains("(byte[][])(await rgReader.ReadColumnAsync(field_0", code);
     }
 
     /// <summary>
@@ -81,10 +81,11 @@ public class LegacyEmitterTests
             )
         );
 
-        code.ShouldContain("var colArray_0 = new int?[count];");
-        code.ShouldContain("item.Grade is null ? (int?)null : (int)item.Grade.Value");
-        code.ShouldContain(
-            "data_0[k] is null ? (global::MyApp.Grade?)null : (global::MyApp.Grade)data_0[k]!"
+        Assert.Contains("var colArray_0 = new int?[count];", code);
+        Assert.Contains("item.Grade is null ? (int?)null : (int)item.Grade.Value", code);
+        Assert.Contains(
+            "data_0[k] is null ? (global::MyApp.Grade?)null : (global::MyApp.Grade)data_0[k]!",
+            code
         );
     }
 
@@ -102,8 +103,8 @@ public class LegacyEmitterTests
             )
         );
 
-        code.ShouldContain("var colArray_0 = new int[count];");
-        code.ShouldContain("colArray_0[k] = (int)item.Grade;");
+        Assert.Contains("var colArray_0 = new int[count];", code);
+        Assert.Contains("colArray_0[k] = (int)item.Grade;", code);
     }
 
     /// <summary>
@@ -118,15 +119,15 @@ public class LegacyEmitterTests
             Prop("Id", "id", "int", LegacyModels::PropertyKind.Primitive, isNullable: false)
         );
 
-        code.ShouldContain("writer.CompressionMethod = options.CompressionMethod switch");
-        code.ShouldContain(
-            "writer.CompressionLevel = global::System.IO.Compression.CompressionLevel.Fastest;"
+        Assert.Contains("writer.CompressionMethod = options.CompressionMethod switch", code);
+        Assert.Contains(
+            "writer.CompressionLevel = global::System.IO.Compression.CompressionLevel.Fastest;",
+            code
         );
 
-        // Both the single-row-group fast path and the multi-row-group chunked path must call it,
-        // so the chunked path honours compression just like the fast path.
-        CountOccurrences(code, "ApplyCompression(singleWriter, options);").ShouldBe(1);
-        CountOccurrences(code, "ApplyCompression(writer, options);").ShouldBe(1);
+        // Both WriteParquetAsync and WriteParquetBatchedAsync must call it, or the batched path
+        // quietly keeps the default while the simple path honours the option.
+        Assert.Equal(2, CountOccurrences(code, "ApplyCompression(writer, options);"));
     }
 
     /// <summary>
@@ -142,16 +143,17 @@ public class LegacyEmitterTests
         );
 
         int guardStart = code.IndexOf("#if NET6_0_OR_GREATER", StringComparison.Ordinal);
-        int guardEnd = code.IndexOf("#endif", guardStart, StringComparison.Ordinal);
+        int guardEnd = code.IndexOf("#endif", StringComparison.Ordinal);
         int smallestSize = code.IndexOf(
             "global::System.IO.Compression.CompressionLevel.SmallestSize",
             StringComparison.Ordinal
         );
 
-        (guardStart >= 0).ShouldBeTrue(
+        Assert.True(
+            guardStart >= 0,
             "The emitted code should guard the .NET 6+ compression level."
         );
-        smallestSize.ShouldBeInRange(guardStart, guardEnd);
+        Assert.InRange(smallestSize, guardStart, guardEnd);
     }
 
     /// <summary>
@@ -165,56 +167,8 @@ public class LegacyEmitterTests
             Prop("Id", "id", "int", LegacyModels::PropertyKind.Primitive, isNullable: false)
         );
 
-        code.ShouldContain("global::Parquet.ParquetReader.CreateAsync(");
-        code.ShouldContain("BuildFormatOptions()");
-    }
-
-    [Fact]
-    public void LegacyReaderChecksTheByteBudgetBeforeReadingAColumnGroup()
-    {
-        string code = Emit(
-            Prop("Id", "id", "int", LegacyModels::PropertyKind.Primitive, false),
-            Prop("Name", "name", "string", LegacyModels::PropertyKind.Primitive, true)
-        );
-
-        code.ShouldContain("CheckAllocationBudget(0, groupRows, 40, options);");
-        code.ShouldContain("options.MaxAllocationBytes");
-    }
-
-    [Fact]
-    public void LegacyReaderEmitsDictionaryAndStringSafetyGuards()
-    {
-        string code = Emit(
-            Prop("Category", "category", "string", LegacyModels::PropertyKind.Primitive, false),
-            Prop("Description", "description", "string", LegacyModels::PropertyKind.Primitive, true)
-        );
-
-        code.ShouldContain("ValidateDictionaryEntries(rgReader, stream, field_0, options);");
-        code.ShouldContain(
-            "if (!missing_1) ValidateDictionaryEntries(rgReader, stream, field_1, options);"
-        );
-        code.ShouldContain("ReadDictionaryEntryCount(groupReader, stream, field)");
-        code.ShouldContain("ValidateStringLengths(data_0, field_0.Name, options);");
-        code.ShouldContain("if (!missing_1) ValidateStringLengths(data_1, field_1.Name, options);");
-        code.ShouldContain("options.MaxStringLengthBytes");
-        code.ShouldContain("throw new global::System.IO.InvalidDataException");
-    }
-
-    [Fact]
-    public void LegacyStringLimitIsPostMaterializationValidation()
-    {
-        string code = Emit(
-            Prop("Description", "description", "string", LegacyModels::PropertyKind.Primitive, true)
-        );
-
-        int read = code.IndexOf("ReadColumnAsync(field_0", StringComparison.Ordinal);
-        int validate = code.IndexOf(
-            "ValidateStringLengths(data_0, field_0.Name, options);",
-            StringComparison.Ordinal
-        );
-
-        read.ShouldBeGreaterThanOrEqualTo(0);
-        validate.ShouldBeGreaterThan(read);
+        Assert.Contains("global::Parquet.ParquetReader.CreateAsync(", code);
+        Assert.Contains("BuildFormatOptions(options)", code);
     }
 
     /// <summary>
@@ -229,12 +183,14 @@ public class LegacyEmitterTests
             Prop("Name", "name", "string", LegacyModels::PropertyKind.Primitive, isNullable: true)
         );
 
-        CountOccurrences(code, "reader.Schema.GetDataFields()").ShouldBe(1);
-        CountOccurrences(code, "ResolveSchemaField(fileFields, 0, _field_0, ref fieldsByName,")
-            .ShouldBe(1);
+        Assert.Equal(1, CountOccurrences(code, "reader.Schema.GetDataFields()"));
+        Assert.Equal(
+            1,
+            CountOccurrences(code, "ResolveSchemaField(fileFields, 0, _field_0, ref fieldsByName,")
+        );
 
         // Row counts come from row-group metadata, so the file is not walked twice just to total them.
-        code.ShouldContain("long rowCount = reader.RowGroups[r].RowCount;");
+        Assert.Contains("totalRows += (int)reader.RowGroups[r].RowCount;", code);
     }
 
     /// <summary>
@@ -257,8 +213,10 @@ public class LegacyEmitterTests
             }
             """;
 
-        RunLegacyGenerator(source)
-            .ShouldContain(d => d.Id == DiagnosticDescriptors.TypeUnsupportedOnClassicApi.Id);
+        Assert.Contains(
+            RunLegacyGenerator(source),
+            d => d.Id == DiagnosticDescriptors.TypeUnsupportedOnClassicApi.Id
+        );
     }
 
     [Fact]
@@ -287,10 +245,14 @@ public class LegacyEmitterTests
 
         ImmutableArray<Diagnostic> diagnostics = RunLegacyGenerator(source);
 
-        diagnostics.ShouldNotContain(d =>
-            d.Id == DiagnosticDescriptors.TypeUnsupportedOnClassicApi.Id
+        Assert.DoesNotContain(
+            diagnostics,
+            d => d.Id == DiagnosticDescriptors.TypeUnsupportedOnClassicApi.Id
         );
-        diagnostics.ShouldNotContain(d => d.Id == DiagnosticDescriptors.UnsupportedPropertyType.Id);
+        Assert.DoesNotContain(
+            diagnostics,
+            d => d.Id == DiagnosticDescriptors.UnsupportedPropertyType.Id
+        );
     }
 
     [Fact]
@@ -301,42 +263,12 @@ public class LegacyEmitterTests
         );
 
         // Direct array reader overload
-        code.ShouldContain("Task<TestModel[]> ReadParquetArrayAsync(");
+        Assert.Contains("Task<TestModel[]> ReadParquetArrayAsync(", code);
 
         // Batched write small-collection fast path
-        code.ShouldContain(
-            "if (items is global::System.Collections.Generic.IReadOnlyList<TestModel> list && list.Count <= batchSize)"
-        );
-
-        code.ShouldContain("CreateGuardedReadStream");
-        code.ShouldContain("guardedStream.Activate()");
-        code.ShouldContain("MaxDecompressedPageSize");
-        code.ShouldContain("MaxDecompressionExpansionRatio");
-    }
-
-    [Fact]
-    public void LegacyReadBoundsFileDeclaredCountsBeforeNarrowingOrAllocating()
-    {
-        string code = Emit(
-            Prop("Id", "id", "int", LegacyModels::PropertyKind.Primitive, isNullable: false),
-            Prop("Name", "name", "string", LegacyModels::PropertyKind.Primitive, isNullable: true)
-        );
-
-        // Row counts are summed in 64 bits and checked against MaxAllocationValues first.
-        code.ShouldContain("int totalRows = CountRows(reader, options);");
-        code.ShouldContain("long rowCount = reader.RowGroups[r].RowCount;");
-        code.ShouldContain("if (rowCount < 0 || rowCount > options.MaxAllocationValues)");
-        code.ShouldContain("int groupRows = checked((int)rgReader.RowCount);");
-        code.ShouldNotContain("totalRows += (int)");
-
-        // A column's declared value count is checked before Parquet.Net reads it, and its length
-        // before it is indexed. The behaviour is pinned by test/PackageConsumptionLegacy.
-        code.ShouldContain(
-            "ValidateColumnValueCount(rgReader, field_0, options, ref allocatedBytes, 4);"
-        );
-        code.ShouldContain("ValidateColumnLength(data_0.Length, field_0.Name, groupRows);");
-        code.ShouldContain(
-            "if (!missing_1) ValidateColumnLength(data_1.Length, field_1.Name, groupRows);"
+        Assert.Contains(
+            "if (items is global::System.Collections.Generic.IReadOnlyList<TestModel> list && list.Count <= batchSize)",
+            code
         );
     }
 
@@ -345,11 +277,11 @@ public class LegacyEmitterTests
     {
         string code = Emit(AllSupportedLegacyProperties());
 
-        code.ShouldContain("var colArray_10 = new global::System.Guid[count];");
-        code.ShouldContain("var colArray_11 = new global::System.Guid?[count];");
-        code.ShouldContain("new global::Parquet.SourceGenerator.StringDeduplicator(512);");
-        code.ShouldContain("ReadColumnAsync");
-        code.ShouldContain("WriteColumnAsync");
+        Assert.Contains("var colArray_10 = new global::System.Guid[count];", code);
+        Assert.Contains("var colArray_11 = new global::System.Guid?[count];", code);
+        Assert.Contains("struct StringDeduplicator", code);
+        Assert.Contains("ReadColumnAsync", code);
+        Assert.Contains("WriteColumnAsync", code);
     }
 
     [Fact]
@@ -357,10 +289,11 @@ public class LegacyEmitterTests
     {
         string code = Emit();
 
-        code.ShouldContain(
-            "await global::System.Threading.Tasks.Task.CompletedTask.ConfigureAwait(false);"
+        Assert.Contains(
+            "await global::System.Threading.Tasks.Task.CompletedTask.ConfigureAwait(false);",
+            code
         );
-        code.ShouldContain("return global::System.Array.Empty<TestModel>();");
+        Assert.Contains("return global::System.Array.Empty<TestModel>();", code);
     }
 
     [Fact]
@@ -388,8 +321,8 @@ public class LegacyEmitterTests
                 model
             );
 
-        code.ShouldNotContain("namespace ;");
-        code.ShouldContain("public static partial class GlobalModelParquetLegacyExtensions");
+        Assert.DoesNotContain("namespace ;", code);
+        Assert.Contains("public static partial class GlobalModelParquetLegacyExtensions", code);
     }
 
     [Fact]
@@ -420,13 +353,15 @@ public class LegacyEmitterTests
                 model
             );
 
-        code.ShouldContain(
-            "global::System.Runtime.InteropServices.MemoryMarshal.Cast<BlittableInt, int>"
+        Assert.Contains(
+            "global::System.Runtime.InteropServices.MemoryMarshal.Cast<BlittableInt, int>",
+            code
         );
-        code.ShouldContain(
-            "items is global::System.Collections.Generic.List<BlittableInt> listItems"
+        Assert.Contains(
+            "items is global::System.Collections.Generic.List<BlittableInt> listItems",
+            code
         );
-        code.ShouldContain("items is BlittableInt[] arrayItems");
+        Assert.Contains("items is BlittableInt[] arrayItems", code);
     }
 
     [Fact]
@@ -493,12 +428,12 @@ public class LegacyEmitterTests
 
         var (diagnostics, trees) = RunLegacyGeneratorWithOutput(source);
 
-        diagnostics.ShouldBeEmpty();
-        trees.Length.ShouldBe(1);
+        Assert.Empty(diagnostics);
+        Assert.Single(trees);
         string generatedSource = trees[0].ToString();
-        generatedSource.ShouldContain("FullModelParquetLegacyExtensions");
-        generatedSource.ShouldContain("WriteRowGroupAsync");
-        generatedSource.ShouldContain("ReadParquetArrayAsync");
+        Assert.Contains("FullModelParquetLegacyExtensions", generatedSource);
+        Assert.Contains("WriteRowGroupAsync", generatedSource);
+        Assert.Contains("ReadParquetArrayAsync", generatedSource);
     }
 
     [Fact]
@@ -526,8 +461,8 @@ public class LegacyEmitterTests
 
         var (diagnostics, trees) = RunLegacyGeneratorWithOutput(source);
 
-        diagnostics.ShouldBeEmpty();
-        trees.Length.ShouldBe(2);
+        Assert.Empty(diagnostics);
+        Assert.Equal(2, trees.Length);
     }
 
     [Fact]
@@ -538,8 +473,10 @@ public class LegacyEmitterTests
             [ParquetSerializable]
             public class NotPartial { public int Id { get; set; } }
             """;
-        RunLegacyGenerator(notPartial)
-            .ShouldContain(d => d.Id == DiagnosticDescriptors.MustBePartial.Id);
+        Assert.Contains(
+            RunLegacyGenerator(notPartial),
+            d => d.Id == DiagnosticDescriptors.MustBePartial.Id
+        );
 
         string duplicateProp = """
             using Parquet.SourceGenerator;
@@ -552,16 +489,20 @@ public class LegacyEmitterTests
                 public int B { get; set; }
             }
             """;
-        RunLegacyGenerator(duplicateProp)
-            .ShouldContain(d => d.Id == DiagnosticDescriptors.DuplicateColumnName.Id);
+        Assert.Contains(
+            RunLegacyGenerator(duplicateProp),
+            d => d.Id == DiagnosticDescriptors.DuplicateColumnName.Id
+        );
 
         string generic = """
             using Parquet.SourceGenerator;
             [ParquetSerializable]
             public partial class GenericClass<T> { public T? Value { get; set; } }
             """;
-        RunLegacyGenerator(generic)
-            .ShouldContain(d => d.Id == DiagnosticDescriptors.GenericTypeNotSupported.Id);
+        Assert.Contains(
+            RunLegacyGenerator(generic),
+            d => d.Id == DiagnosticDescriptors.GenericTypeNotSupported.Id
+        );
     }
 
     // ──────────────────────────────────────────────────────────

@@ -1,0 +1,48 @@
+#nullable enable
+SampleDomain.Models.ListOrderParquet
+SampleDomain.Models.ListOrderParquetExtensions
+SampleDomain.Models.ListOrderParquetFilteredSource
+SampleDomain.Models.ListOrderParquetFilteredSource.AsAsyncEnumerable(System.Threading.CancellationToken cancellationToken = default) -> System.Collections.Generic.IAsyncEnumerable<ListOrder>
+SampleDomain.Models.ListOrderParquetFilteredSource.ToArrayAsync(System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<ListOrder[]>
+SampleDomain.Models.ListOrderParquetFilteredSource.ToListAsync(System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<System.Collections.Generic.List<ListOrder>>
+SampleDomain.Models.ListOrderParquetFilteredSource.WithOptions(Parquet.SourceGenerator.ParquetSerializerOptions options) -> ListOrderParquetFilteredSource
+SampleDomain.Models.ListOrderParquetMemorySource
+SampleDomain.Models.ListOrderParquetMemorySource.AsAsyncEnumerable(System.Threading.CancellationToken cancellationToken = default) -> System.Collections.Generic.IAsyncEnumerable<ListOrder>
+SampleDomain.Models.ListOrderParquetMemorySource.Parallel() -> ListOrderParquetParallelSource
+SampleDomain.Models.ListOrderParquetMemorySource.ToArrayAsync(System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<ListOrder[]>
+SampleDomain.Models.ListOrderParquetMemorySource.ToListAsync(System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<System.Collections.Generic.List<ListOrder>>
+SampleDomain.Models.ListOrderParquetMemorySource.Where(System.Func<SampleDomain.Models.ListOrderRowGroupMetadata, bool> predicate) -> ListOrderParquetFilteredSource
+SampleDomain.Models.ListOrderParquetMemorySource.WithOptions(Parquet.SourceGenerator.ParquetSerializerOptions options) -> ListOrderParquetMemorySource
+SampleDomain.Models.ListOrderParquetParallelSource
+SampleDomain.Models.ListOrderParquetParallelSource.ToArrayAsync(System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<ListOrder[]>
+SampleDomain.Models.ListOrderParquetParallelSource.ToListAsync(System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<System.Collections.Generic.List<ListOrder>>
+SampleDomain.Models.ListOrderParquetParallelSource.WithOptions(Parquet.SourceGenerator.ParquetSerializerOptions options) -> ListOrderParquetParallelSource
+SampleDomain.Models.ListOrderParquetStreamSource
+SampleDomain.Models.ListOrderParquetStreamSource.AsAsyncEnumerable(System.Threading.CancellationToken cancellationToken = default) -> System.Collections.Generic.IAsyncEnumerable<ListOrder>
+SampleDomain.Models.ListOrderParquetStreamSource.ToArrayAsync(System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<ListOrder[]>
+SampleDomain.Models.ListOrderParquetStreamSource.ToListAsync(System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<System.Collections.Generic.List<ListOrder>>
+SampleDomain.Models.ListOrderParquetStreamSource.Where(System.Func<SampleDomain.Models.ListOrderRowGroupMetadata, bool> predicate) -> ListOrderParquetFilteredSource
+SampleDomain.Models.ListOrderParquetStreamSource.WithOptions(Parquet.SourceGenerator.ParquetSerializerOptions options) -> ListOrderParquetStreamSource
+SampleDomain.Models.ListOrderRowGroupMetadata
+SampleDomain.Models.ListOrderRowGroupMetadata.HasStatistics.get -> bool
+SampleDomain.Models.ListOrderRowGroupMetadata.Id.get -> Parquet.SourceGenerator.ParquetColumnStatistics<int>
+SampleDomain.Models.ListOrderRowGroupMetadata.ListOrderRowGroupMetadata(int rowGroupIndex, long rowCount, bool hasStatistics, Parquet.SourceGenerator.ParquetColumnStatistics<int> column_0) -> void
+SampleDomain.Models.ListOrderRowGroupMetadata.RowCount.get -> long
+SampleDomain.Models.ListOrderRowGroupMetadata.RowGroupIndex.get -> int
+static SampleDomain.Models.ListOrderParquet.From(System.IO.Stream stream) -> ListOrderParquetStreamSource
+static SampleDomain.Models.ListOrderParquet.From(System.ReadOnlyMemory<byte> parquetBytes) -> ListOrderParquetMemorySource
+static SampleDomain.Models.ListOrderParquetExtensions.ReadParquetArrayAsync(System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default, System.Func<SampleDomain.Models.ListOrderRowGroupMetadata, bool>? predicate = null) -> System.Threading.Tasks.Task<ListOrder[]>
+static SampleDomain.Models.ListOrderParquetExtensions.ReadParquetArrayAsync(System.ReadOnlyMemory<byte> parquetBytes, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<ListOrder[]>
+static SampleDomain.Models.ListOrderParquetExtensions.ReadParquetAsync(System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default, System.Func<SampleDomain.Models.ListOrderRowGroupMetadata, bool>? predicate = null) -> System.Threading.Tasks.Task<System.Collections.Generic.List<ListOrder>>
+static SampleDomain.Models.ListOrderParquetExtensions.ReadParquetAsync(System.ReadOnlyMemory<byte> parquetBytes, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<System.Collections.Generic.List<ListOrder>>
+static SampleDomain.Models.ListOrderParquetExtensions.ReadParquetParallelArrayAsync(System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<ListOrder[]>
+static SampleDomain.Models.ListOrderParquetExtensions.ReadParquetParallelArrayAsync(System.ReadOnlyMemory<byte> parquetBytes, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<ListOrder[]>
+static SampleDomain.Models.ListOrderParquetExtensions.ReadParquetParallelAsync(System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<System.Collections.Generic.List<ListOrder>>
+static SampleDomain.Models.ListOrderParquetExtensions.ReadParquetParallelAsync(System.ReadOnlyMemory<byte> parquetBytes, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<System.Collections.Generic.List<ListOrder>>
+static SampleDomain.Models.ListOrderParquetExtensions.ReadParquetStreamAsync(System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default, System.Func<SampleDomain.Models.ListOrderRowGroupMetadata, bool>? predicate = null) -> System.Collections.Generic.IAsyncEnumerable<ListOrder>
+static SampleDomain.Models.ListOrderParquetExtensions.ReadParquetStreamAsync(System.ReadOnlyMemory<byte> parquetBytes, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default, System.Func<SampleDomain.Models.ListOrderRowGroupMetadata, bool>? predicate = null) -> System.Collections.Generic.IAsyncEnumerable<ListOrder>
+static SampleDomain.Models.ListOrderParquetExtensions.WriteParquetAsync(this System.Collections.Generic.IAsyncEnumerable<ListOrder> items, System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task
+static SampleDomain.Models.ListOrderParquetExtensions.WriteParquetAsync(this System.Collections.Generic.IReadOnlyCollection<ListOrder> items, System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task
+static SampleDomain.Models.ListOrderParquetExtensions.WriteParquetBatchedAsync(this System.Collections.Generic.IEnumerable<ListOrder> items, System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task
+static SampleDomain.Models.ListOrderParquetExtensions.WriteParquetRowGroupAsync(this Parquet.ParquetWriter writer, System.Collections.Generic.IReadOnlyCollection<ListOrder> chunk, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task
+static readonly SampleDomain.Models.ListOrderParquetExtensions.Schema -> Parquet.Schema.ParquetSchema

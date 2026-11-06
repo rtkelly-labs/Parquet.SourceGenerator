@@ -52,26 +52,26 @@ public sealed class NullBypassReadTests
             }
         }
 
-        NullBypassRecord[] sequential = await ReadSequentialAsync(parquet);
-        NullBypassRecord[] array = await NullBypassRecordParquet
-            .From(new MemoryStream(parquet))
-            .ToArrayAsync();
-        NullBypassRecord[] parallel = await NullBypassRecordParquet
-            .From(parquet)
-            .WithOptions(new ParquetSerializerOptions { MaxDegreeOfParallelism = 2 })
-            .Parallel()
-            .ToArrayAsync();
-        NullBypassRecord[] parallelArray = await NullBypassRecordParquet
-            .From(parquet)
-            .WithOptions(new ParquetSerializerOptions { MaxDegreeOfParallelism = 2 })
-            .Parallel()
-            .ToArrayAsync();
+        List<NullBypassRecord> sequential = await ReadSequentialAsync(parquet);
+        NullBypassRecord[] array = await NullBypassRecordParquetExtensions.ReadParquetArrayAsync(
+            new MemoryStream(parquet)
+        );
+        List<NullBypassRecord> parallel =
+            await NullBypassRecordParquetExtensions.ReadParquetParallelAsync(
+                new MemoryStream(parquet),
+                new ParquetSerializerOptions { MaxDegreeOfParallelism = 2 }
+            );
+        NullBypassRecord[] parallelArray =
+            await NullBypassRecordParquetExtensions.ReadParquetParallelArrayAsync(
+                parquet,
+                new ParquetSerializerOptions { MaxDegreeOfParallelism = 2 }
+            );
 
         var streamed = new List<NullBypassRecord>();
         await foreach (
-            NullBypassRecord item in NullBypassRecordParquet
-                .From(new MemoryStream(parquet))
-                .AsAsyncEnumerable()
+            NullBypassRecord item in NullBypassRecordParquetExtensions.ReadParquetStreamAsync(
+                new MemoryStream(parquet)
+            )
         )
         {
             streamed.Add(item);
@@ -119,9 +119,9 @@ public sealed class NullBypassReadTests
         };
 
         byte[] parquet = await WriteAsync(expected);
-        NullBypassRecord[] actual = await ReadSequentialAsync(parquet);
+        List<NullBypassRecord> actual = await ReadSequentialAsync(parquet);
 
-        actual.Length.ShouldBe(expected.Count);
+        actual.Count.ShouldBe(expected.Count);
         for (int i = 0; i < expected.Count; i++)
         {
             actual[i].OptionalInt.ShouldBe(expected[i].OptionalInt);
@@ -146,9 +146,9 @@ public sealed class NullBypassReadTests
         return stream.ToArray();
     }
 
-    private static async Task<NullBypassRecord[]> ReadSequentialAsync(byte[] parquet)
+    private static async Task<List<NullBypassRecord>> ReadSequentialAsync(byte[] parquet)
     {
-        return await NullBypassRecordParquet.From(new MemoryStream(parquet)).ToArrayAsync();
+        return await NullBypassRecordParquetExtensions.ReadParquetAsync(new MemoryStream(parquet));
     }
 
     private static void AssertAllNull(IEnumerable<NullBypassRecord> items)

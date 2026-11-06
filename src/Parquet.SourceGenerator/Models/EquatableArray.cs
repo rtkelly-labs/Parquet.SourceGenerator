@@ -10,7 +10,7 @@ namespace Parquet.SourceGenerator.Models;
 /// Immutable, value-equatable array wrapper designed for Roslyn incremental generator caching.
 /// </summary>
 /// <typeparam name="T">Element type, must implement <see cref="IEquatable{T}"/>.</typeparam>
-internal readonly struct EquatableArray<T> : IEquatable<EquatableArray<T>>, IEnumerable<T>
+public readonly struct EquatableArray<T> : IEquatable<EquatableArray<T>>, IEnumerable<T>
     where T : IEquatable<T>
 {
     private readonly T[]? _array;
@@ -71,7 +71,7 @@ internal readonly struct EquatableArray<T> : IEquatable<EquatableArray<T>>, IEnu
         int hashCode = 17;
         foreach (T item in _array)
         {
-            hashCode = unchecked((hashCode * 31) + EqualityComparer<T>.Default.GetHashCode(item));
+            hashCode = unchecked((hashCode * 31) + item.GetHashCode());
         }
         return hashCode;
     }

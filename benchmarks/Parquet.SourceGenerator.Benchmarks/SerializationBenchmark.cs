@@ -5,8 +5,6 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using BenchmarkDotNet.Attributes;
-using BenchmarkDotNet.Configs;
-using BenchmarkDotNet.Exporters.Json;
 using BenchmarkDotNet.Jobs;
 using BenchmarkDotNet.Running;
 using Parquet.Serialization;
@@ -50,11 +48,8 @@ public class ScalingSerializationBenchmark
 {
     private List<ScaleEvent> _data = null!;
 
-    [ParamsSource(nameof(Counts))]
+    [Params(1_000, 10_000, 100_000, 1_000_000)]
     public int Count { get; set; }
-
-    public static IEnumerable<int> Counts =>
-        BenchmarkParameterSource.GetCounts(1_000, 10_000, 100_000, 1_000_000);
 
     [GlobalSetup]
     public void Setup()
@@ -99,7 +94,7 @@ public class ScalingSerializationBenchmark
     public async Task SourceGeneratorWriteBatchedAsync()
     {
         using var stream = new MemoryStream();
-        await _data.WriteParquetAsync(
+        await _data.WriteParquetBatchedAsync(
             stream,
             new ParquetSerializerOptions { RowGroupSize = 20_000 }
         );
@@ -114,11 +109,8 @@ public class ScalingDeserializationBenchmark
 {
     private byte[] _parquetBytes = null!;
 
-    [ParamsSource(nameof(Counts))]
+    [Params(1_000, 10_000, 100_000, 1_000_000)]
     public int Count { get; set; }
-
-    public static IEnumerable<int> Counts =>
-        BenchmarkParameterSource.GetCounts(1_000, 10_000, 100_000, 1_000_000);
 
     [GlobalSetup]
     public void Setup()
@@ -135,7 +127,10 @@ public class ScalingDeserializationBenchmark
             .ToList();
 
         using var stream = new MemoryStream();
-        data.WriteParquetAsync(stream, new ParquetSerializerOptions { RowGroupSize = 20_000 })
+        data.WriteParquetBatchedAsync(
+                stream,
+                new ParquetSerializerOptions { RowGroupSize = 20_000 }
+            )
             .GetAwaiter()
             .GetResult();
         _parquetBytes = stream.ToArray();
@@ -173,27 +168,34 @@ public class ScalingDeserializationBenchmark
     /// <summary>
     /// Source generator sequential deserializer — Native AOT compatible, ArrayPool buffers.
     /// </summary>
-    /// <remarks>
-    /// Measured the <c>List&lt;T&gt;</c> terminal until #479 removed it; it now measures the array
-    /// path (the same path as <see cref="SourceGeneratorReadArrayAsync"/>). The name is kept because
-    /// the benchmark summary and the regression history key on it. The same applies to the
-    /// <c>...BufferAsync</c> and <c>...ParallelBufferAsync</c> benchmarks below and to the
-    /// formerly <c>List</c>-returning read benchmarks in the dataset and deduplication suites.
-    /// </remarks>
     [Benchmark]
-    public async Task<ScaleEvent[]> SourceGeneratorReadAsync()
+    public async Task<List<ScaleEvent>> SourceGeneratorReadAsync()
     {
         using var stream = new MemoryStream(_parquetBytes);
-        return await ScaleEventParquet.From(stream).ToArrayAsync();
+        return await ScaleEventParquetExtensions.ReadParquetAsync(stream);
+    }
+
+    /// <summary>
+    /// Source generator array-backed deserializer over a <c>Stream</c>. Reads row groups
+    /// sequentially — a stream cannot be shared between readers — and materialises into a pre-sized
+    /// array rather than a growing list.
+    /// </summary>
+    [Benchmark]
+    public async Task<List<ScaleEvent>> SourceGeneratorReadParallelAsync()
+    {
+        using var stream = new MemoryStream(_parquetBytes);
+        return await ScaleEventParquetExtensions.ReadParquetParallelAsync(stream);
     }
 
     /// <summary>
     /// Source generator sequential deserializer over a byte buffer — no stream wrapper allocation.
     /// </summary>
     [Benchmark]
-    public async Task<ScaleEvent[]> SourceGeneratorReadBufferAsync()
+    public async Task<List<ScaleEvent>> SourceGeneratorReadBufferAsync()
     {
-        return await ScaleEventParquet.From(new ReadOnlyMemory<byte>(_parquetBytes)).ToArrayAsync();
+        return await ScaleEventParquetExtensions.ReadParquetAsync(
+            new ReadOnlyMemory<byte>(_parquetBytes)
+        );
     }
 
     /// <summary>
@@ -207,13 +209,12 @@ public class ScalingDeserializationBenchmark
     /// obvious in the allocation column here.
     /// </remarks>
     [Benchmark]
-    public async Task<ScaleEvent[]> SourceGeneratorReadParallelBufferAsync()
+    public async Task<List<ScaleEvent>> SourceGeneratorReadParallelBufferAsync()
     {
-        return await ScaleEventParquet
-            .From(new ReadOnlyMemory<byte>(_parquetBytes))
-            .WithOptions(new ParquetSerializerOptions { MaxDegreeOfParallelism = 4 })
-            .Parallel()
-            .ToArrayAsync();
+        return await ScaleEventParquetExtensions.ReadParquetParallelAsync(
+            new ReadOnlyMemory<byte>(_parquetBytes),
+            new ParquetSerializerOptions { MaxDegreeOfParallelism = 4 }
+        );
     }
 
     /// <summary>
@@ -223,7 +224,7 @@ public class ScalingDeserializationBenchmark
     public async Task<ScaleEvent[]> SourceGeneratorReadArrayAsync()
     {
         using var stream = new MemoryStream(_parquetBytes);
-        return await ScaleEventParquet.From(stream).ToArrayAsync();
+        return await ScaleEventParquetExtensions.ReadParquetArrayAsync(stream);
     }
 
     /// <summary>
@@ -232,7 +233,9 @@ public class ScalingDeserializationBenchmark
     [Benchmark]
     public async Task<ScaleEvent[]> SourceGeneratorReadBufferArrayAsync()
     {
-        return await ScaleEventParquet.From(new ReadOnlyMemory<byte>(_parquetBytes)).ToArrayAsync();
+        return await ScaleEventParquetExtensions.ReadParquetArrayAsync(
+            new ReadOnlyMemory<byte>(_parquetBytes)
+        );
     }
 
     /// <summary>
@@ -241,11 +244,10 @@ public class ScalingDeserializationBenchmark
     [Benchmark]
     public async Task<ScaleEvent[]> SourceGeneratorReadParallelBufferArrayAsync()
     {
-        return await ScaleEventParquet
-            .From(new ReadOnlyMemory<byte>(_parquetBytes))
-            .WithOptions(new ParquetSerializerOptions { MaxDegreeOfParallelism = 4 })
-            .Parallel()
-            .ToArrayAsync();
+        return await ScaleEventParquetExtensions.ReadParquetParallelArrayAsync(
+            new ReadOnlyMemory<byte>(_parquetBytes),
+            new ParquetSerializerOptions { MaxDegreeOfParallelism = 4 }
+        );
     }
 
     /// <summary>
@@ -256,7 +258,7 @@ public class ScalingDeserializationBenchmark
     {
         using var stream = new MemoryStream(_parquetBytes);
         int count = 0;
-        await foreach (var item in ScaleEventParquet.From(stream).AsAsyncEnumerable())
+        await foreach (var item in ScaleEventParquetExtensions.ReadParquetStreamAsync(stream))
         {
             count++;
         }
@@ -272,11 +274,8 @@ public class GuidInterchangeBenchmark
 {
     private List<GuidEvent> _guidData = null!;
 
-    [ParamsSource(nameof(Counts))]
+    [Params(1_000, 10_000, 100_000)]
     public int Count { get; set; }
-
-    public static IEnumerable<int> Counts =>
-        BenchmarkParameterSource.GetCounts(1_000, 10_000, 100_000);
 
     [GlobalSetup]
     public void Setup()
@@ -311,46 +310,6 @@ internal static class Program
 {
     private static void Main(string[] args)
     {
-        List<string> benchmarkArgs = new(args.Length);
-        for (int i = 0; i < args.Length; i++)
-        {
-            if (args[i].Equals("--params", StringComparison.Ordinal))
-            {
-                if (++i >= args.Length)
-                {
-                    throw new ArgumentException(
-                        "--params requires a value such as Count=1000,10000.",
-                        nameof(args)
-                    );
-                }
-
-                string parameter = args[i];
-                const string countPrefix = "Count=";
-                if (!parameter.StartsWith(countPrefix, StringComparison.Ordinal))
-                {
-                    throw new ArgumentException(
-                        "Only the Count benchmark parameter can be overridden.",
-                        nameof(args)
-                    );
-                }
-
-                Environment.SetEnvironmentVariable(
-                    "PSG_BENCHMARK_COUNTS",
-                    parameter[countPrefix.Length..]
-                );
-                continue;
-            }
-
-            benchmarkArgs.Add(args[i]);
-        }
-
-        // The regression gate (tools/BenchmarkSummaryGenerator --baseline) reads the compressed JSON
-        // export: it carries the benchmark type and the full parameter set, and exact allocated
-        // bytes, none of which the CSV column order or its rounded units can give it reliably.
-        IConfig config = DefaultConfig.Instance.AddExporter(JsonExporter.FullCompressed);
-
-        BenchmarkSwitcher
-            .FromAssembly(typeof(Program).Assembly)
-            .Run(benchmarkArgs.ToArray(), config);
+        BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args);
     }
 }

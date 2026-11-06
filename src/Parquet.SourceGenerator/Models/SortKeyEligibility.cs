@@ -13,7 +13,7 @@ namespace Parquet.SourceGenerator.Models;
 /// with the classic (v4/v5) backend, which does not compile the pruning emitter at all.
 /// </para>
 /// </summary>
-internal static class SortKeyEligibility
+public static class SortKeyEligibility
 {
     /// <summary>
     /// Primitive key types whose Parquet statistics round-trip to the identical CLR type and

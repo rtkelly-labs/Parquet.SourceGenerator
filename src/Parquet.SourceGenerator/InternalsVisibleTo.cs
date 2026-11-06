@@ -1,4 +1,0 @@
-using System.Runtime.CompilerServices;
-
-[assembly: InternalsVisibleTo("Parquet.SourceGenerator.Tests")]
-[assembly: InternalsVisibleTo("Parquet.SourceGenerator.Benchmarks")]

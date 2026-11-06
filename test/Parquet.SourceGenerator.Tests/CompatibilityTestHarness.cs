@@ -313,7 +313,8 @@ public sealed class CompatibilityTestHarnessTests
         await expected.WriteParquetAsync(stream);
         stream.Position = 0;
 
-        CompatibilityRecord[] actual = await CompatibilityRecordParquet.From(stream).ToArrayAsync();
+        List<CompatibilityRecord> actual =
+            await CompatibilityRecordParquetExtensions.ReadParquetAsync(stream);
 
         ParquetCompatibilityOracle.AssertEquivalent(
             expected,

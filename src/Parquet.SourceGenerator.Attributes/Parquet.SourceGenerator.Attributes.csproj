@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFrameworks>netstandard2.0;netstandard2.1;net8.0;net9.0</TargetFrameworks>
+        <RootNamespace>Parquet.SourceGenerator</RootNamespace>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" PrivateAssets="All" />
+    </ItemGroup>
+
+    <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
+        <PackageReference Include="System.Memory" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- CA1502 / CA1505 / CA1506 thresholds. See docs/21-CODE-METRICS.md. -->
+        <AdditionalFiles Include="..\..\CodeMetricsConfig.txt" />
+        <AdditionalFiles Include="PublicAPI.Shipped.txt" />
+        <AdditionalFiles Include="PublicAPI.Unshipped.txt" />
+    </ItemGroup>
+
+    <!--
+    PARQAPI002 (docs/18-API-CHANGE-CONTRACT.md). The gate is an analyzer, referenced build-time
+    only: ReferenceOutputAssembly="false" keeps it out of the compile scope and PrivateAssets="all"
+    keeps it out of the produced package. It short-circuits unless it is handed src/api/seams.txt,
+    which only the projects in this ItemGroup supply.
+  -->
+    <ItemGroup>
+        <ProjectReference
+            Include="..\..\tools\Parquet.SourceGenerator.ApiGates\Parquet.SourceGenerator.ApiGates.csproj"
+            OutputItemType="Analyzer"
+            ReferenceOutputAssembly="false"
+            PrivateAssets="all"
+        />
+        <AdditionalFiles Include="..\api\seams.txt" />
+        <AdditionalFiles Include="..\..\docs\api\LEDGER.md" />
+    </ItemGroup>
+</Project>

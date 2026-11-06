@@ -157,31 +157,32 @@ public sealed class BlittableStructPropertyTests
             await items.WriteParquetAsync(ms);
             byte[] bytes = ms.ToArray();
 
-            // 1. Sequential Stream Read, converted to a List (the #479 migration for List callers)
+            // 1. Sequential Stream List Read
             ms.Position = 0;
-            List<BlittableInt32Struct> seqList = (
-                await BlittableInt32StructParquet.From(ms).ToArrayAsync()
-            ).ToList();
+            var seqList = await BlittableInt32StructParquetExtensions.ReadParquetAsync(ms);
             seqList.Count.ShouldBe(count);
             seqList.ShouldBe(items);
 
             // 2. Sequential Stream Array Read
             ms.Position = 0;
-            var seqArray = await BlittableInt32StructParquet.From(ms).ToArrayAsync();
+            var seqArray = await BlittableInt32StructParquetExtensions.ReadParquetArrayAsync(ms);
             seqArray.ShouldBe(items);
 
             // 3. Sequential Bytes Array Read
-            var bytesArray = await BlittableInt32StructParquet.From(bytes).ToArrayAsync();
+            var bytesArray = await BlittableInt32StructParquetExtensions.ReadParquetArrayAsync(
+                bytes
+            );
             bytesArray.ShouldBe(items);
 
             // 4. Parallel Bytes Array Read
-            var parArray = await BlittableInt32StructParquet.From(bytes).Parallel().ToArrayAsync();
+            var parArray =
+                await BlittableInt32StructParquetExtensions.ReadParquetParallelArrayAsync(bytes);
             parArray.ShouldBe(items);
 
-            // 5. Parallel Bytes Read, converted to a List
-            List<BlittableInt32Struct> parList = (
-                await BlittableInt32StructParquet.From(bytes).Parallel().ToArrayAsync()
-            ).ToList();
+            // 5. Parallel Bytes List Read
+            var parList = await BlittableInt32StructParquetExtensions.ReadParquetParallelAsync(
+                bytes
+            );
             parList.ShouldBe(items);
         }
     }
@@ -213,8 +214,9 @@ public sealed class BlittableStructPropertyTests
             await items.WriteParquetAsync(ms);
             byte[] bytes = ms.ToArray();
 
-            var seqArray = await BlittableInt64StructParquet.From(bytes).ToArrayAsync();
-            var parArray = await BlittableInt64StructParquet.From(bytes).Parallel().ToArrayAsync();
+            var seqArray = await BlittableInt64StructParquetExtensions.ReadParquetArrayAsync(bytes);
+            var parArray =
+                await BlittableInt64StructParquetExtensions.ReadParquetParallelArrayAsync(bytes);
 
             seqArray.ShouldBe(items);
             parArray.ShouldBe(items);
@@ -248,25 +250,33 @@ public sealed class BlittableStructPropertyTests
             // UInt8
             using var ms8 = new MemoryStream();
             await byteItems.WriteParquetAsync(ms8);
-            var res8 = await BlittableUInt8StructParquet.From(ms8.ToArray()).ToArrayAsync();
+            var res8 = await BlittableUInt8StructParquetExtensions.ReadParquetArrayAsync(
+                ms8.ToArray()
+            );
             res8.ShouldBe(byteItems);
 
             // UInt16
             using var ms16 = new MemoryStream();
             await ushortItems.WriteParquetAsync(ms16);
-            var res16 = await BlittableUInt16StructParquet.From(ms16.ToArray()).ToArrayAsync();
+            var res16 = await BlittableUInt16StructParquetExtensions.ReadParquetArrayAsync(
+                ms16.ToArray()
+            );
             res16.ShouldBe(ushortItems);
 
             // UInt32
             using var ms32 = new MemoryStream();
             await uintItems.WriteParquetAsync(ms32);
-            var res32 = await BlittableUInt32StructParquet.From(ms32.ToArray()).ToArrayAsync();
+            var res32 = await BlittableUInt32StructParquetExtensions.ReadParquetArrayAsync(
+                ms32.ToArray()
+            );
             res32.ShouldBe(uintItems);
 
             // UInt64
             using var ms64 = new MemoryStream();
             await ulongItems.WriteParquetAsync(ms64);
-            var res64 = await BlittableUInt64StructParquet.From(ms64.ToArray()).ToArrayAsync();
+            var res64 = await BlittableUInt64StructParquetExtensions.ReadParquetArrayAsync(
+                ms64.ToArray()
+            );
             res64.ShouldBe(ulongItems);
         }
     }
@@ -296,12 +306,16 @@ public sealed class BlittableStructPropertyTests
 
             using var ms8 = new MemoryStream();
             await sbyteItems.WriteParquetAsync(ms8);
-            var res8 = await BlittableInt8StructParquet.From(ms8.ToArray()).ToArrayAsync();
+            var res8 = await BlittableInt8StructParquetExtensions.ReadParquetArrayAsync(
+                ms8.ToArray()
+            );
             res8.ShouldBe(sbyteItems);
 
             using var ms16 = new MemoryStream();
             await shortItems.WriteParquetAsync(ms16);
-            var res16 = await BlittableInt16StructParquet.From(ms16.ToArray()).ToArrayAsync();
+            var res16 = await BlittableInt16StructParquetExtensions.ReadParquetArrayAsync(
+                ms16.ToArray()
+            );
             res16.ShouldBe(shortItems);
         }
     }
@@ -342,7 +356,9 @@ public sealed class BlittableStructPropertyTests
             await items.WriteParquetAsync(ms);
             byte[] bytes = ms.ToArray();
 
-            var readArray = await BlittableFloatStructParquet.From(bytes).ToArrayAsync();
+            var readArray = await BlittableFloatStructParquetExtensions.ReadParquetArrayAsync(
+                bytes
+            );
             readArray.Length.ShouldBe(count);
 
             for (int i = 0; i < count; i++)
@@ -399,7 +415,7 @@ public sealed class BlittableStructPropertyTests
             await items.WriteParquetAsync(ms);
 
             ms.Position = 0;
-            var readArray = await BlittableDoubleStructParquet.From(ms).ToArrayAsync();
+            var readArray = await BlittableDoubleStructParquetExtensions.ReadParquetArrayAsync(ms);
             readArray.Length.ShouldBe(count);
 
             for (int i = 0; i < count; i++)
@@ -440,7 +456,9 @@ public sealed class BlittableStructPropertyTests
 
             using var ms = new MemoryStream();
             await items.WriteParquetAsync(ms);
-            var read = await BlittableBoolStructParquet.From(ms.ToArray()).ToArrayAsync();
+            var read = await BlittableBoolStructParquetExtensions.ReadParquetArrayAsync(
+                ms.ToArray()
+            );
 
             read.Length.ShouldBe(count);
             read.ShouldBe(items);
@@ -481,14 +499,15 @@ public sealed class BlittableStructPropertyTests
 
         byte[] parquetBytes = ms.ToArray();
 
-        var seqArray = await BlittableInt32StructParquet.From(parquetBytes).ToArrayAsync();
-        var parArray = await BlittableInt32StructParquet
-            .From(parquetBytes)
-            .Parallel()
-            .ToArrayAsync();
-        var seqList = await BlittableInt32StructParquet
-            .From(new MemoryStream(parquetBytes))
-            .ToArrayAsync();
+        var seqArray = await BlittableInt32StructParquetExtensions.ReadParquetArrayAsync(
+            parquetBytes
+        );
+        var parArray = await BlittableInt32StructParquetExtensions.ReadParquetParallelArrayAsync(
+            parquetBytes
+        );
+        var seqList = await BlittableInt32StructParquetExtensions.ReadParquetAsync(
+            new MemoryStream(parquetBytes)
+        );
 
         seqArray.Length.ShouldBe(totalRows);
         seqArray.ShouldBe(allItems);
@@ -512,7 +531,7 @@ public sealed class BlittableStructPropertyTests
         await items.WriteParquetAsync(ms);
 
         ms.Position = 0;
-        var readArray = await StructWithIgnoredFieldParquet.From(ms).ToArrayAsync();
+        var readArray = await StructWithIgnoredFieldParquetExtensions.ReadParquetArrayAsync(ms);
 
         readArray.Length.ShouldBe(count);
         for (int i = 0; i < count; i++)
@@ -537,7 +556,7 @@ public sealed class BlittableStructPropertyTests
         await items.WriteParquetAsync(ms);
 
         ms.Position = 0;
-        var readArray = await StructWithPrivateFieldParquet.From(ms).ToArrayAsync();
+        var readArray = await StructWithPrivateFieldParquetExtensions.ReadParquetArrayAsync(ms);
 
         readArray.Length.ShouldBe(count);
         for (int i = 0; i < count; i++)

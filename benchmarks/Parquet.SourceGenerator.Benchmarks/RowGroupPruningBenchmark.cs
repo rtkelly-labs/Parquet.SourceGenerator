@@ -70,7 +70,10 @@ public class RowGroupPruningBenchmark
             .ToList();
 
         using var stream = new MemoryStream();
-        rows.WriteParquetAsync(stream, new ParquetSerializerOptions { RowGroupSize = RowGroupSize })
+        rows.WriteParquetBatchedAsync(
+                stream,
+                new ParquetSerializerOptions { RowGroupSize = RowGroupSize }
+            )
             .GetAwaiter()
             .GetResult();
         _parquet = stream.ToArray();
@@ -83,9 +86,9 @@ public class RowGroupPruningBenchmark
     [Benchmark(Baseline = true)]
     public async Task<int> ReadEverythingThenFilter()
     {
-        PrunableOrder[] all = await PrunableOrderParquet
-            .From(new MemoryStream(_parquet, writable: false))
-            .ToArrayAsync();
+        List<PrunableOrder> all = await PrunableOrderParquetExtensions.ReadParquetAsync(
+            new MemoryStream(_parquet, writable: false)
+        );
         return all.Count(o => o.OrderKey >= _threshold);
     }
 
@@ -94,10 +97,10 @@ public class RowGroupPruningBenchmark
     public async Task<int> PruneRowGroupsThenFilter()
     {
         long threshold = _threshold;
-        PrunableOrder[] candidates = await PrunableOrderParquet
-            .From(new MemoryStream(_parquet, writable: false))
-            .Where(meta => meta.OrderKey.MayContainAtLeast(threshold))
-            .ToArrayAsync();
+        List<PrunableOrder> candidates = await PrunableOrderParquetExtensions.ReadParquetAsync(
+            new MemoryStream(_parquet, writable: false),
+            predicate: meta => meta.OrderKey.MayContainAtLeast(threshold)
+        );
         return candidates.Count(o => o.OrderKey >= threshold);
     }
 }

@@ -13,20 +13,16 @@ permissions:
   contents: read
   pull-requests: write
 
-# A pull request's runs share one group, so a new push cancels the stale run. Each push to main gets
-# a group of its own and is never cancelled: its `derived` job publishes the baseline that pull
-# requests are diffed against, so every main commit has to finish. A shared group with
-# cancel-in-progress off would not be enough — GitHub keeps one pending run per group, and a third
-# push replaces the pending second.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  # Restore, build, test, pack and interop. Not itself a required check: the `build` job at the
-  # end of this file aggregates it with `derived`, and that is what branch protection requires.
-  test:
-    name: test
+  # The job name is the check name that branch protection matches on, so it is deliberately short,
+  # lowercase, and free of characters that are easy to mistype or that GitHub HTML-escapes when a
+  # doc is rendered. Treat it as an identifier: renaming it silently breaks any ruleset requiring it.
+  build:
+    name: build
     runs-on: ubuntu-latest
 
     steps:
@@ -34,9 +30,6 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           lfs: true
-
-      - name: Lint file extensions and naming conventions
-        uses: ls-lint/action@a87c5eb4fb26d7af1bd0adba203dd1e76f7e94eb # v2.3.2
 
       # Policy: Python (.py) files are strictly forbidden in this repository, with the sole exception
       # of scripts/generate_test_data.py used to generate cross-engine PyArrow format-compatibility datasets.
@@ -88,13 +81,10 @@ jobs:
           python-version: '3.11'
 
       - name: Install uv
-        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
-        with:
-          # Exact version: the action otherwise installs the latest uv on every run.
-          version: "0.12.21"
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
 
       - name: Restore solution dependencies
-        run: dotnet restore Parquet.SourceGenerator.slnx --locked-mode
+        run: dotnet restore Parquet.SourceGenerator.slnx
 
       - name: Audit Package Security & Vulnerabilities
         run: |
@@ -126,7 +116,7 @@ jobs:
         run: dotnet csharpier check .
 
       # The CI half of the API change contract (docs/18-API-CHANGE-CONTRACT.md). Build errors
-      # RS0016 and PARQAPI002 enforce "nothing exists outside a catalogue"; this enforces the
+      # PARQAPI001 and PARQAPI002 enforce "nothing exists outside a catalogue"; this enforces the
       # other half — "nothing is catalogued without a recorded semver decision" — which needs the
       # diff against the pull request's base and so cannot live in an analyzer. It also rejects the
       # `**Unapproved-by-design:**` escape-hatch marker, which suppresses those build errors for a
@@ -134,30 +124,82 @@ jobs:
       - name: Verify API Change Ledger
         env:
           GITHUB_BASE_REF: ${{ github.base_ref }}
-          # Push to main has no base ref; the pushed range stands in for it (#430).
-          GITHUB_EVENT_BEFORE: ${{ github.event.before }}
         run: dotnet run scripts/CheckApiLedger.cs
 
       - name: Build solution (Release)
         run: dotnet build Parquet.SourceGenerator.slnx --configuration Release --no-restore -warnaserror
 
-      # README.md and PACKAGE_README.md examples are compiled against the generator as a consumer
-      # references it (#596, 47 section 8: README examples use only the stable surface). The
-      # generator is already built above; this builds a snippet project from the tagged blocks and
-      # fails with the README line of any example that uses a removed or renamed member.
-      - name: Verify README Examples Compile
-        run: dotnet run scripts/CheckReadme.cs
+      # Layers 1 and 2 of #251 (docs/21-CODE-METRICS.md, docs/22-GENERATED-CODE-METRICS.md). The
+      # build above already enforces CA1502 / CA1505 / CA1506 against the thresholds in
+      # CodeMetricsConfig.txt, which is an absolute judgement and therefore the weaker half. This
+      # is the other half: checked-in, ordinal baselines of Roslyn's maintainability index,
+      # cyclomatic complexity, class coupling, inheritance depth and line counts, gated on DRIFT
+      # rather than on an absolute number — for every namespace, type and member under src/
+      # (metrics/*.metrics.txt), and for every emitted golden model
+      # (GoldenFiles/*.metrics.txt). It also validates CodeMetricsConfig.txt, because a single
+      # unrecognised entry in that file silently disables all three analyzers.
+      #
+      # This step is what proves cross-platform determinism: the baselines are regenerated here on
+      # ubuntu-latest / x64 from files a contributor generated on their own machine, and compared
+      # with no tolerance at all on every metric but one.
+      #
+      # It runs `dotnet run` on a file-based app whose Roslyn version is pinned in the script, so
+      # the numbers do not move when the runner's SDK does. NU1903 on Microsoft.Build.Tasks.Core
+      # and on Snappier is expected and unavoidable here: they are transitive dependencies of
+      # Microsoft.CodeAnalysis.Workspaces.MSBuild and of the Parquet.Net 4.25.0 pin the legacy
+      # golden file is measured against, no code from either is executed (MSBuildLocator binds the
+      # SDK's copy of the former; the latter is loaded only as a Roslyn metadata reference), and
+      # both are outside the solution the audit step above governs.
+      - name: Verify Code Metrics Baselines
+        run: |
+          status=0
+          dotnet run scripts/CodeMetrics.cs -- --summary code-metrics.md || status=$?
+          if [ -f code-metrics.md ]; then
+            cat code-metrics.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit $status
 
-      # #259: accepted property kinds and nesting shapes are derived from the parser and backend
-      # dials, then checked against the committed evidence map. A source change cannot silently
-      # widen the coverage envelope without adding evidence and reviewing its risk.
-      - name: Verify Coverage Envelope Map
-        run: dotnet run scripts/CoverageMap.cs
+      # Layer 3 of #251 (docs/23-DUPLICATION.md): token-level duplication across src/, gated on
+      # drift with zero tolerance — the layers 1 and 2 grammar. Emitted code is out of scope by
+      # design; generated output repeating itself is the design, not a defect.
+      - name: Verify Duplication Baseline
+        run: |
+          status=0
+          dotnet run scripts/Duplication.cs -- --summary duplication.md || status=$?
+          if [ -f duplication.md ]; then
+            cat duplication.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit $status
 
-      # The shared action keeps the committed-byte hash gate ahead of generation and sends all
-      # generated compatibility data to RUNNER_TEMP. Its structure is covered by a consistency test.
-      - name: Verify and Generate Test Data
-        uses: ./.github/actions/verify-test-data
+      # #252: the call graph — structure as a gated artifact. Edge drift, declared
+      # cycles (graph/callgraph.allowlist.txt), the fan-out ratchet, and the
+      # components-must-not-call-the-hub layering rule. docs/25-CALL-GRAPH.md states
+      # what the static approximation cannot see; the unresolved count rides in the
+      # baseline header so the blind spot is measured, not hidden.
+      - name: Verify Call-Graph Baselines
+        run: |
+          status=0
+          dotnet run scripts/CallGraph.cs || status=$?
+          if [ -f graph/callgraph-summary.md ]; then
+            cat graph/callgraph-summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit $status
+
+      # Dataset hash integrity is a gate on the COMMITTED bytes, so it must run
+      # before any generated compatibility datasets are created. The pinned
+      # hashes in test/data/fixture-manifest.json match the checked-in files only.
+      - name: Verify Checked-In Dataset Hash Integrity (pre-regeneration)
+        run: dotnet test Parquet.SourceGenerator.slnx --configuration Release --no-build --filter "Category=DatasetIntegrity" --verbosity normal
+
+      - name: Generate Python Test Datasets (PyArrow v1 & v2)
+        env:
+          PARQUET_TEST_DATA_OUTPUT_DIR: ${{ runner.temp }}/parquet-source-generator/data
+        run: uv run scripts/generate_test_data.py
+
+      - name: Generate C# Test Datasets (Parquet.Net)
+        env:
+          PARQUET_TEST_DATA_CSHARP_OUTPUT_DIR: ${{ runner.temp }}/parquet-source-generator/data_csharp
+        run: dotnet run --project test/Parquet.SourceGenerator.CLI/Parquet.SourceGenerator.CLI.csproj
 
       - name: Generate C# PyArrow Interop Output
         env:
@@ -172,16 +214,12 @@ jobs:
       - name: Install DuckDB CLI
         env:
           DUCKDB_VERSION: 1.5.4
-          # SHA-256 of duckdb_cli-linux-amd64.zip for the version above (matches the digest GitHub
-          # publishes for the release asset). Bump both together.
-          DUCKDB_SHA256: 1f2fa724fb054b3dbe1a9cbd13de5b76997d850e7087ec762ba88db04e0180cf
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/duckdb"
           curl --fail --silent --show-error --location \
             "https://github.com/duckdb/duckdb/releases/download/v${DUCKDB_VERSION}/duckdb_cli-linux-amd64.zip" \
             --output "$RUNNER_TEMP/duckdb/duckdb.zip"
-          echo "${DUCKDB_SHA256}  $RUNNER_TEMP/duckdb/duckdb.zip" | sha256sum --check --strict -
           unzip -oq "$RUNNER_TEMP/duckdb/duckdb.zip" -d "$RUNNER_TEMP/duckdb"
           chmod +x "$RUNNER_TEMP/duckdb/duckdb"
           echo "DUCKDB_BIN=$RUNNER_TEMP/duckdb/duckdb" >> "$GITHUB_ENV"
@@ -200,20 +238,10 @@ jobs:
       # newer JDKs refuse. Every SHA-256 is re-verified from the manifest before use, and all
       # tool dumps plus the source and corrupt files are uploaded when this gate fails.
       - name: Setup Java (Apache Parquet conformance tooling)
-        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
         with:
           distribution: temurin
           java-version: '17'
-
-      # The pinned jars are cached by manifest hash so a Maven Central outage (#692 failed on a
-      # transient 404 for a jar that exists) does not break pull requests. The cache is not
-      # trusted: --restore re-hashes every cached jar against the manifest and re-downloads,
-      # through the ordered mirror list with retries, any that is missing or does not match.
-      - name: Cache Apache Parquet Conformance Tooling
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
-        with:
-          path: ${{ runner.temp }}/apache-parquet-tools
-          key: apache-parquet-tools-${{ hashFiles('test/data/apache-conformance.json') }}
 
       - name: Restore Apache Parquet Conformance Tooling
         run: dotnet run scripts/VerifyApacheConformance.cs -- --restore "$RUNNER_TEMP/apache-parquet-tools"
@@ -242,16 +270,13 @@ jobs:
           # The version/schema-evolution matrix writes its per-cell record here so the run leaves
           # behind a compatibility report, not just a pass/fail.
           PARQUET_COMPAT_MATRIX_OUTPUT: ${{ runner.temp }}/parquet-source-generator/compatibility-matrix
-        run: dotnet test Parquet.SourceGenerator.slnx --configuration Release --no-build --filter "Category!=DatasetIntegrity&Category!=ExternalInterop" --verbosity normal --collect:"XPlat Code Coverage" --settings coverlet.runsettings --logger "trx;LogFileName=ci-core.trx"
+        run: dotnet test Parquet.SourceGenerator.slnx --configuration Release --no-build --filter "Category!=DatasetIntegrity&Category!=ExternalInterop" --verbosity normal --collect:"XPlat Code Coverage" --settings coverlet.runsettings
 
       - name: Verify Generated Reader With PyArrow Fixture
         env:
           PARQUET_PYARROW_INTEROP_INPUT: ${{ runner.temp }}/parquet-source-generator/data/pyarrow_interop_input.parquet
           DUCKDB_INTEROP_INPUT: ${{ runner.temp }}/parquet-source-generator/generated-duckdb.parquet
-        run: dotnet test Parquet.SourceGenerator.slnx --configuration Release --no-build --filter "Category=ExternalInterop" --verbosity normal --logger "trx;LogFileName=ci-external.trx"
-
-      - name: Verify Required Test Execution
-        run: dotnet run scripts/VerifyRequiredTestExecution.cs
+        run: dotnet test Parquet.SourceGenerator.slnx --configuration Release --no-build --filter "Category=ExternalInterop" --verbosity normal
 
       - name: Generate Code Coverage Summary & Evaluate Gate
         run: |
@@ -326,7 +351,38 @@ jobs:
 
       # Packing proves the packages build, not that they work. These steps consume them.
       - name: Verify Package Layout
-        uses: ./.github/actions/verify-package-layout
+        run: |
+          set -euo pipefail
+          cd artifacts
+          gen=$(ls Parquet.SourceGenerator.[0-9]*.nupkg)
+          genlegacy=$(ls Parquet.SourceGenerator.Legacy.[0-9]*.nupkg)
+          attrs=$(ls Parquet.SourceGenerator.Attributes.*.nupkg)
+          echo "::group::$gen contents"; unzip -Z1 "$gen"; echo "::endgroup::"
+          echo "::group::$genlegacy contents"; unzip -Z1 "$genlegacy"; echo "::endgroup::"
+
+          # The generator must ship as an analyzer and must NOT ship as a library: a lib/ entry
+          # means consumers compile against the generator and its Roslyn-facing internals.
+          unzip -Z1 "$gen" | grep -q '^analyzers/dotnet/cs/Parquet\.SourceGenerator\.dll$' \
+            || { echo "FAIL: generator missing from analyzers/dotnet/cs/"; exit 1; }
+          unzip -Z1 "$genlegacy" | grep -q '^analyzers/dotnet/cs/Parquet\.SourceGenerator\.Legacy\.dll$' \
+            || { echo "FAIL: Legacy generator missing from analyzers/dotnet/cs/"; exit 1; }
+          if unzip -Z1 "$gen" | grep -q '^lib/' || unzip -Z1 "$genlegacy" | grep -q '^lib/'; then
+            echo "FAIL: generator package contains lib/ entries; it must be analyzer-only:"
+            exit 1
+          fi
+
+          # Generated code references the attributes, so the dependency has to be declared.
+          unzip -p "$gen" '*.nuspec' | grep -q 'id="Parquet.SourceGenerator.Attributes"' \
+            || { echo "FAIL: generator .nuspec does not depend on the Attributes package"; exit 1; }
+          unzip -p "$genlegacy" '*.nuspec' | grep -q 'id="Parquet.SourceGenerator.Attributes"' \
+            || { echo "FAIL: Legacy generator .nuspec does not depend on the Attributes package"; exit 1; }
+
+          # The attributes package is a real runtime library and must carry assemblies.
+          for tfm in netstandard2.0 netstandard2.1 net8.0 net9.0; do
+            unzip -Z1 "$attrs" | grep -q "^lib/$tfm/Parquet\.SourceGenerator\.Attributes\.dll$" \
+              || { echo "FAIL: attributes package missing lib/$tfm"; exit 1; }
+          done
+          echo "Package layout OK."
 
       - name: Verify Package Consumption (v6 & Legacy packages on .NET 8 & .NET 9)
         run: |
@@ -428,390 +484,3 @@ jobs:
         with:
           name: nuget-packages
           path: ./artifacts/*.nupkg
-
-  # Derived review outputs (docs/17-GENERATED-API-BASELINES.md). The emitted source of each golden
-  # model, its signature-only public API, code metrics (src/ and generated), duplication and the
-  # call graph are generated from the code here and never checked in; every run uploads them as the
-  # `derived-outputs` artifact. On a push to main the same tree is also kept as
-  # `derived-baseline-<sha>`. On a pull request the merge base's tree is fetched from that artifact
-  # (or regenerated when it is missing), diffed against the head, and posted as ONE sticky comment,
-  # API changes first. Runs beside `test` rather than inside it, so it adds no wall-clock time;
-  # `build` below requires both.
-  #
-  # The gates that remain live here, on the head: golden models parse and compile, emitted code
-  # compiles against its GoldenModels/ declaration (ERRORS=0), CodeMetricsConfig.txt is valid
-  # (a malformed entry silently disables CA1502/CA1505/CA1506), and the call graph satisfies its
-  # cycle, fan-out and layering rules (docs/25-CALL-GRAPH.md). Nothing about the merge base can
-  # fail this job: the base already passed its own gates on its branch.
-  #
-  # NU1903 warnings on Microsoft.Build.Tasks.Core and Snappier from `dotnet run
-  # scripts/CodeMetrics.cs` are expected: transitive dependencies of Workspaces.MSBuild and of the
-  # Parquet.Net 4.25.0 pin the legacy golden model is measured against; neither executes here and
-  # both are outside the solution the audit step governs.
-  derived:
-    name: derived
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      # Find and download the merge base's `derived-baseline-<sha>` artifact from its main run.
-      actions: read
-      pull-requests: write
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          # The merge base must be reachable, to name it and, when its baseline is missing, to
-          # regenerate its side of the diff.
-          fetch-depth: 0
-
-      - name: Setup .NET SDK
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
-        with:
-          dotnet-version: |
-            8.0.x
-            10.0.x
-
-      - name: Restore dependencies
-        run: dotnet restore Parquet.SourceGenerator.slnx --locked-mode
-
-      # Named first, so the PR summary (read from git) is there even when producing the head's
-      # derived outputs fails.
-      - name: Name Merge Base
-        id: mb
-        if: github.event_name == 'pull_request'
-        env:
-          BASE_REF: ${{ github.base_ref }}
-        run: |
-          base=$(git merge-base "origin/$BASE_REF" HEAD)
-          echo "sha=$base" >> "$GITHUB_OUTPUT"
-          echo "head=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-          echo "label=$BASE_REF @ ${base:0:7}" >> "$GITHUB_OUTPUT"
-
-      - name: Produce Derived Outputs (head)
-        id: head
-        run: |
-          dotnet run scripts/DerivedOutputs.cs -- --out "$RUNNER_TEMP/derived/head"
-          for f in code-metrics.md duplication.md callgraph/callgraph-summary.md; do
-            cat "$RUNNER_TEMP/derived/head/$f" >> "$GITHUB_STEP_SUMMARY"
-            echo >> "$GITHUB_STEP_SUMMARY"
-          done
-
-      # The baseline for every commit on main, named by its SHA so a pull request can fetch exactly
-      # its merge base's outputs instead of rebuilding them. Only a head that passed its gates is
-      # published; a missing baseline (a failed or expired run) is regenerated by the consumer.
-      - name: Publish Main Baseline
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: derived-baseline-${{ github.sha }}
-          path: ${{ runner.temp }}/derived/head/
-          retention-days: 90
-          if-no-files-found: error
-
-      # The merge base's outputs. Fetched from the main run that published them; regenerated here
-      # in a worktree only when there is no such artifact — the base is another branch of a stack,
-      # its main run has not finished yet, or the artifact expired (90 days). Outputs are
-      # byte-identical across runs and runners, so a fetched baseline equals a regenerated one.
-      # Best effort: a failure here is reported in the comment, never as a failed check.
-      - name: Resolve Merge Base Outputs
-        id: base
-        if: github.event_name == 'pull_request' && steps.head.outcome == 'success'
-        continue-on-error: true
-        env:
-          BASE: ${{ steps.mb.outputs.sha }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-          out="$RUNNER_TEMP/derived/base"
-          name="derived-baseline-$BASE"
-          # The name alone proves nothing: any workflow run — a pull request that edits this file,
-          # a fork's run — can upload an artifact called derived-baseline-<sha>. Accept only one
-          # uploaded from this repository by a push run of ci.yml on main, at exactly this commit.
-          candidates=$(gh api --paginate "repos/$REPO/actions/artifacts?name=$name" --jq ".artifacts[]
-            | select((.expired | not)
-                and .workflow_run.head_sha == \"$BASE\"
-                and .workflow_run.head_branch == \"main\"
-                and .workflow_run.head_repository_id == .workflow_run.repository_id)
-            | .workflow_run.id" || true)
-          run_id=""
-          for candidate in $candidates; do
-            origin=$(gh api "repos/$REPO/actions/runs/$candidate" --jq '"\(.event) \(.path)"' || true)
-            if [ "$origin" = "push .github/workflows/ci.yml" ]; then
-              run_id=$candidate
-              break
-            fi
-            echo "Ignoring $name from run $candidate ($origin): not a push run of ci.yml."
-          done
-          if [ -n "$run_id" ] && gh run download "$run_id" --repo "$REPO" --name "$name" --dir "$out"; then
-            echo "source=\`$name\` from run $run_id" >> "$GITHUB_OUTPUT"
-          else
-            echo "No usable $name artifact; regenerating the merge base's outputs."
-            rm -rf "$out"
-            git worktree add "$RUNNER_TEMP/base-tree" "$BASE"
-            dotnet run scripts/DerivedOutputs.cs -- --repo "$RUNNER_TEMP/base-tree" --out "$out"
-            echo "source=regenerated in this run (no \`$name\` artifact)" >> "$GITHUB_OUTPUT"
-          fi
-
-      # The two HTML views (scripts/DerivedReport): the diff against the merge base, and the head's
-      # state as it is. Each is written only when there is something to show.
-      - name: Render Reports
-        if: always() && github.event_name == 'pull_request'
-        continue-on-error: true
-        env:
-          HEAD_STATUS: ${{ steps.head.outcome }}
-          BASE_STATUS: ${{ steps.base.outcome }}
-          BASE_LABEL: ${{ steps.mb.outputs.label }}
-          BASE_SOURCE: ${{ steps.base.outputs.source }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          report=scripts/DerivedReport/DerivedReport.cs
-          if [ "$HEAD_STATUS" = success ]; then
-            dotnet run "$report" -- state --tree "$RUNNER_TEMP/derived/head" \
-              --label "PR #$PR_NUMBER head" --html "$RUNNER_TEMP/derived-state.html"
-          fi
-          if [ "$HEAD_STATUS" = success ] && [ "$BASE_STATUS" = success ]; then
-            dotnet run "$report" -- diff --base "$RUNNER_TEMP/derived/base" \
-              --head "$RUNNER_TEMP/derived/head" --base-label "$BASE_LABEL" \
-              --base-source "$BASE_SOURCE" --repo . \
-              --base-commit "${{ steps.mb.outputs.sha }}" --head-commit "${{ steps.mb.outputs.head }}" \
-              --patch "$RUNNER_TEMP/derived/review.patch" --html "$RUNNER_TEMP/derived-diff.html"
-          fi
-
-      # Each uploaded unzipped (archive: false, which names the artifact after the file), so the
-      # comment's links download the pages themselves rather than zips.
-      - name: Upload Diff (HTML)
-        id: diff_html
-        if: always() && github.event_name == 'pull_request'
-        continue-on-error: true
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          path: ${{ runner.temp }}/derived-diff.html
-          archive: false
-          if-no-files-found: ignore
-
-      - name: Upload State (HTML)
-        id: state_html
-        if: always() && github.event_name == 'pull_request'
-        continue-on-error: true
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          path: ${{ runner.temp }}/derived-state.html
-          archive: false
-          if-no-files-found: ignore
-
-      # The PR summary. Rendered on every run, so the comment always describes this one: a diff,
-      # or a statement that the head failed or the base could not be produced.
-      - name: Render Review Comment
-        if: always() && github.event_name == 'pull_request'
-        continue-on-error: true
-        env:
-          HEAD_STATUS: ${{ steps.head.outcome }}
-          BASE_STATUS: ${{ steps.base.outcome }}
-          BASE_LABEL: ${{ steps.mb.outputs.label || github.base_ref }}
-          BASE_SOURCE: ${{ steps.base.outputs.source }}
-          DIFF_URL: ${{ steps.diff_html.outputs.artifact-url }}
-          STATE_URL: ${{ steps.state_html.outputs.artifact-url }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          mkdir -p "$RUNNER_TEMP/derived"
-          dotnet run scripts/DerivedReport/DerivedReport.cs -- diff \
-            --base "$RUNNER_TEMP/derived/base" --head "$RUNNER_TEMP/derived/head" \
-            --base-label "$BASE_LABEL" --base-source "$BASE_SOURCE" --repo . \
-            --base-commit "${{ steps.mb.outputs.sha }}" --head-commit "${{ steps.mb.outputs.head }}" \
-            --head-status "${HEAD_STATUS:-skipped}" --base-status "${BASE_STATUS:-skipped}" \
-            --diff-url "$DIFF_URL" --state-url "$STATE_URL" --artifact-url "$RUN_URL#artifacts" \
-            --comment "$RUNNER_TEMP/derived/review-diff.md"
-          cat "$RUNNER_TEMP/derived/review-diff.md" >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Upload Derived Outputs
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: derived-outputs
-          path: ${{ runner.temp }}/derived/
-          if-no-files-found: warn
-
-      # One comment per pull request, edited in place on every run, found by its marker. If the
-      # renderer itself failed, a minimal body still replaces the previous run's diff. A fork's
-      # token cannot write comments; the result is still in the step summary and the artifact, so
-      # that is not a failure.
-      - name: Update Sticky Review Comment
-        if: always() && github.event_name == 'pull_request'
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          # A re-run keeps its original event, so an old run re-run after a newer push would
-          # otherwise replace the current head's diff with its own. Only the current head posts.
-          current=$(gh api "repos/$REPO/pulls/$PR_NUMBER" --jq .head.sha)
-          if [ "$current" != "$HEAD_SHA" ]; then
-            echo "The PR head is now ${current:0:7}; this run is for ${HEAD_SHA:0:7}. Leaving the comment alone."
-            exit 0
-          fi
-          body="$RUNNER_TEMP/derived/review-diff.md"
-          if [ ! -s "$body" ]; then
-            mkdir -p "$(dirname "$body")"
-            printf '%s\n## Derived output: not rendered\n\nThe `derived` job failed before it could render a diff. See [the run](%s).\n' \
-              '<!-- derived-review-diff -->' "$RUN_URL" > "$body"
-          fi
-          id=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" --paginate \
-            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | contains("<!-- derived-review-diff -->"))) | .id' \
-            | head -n 1)
-          if [ -n "$id" ]; then
-            gh api --method PATCH "repos/$REPO/issues/comments/$id" -F "body=@$body" > /dev/null
-          else
-            gh pr comment "$PR_NUMBER" --repo "$REPO" --body-file "$body"
-          fi
-
-  # Every analyzer the shipped src/ projects run, run over the golden models' emitted source
-  # (docs/50-GENERATED-CODE-ANALYSIS.md). Any finding fails the job, and so the required `build`
-  # check: the baseline is empty and there is no list to add a rule to. Kept apart from `derived`
-  # so a red result names the rule and count, and so it gates without needing a base to diff.
-  #
-  # Two things keep it from passing by examining nothing. The script fails when the emitted files
-  # it compiled do not match the golden models declared in test/.../GoldenModels, or when either
-  # backend compiled none; and the positive control below runs the same pipeline over a seeded
-  # violation and fails unless the gate catches it in both backends (compare the zero-boxing IL
-  # gate, #467, and the coverage gate, #416).
-  generated-analysis:
-    name: generated-analysis
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-
-      - name: Setup .NET SDK
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
-        with:
-          dotnet-version: |
-            8.0.x
-            10.0.x
-
-      # Publishes each golden model's emitted source to artifacts/golden/ (gitignored).
-      - name: Publish golden outputs
-        run: >-
-          dotnet test test/Parquet.SourceGenerator.Tests/Parquet.SourceGenerator.Tests.csproj
-          --configuration Release --filter "FullyQualifiedName~GoldenCodeGenRegressionTests"
-
-      # Positive control: a seeded CA2007 violation in each backend must fail the gate.
-      - name: Positive control (a seeded violation must fail the gate)
-        run: dotnet run scripts/GeneratedCodeAnalysis.cs -- --self-test
-
-      # The summary is written even when the gate fails, so a red run still shows its table.
-      - name: Analyze emitted code
-        run: |
-          dotnet run scripts/GeneratedCodeAnalysis.cs -- --summary "$RUNNER_TEMP/generated-analysis.md"
-
-      - name: Publish analysis summary
-        if: always()
-        run: |
-          if [ -f "$RUNNER_TEMP/generated-analysis.md" ]; then
-            cat "$RUNNER_TEMP/generated-analysis.md" >> "$GITHUB_STEP_SUMMARY"
-          fi
-
-      - name: Upload generated-diagnostics.txt
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: generated-diagnostics
-          path: artifacts/analysis/generated-diagnostics.txt
-          if-no-files-found: error
-
-  # The required status check. The job name is the check name that branch protection matches on
-  # (.github/BRANCH_PROTECTION.md, REPO_REQUIRED_CHECKS_MAP in shared-utilities), so it is
-  # deliberately short, lowercase, and free of characters that are easy to mistype or that GitHub
-  # HTML-escapes. Treat it as an identifier: renaming it silently breaks the ruleset. It exists so
-  # the gates in `derived` (emitted code compiles, call-graph rules, CodeMetricsConfig.txt) and
-  # `generated-analysis` (analyzer findings in emitted code) block a merge exactly as the ones in
-  # `test` do, while the jobs still run in parallel.
-  # The Legacy package exists for .NET Framework. The compile-only net472 step in `test` proves it
-  # builds and nothing about running it (#565); this job executes the consumer on a real .NET
-  # Framework runtime (windows-latest): write, read, compression, batching and schema evolution
-  # scenarios, the blocked-SynchronizationContext round trip, and a file hand-off with net8.0 in both
-  # directions. It is part of the `build` aggregate and has no path filter, so a change outside src/
-  # cannot skip it and then leave a required check satisfied by absence. It builds its own two
-  # packages because artifacts do not cross jobs without extra steps.
-  net472-consumer:
-    name: net472-consumer
-    runs-on: windows-latest
-    timeout-minutes: 25
-    defaults:
-      run:
-        shell: bash
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-
-      - name: Setup .NET SDK
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
-        with:
-          dotnet-version: |
-            8.0.x
-            10.0.x
-
-      - name: Pack the Runtime and Legacy packages
-        run: |
-          set -euo pipefail
-          dotnet pack src/Parquet.SourceGenerator.Runtime/Parquet.SourceGenerator.Runtime.csproj \
-            --configuration Release --output artifacts -p:Version=0.0.0-net472.1
-          dotnet pack src/Parquet.SourceGenerator.Legacy/Parquet.SourceGenerator.Legacy.csproj \
-            --configuration Release --output artifacts -p:Version=0.0.0-net472.1
-          ls artifacts
-
-      # Executed, not compiled: `dotnet run` starts the net472 executable on the .NET Framework
-      # runtime of the runner. A missing method, binding redirect or System.Memory version skew
-      # fails here and passed ci.yml's compile-only step.
-      - name: Run the Legacy consumer on .NET Framework 4.7.2
-        run: |
-          set -euo pipefail
-          dotnet run --project test/PackageConsumptionLegacy/PackageConsumptionLegacy.csproj \
-            --framework net472 --configuration Release \
-            -p:GeneratorPackageVersion=0.0.0-net472.1 \
-            -p:RestorePackagesPath="$RUNNER_TEMP/consumption-packages-legacy-net472"
-
-      # The same file format has to cross runtimes: written by .NET Framework and read on .NET 8,
-      # and the reverse. Each leg prints the producer so a mislabelled run is visible.
-      - name: Hand a file between .NET Framework 4.7.2 and .NET 8
-        run: |
-          set -euo pipefail
-          dir="$RUNNER_TEMP/net472-interop"
-          mkdir -p "$dir"
-          project=test/PackageConsumptionLegacy/PackageConsumptionLegacy.csproj
-          net472=(dotnet run --project "$project" --framework net472 --configuration Release
-            -p:GeneratorPackageVersion=0.0.0-net472.1
-            -p:RestorePackagesPath="$RUNNER_TEMP/consumption-packages-legacy-net472")
-          net8=(dotnet run --project "$project" --framework net8.0 --configuration Release
-            -p:GeneratorPackageVersion=0.0.0-net472.1
-            -p:RestorePackagesPath="$RUNNER_TEMP/consumption-packages-legacy-net8")
-
-          "${net472[@]}" -- --write-interop "$dir/net472.parquet"
-          "${net8[@]}" -- --read-interop "$dir/net472.parquet" classic/net472
-          "${net8[@]}" -- --write-interop "$dir/net8.parquet"
-          "${net472[@]}" -- --read-interop "$dir/net8.parquet" classic/net8.0
-
-  build:
-    name: build
-    if: always()
-    needs: [test, derived, generated-analysis, net472-consumer]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Require test, derived, generated-analysis and net472-consumer
-        env:
-          TEST_RESULT: ${{ needs.test.result }}
-          DERIVED_RESULT: ${{ needs.derived.result }}
-          ANALYSIS_RESULT: ${{ needs.generated-analysis.result }}
-          NET472_RESULT: ${{ needs.net472-consumer.result }}
-        run: |
-          echo "test: $TEST_RESULT, derived: $DERIVED_RESULT, generated-analysis: $ANALYSIS_RESULT, net472-consumer: $NET472_RESULT"
-          if [ "$TEST_RESULT" != "success" ] || [ "$DERIVED_RESULT" != "success" ] || [ "$ANALYSIS_RESULT" != "success" ] || [ "$NET472_RESULT" != "success" ]; then
-            echo "::error::Required jobs did not all succeed (test=$TEST_RESULT, derived=$DERIVED_RESULT, generated-analysis=$ANALYSIS_RESULT, net472-consumer=$NET472_RESULT)."
-            exit 1
-          fi

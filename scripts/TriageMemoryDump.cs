@@ -1,7 +1,5 @@
 #pragma warning disable CA1305, MA0009, MA0011, MA0023, MA0047, CA1852
 
-#:package CliWrap@3.7.1
-
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -11,8 +9,6 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
-using CliWrap;
-using CliWrap.Buffered;
 
 // -----------------------------------------------------------------------------
 // TriageMemoryDump.cs
@@ -465,11 +461,20 @@ static (int exitCode, string stdout, string stderr) RunDotnet(string arguments)
     if (!File.Exists(dotnetHost))
         dotnetHost = "dotnet";
 
-    var env = new Dictionary<string, string?>();
+    var psi = new ProcessStartInfo
+    {
+        FileName = dotnetHost,
+        Arguments = arguments,
+        RedirectStandardOutput = true,
+        RedirectStandardError = true,
+        UseShellExecute = false,
+        CreateNoWindow = true,
+    };
+
     if (Directory.Exists(homeDotnetDir))
     {
-        env["DOTNET_ROOT"] = homeDotnetDir;
-        env["PATH"] =
+        psi.Environment["DOTNET_ROOT"] = homeDotnetDir;
+        psi.Environment["PATH"] =
             Path.Combine(homeDotnetDir, "tools")
             + Path.PathSeparator
             + homeDotnetDir
@@ -477,15 +482,12 @@ static (int exitCode, string stdout, string stderr) RunDotnet(string arguments)
             + Environment.GetEnvironmentVariable("PATH");
     }
 
-    var result = Cli.Wrap(dotnetHost)
-        .WithArguments(arguments)
-        .WithEnvironmentVariables(env)
-        .WithValidation(CommandResultValidation.None)
-        .ExecuteBufferedAsync()
-        .GetAwaiter()
-        .GetResult();
+    using var process = Process.Start(psi)!;
+    string stdout = process.StandardOutput.ReadToEnd();
+    string stderr = process.StandardError.ReadToEnd();
+    process.WaitForExit();
 
-    return (result.ExitCode, result.StandardOutput, result.StandardError);
+    return (process.ExitCode, stdout, stderr);
 }
 
 sealed record HeapTypeStat(string MethodTable, long Count, long TotalSizeBytes, string TypeName);

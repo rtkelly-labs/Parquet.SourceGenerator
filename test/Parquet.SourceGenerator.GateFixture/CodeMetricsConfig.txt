@@ -1,2 +1,0 @@
-# Fixture threshold: any method with more than one decision point exceeds it.
-CA1502: 1

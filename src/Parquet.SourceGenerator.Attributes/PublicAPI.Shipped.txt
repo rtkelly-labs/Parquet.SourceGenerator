@@ -1,0 +1,45 @@
+#nullable enable
+Parquet.SourceGenerator.ParquetColumnAttribute
+Parquet.SourceGenerator.ParquetColumnAttribute.Name.get -> string?
+Parquet.SourceGenerator.ParquetColumnAttribute.Name.set -> void
+Parquet.SourceGenerator.ParquetColumnAttribute.Order.get -> int
+Parquet.SourceGenerator.ParquetColumnAttribute.Order.set -> void
+Parquet.SourceGenerator.ParquetColumnAttribute.ParquetColumnAttribute() -> void
+Parquet.SourceGenerator.ParquetColumnAttribute.ParquetColumnAttribute(string! name) -> void
+Parquet.SourceGenerator.ParquetCompressionLevel
+Parquet.SourceGenerator.ParquetCompressionLevel.Fastest = 1 -> Parquet.SourceGenerator.ParquetCompressionLevel
+Parquet.SourceGenerator.ParquetCompressionLevel.NoCompression = 2 -> Parquet.SourceGenerator.ParquetCompressionLevel
+Parquet.SourceGenerator.ParquetCompressionLevel.Optimal = 0 -> Parquet.SourceGenerator.ParquetCompressionLevel
+Parquet.SourceGenerator.ParquetCompressionLevel.SmallestSize = 3 -> Parquet.SourceGenerator.ParquetCompressionLevel
+Parquet.SourceGenerator.ParquetCompressionMethod
+Parquet.SourceGenerator.ParquetCompressionMethod.Brotli = 4 -> Parquet.SourceGenerator.ParquetCompressionMethod
+Parquet.SourceGenerator.ParquetCompressionMethod.Gzip = 2 -> Parquet.SourceGenerator.ParquetCompressionMethod
+Parquet.SourceGenerator.ParquetCompressionMethod.Lz4 = 3 -> Parquet.SourceGenerator.ParquetCompressionMethod
+Parquet.SourceGenerator.ParquetCompressionMethod.None = 0 -> Parquet.SourceGenerator.ParquetCompressionMethod
+Parquet.SourceGenerator.ParquetCompressionMethod.Snappy = 1 -> Parquet.SourceGenerator.ParquetCompressionMethod
+Parquet.SourceGenerator.ParquetCompressionMethod.Zstd = 5 -> Parquet.SourceGenerator.ParquetCompressionMethod
+Parquet.SourceGenerator.ParquetDecimalAttribute
+Parquet.SourceGenerator.ParquetDecimalAttribute.ParquetDecimalAttribute(int precision, int scale) -> void
+Parquet.SourceGenerator.ParquetDecimalAttribute.Precision.get -> int
+Parquet.SourceGenerator.ParquetDecimalAttribute.Scale.get -> int
+Parquet.SourceGenerator.ParquetIgnoreAttribute
+Parquet.SourceGenerator.ParquetIgnoreAttribute.ParquetIgnoreAttribute() -> void
+Parquet.SourceGenerator.ParquetSerializableAttribute
+Parquet.SourceGenerator.ParquetSerializableAttribute.ParquetSerializableAttribute() -> void
+Parquet.SourceGenerator.ParquetSerializerOptions
+Parquet.SourceGenerator.ParquetSerializerOptions.CompressionLevel.get -> Parquet.SourceGenerator.ParquetCompressionLevel?
+Parquet.SourceGenerator.ParquetSerializerOptions.CompressionLevel.set -> void
+Parquet.SourceGenerator.ParquetSerializerOptions.CompressionMethod.get -> Parquet.SourceGenerator.ParquetCompressionMethod
+Parquet.SourceGenerator.ParquetSerializerOptions.CompressionMethod.set -> void
+Parquet.SourceGenerator.ParquetSerializerOptions.MaxDegreeOfParallelism.get -> int
+Parquet.SourceGenerator.ParquetSerializerOptions.MaxDegreeOfParallelism.set -> void
+Parquet.SourceGenerator.ParquetSerializerOptions.ParquetSerializerOptions() -> void
+Parquet.SourceGenerator.ParquetSerializerOptions.RowGroupSize.get -> int
+Parquet.SourceGenerator.ParquetSerializerOptions.RowGroupSize.set -> void
+Parquet.SourceGenerator.ParquetTimestampAttribute
+Parquet.SourceGenerator.ParquetTimestampAttribute.ParquetTimestampAttribute(Parquet.SourceGenerator.ParquetTimestampUnit unit) -> void
+Parquet.SourceGenerator.ParquetTimestampAttribute.Unit.get -> Parquet.SourceGenerator.ParquetTimestampUnit
+Parquet.SourceGenerator.ParquetTimestampUnit
+Parquet.SourceGenerator.ParquetTimestampUnit.Microseconds = 1 -> Parquet.SourceGenerator.ParquetTimestampUnit
+Parquet.SourceGenerator.ParquetTimestampUnit.Milliseconds = 0 -> Parquet.SourceGenerator.ParquetTimestampUnit
+static Parquet.SourceGenerator.ParquetSerializerOptions.Default.get -> Parquet.SourceGenerator.ParquetSerializerOptions!

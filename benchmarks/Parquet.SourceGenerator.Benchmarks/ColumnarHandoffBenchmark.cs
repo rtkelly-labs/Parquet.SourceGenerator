@@ -43,12 +43,10 @@ namespace Parquet.SourceGenerator.Benchmarks;
 public class ColumnarHandoffBenchmark
 {
     private List<BenchmarkTpchLineItem> _rows = null!;
-    private BenchmarkTpchLineItemBatch _batch;
+    private BenchmarkTpchLineItemColumnarBatch _batch;
 
-    [ParamsSource(nameof(Counts))]
+    [Params(10_000, 50_000)]
     public int Count { get; set; }
-
-    public static IEnumerable<int> Counts => BenchmarkParameterSource.GetCounts(10_000, 50_000);
 
     [GlobalSetup]
     public void Setup()
@@ -228,7 +226,7 @@ public class ColumnarHandoffBenchmark
     /// already owns buffers like these; building them is the premise of the API, not part of any
     /// measured path.
     /// </summary>
-    private static BenchmarkTpchLineItemBatch Transpose(List<BenchmarkTpchLineItem> rows)
+    private static BenchmarkTpchLineItemColumnarBatch Transpose(List<BenchmarkTpchLineItem> rows)
     {
         int count = rows.Count;
 
@@ -295,36 +293,37 @@ public class ColumnarHandoffBenchmark
             comment[i] = AsMemory(row.Comment);
         }
 
-        return new BenchmarkTpchLineItemBatch(
-            rowCount: count,
-            orderKey: orderKey.AsMemory(0, nOrderKey),
-            orderKeyDefinitionLevels: orderKeyDef.AsMemory(0, count),
-            partKey: partKey.AsMemory(0, nPartKey),
-            partKeyDefinitionLevels: partKeyDef.AsMemory(0, count),
-            suppKey: suppKey.AsMemory(0, nSuppKey),
-            suppKeyDefinitionLevels: suppKeyDef.AsMemory(0, count),
-            lineNumber: lineNumber.AsMemory(0, nLineNumber),
-            lineNumberDefinitionLevels: lineNumberDef.AsMemory(0, count),
-            quantity: quantity.AsMemory(0, nQuantity),
-            quantityDefinitionLevels: quantityDef.AsMemory(0, count),
-            extendedPrice: extendedPrice.AsMemory(0, nExtendedPrice),
-            extendedPriceDefinitionLevels: extendedPriceDef.AsMemory(0, count),
-            discount: discount.AsMemory(0, nDiscount),
-            discountDefinitionLevels: discountDef.AsMemory(0, count),
-            tax: tax.AsMemory(0, nTax),
-            taxDefinitionLevels: taxDef.AsMemory(0, count),
-            returnFlag: returnFlag.AsMemory(0, count),
-            lineStatus: lineStatus.AsMemory(0, count),
-            shipDate: shipDate.AsMemory(0, nShipDate),
-            shipDateDefinitionLevels: shipDateDef.AsMemory(0, count),
-            commitDate: commitDate.AsMemory(0, nCommitDate),
-            commitDateDefinitionLevels: commitDateDef.AsMemory(0, count),
-            receiptDate: receiptDate.AsMemory(0, nReceiptDate),
-            receiptDateDefinitionLevels: receiptDateDef.AsMemory(0, count),
-            shipInstruct: shipInstruct.AsMemory(0, count),
-            shipMode: shipMode.AsMemory(0, count),
-            comment: comment.AsMemory(0, count)
-        );
+        return new BenchmarkTpchLineItemColumnarBatch
+        {
+            RowCount = count,
+            OrderKey = orderKey.AsMemory(0, nOrderKey),
+            OrderKeyDefinitionLevels = orderKeyDef.AsMemory(0, count),
+            PartKey = partKey.AsMemory(0, nPartKey),
+            PartKeyDefinitionLevels = partKeyDef.AsMemory(0, count),
+            SuppKey = suppKey.AsMemory(0, nSuppKey),
+            SuppKeyDefinitionLevels = suppKeyDef.AsMemory(0, count),
+            LineNumber = lineNumber.AsMemory(0, nLineNumber),
+            LineNumberDefinitionLevels = lineNumberDef.AsMemory(0, count),
+            Quantity = quantity.AsMemory(0, nQuantity),
+            QuantityDefinitionLevels = quantityDef.AsMemory(0, count),
+            ExtendedPrice = extendedPrice.AsMemory(0, nExtendedPrice),
+            ExtendedPriceDefinitionLevels = extendedPriceDef.AsMemory(0, count),
+            Discount = discount.AsMemory(0, nDiscount),
+            DiscountDefinitionLevels = discountDef.AsMemory(0, count),
+            Tax = tax.AsMemory(0, nTax),
+            TaxDefinitionLevels = taxDef.AsMemory(0, count),
+            ReturnFlag = returnFlag.AsMemory(0, count),
+            LineStatus = lineStatus.AsMemory(0, count),
+            ShipDate = shipDate.AsMemory(0, nShipDate),
+            ShipDateDefinitionLevels = shipDateDef.AsMemory(0, count),
+            CommitDate = commitDate.AsMemory(0, nCommitDate),
+            CommitDateDefinitionLevels = commitDateDef.AsMemory(0, count),
+            ReceiptDate = receiptDate.AsMemory(0, nReceiptDate),
+            ReceiptDateDefinitionLevels = receiptDateDef.AsMemory(0, count),
+            ShipInstruct = shipInstruct.AsMemory(0, count),
+            ShipMode = shipMode.AsMemory(0, count),
+            Comment = comment.AsMemory(0, count),
+        };
     }
 
     private static void Pack<T>(

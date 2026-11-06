@@ -1,0 +1,79 @@
+#nullable enable
+~override Parquet.SourceGenerator.Models.DiagnosticInfo.Equals(object obj) -> bool
+~override Parquet.SourceGenerator.Models.DiagnosticInfo.ToString() -> string
+const Parquet.SourceGenerator.Parser.TargetParser.MaxCompoundDepth = 6 -> int
+override Parquet.SourceGenerator.Models.PropertyModel.Equals(object? obj) -> bool
+override Parquet.SourceGenerator.Models.PropertyModel.GetHashCode() -> int
+override Parquet.SourceGenerator.Models.PropertyModel.ToString() -> string!
+override Parquet.SourceGenerator.Models.TargetClassModel.Equals(object? obj) -> bool
+override Parquet.SourceGenerator.Models.TargetClassModel.GetHashCode() -> int
+override Parquet.SourceGenerator.Models.TargetClassModel.ToString() -> string!
+override Parquet.SourceGenerator.Parser.TargetParserResult.Equals(object? obj) -> bool
+override Parquet.SourceGenerator.Parser.TargetParserResult.GetHashCode() -> int
+override Parquet.SourceGenerator.Parser.TargetParserResult.ToString() -> string!
+Parquet.SourceGenerator.Models.ColumnEncoding
+Parquet.SourceGenerator.Models.ColumnEncoding.ByteSplitStream = 3 -> Parquet.SourceGenerator.Models.ColumnEncoding
+Parquet.SourceGenerator.Models.ColumnEncoding.Default = 0 -> Parquet.SourceGenerator.Models.ColumnEncoding
+Parquet.SourceGenerator.Models.ColumnEncoding.DeltaBinaryPacked = 2 -> Parquet.SourceGenerator.Models.ColumnEncoding
+Parquet.SourceGenerator.Models.ColumnEncoding.Dictionary = 1 -> Parquet.SourceGenerator.Models.ColumnEncoding
+Parquet.SourceGenerator.Models.DiagnosticInfo.Deconstruct(out Microsoft.CodeAnalysis.DiagnosticDescriptor! Descriptor, out Microsoft.CodeAnalysis.Location! Location, out string![]! MessageArgs) -> void
+Parquet.SourceGenerator.Models.PropertyKind.DateOnly = 8 -> Parquet.SourceGenerator.Models.PropertyKind
+Parquet.SourceGenerator.Models.PropertyKind.List = 10 -> Parquet.SourceGenerator.Models.PropertyKind
+Parquet.SourceGenerator.Models.PropertyKind.Map = 11 -> Parquet.SourceGenerator.Models.PropertyKind
+Parquet.SourceGenerator.Models.PropertyKind.Struct = 9 -> Parquet.SourceGenerator.Models.PropertyKind
+Parquet.SourceGenerator.Models.PropertyKind.TimeOnly = 7 -> Parquet.SourceGenerator.Models.PropertyKind
+Parquet.SourceGenerator.Models.PropertyModel.<Clone>$() -> Parquet.SourceGenerator.Models.PropertyModel!
+Parquet.SourceGenerator.Models.PropertyModel.Children.get -> Parquet.SourceGenerator.Models.EquatableArray<Parquet.SourceGenerator.Models.PropertyModel!>
+Parquet.SourceGenerator.Models.PropertyModel.Children.init -> void
+Parquet.SourceGenerator.Models.PropertyModel.CompoundIsValueType.get -> bool
+Parquet.SourceGenerator.Models.PropertyModel.CompoundIsValueType.init -> void
+Parquet.SourceGenerator.Models.PropertyModel.Deconstruct(out string! Name, out string! ParquetColumnName, out string! TypeName, out string? TimestampUnit, out string? EnumUnderlyingTypeName, out int Order, out int? DecimalPrecision, out int? DecimalScale, out Parquet.SourceGenerator.Models.PropertyKind Kind, out bool IsNullable, out bool Deduplicate, out Parquet.SourceGenerator.Models.ColumnEncoding Encoding) -> void
+Parquet.SourceGenerator.Models.PropertyModel.Deduplicate.get -> bool
+Parquet.SourceGenerator.Models.PropertyModel.Deduplicate.init -> void
+Parquet.SourceGenerator.Models.PropertyModel.Element.get -> Parquet.SourceGenerator.Models.PropertyModel?
+Parquet.SourceGenerator.Models.PropertyModel.Element.init -> void
+Parquet.SourceGenerator.Models.PropertyModel.Encoding.get -> Parquet.SourceGenerator.Models.ColumnEncoding
+Parquet.SourceGenerator.Models.PropertyModel.Encoding.init -> void
+Parquet.SourceGenerator.Models.PropertyModel.Equals(Parquet.SourceGenerator.Models.PropertyModel? other) -> bool
+Parquet.SourceGenerator.Models.PropertyModel.MapValue.get -> Parquet.SourceGenerator.Models.PropertyModel?
+Parquet.SourceGenerator.Models.PropertyModel.MapValue.init -> void
+Parquet.SourceGenerator.Models.PropertyModel.PropertyModel(string! Name, string! ParquetColumnName, string! TypeName, string? TimestampUnit, string? EnumUnderlyingTypeName, int Order, int? DecimalPrecision, int? DecimalScale, Parquet.SourceGenerator.Models.PropertyKind Kind, bool IsNullable, bool Deduplicate = false, Parquet.SourceGenerator.Models.ColumnEncoding Encoding = Parquet.SourceGenerator.Models.ColumnEncoding.Default) -> void
+Parquet.SourceGenerator.Models.PropertyModel.PropertyModel(string! Name, string! ParquetColumnName, string! TypeName, string? TimestampUnit, string? EnumUnderlyingTypeName, int Order, int? DecimalPrecision, int? DecimalScale, Parquet.SourceGenerator.Models.PropertyKind Kind, bool IsNullable, bool Deduplicate) -> void
+Parquet.SourceGenerator.Models.TargetClassModel.<Clone>$() -> Parquet.SourceGenerator.Models.TargetClassModel!
+Parquet.SourceGenerator.Models.TargetClassModel.Deconstruct(out string! Namespace, out string! ClassName, out Parquet.SourceGenerator.Models.EquatableArray<Parquet.SourceGenerator.Models.PropertyModel!> Properties, out bool IsValueType, out bool IsUnmanaged, out bool HasSingleInstanceField) -> void
+Parquet.SourceGenerator.Models.TargetClassModel.Equals(Parquet.SourceGenerator.Models.TargetClassModel? other) -> bool
+Parquet.SourceGenerator.Models.TargetClassModel.HasSingleInstanceField.get -> bool
+Parquet.SourceGenerator.Models.TargetClassModel.HasSingleInstanceField.init -> void
+Parquet.SourceGenerator.Models.TargetClassModel.IsUnmanaged.get -> bool
+Parquet.SourceGenerator.Models.TargetClassModel.IsUnmanaged.init -> void
+Parquet.SourceGenerator.Models.TargetClassModel.IsValueType.get -> bool
+Parquet.SourceGenerator.Models.TargetClassModel.IsValueType.init -> void
+Parquet.SourceGenerator.Models.TargetClassModel.TargetClassModel(string! Namespace, string! ClassName, Parquet.SourceGenerator.Models.EquatableArray<Parquet.SourceGenerator.Models.PropertyModel!> Properties, bool IsValueType = false, bool IsUnmanaged = false, bool HasSingleInstanceField = false) -> void
+Parquet.SourceGenerator.Models.TargetClassModel.TargetClassModel(string! Namespace, string! ClassName, Parquet.SourceGenerator.Models.EquatableArray<Parquet.SourceGenerator.Models.PropertyModel!> Properties, bool IsValueType, bool IsUnmanaged) -> void
+Parquet.SourceGenerator.Parser.CompoundKinds
+Parquet.SourceGenerator.Parser.CompoundKinds.List = 2 -> Parquet.SourceGenerator.Parser.CompoundKinds
+Parquet.SourceGenerator.Parser.CompoundKinds.Map = 4 -> Parquet.SourceGenerator.Parser.CompoundKinds
+Parquet.SourceGenerator.Parser.CompoundKinds.None = 0 -> Parquet.SourceGenerator.Parser.CompoundKinds
+Parquet.SourceGenerator.Parser.CompoundKinds.Struct = 1 -> Parquet.SourceGenerator.Parser.CompoundKinds
+Parquet.SourceGenerator.Parser.TargetParserResult.<Clone>$() -> Parquet.SourceGenerator.Parser.TargetParserResult!
+Parquet.SourceGenerator.Parser.TargetParserResult.Deconstruct(out Parquet.SourceGenerator.Models.TargetClassModel? Model, out Parquet.SourceGenerator.Models.EquatableArray<Parquet.SourceGenerator.Models.DiagnosticInfo> Diagnostics) -> void
+Parquet.SourceGenerator.Parser.TargetParserResult.Equals(Parquet.SourceGenerator.Parser.TargetParserResult? other) -> bool
+static Parquet.SourceGenerator.Models.DiagnosticInfo.operator !=(Parquet.SourceGenerator.Models.DiagnosticInfo left, Parquet.SourceGenerator.Models.DiagnosticInfo right) -> bool
+static Parquet.SourceGenerator.Models.DiagnosticInfo.operator ==(Parquet.SourceGenerator.Models.DiagnosticInfo left, Parquet.SourceGenerator.Models.DiagnosticInfo right) -> bool
+static Parquet.SourceGenerator.Models.PropertyModel.operator !=(Parquet.SourceGenerator.Models.PropertyModel? left, Parquet.SourceGenerator.Models.PropertyModel? right) -> bool
+static Parquet.SourceGenerator.Models.PropertyModel.operator ==(Parquet.SourceGenerator.Models.PropertyModel? left, Parquet.SourceGenerator.Models.PropertyModel? right) -> bool
+static Parquet.SourceGenerator.Models.TargetClassModel.operator !=(Parquet.SourceGenerator.Models.TargetClassModel? left, Parquet.SourceGenerator.Models.TargetClassModel? right) -> bool
+static Parquet.SourceGenerator.Models.TargetClassModel.operator ==(Parquet.SourceGenerator.Models.TargetClassModel? left, Parquet.SourceGenerator.Models.TargetClassModel? right) -> bool
+static Parquet.SourceGenerator.Parser.TargetParser.GetTargetModel(Microsoft.CodeAnalysis.GeneratorSyntaxContext context, Parquet.SourceGenerator.Parser.ParquetApiLevel apiLevel, bool allowCompoundTypes) -> Parquet.SourceGenerator.Parser.TargetParserResult!
+static Parquet.SourceGenerator.Parser.TargetParser.GetTargetModel(Microsoft.CodeAnalysis.GeneratorSyntaxContext context, Parquet.SourceGenerator.Parser.ParquetApiLevel apiLevel, Parquet.SourceGenerator.Parser.CompoundKinds compoundKinds) -> Parquet.SourceGenerator.Parser.TargetParserResult!
+static Parquet.SourceGenerator.Parser.TargetParser.GetTargetModel(Microsoft.CodeAnalysis.INamedTypeSymbol! typeSymbol, Parquet.SourceGenerator.Parser.ParquetApiLevel apiLevel, bool allowCompoundTypes) -> Parquet.SourceGenerator.Parser.TargetParserResult!
+static Parquet.SourceGenerator.Parser.TargetParser.GetTargetModel(Microsoft.CodeAnalysis.INamedTypeSymbol! typeSymbol, Parquet.SourceGenerator.Parser.ParquetApiLevel apiLevel, Parquet.SourceGenerator.Parser.CompoundKinds compoundKinds) -> Parquet.SourceGenerator.Parser.TargetParserResult!
+static Parquet.SourceGenerator.Parser.TargetParserResult.operator !=(Parquet.SourceGenerator.Parser.TargetParserResult? left, Parquet.SourceGenerator.Parser.TargetParserResult? right) -> bool
+static Parquet.SourceGenerator.Parser.TargetParserResult.operator ==(Parquet.SourceGenerator.Parser.TargetParserResult? left, Parquet.SourceGenerator.Parser.TargetParserResult? right) -> bool
+static readonly Parquet.SourceGenerator.Diagnostics.DiagnosticDescriptors.NestedTypeCycleDetected -> Microsoft.CodeAnalysis.DiagnosticDescriptor!
+static readonly Parquet.SourceGenerator.Diagnostics.DiagnosticDescriptors.NestedTypeTooDeep -> Microsoft.CodeAnalysis.DiagnosticDescriptor!
+Parquet.SourceGenerator.Models.PropertyModel.IsSortKey.get -> bool
+Parquet.SourceGenerator.Models.PropertyModel.IsSortKey.init -> void
+Parquet.SourceGenerator.Models.SortKeyEligibility
+static Parquet.SourceGenerator.Models.SortKeyEligibility.IsEligible(Parquet.SourceGenerator.Models.PropertyModel! property, out string! reason) -> bool
+static readonly Parquet.SourceGenerator.Diagnostics.DiagnosticDescriptors.SortKeyNotEligible -> Microsoft.CodeAnalysis.DiagnosticDescriptor!

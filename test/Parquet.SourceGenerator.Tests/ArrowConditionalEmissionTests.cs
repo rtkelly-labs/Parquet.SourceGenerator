@@ -268,44 +268,10 @@ public sealed class ArrowConditionalEmissionTests
         idBlock.ShouldNotContain("ArrayPool", Case.Sensitive);
 
         // The nullable long column cannot be zero-copy: values are packed and def levels derived
-        // from the validity bitmap, which does rent before the column is written.
+        // from the validity bitmap, which does rent.
         string qtyBlock = ColumnBlock(arrow, "// column 2: qty");
-        qtyBlock.ShouldContain("var lane_2 =", Case.Sensitive);
-        qtyBlock.ShouldContain("var levels_2 =", Case.Sensitive);
+        qtyBlock.ShouldContain("WriteAllPartsAsync<long>", Case.Sensitive);
         qtyBlock.ShouldContain("IsValid(row)", Case.Sensitive);
-    }
-
-    [Fact]
-    public void ArrowBridgeWritesAndReleasesEachColumnBeforeMaterializingTheNext()
-    {
-        ImmutableArray<GeneratedSourceResult> sources = Run(
-            CreateDriver(),
-            Compilation(FlatSource, withArrow: true),
-            out _
-        );
-
-        string arrow = sources
-            .Single(s => s.HintName.EndsWith(".Arrow.g.cs", StringComparison.Ordinal))
-            .SourceText.ToString();
-
-        arrow.ShouldNotContain("columnarBatch", Case.Sensitive);
-        arrow.ShouldContain("using (var groupWriter = writer.CreateRowGroup())", Case.Sensitive);
-        arrow.ShouldContain("await groupWriter.WriteAsync<int>(", Case.Sensitive);
-        arrow.ShouldContain("await groupWriter.WriteAllPartsAsync<long>(", Case.Sensitive);
-        arrow.ShouldNotContain(
-            "await writer.WriteParquetRowGroupAsync(columnarBatch, cancellationToken);",
-            Case.Sensitive
-        );
-
-        int write = arrow.IndexOf("await groupWriter.WriteAsync<int>(", StringComparison.Ordinal);
-        int cleanup = arrow.IndexOf(
-            "ArrayPool<int>.Shared.Return",
-            write,
-            StringComparison.Ordinal
-        );
-        (cleanup > write).ShouldBeTrue(
-            "the first pooled Arrow column must be returned after its write"
-        );
     }
 
     private static string ColumnBlock(string source, string marker)

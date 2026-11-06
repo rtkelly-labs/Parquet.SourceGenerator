@@ -3,9 +3,8 @@ name: Metrics Oracle (nightly)
 # #254: the independent check on scripts/CodeMetrics.cs. Metrics.exe (the Windows-only
 # Microsoft.CodeAnalysis.Metrics tool) and our bespoke computation both derive from
 # Roslyn's CodeAnalysisMetricData and should agree by construction; nothing else in the
-# repo verifies that they do. If they ever diverge, every number CodeMetrics.cs reports is
-# wrong in the same direction. Both tools measure the same checkout in this job; nothing
-# is compared against a checked-in file.
+# repo verifies that they do. If they ever diverge, every baseline number is wrong in the
+# same direction and the drift gate is holding a wrong baseline stable.
 #
 # It cannot run per-PR because the entry point is a .NET Framework Windows executable
 # (see docs/21-CODE-METRICS.md), and it is scheduled rather than push-triggered because
@@ -32,9 +31,6 @@ jobs:
     runs-on: windows-latest
     env:
       METRICS_VERSION: 5.6.0
-      # Metrics 5.6.0 embeds the Roslyn 4.12.0 Workspaces.MSBuild assembly but
-      # omits its BuildHost-netcore content from the package.
-      METRICS_WORKSPACES_VERSION: 4.12.0
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -47,37 +43,16 @@ jobs:
             10.0.x
 
       - name: Restore solution dependencies
-        run: dotnet restore Parquet.SourceGenerator.slnx --locked-mode
-
-      # The numbers under test: CodeMetrics.cs over this checkout, written outside the repo. It
-      # runs before Metrics.exe so a failure here is classified as infrastructure, not as a
-      # disagreement, by the issue step below.
-      - name: Measure with CodeMetrics.cs
-        shell: bash
-        run: dotnet run scripts/CodeMetrics.cs -- --src-only --out "$RUNNER_TEMP/metrics"
+        run: dotnet restore Parquet.SourceGenerator.slnx
 
       - name: Install Microsoft.CodeAnalysis.Metrics
         shell: bash
         run: |
           set -euo pipefail
           nuget install Microsoft.CodeAnalysis.Metrics -Version "$METRICS_VERSION" -OutputDirectory "$RUNNER_TEMP/pkg"
-          nuget install Microsoft.CodeAnalysis.Workspaces.MSBuild -Version "$METRICS_WORKSPACES_VERSION" -OutputDirectory "$RUNNER_TEMP/pkg"
-
-          metrics_root="$RUNNER_TEMP/pkg/Microsoft.CodeAnalysis.Metrics.$METRICS_VERSION"
-          build_host_source="$RUNNER_TEMP/pkg/Microsoft.CodeAnalysis.Workspaces.MSBuild.$METRICS_WORKSPACES_VERSION/contentFiles/any/any/BuildHost-netcore"
-          build_host_destination="$metrics_root/Metrics/BuildHost-netcore"
-
-          test -s "$metrics_root/Metrics/Metrics.exe"
-          test -s "$build_host_source/Microsoft.CodeAnalysis.Workspaces.MSBuild.BuildHost.dll"
-          test -s "$build_host_source/Microsoft.CodeAnalysis.Workspaces.MSBuild.BuildHost.deps.json"
-          test -s "$build_host_source/Microsoft.CodeAnalysis.Workspaces.MSBuild.BuildHost.runtimeconfig.json"
-
-          mkdir -p "$build_host_destination"
-          cp -R "$build_host_source/." "$build_host_destination/"
-          test -s "$build_host_destination/Microsoft.CodeAnalysis.Workspaces.MSBuild.BuildHost.dll"
+          test -x "$RUNNER_TEMP/pkg/Microsoft.CodeAnalysis.Metrics.$METRICS_VERSION/Metrics/Metrics.exe"
 
       - name: Run Metrics.exe over both generator projects
-        id: run_metrics
         shell: bash
         run: |
           set -euo pipefail
@@ -88,19 +63,22 @@ jobs:
             /out:"$RUNNER_TEMP/oracle.xml" /quiet
           test -s "$RUNNER_TEMP/oracle.xml"
 
-      - name: Compare Metrics.exe against CodeMetrics.cs
-        id: compare
+      - name: Compare against checked-in baselines
         shell: bash
         run: |
           set -uo pipefail
           export MSYS_NO_PATHCONV=1
           status=0
-          for name in Parquet.SourceGenerator Parquet.SourceGenerator.Legacy
+          for pair in \
+            "Parquet.SourceGenerator:metrics/Parquet.SourceGenerator.metrics.txt:Parquet.SourceGenerator.csproj" \
+            "Parquet.SourceGenerator.Legacy:metrics/Parquet.SourceGenerator.Legacy.metrics.txt:Parquet.SourceGenerator.Legacy.csproj"
           do
+            baseline=$(printf '%s' "$pair" | cut -d: -f2)
+            target=$(printf '%s' "$pair" | rev | cut -d: -f1 | rev)
             dotnet run scripts/MetricsOracleCompare.cs -- \
               --xml "$RUNNER_TEMP/oracle.xml" \
-              --baseline "$RUNNER_TEMP/metrics/$name.metrics.txt" \
-              --target "$name.csproj" \
+              --baseline "$baseline" \
+              --target "$target" \
               --summary oracle-report.md --append 2>&1 | tee -a oracle-output.log || status=1
           done
           echo "## Full oracle output" >> oracle-report.md
@@ -114,10 +92,9 @@ jobs:
           name: metrics-oracle-report
           path: |
             oracle-report.md
-            ${{ runner.temp }}/metrics/
           if-no-files-found: warn
 
-      - name: Open or update the oracle failure issue
+      - name: Open or update the disagreement issue
         if: failure()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -125,35 +102,20 @@ jobs:
         shell: bash
         run: |
           set -uo pipefail
-          metrics_outcome="${{ steps.run_metrics.outcome }}"
-          compare_outcome="${{ steps.compare.outcome }}"
+          gh label create metrics-oracle --color B60205 \
+            --description "Metrics.exe and scripts/CodeMetrics.cs disagree" --force >/dev/null 2>&1 || true
+          title="metrics oracle: Metrics.exe disagrees with CodeMetrics.cs baselines"
+          body="The nightly Metrics.exe oracle (#254) did not agree with the checked-in
+          \`metrics/*.metrics.txt\` baselines. The per-PR gate may be measuring the wrong
+          numbers until this is resolved.
 
-          if [ "$metrics_outcome" = "success" ] && [ "$compare_outcome" != "success" ]; then
-            label=metrics-oracle
-            title="metrics oracle: Metrics.exe disagrees with CodeMetrics.cs"
-            body="The nightly Metrics.exe oracle (#254) did not agree with the numbers
-            scripts/CodeMetrics.cs reports for the same commit. The per-PR metrics reports may
-            be wrong until this is resolved.
+          [Run]($RUN_URL) — full report in the \`metrics-oracle-report\` artifact.
 
-            [Run]($RUN_URL) — full report in the \`metrics-oracle-report\` artifact.
-
-            Tolerance: MI ±2, every other metric exact; type-level only (see
-            docs/24-METRICS-ORACLE.md for why)."
-          else
-            label=metrics-oracle-infrastructure
-            title="metrics oracle: CodeMetrics.cs or Metrics.exe execution failed"
-            body="The nightly Metrics.exe oracle could not complete its tool execution, so no metric comparison was performed.
-
-            [Run]($RUN_URL) — inspect the CodeMetrics.cs measurement and the Metrics.exe provisioning and execution logs.
-
-            This is an oracle infrastructure failure, not evidence that Metrics.exe disagrees with CodeMetrics.cs."
-          fi
-
-          gh label create "$label" --color B60205 \
-            --description "Metrics oracle failure requiring investigation" --force >/dev/null 2>&1 || true
-          existing=$(gh issue list --state open --label "$label" --json number --jq '.[0].number // empty')
+          Tolerance: MI ±2, every other metric exact; type-level only (see
+          docs/24-METRICS-ORACLE.md for why)."
+          existing=$(gh issue list --state open --label metrics-oracle --json number --jq '.[0].number // empty')
           if [ -n "$existing" ]; then
-            gh issue comment "$existing" --body "$body"
+            gh issue comment "$existing" --body "Disagreement recurred: [run]($RUN_URL)"
           else
-            gh issue create --title "$title" --body "$body" --label "$label"
+            gh issue create --title "$title" --body "$body" --label metrics-oracle
           fi

@@ -1,0 +1,2 @@
+# Golden files must not be reformatted; they verify exact generator code emission
+test/Parquet.SourceGenerator.Tests/GoldenFiles/**

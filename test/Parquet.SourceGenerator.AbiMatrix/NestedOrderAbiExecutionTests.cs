@@ -3,13 +3,12 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using SampleDomain.Models;
-using Shouldly;
 using Xunit;
 
 namespace Parquet.SourceGenerator.AbiMatrix;
 
 /// <summary>
-/// ABI Execution verification for frozen v1.0 compound generated code (issue #289, docs/architecture/adrs/0002-peer-study-protobuf.md §2.1).
+/// ABI Execution verification for frozen v1.0 compound generated code (issue #289, docs/27 §2.1).
 ///
 /// Verifies that historical, pre-generated compound NestedOrderParquetExtensions (exercising
 /// Dremel level shredding, WriteAllPartsAsync, and PropagateLevels) executes cleanly against
@@ -57,17 +56,17 @@ public sealed class NestedOrderAbiExecutionTests
         ms.Position = 0;
 
         List<NestedOrder> actual = await NestedOrderParquetExtensions.ReadParquetAsync(ms);
-        actual.Count.ShouldBe(3);
-        actual[0].Ship?.City.ShouldBe("Seattle");
-        actual[0].Ship?.Zip.ShouldBe(98101);
-        actual[0].Bill.City.ShouldBe("New York");
-        actual[0].Origin.X.ShouldBe(10);
-        actual[0].Start?.X.ShouldBe(1);
+        Assert.Equal(3, actual.Count);
+        Assert.Equal("Seattle", actual[0].Ship?.City);
+        Assert.Equal(98101, actual[0].Ship?.Zip);
+        Assert.Equal("New York", actual[0].Bill.City);
+        Assert.Equal(10, actual[0].Origin.X);
+        Assert.Equal(1, actual[0].Start?.X);
 
-        actual[1].Ship.ShouldBeNull();
-        actual[1].Bill.City.ShouldBe("Chicago");
-        actual[1].Bill.Zip.ShouldBeNull();
-        actual[1].Start.ShouldBeNull();
+        Assert.Null(actual[1].Ship);
+        Assert.Equal("Chicago", actual[1].Bill.City);
+        Assert.Null(actual[1].Bill.Zip);
+        Assert.Null(actual[1].Start);
     }
 
     [Fact]
@@ -79,10 +78,10 @@ public sealed class NestedOrderAbiExecutionTests
         ms.Position = 0;
 
         NestedOrder[] actual = await NestedOrderParquetExtensions.ReadParquetParallelArrayAsync(ms);
-        actual.Length.ShouldBe(3);
-        actual[0].Ship?.City.ShouldBe("Seattle");
-        actual[1].Ship.ShouldBeNull();
-        actual[1].Bill.City.ShouldBe("Chicago");
+        Assert.Equal(3, actual.Length);
+        Assert.Equal("Seattle", actual[0].Ship?.City);
+        Assert.Null(actual[1].Ship);
+        Assert.Equal("Chicago", actual[1].Bill.City);
     }
 
     [Fact]
@@ -99,9 +98,9 @@ public sealed class NestedOrderAbiExecutionTests
             actual.Add(order);
         }
 
-        actual.Count.ShouldBe(3);
-        actual[0].Ship?.City.ShouldBe("Seattle");
-        actual[1].Ship.ShouldBeNull();
+        Assert.Equal(3, actual.Count);
+        Assert.Equal("Seattle", actual[0].Ship?.City);
+        Assert.Null(actual[1].Ship);
     }
 
     [Fact]
@@ -113,7 +112,7 @@ public sealed class NestedOrderAbiExecutionTests
         byte[] bytes = ms.ToArray();
 
         List<NestedOrder> actual = await NestedOrderParquetExtensions.ReadParquetAsync(bytes);
-        actual.Count.ShouldBe(3);
-        actual[0].Ship?.City.ShouldBe("Seattle");
+        Assert.Equal(3, actual.Count);
+        Assert.Equal("Seattle", actual[0].Ship?.City);
     }
 }

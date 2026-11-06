@@ -4,13 +4,12 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using SampleDomain.Models;
-using Shouldly;
 using Xunit;
 
 namespace Parquet.SourceGenerator.AbiMatrix;
 
 /// <summary>
-/// ABI Execution verification for frozen v1.0 generated code (issue #289, docs/architecture/adrs/0002-peer-study-protobuf.md §2.1).
+/// ABI Execution verification for frozen v1.0 generated code (issue #289, docs/27 §2.1).
 ///
 /// Verifies that historical, pre-generated OrderEventParquetExtensions compiled into a consumer
 /// project continues to execute cleanly against the runtime Parquet.Net package without
@@ -47,24 +46,18 @@ public sealed class OrderEventAbiExecutionTests
         ms.Position = 0;
 
         List<OrderEvent> actual = await OrderEventParquetExtensions.ReadParquetAsync(ms);
-        actual.Count.ShouldBe(expected.Count);
+        Assert.Equal(expected.Count, actual.Count);
         for (int i = 0; i < expected.Count; i++)
         {
-            actual[i].Id.ShouldBe(expected[i].Id);
-            actual[i].Name.ShouldBe(expected[i].Name);
-            actual[i].Score.ShouldBe(expected[i].Score);
-            // The frozen v1.0 code predates the .NET 11 decimal correction (ParquetDecimalScale),
-            // so on .NET 11 it returns Parquet.Net's inexact decimal(18,4) values. This test is
-            // about linkage, so it applies the correction current generated code applies;
-            // regenerating with the current package is what fixes the values for a consumer.
-            decimal[] price = [actual[i].Price];
-            ParquetDecimalScale.RestoreIntegerScaled(price, 4);
-            price[0].ShouldBe(expected[i].Price);
-            actual[i].CreatedAt.ShouldBe(expected[i].CreatedAt);
-            actual[i].Duration.ShouldBe(expected[i].Duration);
-            actual[i].CorrelationId.ShouldBe(expected[i].CorrelationId);
-            actual[i].OptionalGuid.ShouldBe(expected[i].OptionalGuid);
-            actual[i].Payload.ShouldBe(expected[i].Payload);
+            Assert.Equal(expected[i].Id, actual[i].Id);
+            Assert.Equal(expected[i].Name, actual[i].Name);
+            Assert.Equal(expected[i].Score, actual[i].Score);
+            Assert.Equal(expected[i].Price, actual[i].Price);
+            Assert.Equal(expected[i].CreatedAt, actual[i].CreatedAt);
+            Assert.Equal(expected[i].Duration, actual[i].Duration);
+            Assert.Equal(expected[i].CorrelationId, actual[i].CorrelationId);
+            Assert.Equal(expected[i].OptionalGuid, actual[i].OptionalGuid);
+            Assert.Equal(expected[i].Payload, actual[i].Payload);
         }
     }
 
@@ -80,11 +73,11 @@ public sealed class OrderEventAbiExecutionTests
         ms.Position = 0;
 
         OrderEvent[] actual = await OrderEventParquetExtensions.ReadParquetParallelArrayAsync(ms);
-        actual.Length.ShouldBe(expected.Count);
+        Assert.Equal(expected.Count, actual.Length);
         for (int i = 0; i < expected.Count; i++)
         {
-            actual[i].Id.ShouldBe(expected[i].Id);
-            actual[i].CorrelationId.ShouldBe(expected[i].CorrelationId);
+            Assert.Equal(expected[i].Id, actual[i].Id);
+            Assert.Equal(expected[i].CorrelationId, actual[i].CorrelationId);
         }
     }
 
@@ -102,9 +95,9 @@ public sealed class OrderEventAbiExecutionTests
             actual.Add(evt);
         }
 
-        actual.Count.ShouldBe(expected.Count);
-        actual[0].Id.ShouldBe(expected[0].Id);
-        actual[14].Id.ShouldBe(expected[14].Id);
+        Assert.Equal(expected.Count, actual.Count);
+        Assert.Equal(expected[0].Id, actual[0].Id);
+        Assert.Equal(expected[14].Id, actual[14].Id);
     }
 
     [Fact]
@@ -116,7 +109,7 @@ public sealed class OrderEventAbiExecutionTests
         byte[] bytes = ms.ToArray();
 
         List<OrderEvent> actual = await OrderEventParquetExtensions.ReadParquetAsync(bytes);
-        actual.Count.ShouldBe(expected.Count);
-        actual[0].Name.ShouldBe(expected[0].Name);
+        Assert.Equal(expected.Count, actual.Count);
+        Assert.Equal(expected[0].Name, actual[0].Name);
     }
 }

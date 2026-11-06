@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
-using Parquet.SourceGenerator.Emitter.Components;
 using Parquet.SourceGenerator.Emitter.Compound;
 using Parquet.SourceGenerator.Models;
 
@@ -80,19 +79,22 @@ internal static class RowGroupPruningComponent
             ? $"global::{MetadataTypeName(model)}"
             : $"global::{model.Namespace}.{MetadataTypeName(model)}";
 
-    /// <summary>
-    /// The optional pruning predicate parameter, ending in a newline, for a read method's parameter
-    /// list. It precedes the trailing <c>CancellationToken</c> (CA1068); empty when the model has no
-    /// column whose statistics can be projected.
-    /// </summary>
-    public static string PredicateParameterLine(TargetClassModel model) =>
-        IsEnabled(model)
-            ? $"        global::System.Func<{QualifiedMetadataTypeName(model)}, bool>? predicate = null,\n"
-            : string.Empty;
+    /// <summary>The predicate parameter line appended to a read method's parameter list.</summary>
+    public static string PredicateParameter(TargetClassModel model) =>
+        $"        global::System.Func<{QualifiedMetadataTypeName(model)}, bool>? predicate = null";
 
-    /// <summary>Argument text forwarding the predicate (before the token) to a delegating overload.</summary>
-    public static string ForwardPredicate(TargetClassModel model) =>
-        IsEnabled(model) ? "predicate, " : string.Empty;
+    /// <summary>
+    /// Closing text for a read method's parameter list: appends the optional pruning predicate
+    /// when the model has at least one column whose statistics can be projected.
+    /// </summary>
+    public static string SignatureSuffix(TargetClassModel model) =>
+        IsEnabled(model)
+            ? $",\n        global::System.Func<{QualifiedMetadataTypeName(model)}, bool>? predicate = null)"
+            : ")";
+
+    /// <summary>Argument text forwarding the predicate to a delegating overload.</summary>
+    public static string ForwardArgument(TargetClassModel model) =>
+        IsEnabled(model) ? ", predicate" : string.Empty;
 
     /// <summary>The call arguments passing every statistics column's resolved field to the guard.</summary>
     private static string FieldArguments(TargetClassModel model)
@@ -111,32 +113,19 @@ internal static class RowGroupPruningComponent
     /// opened and before any column read, so a rejected group never touches a data page.
     /// </summary>
     public static void EmitLoopGuard(
-        IndentedWriter writer,
+        StringBuilder builder,
         TargetClassModel model,
+        string indent,
         string groupReaderVar = "groupReader",
         string indexVar = "r"
     )
     {
         if (!IsEnabled(model))
             return;
-        writer.Line(
-            $"if (!AcceptRowGroup(predicate, {groupReaderVar}, {indexVar}{FieldArguments(model)})) continue;"
+        builder.AppendLine(
+            $"{indent}if (!AcceptRowGroup(predicate, {groupReaderVar}, {indexVar}{FieldArguments(model)})) continue;"
         );
     }
-
-    public static void EmitLoopGuard(
-        StringBuilder builder,
-        TargetClassModel model,
-        string indent,
-        string groupReaderVar = "groupReader",
-        string indexVar = "r"
-    ) =>
-        EmitLoopGuard(
-            new IndentedWriter(builder) { IndentLevel = indent.Length / 4 },
-            model,
-            groupReaderVar,
-            indexVar
-        );
 
     /// <summary>
     /// Emits the pre-pass that decides which row groups survive and how many rows they hold, so a
@@ -151,7 +140,9 @@ internal static class RowGroupPruningComponent
     {
         if (!IsEnabled(model))
         {
-            builder.AppendLine($"        int {totalRowsVar} = SumRowGroupRows(reader, options);");
+            builder.AppendLine(
+                $"        int {totalRowsVar} = (int)global::System.Linq.Enumerable.Sum(reader.RowGroups, rg => rg.RowCount);"
+            );
             return;
         }
 
@@ -225,18 +216,16 @@ internal static class RowGroupPruningComponent
     }
 
     /// <summary>Emits the cheap per-iteration test against the pre-pass result.</summary>
-    public static void EmitSelectionCheck(IndentedWriter writer, TargetClassModel model)
-    {
-        if (!IsEnabled(model))
-            return;
-        writer.Line("if (selectedGroups != null && !selectedGroups[r]) continue;");
-    }
-
     public static void EmitSelectionCheck(
         StringBuilder builder,
         TargetClassModel model,
         string indent
-    ) => EmitSelectionCheck(new IndentedWriter(builder) { IndentLevel = indent.Length / 4 }, model);
+    )
+    {
+        if (!IsEnabled(model))
+            return;
+        builder.AppendLine($"{indent}if (selectedGroups != null && !selectedGroups[r]) continue;");
+    }
 
     /// <summary>
     /// Emits the guard method: projects one row group's column-chunk statistics onto the model's
@@ -246,7 +235,8 @@ internal static class RowGroupPruningComponent
     /// Constraint recorded per #264 (from closed #209's lesson): any future row-group PREFETCH
     /// (overlapped read-ahead of group pages) MUST consult this emitted <c>AcceptRowGroup</c>
     /// decision before decoding a group, or it silently pulls every skipped group back into the
-    /// page cache and undoes the pruning win it was meant to compose with. A revival of #209 that
+    /// page cache and undoes the pruning win it was meant to compose with. Same rule applies to
+    /// <see cref="SortedRowGroupPruningComponent"/>'s pruned-range core. A revival of #209 that
     /// ignores this turns pushdown into pure overhead.
     /// </remarks>
     public static void EmitAcceptRowGroup(StringBuilder builder, TargetClassModel model)
@@ -327,7 +317,7 @@ internal static class RowGroupPruningComponent
             builder.AppendLine(",");
             builder.Append(
                 $"            global::Parquet.SourceGenerator.ParquetColumnStatistics.FromRaw<{type}>("
-                    + $"stats_{col.Slot}!.MinValue, stats_{col.Slot}.MaxValue, stats_{col.Slot}.NullCount, stats_{col.Slot}.DistinctCount)"
+                    + $"stats_{col.Slot}!.MinValue, stats_{col.Slot}!.MaxValue, stats_{col.Slot}!.NullCount, stats_{col.Slot}!.DistinctCount)"
             );
         }
 
@@ -361,13 +351,8 @@ internal static class RowGroupPruningComponent
         builder.AppendLine("/// </summary>");
         builder.AppendLine($"public readonly struct {name}");
         builder.AppendLine("{");
-        builder.AppendLine(
-            "    /// <summary>Creates a row-group zone map. Only the generated reader constructs one; the"
-        );
-        builder.AppendLine(
-            "    /// parameters are emitter column slots, so the constructor is not public API.</summary>"
-        );
-        builder.AppendLine($"    internal {name}(");
+        builder.AppendLine("    /// <summary>Creates a row-group zone map.</summary>");
+        builder.AppendLine($"    public {name}(");
         builder.AppendLine("        int rowGroupIndex,");
         builder.AppendLine("        long rowCount,");
         builder.Append("        bool hasStatistics");
@@ -386,7 +371,7 @@ internal static class RowGroupPruningComponent
         builder.AppendLine("        HasStatistics = hasStatistics;");
         foreach (LeafColumn col in columns)
         {
-            builder.AppendLine($"        {EmittedText.Ident(col.Leaf.Name)} = column_{col.Slot};");
+            builder.AppendLine($"        {col.Leaf.Name} = column_{col.Slot};");
         }
 
         builder.AppendLine("    }");
@@ -411,10 +396,10 @@ internal static class RowGroupPruningComponent
         {
             builder.AppendLine();
             builder.AppendLine(
-                $"    /// <summary>Zone map for the <c>{EmittedText.XmlDoc(col.Leaf.ParquetColumnName)}</c> column.</summary>"
+                $"    /// <summary>Zone map for the <c>{col.Leaf.ParquetColumnName}</c> column.</summary>"
             );
             builder.AppendLine(
-                $"    public global::Parquet.SourceGenerator.ParquetColumnStatistics<{UnderlyingType(col.Leaf)}> {EmittedText.Ident(col.Leaf.Name)} {{ get; }}"
+                $"    public global::Parquet.SourceGenerator.ParquetColumnStatistics<{UnderlyingType(col.Leaf)}> {col.Leaf.Name} {{ get; }}"
             );
         }
 

@@ -81,10 +81,10 @@ public sealed class StringDeduplicationTests
         byte[] bytes = await CreateCategoricalParquetBytesAsync(200);
 
         var options = new ParquetSerializerOptions { DeduplicateStrings = true };
-        var results = await CategoricalRecordParquet
-            .From(bytes)
-            .WithOptions(options)
-            .ToArrayAsync();
+        var results = await CategoricalRecordParquetExtensions.ReadParquetArrayAsync(
+            bytes,
+            options
+        );
 
         results.Length.ShouldBe(200);
 
@@ -124,10 +124,10 @@ public sealed class StringDeduplicationTests
         byte[] bytes = await CreateCategoricalParquetBytesAsync(200);
 
         var options = new ParquetSerializerOptions { DeduplicateStrings = false };
-        var results = await CategoricalRecordParquet
-            .From(bytes)
-            .WithOptions(options)
-            .ToArrayAsync();
+        var results = await CategoricalRecordParquetExtensions.ReadParquetArrayAsync(
+            bytes,
+            options
+        );
 
         results.Length.ShouldBe(200);
 
@@ -147,10 +147,10 @@ public sealed class StringDeduplicationTests
 
         // Global DeduplicateStrings = false
         var options = new ParquetSerializerOptions { DeduplicateStrings = false };
-        var results = await ExplicitDeduplicateRecordParquet
-            .From(bytes)
-            .WithOptions(options)
-            .ToArrayAsync();
+        var results = await ExplicitDeduplicateRecordParquetExtensions.ReadParquetArrayAsync(
+            bytes,
+            options
+        );
 
         results.Length.ShouldBe(200);
 
@@ -182,10 +182,7 @@ public sealed class StringDeduplicationTests
 
         var items = new List<CategoricalRecord>();
         await foreach (
-            var item in CategoricalRecordParquet
-                .From(stream)
-                .WithOptions(options)
-                .AsAsyncEnumerable()
+            var item in CategoricalRecordParquetExtensions.ReadParquetStreamAsync(stream, options)
         )
         {
             items.Add(item);
@@ -209,11 +206,10 @@ public sealed class StringDeduplicationTests
             DeduplicateStrings = true,
             MaxDegreeOfParallelism = 2,
         };
-        var results = await CategoricalRecordParquet
-            .From(bytes)
-            .WithOptions(options)
-            .Parallel()
-            .ToArrayAsync();
+        var results = await CategoricalRecordParquetExtensions.ReadParquetParallelArrayAsync(
+            bytes,
+            options
+        );
 
         results.Length.ShouldBe(100);
         results[0]

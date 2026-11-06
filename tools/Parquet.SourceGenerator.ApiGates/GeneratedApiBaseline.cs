@@ -24,8 +24,8 @@ namespace Parquet.SourceGenerator.ApiGates;
 ///     are meaningful.</description></item>
 ///   <item><description>One member per line. Every line carries its fully-qualified containing
 ///     type, so a line is self-contained and does not change when an unrelated member is added or
-///     removed. One generated file routinely holds several types (the extensions class, the
-///     <c>&lt;Model&gt;Batch</c> struct, a row-group metadata struct).</description></item>
+///     removed. One generated file routinely holds several types (the extensions class, a nested
+///     <c>ColumnBatch</c>, a row-group metadata struct, a columnar batch struct).</description></item>
 ///   <item><description>A type contributes a bare line: <c>Ns.Type</c> — generic types keep their
 ///     type-parameter list, <c>Ns.Type&lt;T&gt;</c>.</description></item>
 ///   <item><description>Methods: <c>Ns.Type.Method(Type param, Type other = 4) -&gt; ReturnType</c>.
@@ -73,9 +73,6 @@ public static class GeneratedApiBaseline
 {
     /// <summary>First line of every baseline file, mirroring <c>PublicAPI.Shipped.txt</c>.</summary>
     public const string NullableHeader = "#nullable enable";
-
-    /// <summary>Header of the compact generated API shape summary companion.</summary>
-    public const string ShapeSummaryHeader = "# generated API shape summary";
 
     /// <summary>
     /// Modifiers that are part of the API contract, in the fixed order they are rendered. Rendering
@@ -132,133 +129,6 @@ public static class GeneratedApiBaseline
             .Count(line =>
                 line.Length > 0 && !string.Equals(line, NullableHeader, StringComparison.Ordinal)
             );
-
-    /// <summary>Renders the compact shape summary that accompanies a generated API baseline.</summary>
-    /// <remarks>
-    /// <para>
-    /// <c>PARAMETERS</c> counts parameter slots on externally reachable methods, constructors,
-    /// operators, conversions, indexers and delegates. Each overload contributes its own slots;
-    /// properties, fields and types contribute none. Unlike a hand-maintained count, the value is
-    /// derived from the same emitted source that produces the sibling <c>.api.txt</c> file.
-    /// </para>
-    /// <para>
-    /// The summary deliberately remains a separate, compact artefact. Adding its fields to the API
-    /// grammar would make a machine-readable shape measurement look like a public API signature.
-    /// </para>
-    /// </remarks>
-    /// <param name="emittedSource">Generated C# exactly as the emitter produced it.</param>
-    /// <returns>A deterministic, newline-terminated summary.</returns>
-    public static string CreateShapeSummary(string emittedSource)
-    {
-        string baseline = Create(emittedSource);
-        int parameterSlots = CountParameterSlots(emittedSource);
-
-        return ShapeSummaryHeader
-            + "\nMEMBERS="
-            + CountMembers(baseline).ToString(System.Globalization.CultureInfo.InvariantCulture)
-            + " PARAMETERS="
-            + parameterSlots.ToString(System.Globalization.CultureInfo.InvariantCulture)
-            + "\n";
-    }
-
-    /// <summary>
-    /// Counts parameter slots on the externally reachable callable declarations in generated C#.
-    /// The syntax walk uses the same visibility rules as <see cref="Create"/>.
-    /// </summary>
-    public static int CountParameterSlots(string emittedSource)
-    {
-        CompilationUnitSyntax root = CSharpSyntaxTree
-            .ParseText(emittedSource)
-            .GetCompilationUnitRoot();
-
-        int total = 0;
-        foreach (MemberDeclarationSyntax member in root.Members)
-        {
-            CountContainerParameters(member, ref total);
-        }
-
-        return total;
-    }
-
-    private static void CountContainerParameters(
-        MemberDeclarationSyntax member,
-        ref int parameterSlots
-    )
-    {
-        switch (member)
-        {
-            case BaseNamespaceDeclarationSyntax ns:
-                foreach (MemberDeclarationSyntax child in ns.Members)
-                {
-                    CountContainerParameters(child, ref parameterSlots);
-                }
-
-                break;
-
-            case DelegateDeclarationSyntax delegateDeclaration:
-                if (IsExternallyVisible(delegateDeclaration.Modifiers))
-                {
-                    parameterSlots += delegateDeclaration.ParameterList.Parameters.Count;
-                }
-
-                break;
-
-            case TypeDeclarationSyntax typeDeclaration:
-                if (!IsExternallyVisible(typeDeclaration.Modifiers))
-                {
-                    return;
-                }
-
-                if (typeDeclaration is RecordDeclarationSyntax { ParameterList: { } primary })
-                {
-                    parameterSlots += primary.Parameters.Count;
-                }
-
-                foreach (MemberDeclarationSyntax child in typeDeclaration.Members)
-                {
-                    CountTypeMemberParameters(child, ref parameterSlots);
-                }
-
-                break;
-        }
-    }
-
-    private static void CountTypeMemberParameters(
-        MemberDeclarationSyntax member,
-        ref int parameterSlots
-    )
-    {
-        switch (member)
-        {
-            case BaseTypeDeclarationSyntax or DelegateDeclarationSyntax:
-                CountContainerParameters(member, ref parameterSlots);
-                return;
-        }
-
-        if (!IsExternallyVisible(member.Modifiers))
-        {
-            return;
-        }
-
-        switch (member)
-        {
-            case ConstructorDeclarationSyntax constructor:
-                parameterSlots += constructor.ParameterList.Parameters.Count;
-                break;
-            case MethodDeclarationSyntax method:
-                parameterSlots += method.ParameterList.Parameters.Count;
-                break;
-            case OperatorDeclarationSyntax op:
-                parameterSlots += op.ParameterList.Parameters.Count;
-                break;
-            case ConversionOperatorDeclarationSyntax conversion:
-                parameterSlots += conversion.ParameterList.Parameters.Count;
-                break;
-            case IndexerDeclarationSyntax indexer:
-                parameterSlots += indexer.ParameterList.Parameters.Count;
-                break;
-        }
-    }
 
     private static void VisitContainerMember(
         MemberDeclarationSyntax member,

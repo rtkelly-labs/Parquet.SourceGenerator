@@ -8,7 +8,6 @@ using Apache.Arrow;
 using Apache.Arrow.Arrays;
 using Apache.Arrow.Types;
 using Parquet;
-using Shouldly;
 using Xunit;
 
 namespace Parquet.SourceGenerator.Tests;
@@ -460,34 +459,36 @@ public sealed class ArrowRecordBatchBridgeTests
         byte[] bytes = await WriteArrowAsync(batch);
 
         using var readStream = new MemoryStream(bytes);
-        ArrowPrimitiveRow[] actual = await ArrowPrimitiveRowParquet.From(readStream).ToArrayAsync();
+        List<ArrowPrimitiveRow> actual = await ArrowPrimitiveRowParquetExtensions.ReadParquetAsync(
+            readStream
+        );
 
         List<ArrowPrimitiveRow> expected = ExpectedPrimitiveRows();
-        actual.Length.ShouldBe(expected.Count);
+        Assert.Equal(expected.Count, actual.Count);
 
         for (int i = 0; i < expected.Count; i++)
         {
             ArrowPrimitiveRow e = expected[i];
             ArrowPrimitiveRow a = actual[i];
-            a.Id.ShouldBe(e.Id);
-            a.Sequence.ShouldBe(e.Sequence);
-            a.Small.ShouldBe(e.Small);
-            a.Delta.ShouldBe(e.Delta);
-            a.Tiny.ShouldBe(e.Tiny);
-            a.USmall.ShouldBe(e.USmall);
-            a.UMedium.ShouldBe(e.UMedium);
-            a.ULarge.ShouldBe(e.ULarge);
-            a.Ratio.ShouldBe(e.Ratio);
-            a.Amount.ShouldBe(e.Amount);
-            a.Active.ShouldBe(e.Active);
-            a.Name.ShouldBe(e.Name);
-            a.Payload.ShouldBe(e.Payload);
-            a.Price.ShouldBe(e.Price);
-            a.CreatedAt.Ticks.ShouldBe(e.CreatedAt.Ticks);
-            a.Day.ShouldBe(e.Day);
-            a.At.ShouldBe(e.At);
-            a.Elapsed.ShouldBe(e.Elapsed);
-            a.CorrelationId.ShouldBe(e.CorrelationId);
+            Assert.Equal(e.Id, a.Id);
+            Assert.Equal(e.Sequence, a.Sequence);
+            Assert.Equal(e.Small, a.Small);
+            Assert.Equal(e.Delta, a.Delta);
+            Assert.Equal(e.Tiny, a.Tiny);
+            Assert.Equal(e.USmall, a.USmall);
+            Assert.Equal(e.UMedium, a.UMedium);
+            Assert.Equal(e.ULarge, a.ULarge);
+            Assert.Equal(e.Ratio, a.Ratio);
+            Assert.Equal(e.Amount, a.Amount);
+            Assert.Equal(e.Active, a.Active);
+            Assert.Equal(e.Name, a.Name);
+            Assert.Equal(e.Payload, a.Payload);
+            Assert.Equal(e.Price, a.Price);
+            Assert.Equal(e.CreatedAt.Ticks, a.CreatedAt.Ticks);
+            Assert.Equal(e.Day, a.Day);
+            Assert.Equal(e.At, a.At);
+            Assert.Equal(e.Elapsed, a.Elapsed);
+            Assert.Equal(e.CorrelationId, a.CorrelationId);
         }
     }
 
@@ -588,7 +589,7 @@ public sealed class ArrowRecordBatchBridgeTests
             await writer.WriteParquetRowGroupAsync(NullableRows());
         }
 
-        Sha256(arrowStream.ToArray()).ShouldBe(Sha256(pocoStream.ToArray()));
+        Assert.Equal(Sha256(pocoStream.ToArray()), Sha256(arrowStream.ToArray()));
     }
 
     [Fact]
@@ -608,18 +609,20 @@ public sealed class ArrowRecordBatchBridgeTests
         }
 
         using var readStream = new MemoryStream(stream.ToArray());
-        ArrowNullableRow[] actual = await ArrowNullableRowParquet.From(readStream).ToArrayAsync();
+        List<ArrowNullableRow> actual = await ArrowNullableRowParquetExtensions.ReadParquetAsync(
+            readStream
+        );
 
         List<ArrowNullableRow> expected = NullableRows();
-        actual.Length.ShouldBe(expected.Count);
+        Assert.Equal(expected.Count, actual.Count);
         for (int i = 0; i < expected.Count; i++)
         {
             // Record equality would compare Blob by reference, so the columns are checked one by one.
-            actual[i].Id.ShouldBe(expected[i].Id);
-            actual[i].Score.ShouldBe(expected[i].Score);
-            actual[i].Label.ShouldBe(expected[i].Label);
-            actual[i].Blob.ShouldBe(expected[i].Blob);
-            actual[i].Moment.ShouldBe(expected[i].Moment);
+            Assert.Equal(expected[i].Id, actual[i].Id);
+            Assert.Equal(expected[i].Score, actual[i].Score);
+            Assert.Equal(expected[i].Label, actual[i].Label);
+            Assert.Equal(expected[i].Blob, actual[i].Blob);
+            Assert.Equal(expected[i].Moment, actual[i].Moment);
         }
     }
 
@@ -635,7 +638,7 @@ public sealed class ArrowRecordBatchBridgeTests
             ArrowNullableRowParquetExtensions.Schema,
             stream
         );
-        return await Should.ThrowAsync<InvalidDataException>(async () =>
+        return await Assert.ThrowsAsync<InvalidDataException>(async () =>
             await ArrowNullableRowParquetExtensions.WriteParquetRowGroupAsync(writer, batch)
         );
     }
@@ -654,8 +657,8 @@ public sealed class ArrowRecordBatchBridgeTests
 
         InvalidDataException error = await WriteNullableAndCaptureAsync(batch);
 
-        error.Message.ShouldContain("score: column is missing", Case.Sensitive);
-        error.Message.ShouldContain("label: column is missing", Case.Sensitive);
+        Assert.Contains("score: column is missing", error.Message, StringComparison.Ordinal);
+        Assert.Contains("label: column is missing", error.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -689,7 +692,11 @@ public sealed class ArrowRecordBatchBridgeTests
 
         InvalidDataException error = await WriteNullableAndCaptureAsync(batch);
 
-        error.Message.ShouldContain("id: expected Arrow Int32, found int64", Case.Sensitive);
+        Assert.Contains(
+            "id: expected Arrow Int32, found int64",
+            error.Message,
+            StringComparison.Ordinal
+        );
     }
 
     [Fact]
@@ -723,8 +730,8 @@ public sealed class ArrowRecordBatchBridgeTests
 
         InvalidDataException error = await WriteNullableAndCaptureAsync(batch);
 
-        error.Message.ShouldContain("moment: timestamp unit mismatch", Case.Sensitive);
-        error.Message.ShouldContain("Microsecond", Case.Sensitive);
+        Assert.Contains("moment: timestamp unit mismatch", error.Message, StringComparison.Ordinal);
+        Assert.Contains("Microsecond", error.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -758,8 +765,8 @@ public sealed class ArrowRecordBatchBridgeTests
 
         InvalidDataException error = await WriteNullableAndCaptureAsync(batch);
 
-        error.Message.ShouldContain("label: expected Arrow Utf8", Case.Sensitive);
-        error.Message.ShouldContain("large_utf8", Case.Sensitive);
+        Assert.Contains("label: expected Arrow Utf8", error.Message, StringComparison.Ordinal);
+        Assert.Contains("large_utf8", error.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -798,9 +805,10 @@ public sealed class ArrowRecordBatchBridgeTests
 
         InvalidDataException error = await WriteNullableAndCaptureAsync(batch);
 
-        error.Message.ShouldContain(
+        Assert.Contains(
             "label: dictionary-encoded Arrow columns are not supported",
-            Case.Sensitive
+            error.Message,
+            StringComparison.Ordinal
         );
     }
 
@@ -835,9 +843,10 @@ public sealed class ArrowRecordBatchBridgeTests
 
         InvalidDataException error = await WriteNullableAndCaptureAsync(batch);
 
-        error.Message.ShouldContain(
+        Assert.Contains(
             "id: the Parquet column is required but the Arrow column carries 1 null(s)",
-            Case.Sensitive
+            error.Message,
+            StringComparison.Ordinal
         );
     }
 
@@ -885,7 +894,9 @@ public sealed class ArrowRecordBatchBridgeTests
         }
 
         using var readStream = new MemoryStream(stream.ToArray());
-        ArrowNullableRow[] rows = await ArrowNullableRowParquet.From(readStream).ToArrayAsync();
-        rows.ShouldBeEmpty();
+        List<ArrowNullableRow> rows = await ArrowNullableRowParquetExtensions.ReadParquetAsync(
+            readStream
+        );
+        Assert.Empty(rows);
     }
 }

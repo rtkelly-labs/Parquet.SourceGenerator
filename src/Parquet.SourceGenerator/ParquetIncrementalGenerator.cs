@@ -11,7 +11,7 @@ namespace Parquet.SourceGenerator;
 /// Emits zero-reflection schema definitions, column serializers, and deserializers at compile time with compiler diagnostic checks.
 /// </summary>
 [Generator(LanguageNames.CSharp)]
-internal sealed class ParquetIncrementalGenerator : IIncrementalGenerator
+public sealed class ParquetIncrementalGenerator : IIncrementalGenerator
 {
     /// <summary>
     /// Initializes the incremental generator pipeline.
@@ -19,54 +19,26 @@ internal sealed class ParquetIncrementalGenerator : IIncrementalGenerator
     /// <param name="context">The incremental generator context.</param>
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        // 1. Read project policy as value-equatable state, then parse decorated target nodes with
-        // the feature level's compound-shape allowance.
-        IncrementalValueProvider<GeneratorConfiguration> configuration =
-            context.AnalyzerConfigOptionsProvider.Select(
-                static (options, _) => GeneratorConfiguration.From(options)
-            );
-        // The transform parses and returns models, never the syntax context: a context holds a
-        // SemanticModel, which roots the compilation, and has no value equality, so caching it
-        // retained a compilation per target and left nothing downstream able to compare as
-        // unchanged (#395). Only the declaration that carries [ParquetSerializable] yields a
-        // result (#368), so a partial type split across files is one element, not one per part.
-        IncrementalValuesProvider<TargetParseSet> parses = context
-            .SyntaxProvider.CreateSyntaxProvider(
+        // 1. Filter syntax nodes decorated with attributes and extract target model + diagnostics
+        IncrementalValuesProvider<TargetParserResult> targets =
+            context.SyntaxProvider.CreateSyntaxProvider(
                 predicate: static (s, _) => IsTargetSyntax(s),
+                // Compound dial (#176): the v6 emitter expresses nested POCOs (M2) and
+                // root-level lists/arrays of primitives (M3a). Maps (M4), lists of POCOs,
+                // and lists nested in structs (M3b) still fall to PARQ006.
                 transform: static (ctx, _) =>
-                    TargetParser.GetTargetParseSet(
+                    TargetParser.GetTargetModel(
                         ctx,
                         ParquetApiLevel.V6,
-                        CompoundKindsFor(GeneratorConfiguration.Default.FlatOnly)
+                        compoundKinds: Parser.CompoundKinds.Struct | Parser.CompoundKinds.List
                     )
-            )
-            .Where(static parse => parse is not null)!;
-        IncrementalValuesProvider<TargetParserResult> targets = parses
-            .Combine(configuration)
-            .Select(static (pair, _) => pair.Right.FlatOnly ? pair.Left.Flat : pair.Left.Compound);
-
-        context.RegisterSourceOutput(
-            configuration,
-            static (spc, config) =>
-            {
-                if (config.ConfigurationDiagnostic is DiagnosticInfo diagnostic)
-                {
-                    spc.ReportDiagnostic(diagnostic.ToDiagnostic());
-                }
-            }
-        );
+            );
 
         // 2. Register source output emission & diagnostic reporting
         context.RegisterSourceOutput(
-            targets.Combine(configuration),
-            static (spc, pair) =>
+            targets,
+            static (spc, result) =>
             {
-                TargetParserResult result = pair.Left;
-                if (pair.Right.ConfigurationDiagnostic is not null)
-                {
-                    return;
-                }
-
                 // Report compiler diagnostics (PARQ001, PARQ002, PARQ003)
                 for (int i = 0; i < result.Diagnostics.Length; i++)
                 {
@@ -85,7 +57,7 @@ internal sealed class ParquetIncrementalGenerator : IIncrementalGenerator
                         ? result.Model.ClassName
                         : $"{result.Model.Namespace}.{result.Model.ClassName}";
                     string hintName = $"{prefix}.ParquetSerializer.g.cs";
-                    string sourceCode = CodeEmitter.EmitSource(result.Model, pair.Right);
+                    string sourceCode = CodeEmitter.EmitSource(result.Model);
                     spc.AddSource(hintName, sourceCode);
                 }
             }
@@ -158,9 +130,4 @@ internal sealed class ParquetIncrementalGenerator : IIncrementalGenerator
             || node is RecordDeclarationSyntax { AttributeLists.Count: > 0 }
             || node is StructDeclarationSyntax { AttributeLists.Count: > 0 };
     }
-
-    private static Parser.CompoundKinds CompoundKindsFor(bool flatOnly) =>
-        flatOnly
-            ? Parser.CompoundKinds.None
-            : Parser.CompoundKinds.Struct | Parser.CompoundKinds.List;
 }

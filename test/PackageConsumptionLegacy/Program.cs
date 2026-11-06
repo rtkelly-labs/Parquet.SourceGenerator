@@ -127,10 +127,6 @@ internal static class Program
             !await CompressionIsAppliedAsync()
             || !await BatchedWriteRoundTripsAsync()
             || !await SchemaEvolutionRoundTripsAsync()
-            || !await DecompressionLimitIsAppliedAsync()
-            || !await DecompressionGuardScenario.RunAsync()
-            || !await HostileScenario.RunAsync()
-            || !SynchronizationContextScenario.Run()
         )
         {
             return 1;
@@ -175,55 +171,6 @@ internal static class Program
     }
 
     /// <summary>
-    /// The classic generated reader must reject a page from its header before Parquet.Net allocates
-    /// the decompression buffer. This runs against the actual Parquet.Net 4.25 package path rather
-    /// than only checking the emitted source text.
-    /// </summary>
-    private static async Task<bool> DecompressionLimitIsAppliedAsync()
-    {
-        List<Measurement> rows = Enumerable
-            .Range(0, 2_000)
-            .Select(i => new Measurement { Id = i, Label = new string('x', 512) })
-            .ToList();
-
-        using var stream = new MemoryStream();
-        await rows.WriteParquetAsync(stream);
-        var options = new ParquetSerializerOptions { MaxDecompressedPageSize = 1 };
-
-        try
-        {
-            stream.Position = 0;
-            await MeasurementParquetLegacyExtensions.ReadParquetAsync(stream, options);
-            Console.Error.WriteLine("FAILED: legacy page-size limit did not reject the page.");
-            return false;
-        }
-        catch (InvalidDataException exception)
-        {
-            if (!exception.Message.Contains("uncompressed size", StringComparison.Ordinal))
-            {
-                Console.Error.WriteLine(
-                    $"FAILED: legacy page-size limit raised the wrong error: {exception.Message}"
-                );
-                return false;
-            }
-        }
-
-        try
-        {
-            stream.Position = 0;
-            await MeasurementParquetLegacyExtensions.ReadParquetArrayAsync(stream, options);
-            Console.Error.WriteLine(
-                "FAILED: legacy array page-size limit did not reject the page."
-            );
-            return false;
-        }
-        catch (InvalidDataException)
-        {
-            return true;
-        }
-    }
-
-    /// <summary>
     /// Exercises the multi-row-group path: the read side resolves schema fields once for the file
     /// and then loops row groups, so a file with several of them is the shape that would expose a
     /// field resolved against the wrong group or a row count taken from the wrong place.
@@ -241,7 +188,10 @@ internal static class Program
             .ToList();
 
         using var stream = new MemoryStream();
-        await rows.WriteParquetAsync(stream, new ParquetSerializerOptions { RowGroupSize = 100 });
+        await rows.WriteParquetBatchedAsync(
+            stream,
+            new ParquetSerializerOptions { RowGroupSize = 100 }
+        );
         stream.Position = 0;
 
         List<Measurement> read = await MeasurementParquetLegacyExtensions.ReadParquetAsync(stream);

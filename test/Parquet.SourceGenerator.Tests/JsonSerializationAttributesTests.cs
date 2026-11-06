@@ -96,9 +96,10 @@ public sealed class JsonSerializationAttributesTests
         using var ms = new MemoryStream();
         await items.WriteParquetAsync(ms);
 
-        // Read from the buffer (sequential)
-        var readList = await JsonAnnotatedModelParquet.From(ms.ToArray()).ToArrayAsync();
-        readList.Length.ShouldBe(count);
+        // Read list
+        ms.Position = 0;
+        var readList = await JsonAnnotatedModelParquetExtensions.ReadParquetAsync(ms);
+        readList.Count.ShouldBe(count);
         for (int i = 0; i < count; i++)
         {
             readList[i].Id.ShouldBe(items[i].Id);
@@ -110,20 +111,24 @@ public sealed class JsonSerializationAttributesTests
 
         // Read array
         ms.Position = 0;
-        var readArray = await JsonAnnotatedModelParquet.From(ms).ToArrayAsync();
+        var readArray = await JsonAnnotatedModelParquetExtensions.ReadParquetArrayAsync(ms);
         readArray.Length.ShouldBe(count);
         readArray[0].Name.ShouldBe(items[0].Name);
 
         // Read parallel
         byte[] bytes = ms.ToArray();
-        var parallelList = await JsonAnnotatedModelParquet.From(bytes).Parallel().ToArrayAsync();
-        parallelList.Length.ShouldBe(count);
+        var parallelList = await JsonAnnotatedModelParquetExtensions.ReadParquetParallelAsync(
+            bytes
+        );
+        parallelList.Count.ShouldBe(count);
         parallelList[10].Score.ShouldBe(items[10].Score);
 
         // Read stream
         using var streamMs = new MemoryStream(bytes);
         int streamCount = 0;
-        await foreach (var item in JsonAnnotatedModelParquet.From(streamMs).AsAsyncEnumerable())
+        await foreach (
+            var item in JsonAnnotatedModelParquetExtensions.ReadParquetStreamAsync(streamMs)
+        )
         {
             item.Id.ShouldBe(items[streamCount].Id);
             streamCount++;
@@ -174,8 +179,10 @@ public sealed class JsonSerializationAttributesTests
         await Parquet.Serialization.ParquetSerializer.SerializeAsync(data, msReflection);
         msReflection.Position = 0;
 
-        var generatorResult = await JsonAnnotatedModelParquet.From(msReflection).ToArrayAsync();
-        generatorResult.Length.ShouldBe(2);
+        var generatorResult = await JsonAnnotatedModelParquetExtensions.ReadParquetAsync(
+            msReflection
+        );
+        generatorResult.Count.ShouldBe(2);
         generatorResult[1].Id.ShouldBe(102);
         generatorResult[1].Name.ShouldBe("Bob");
         generatorResult[1].Score.ShouldBe(88.0);

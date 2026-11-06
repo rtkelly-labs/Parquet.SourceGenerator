@@ -24,7 +24,7 @@
       consumers of a *published* analyzer package can see which rules arrived in which version.
       This assembly is never published: it is repository build policy, referenced by path, versioned
       by the commit that changes it. The rules are documented where their audience reads —
-      docs/architecture/api-governance.md — rather than in a release file nobody receives.
+      docs/18-API-CHANGE-CONTRACT.md — rather than in a release file nobody receives.
     -->
         <NoWarn>$(NoWarn);RS2008</NoWarn>
     </PropertyGroup>
@@ -35,6 +35,10 @@
             VersionOverride="4.0.1"
             PrivateAssets="all"
         />
-        <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" PrivateAssets="all" />
+        <PackageReference
+            Include="Microsoft.CodeAnalysis.Analyzers"
+            VersionOverride="3.3.3"
+            PrivateAssets="all"
+        />
     </ItemGroup>
 </Project>

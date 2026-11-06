@@ -25,19 +25,6 @@ cd Parquet.SourceGenerator
 dotnet build Parquet.SourceGenerator.slnx --configuration Release
 ```
 
-### Changing a dependency
-
-Every project in the solution except the two Native AOT ones carries a committed `packages.lock.json`, and CI restores in locked mode, so a changed dependency graph fails the build instead of resolving silently (#394). After editing `Directory.Packages.props` or a `PackageReference`, run `dotnet restore Parquet.SourceGenerator.slnx --force-evaluate` and commit the changed lock files with the change. Dependabot's NuGet pull requests need the same step: its updater writes only the `netstandard2.0` section of the multi-targeted `src/Parquet.SourceGenerator.Runtime/packages.lock.json`, so they fail the locked restore with `NU1004`. Check out the Dependabot branch, run the command above, and push the regenerated lock files to it:
-
-```bash
-git fetch origin <dependabot-branch> && git switch <dependabot-branch>
-dotnet restore Parquet.SourceGenerator.slnx --force-evaluate
-dotnet restore Parquet.SourceGenerator.slnx --locked-mode   # must now pass
-git commit -am "build(deps): regenerate NuGet lock files" && git push
-```
-
-Pushing to the branch stops Dependabot rebasing that pull request on its own; comment `@dependabot rebase` (then regenerate again) if it falls behind `main`.
-
 ### 2. Run Test Suite
 ```bash
 dotnet test Parquet.SourceGenerator.slnx --configuration Release
@@ -80,10 +67,9 @@ attributed to *this* repo's assemblies, that is a real regression worth chasing.
 
 ## 📊 Running Benchmarks
 
-Wall-clock benchmarks are not gated in CI (BenchmarkDotNet timings on shared runners are too noisy
-to gate merges on). A small, allocation-only set is: the weekly `benchmarks.yml` regression gate
-compares allocated bytes against `benchmarks/baseline.json` (see [docs/reference/benchmarks.md](docs/reference/benchmarks.md)).
-It is not a PR check. Run the suite locally when working on performance:
+Benchmarks are not run in CI (BenchmarkDotNet on shared runners is too noisy to gate merges on)
+and no baseline results have been committed, so there is nothing to compare against yet. Run them
+locally when working on performance:
 
 ```bash
 dotnet run -c Release --project benchmarks/Parquet.SourceGenerator.Benchmarks/Parquet.SourceGenerator.Benchmarks.csproj -- --filter "*"
@@ -100,26 +86,9 @@ If you publish numbers anywhere, include the machine and runtime they came from.
    via `dotnet csharpier check .`). Do not run `dotnet format` on C# — its Roslyn formatter
    conflicts with CSharpier and `IDE0055` is disabled in `.editorconfig` by design.
 3. **Tests**: The suite must pass cleanly (`dotnet test`).
-4. **Derived outputs**: emitted golden source and API, code metrics, duplication and call-graph
-   edges are generated, not committed (`dotnet run scripts/DerivedOutputs.cs` writes them to the
-   gitignored `artifacts/`). CI posts their diff against the merge base as one comment on the pull
-   request; check its "Emitted public API" section shows only the changes you intend
-   ([docs/17](https://github.com/rtkelly-labs/Parquet.SourceGenerator/blob/e4d46b90cee76d9b3cee0b0fd0452aa386415ef1/docs/17-GENERATED-API-BASELINES.md), [API governance](docs/architecture/api-governance.md)).
-5. **PR Title**: Must follow Conventional Commits — CI validates it (`feat:`, `fix:`, `perf:`,
+4. **PR Title**: Must follow Conventional Commits — CI validates it (`feat:`, `fix:`, `perf:`,
    `docs:`, `style:`, `refactor:`, `test:`, `chore:`, `ci:`, `build:`).
-6. **Commit Message**: Use Conventional Commit messages too.
-
-### Stacked pull requests
-
-Dependent work lands as a GitHub native stack: the bottom pull request targets `main`, each one
-above targets the branch of the one below, and every layer has its own green CI.
-
-- **Link** an existing chain by labelling its bottom pull request `stack:link`. The `stack`
-  workflow walks the chain upward and runs `gh stack link` (or dispatch it with explicit numbers).
-  Locally: `gh stack link <bottom> ... <top>`.
-- **Keep layers linear.** Edit the layer that owns a change, then `gh stack rebase --upstack`.
-- **Merge** with `gh stack merge <top> --squash --yes`. `gh pr merge` and auto-merge are refused
-  for stacked pull requests.
+5. **Commit Message**: Use Conventional Commit messages too.
 
 ---
 

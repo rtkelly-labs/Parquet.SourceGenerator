@@ -12,25 +12,25 @@ using System.Xml.Linq;
 // MetricsOracleCompare.cs
 //
 // The comparison half of #254: checks Microsoft's own Metrics.exe output against
-// the reports produced by scripts/CodeMetrics.cs over the same commit, at TYPE level, and
+// the checked-in baselines produced by scripts/CodeMetrics.cs, at TYPE level, and
 // fails when the two disagree. `CodeMetrics.cs` and `Metrics.exe` both derive from
 // Roslyn's CodeAnalysisMetricData — so they should agree by construction, and this
 // is the only thing in the repository that checks they actually do. If the bespoke
 // computation is subtly wrong (a different enumeration of members, a different
-// treatment of accessors or partials), every reported number is wrong in the same
-// direction and nothing else would notice. This script is the independent oracle
-// that catches that, on the same logic PyArrow,
+// treatment of accessors or partials), every baseline number is wrong in the same
+// direction and the drift gate would hold a wrong baseline stable forever. This
+// script is the independent oracle that catches that, on the same logic PyArrow,
 // DuckDB and parquet-cli apply to generated files (#165, #166, #183).
 //
 // The gate is type-level for a reason: the two tools legitimately differ in
 // *scope* — how generated and partial code is enumerated is not identical — while
 // the oracle question is "is our ruler accurate?", and a ruler is accurate iff it
 // reads the same on every object both can see. Assembly totals are reported
-// (informational) but never gated; docs/internals/code-quality-and-metrics.md records the split.
+// (informational) but never gated; docs/24-METRICS-ORACLE.md records the split.
 //
-// Tolerance: Maintainability Index +/- 2 for cross-machine comparison, because MI
-// involves a cube root whose last digit is not bit-reproducible across runtimes.
-// Every other metric is compared exactly.
+// Tolerance: Maintainability Index +/- 2 — exactly the policy layer 1 uses for
+// cross-machine comparison, because MI involves a cube root whose last digit is
+// not bit-reproducible across runtimes. Every other metric is compared exactly.
 //
 // A disagreement makes the nightly job fail AND (via metrics-oracle.yml) open or
 // update a GitHub issue: a failing schedule gets muted, a reviewable issue gets
@@ -74,7 +74,7 @@ for (int i = 1; i < argv.Length; i++)
 if (xmlPath is null || baselinePath is null)
 {
     Console.Error.WriteLine(
-        "Usage: MetricsOracleCompare.cs --xml <Metrics.exe output> --baseline <artifacts/metrics/*.metrics.txt> [--summary <file>] [--append]"
+        "Usage: MetricsOracleCompare.cs --xml <Metrics.exe output> --baseline <metrics/*.metrics.txt> [--summary <file>] [--append]"
     );
     return 2;
 }
@@ -125,7 +125,7 @@ if (baseline.Assembly is not null && oracle.TryGetValue(assemblyName, out Oracle
     infos.Add(
         $"assembly {assemblyName}: hand-computed MI={baseline.Assembly.Mi} CC={baseline.Assembly.Cc} "
             + $"CL={baseline.Assembly.Cl} SLOC={baseline.Assembly.Sloc}; oracle MI={asm.Mi} CC={asm.Cc} "
-            + $"CL={asm.Cl} SLOC={asm.Sloc} — reported, not gated (enumeration scope differs; docs/internals/code-quality-and-metrics.md)."
+            + $"CL={asm.Cl} SLOC={asm.Sloc} — reported, not gated (enumeration scope differs; docs/24)."
     );
 }
 else
@@ -149,7 +149,7 @@ if (summaryPath is not null)
     var sb = new StringBuilder();
     if (!append || !File.Exists(summaryPath))
     {
-        sb.AppendLine("## Metrics oracle vs CodeMetrics.cs (#254)");
+        sb.AppendLine("## Metrics oracle vs checked-in baselines (#254)");
         sb.AppendLine();
     }
     sb.AppendLine(

@@ -24,18 +24,9 @@
           Can be overridden via command line: -p:ParquetNetPackageVersion=x.y.z
         -->
         <PackageReference Include="Parquet.Net" VersionOverride="$(ParquetNetPackageVersion)" />
-        <PackageReference Include="Shouldly" />
-        <PackageReference Include="Microsoft.CodeAnalysis.BannedApiAnalyzers">
-            <PrivateAssets>all</PrivateAssets>
-            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-        </PackageReference>
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\..\src\Parquet.SourceGenerator.Runtime\Parquet.SourceGenerator.Runtime.csproj" />
-    </ItemGroup>
-
-    <ItemGroup>
-        <AdditionalFiles Include="..\Parquet.SourceGenerator.Tests\BannedSymbols.txt" />
+        <ProjectReference Include="..\..\src\Parquet.SourceGenerator.Attributes\Parquet.SourceGenerator.Attributes.csproj" />
     </ItemGroup>
 </Project>

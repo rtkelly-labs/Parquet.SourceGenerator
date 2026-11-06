@@ -10,7 +10,7 @@ namespace Parquet.SourceGenerator.Parser;
 /// runtime. Threading the level through the parser is what lets that be a compile-time error instead
 /// — the audit named compile-time rejection a prerequisite for shipping a second backend.
 /// </remarks>
-internal enum ParquetApiLevel
+public enum ParquetApiLevel
 {
     /// <summary>
     /// Parquet.Net 6.x — the <c>Memory&lt;T&gt;</c> buffer API.

@@ -9,11 +9,6 @@
 
     <ItemGroup>
         <PackageReference Include="Parquet.Net" />
-        <!--
-      This reference switches on the generator's conditional Arrow ingestion bridge so the
-      published native binary exercises the same surface a consumer would compile.
-    -->
-        <PackageReference Include="Apache.Arrow" />
     </ItemGroup>
 
     <ItemGroup>
@@ -21,7 +16,7 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\..\src\Parquet.SourceGenerator.Runtime\Parquet.SourceGenerator.Runtime.csproj" />
+        <ProjectReference Include="..\..\src\Parquet.SourceGenerator.Attributes\Parquet.SourceGenerator.Attributes.csproj" />
         <ProjectReference
             Include="..\..\src\Parquet.SourceGenerator\Parquet.SourceGenerator.csproj"
             OutputItemType="Analyzer"

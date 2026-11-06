@@ -61,7 +61,7 @@ public sealed class ColumnAttributeAndLevelTests
         await written.WriteParquetAsync(stream);
         stream.Position = 0;
 
-        OrderOnlyModel[] read = await OrderOnlyModelParquet.From(stream).ToArrayAsync();
+        List<OrderOnlyModel> read = await OrderOnlyModelParquetExtensions.ReadParquetAsync(stream);
 
         read.ShouldHaveSingleItem();
         read[0].First.ShouldBe(1);
@@ -129,11 +129,10 @@ public sealed class ColumnAttributeAndLevelTests
         );
         stream.Position = 0;
 
-        CompressionLevelModel[] read = await CompressionLevelModelParquet
-            .From(stream)
-            .ToArrayAsync();
+        List<CompressionLevelModel> read =
+            await CompressionLevelModelParquetExtensions.ReadParquetAsync(stream);
 
-        read.Length.ShouldBe(2);
+        read.Count.ShouldBe(2);
         read[0].Payload.ShouldBe("first");
         read[1].Payload.ShouldBe("second");
     }

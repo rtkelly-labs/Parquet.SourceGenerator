@@ -12,7 +12,7 @@ namespace Parquet.SourceGenerator.Models;
     "CA1720:Identifier contains type name",
     Justification = "Enum members represent semantic property primitive types."
 )]
-internal enum PropertyKind
+public enum PropertyKind
 {
     /// <summary>int, long, double, float, bool, string — direct DataField passthrough.</summary>
     Primitive,
@@ -54,7 +54,7 @@ internal enum PropertyKind
 /// <summary>
 /// Specifies the physical column encoding hint for code generation.
 /// </summary>
-internal enum ColumnEncoding
+public enum ColumnEncoding
 {
     /// <summary>Default encoding, chosen automatically based on data type.</summary>
     Default = 0,
@@ -81,7 +81,7 @@ internal enum ColumnEncoding
 /// <c>List&lt;T&gt;</c> or a raw array for a nested member here.
 /// </para>
 /// </summary>
-internal sealed record PropertyModel(
+public sealed record PropertyModel(
     string Name,
     string ParquetColumnName,
     string TypeName,
@@ -94,7 +94,7 @@ internal sealed record PropertyModel(
     bool IsNullable,
     bool Deduplicate = false,
     ColumnEncoding Encoding = ColumnEncoding.Default
-)
+) : IEquatable<PropertyModel>
 {
     /// <summary>
     /// Struct members: the child property models, in schema order. Value-equal via
@@ -125,22 +125,76 @@ internal sealed record PropertyModel(
 
     /// <summary>
     /// Struct members: whether the nested C# type is a value type. Every Parquet group is
-    /// optional (docs/guides/nested-types.md §2.4) so the definition-level ladder counts the rung either way, but
+    /// optional (docs/15 §2.4) so the definition-level ladder counts the rung either way, but
     /// the write extraction emits the ancestor null test only for reference types — a struct
     /// member can never be null at runtime.
     /// </summary>
     public bool CompoundIsValueType { get; init; }
 
     /// <summary>
-    /// The Parquet field ID from <c>[ParquetColumn(FieldId = n)]</c>, written to the schema element's
-    /// <c>field_id</c> (what Iceberg resolves columns by); null when the member sets none. Off the
-    /// positional list for the same reason as <see cref="IsSortKey"/>.
+    /// Backwards-compatible constructor overload without deduplication or encoding flag.
     /// </summary>
-    public int? FieldId { get; init; }
+    public PropertyModel(
+        string Name,
+        string ParquetColumnName,
+        string TypeName,
+        string? TimestampUnit,
+        string? EnumUnderlyingTypeName,
+        int Order,
+        int? DecimalPrecision,
+        int? DecimalScale,
+        PropertyKind Kind,
+        bool IsNullable
+    )
+        : this(
+            Name,
+            ParquetColumnName,
+            TypeName,
+            TimestampUnit,
+            EnumUnderlyingTypeName,
+            Order,
+            DecimalPrecision,
+            DecimalScale,
+            Kind,
+            IsNullable,
+            Deduplicate: false,
+            ColumnEncoding.Default
+        )
+    {
+        // Backwards-compatible overload
+    }
 
     /// <summary>
-    /// The <c>isAdjustedToUTC</c> flag of a microsecond timestamp column; false only when the member
-    /// asks for <c>[ParquetTimestamp(Microseconds, AdjustedToUtc = false)]</c>.
+    /// Backwards-compatible constructor overload without encoding flag.
     /// </summary>
-    public bool TimestampAdjustedToUtc { get; init; } = true;
+    public PropertyModel(
+        string Name,
+        string ParquetColumnName,
+        string TypeName,
+        string? TimestampUnit,
+        string? EnumUnderlyingTypeName,
+        int Order,
+        int? DecimalPrecision,
+        int? DecimalScale,
+        PropertyKind Kind,
+        bool IsNullable,
+        bool Deduplicate
+    )
+        : this(
+            Name,
+            ParquetColumnName,
+            TypeName,
+            TimestampUnit,
+            EnumUnderlyingTypeName,
+            Order,
+            DecimalPrecision,
+            DecimalScale,
+            Kind,
+            IsNullable,
+            Deduplicate,
+            ColumnEncoding.Default
+        )
+    {
+        // Backwards-compatible overload
+    }
 }

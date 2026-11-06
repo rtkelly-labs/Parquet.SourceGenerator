@@ -55,17 +55,17 @@ public sealed class SpanStringDeduplicationTests
     {
         byte[] bytes = await WriteAsync(items);
 
-        var deduplicated = await SpanDedupRecordParquet
-            .From(new MemoryStream(bytes))
-            .WithOptions(Deduplicating)
-            .ToArrayAsync();
-        var plain = await SpanDedupRecordParquet
-            .From(new MemoryStream(bytes))
-            .WithOptions(NotDeduplicating)
-            .ToArrayAsync();
+        var deduplicated = await SpanDedupRecordParquetExtensions.ReadParquetAsync(
+            new MemoryStream(bytes),
+            Deduplicating
+        );
+        var plain = await SpanDedupRecordParquetExtensions.ReadParquetAsync(
+            new MemoryStream(bytes),
+            NotDeduplicating
+        );
 
-        deduplicated.Length.ShouldBe(items.Count);
-        plain.Length.ShouldBe(items.Count);
+        deduplicated.Count.ShouldBe(items.Count);
+        plain.Count.ShouldBe(items.Count);
 
         for (int i = 0; i < items.Count; i++)
         {
@@ -108,10 +108,10 @@ public sealed class SpanStringDeduplicationTests
         await AssertRoundTripsAsync(items);
 
         byte[] bytes = await WriteAsync(items);
-        var read = await SpanDedupRecordParquet
-            .From(new MemoryStream(bytes))
-            .WithOptions(Deduplicating)
-            .ToArrayAsync();
+        var read = await SpanDedupRecordParquetExtensions.ReadParquetAsync(
+            new MemoryStream(bytes),
+            Deduplicating
+        );
 
         // An empty string must never be conflated with a null.
         read[0].OptionalCategory.ShouldBeNull();
@@ -139,10 +139,10 @@ public sealed class SpanStringDeduplicationTests
         await AssertRoundTripsAsync(items);
 
         byte[] bytes = await WriteAsync(items);
-        var read = await SpanDedupRecordParquet
-            .From(new MemoryStream(bytes))
-            .WithOptions(Deduplicating)
-            .ToArrayAsync();
+        var read = await SpanDedupRecordParquetExtensions.ReadParquetAsync(
+            new MemoryStream(bytes),
+            Deduplicating
+        );
 
         // A NUL must terminate nothing: full length has to be preserved.
         read[0].RequiredCategory.Length.ShouldBe(withNul.Length);
@@ -182,10 +182,10 @@ public sealed class SpanStringDeduplicationTests
         await AssertRoundTripsAsync(items);
 
         byte[] bytes = await WriteAsync(items);
-        var read = await SpanDedupRecordParquet
-            .From(new MemoryStream(bytes))
-            .WithOptions(Deduplicating)
-            .ToArrayAsync();
+        var read = await SpanDedupRecordParquetExtensions.ReadParquetAsync(
+            new MemoryStream(bytes),
+            Deduplicating
+        );
 
         // Two values sharing a 200,000-character prefix must not be conflated.
         read[0].RequiredCategory.ShouldBe(veryLong);
@@ -208,7 +208,7 @@ public sealed class SpanStringDeduplicationTests
         {
             string candidate =
                 "collide-" + i.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            int bucket = (int)(HashForDeduplicator(candidate) & TableMask);
+            int bucket = (int)(Fnv1a(candidate) & TableMask);
             if (targetBucket < 0)
             {
                 targetBucket = bucket;
@@ -258,10 +258,10 @@ public sealed class SpanStringDeduplicationTests
         }
 
         byte[] bytes = await WriteAsync(items);
-        var read = await SpanDedupRecordParquet
-            .From(new MemoryStream(bytes))
-            .WithOptions(Deduplicating)
-            .ToArrayAsync();
+        var read = await SpanDedupRecordParquetExtensions.ReadParquetAsync(
+            new MemoryStream(bytes),
+            Deduplicating
+        );
 
         var distinctRequired = read.Select(r => r.RequiredCategory)
             .Distinct(ReferenceEqualityComparer.Instance)
@@ -306,17 +306,17 @@ public sealed class SpanStringDeduplicationTests
         // xUnit running collections in parallel an unrelated test's allocation lands inside the
         // window: the comparative form passed in isolation and failed in the full suite. Instance
         // identity is what deduplication actually promises, and it is deterministic.
-        var deduplicatedRead = await SpanDedupRecordParquet
-            .From(new MemoryStream(bytes))
-            .WithOptions(Deduplicating)
-            .ToArrayAsync();
-        var plainRead = await SpanDedupRecordParquet
-            .From(new MemoryStream(bytes))
-            .WithOptions(NotDeduplicating)
-            .ToArrayAsync();
+        var deduplicatedRead = await SpanDedupRecordParquetExtensions.ReadParquetAsync(
+            new MemoryStream(bytes),
+            Deduplicating
+        );
+        var plainRead = await SpanDedupRecordParquetExtensions.ReadParquetAsync(
+            new MemoryStream(bytes),
+            NotDeduplicating
+        );
 
-        deduplicatedRead.Length.ShouldBe(items.Count);
-        plainRead.Length.ShouldBe(items.Count);
+        deduplicatedRead.Count.ShouldBe(items.Count);
+        plainRead.Count.ShouldBe(items.Count);
 
         // 8 distinct required + 5 distinct optional values, however many rows carry them.
         int deduplicatedInstances = CountDistinctInstances(deduplicatedRead);
@@ -339,7 +339,7 @@ public sealed class SpanStringDeduplicationTests
             .ToList()
             .ShouldBe(items.Select(i => i.OptionalCategory).ToList());
 
-        static int CountDistinctInstances(IReadOnlyList<SpanDedupRecord> rows)
+        static int CountDistinctInstances(List<SpanDedupRecord> rows)
         {
             var seen = new HashSet<object>(ReferenceEqualityComparer.Instance);
             foreach (SpanDedupRecord row in rows)
@@ -359,47 +359,19 @@ public sealed class SpanStringDeduplicationTests
         }
     }
 
-    [Theory]
-    [InlineData(0)]
-    [InlineData(-1)]
-    [InlineData(-16)]
-    [InlineData(3)]
-    [InlineData(100)]
-    [InlineData(500)]
-    public void ConstructorRejectsInvalidCapacity(int invalidCapacity)
-    {
-        Should.Throw<ArgumentOutOfRangeException>(() => new StringDeduplicator(invalidCapacity));
-    }
-
-    [Theory]
-    [InlineData(1)]
-    [InlineData(2)]
-    [InlineData(16)]
-    [InlineData(512)]
-    [InlineData(1024)]
-    public void ConstructorAcceptsPowerOfTwoCapacity(int validCapacity)
-    {
-        using var dedup = new StringDeduplicator(validCapacity);
-        string? result = dedup.Deduplicate("test");
-        result.ShouldBe("test");
-    }
-
     /// <summary>
-    /// Mirrors the hash used by <see cref="StringDeduplicator"/> so tests can construct
+    /// Mirrors the FNV-1a hash emitted into <c>StringDeduplicator</c> so tests can construct
     /// deliberate bucket collisions.
     /// </summary>
-    private static uint HashForDeduplicator(string value)
+    private static uint Fnv1a(string value)
     {
-#if NETCOREAPP2_1_OR_GREATER
-        return (uint)string.GetHashCode(value, StringComparison.Ordinal);
-#else
         uint hash = 2166136261u;
         for (int i = 0; i < value.Length; i++)
         {
             hash ^= value[i];
             hash *= 16777619u;
         }
+
         return hash;
-#endif
     }
 }
