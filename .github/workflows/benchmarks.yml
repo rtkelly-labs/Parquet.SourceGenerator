@@ -320,10 +320,12 @@ jobs:
           ref: ${{ github.event.inputs.target_branch || github.ref_name }}
           lfs: true
 
-      - name: Setup .NET 8 SDK
+      - name: Setup .NET SDKs (8 to run the benchmarks, 10 for the file-based payload script)
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: |
+            8.0.x
+            10.0.x
 
       - name: Restore dependencies
         run: dotnet restore benchmarks/Parquet.SourceGenerator.Benchmarks/Parquet.SourceGenerator.Benchmarks.csproj --locked-mode
@@ -332,6 +334,7 @@ jobs:
         run: dotnet build benchmarks/Parquet.SourceGenerator.Benchmarks/Parquet.SourceGenerator.Benchmarks.csproj --configuration Release --no-restore
 
       - name: Execute the gated benchmarks
+        id: gated-run
         env:
           DOTNET_ROLL_FORWARD: Minor
         run: |
@@ -412,6 +415,35 @@ jobs:
           fi
 
           exit $status
+
+      # Shadow evidence for Diffra (docs/reference/benchmarks.md, "Diffra evidence"). The same
+      # results, rewritten as three Diffra metrics payloads (allocations, GC counts, time) for the
+      # budgets in benchmarks/diffra/*.rules.json. It decides nothing: the step above is the
+      # gate, this one runs whatever it concluded (and on an update_baseline dispatch, where its
+      # payloads are the Diffra baseline candidate), and a failure here cannot fail the job.
+      - name: Emit Diffra metrics payloads (shadow)
+        if: always() && steps.gated-run.outcome == 'success'
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          dotnet run scripts/BenchmarkDiffraPayload.cs -- BenchmarkDotNet.Artifacts/gate/results diffra-payload
+          {
+            echo "### Diffra payloads (shadow, not gating)"
+            echo
+            echo "Written to the \`benchmark-diffra-payload\` artifact; budgets in \`benchmarks/diffra/\`."
+            echo
+            for payload in diffra-payload/*.json; do
+              echo "- \`$(basename "$payload")\`: $(jq '[.metrics[] | keys[]] | length' "$payload") measurement(s), methodology \`$(jq -r .methodology "$payload")\`"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Diffra payloads
+        if: always() && steps.gated-run.outcome == 'success'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: benchmark-diffra-payload
+          path: diffra-payload/*.json
+          if-no-files-found: warn
 
       - name: Upload gate results
         if: always()

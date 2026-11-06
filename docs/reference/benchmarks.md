@@ -171,6 +171,80 @@ Optional flags: `--alloc-tolerance <fraction>` (default `0.05`, with a 4 KB abso
 regressions to failures and is only meaningful on a quiet machine with a baseline from that machine,
 and `--no-time`, which never reports a wall-clock difference.
 
+### 🧾 Diffra evidence (shadow, gates nothing)
+
+After the gated benchmarks run, the `regression-gate` job also writes the same results as
+[Diffra](https://github.com/rtkelly-labs/Diffra) metrics payloads (`{ scope, methodology, metrics }`)
+and uploads them as the `benchmark-diffra-payload` artifact. `scripts/BenchmarkDiffraPayload.cs`
+does the conversion. The step is `continue-on-error`: the gate above still decides the job, and the
+payload step cannot turn it red or green. The point is to move the baseline-to-budget logic onto a
+standard evidence shape once the Diffra CLI is published, and to collect the history first.
+
+There are three payloads, because a Diffra rules file is one set of thresholds for every
+measurement it evaluates, and the three kinds of measurement need different budgets:
+
+| Payload | Measurement per `Class.Method(Parameters)` | Unit | Rules | Budget |
+| --- | --- | --- | --- | --- |
+| `allocations.json` | `allocatedBytes` | `bytes` | `benchmarks/diffra/allocations.rules.json` | warn above +256 B, fail above +1024 B |
+| `gc.json` | `gen0`/`gen1`/`gen2CollectionsPer1000Ops` | `count/1000-ops` | `benchmarks/diffra/gc.rules.json` | warn above +20 or +35%, fail above +30 or +50% |
+| `time.json` | `meanNanoseconds` | `ns` | `benchmarks/diffra/time.rules.json` | warn above +25%, never fails |
+
+The keys are the identity the gate and `benchmarks/baseline.json` already use, so a key changes
+only when the benchmark does. GC counts are per 1000 operations because BenchmarkDotNet picks the
+operation count from the runner's speed: the same code ran 1024 operations on one runner and 2048
+on a faster one, and the raw counts doubled with it.
+
+**Methodology.** The `methodology` string names the BenchmarkDotNet version, the runtime
+`major.minor`, the OS family and the architecture, plus the measure. `gc.json` and `time.json` also
+name the processor model. Diffra compares two payloads only when scope and methodology match exactly, so a
+baseline from another architecture, or a GC or time baseline from another CPU model, is reported as
+`incompatible` rather than as a change. The runtime patch version is left out because the runner
+image moves it every few weeks.
+
+**Why these budgets.** They come from the six non-skipped gate runs between 2026-10-02 and
+2026-11-01 (runners on three EPYC models, .NET 8.0.31 to 8.0.33), and one gate-only run on this change
+(2026-11-06, an Intel Xeon runner, code unchanged from the 2026-11-01 run):
+
+- *Allocations.* Two runs of the same commit a week apart, across a .NET 8 patch update, gave
+  byte-identical allocations for 13 of 17 cases. The other four drifted by 44 to 173 B, all of them
+  10,000-row writes. Across five
+  runs spanning source changes the largest spread was 243 B (0.02% of that case). Cases that allocate a few bytes
+  per operation (`TransposeOnly`, 0 to 3 B) are amortisation artefacts. A 1024 B fail budget is
+  about 4× the worst drift, and is absolute only: a relative threshold would misfire on the 0 to 3 B
+  cases, because Diffra applies absolute and relative thresholds as either-or. The Xeon run against
+  the 2026-11-01 EPYC run, on unchanged code, moved five cases by 1 to 152 B: within the warn budget.
+- *GC counts.* Gen0 per 1000 operations varied by 0 to 9%. Gen1 and gen2 vary more: up to 28%
+  (19.5 collections per 1000 operations absolute) and 17% respectively on the 10,000-row columnar
+  write. The budget sits just above that. A gen2 count that goes from zero to anything is
+  `needs-review`, which is intended. GC counts are not portable across CPUs: on the Xeon runner the
+  same code ran 50 to 80% fewer gen0 collections than on EPYC (the runtime sizes the gen0 budget
+  from the CPU cache), so, like time, GC counts compare only within one processor model.
+- *Time.* The same code ran 1.7 to 2.1× apart across CPU models, and up to about 10% apart on the
+  same commit and model. Time is a trend to watch, not a gate. The 25% warning applies only within
+  one CPU model, because the methodology makes any other comparison `incompatible`.
+
+**What the evidence says about the gate.** `benchmarks/baseline.json` was recorded on an Arm64
+machine and the runner is X64. Three 10,000-row cases read about 6.5% *lower* on every run since it
+was recorded and are reported as improvements. That is an architecture difference, not a change in
+the code. The architecture belongs in the baseline's identity, which the Diffra methodology carries,
+and the baseline should be re-recorded from a runner.
+
+**Updating the baseline.** Dispatch `benchmarks.yml` with `gate_only` and `update_baseline` set. The
+run uploads both `benchmark-baseline-candidate` (for the gate) and `benchmark-diffra-payload` (the
+Diffra baseline candidate, recorded on the runner). Nothing is committed automatically: review both,
+then commit `benchmarks/baseline.json`. Once the Diffra CLI is published, the payload is collected
+into a baseline with `diffra collect` and compared with `diffra diff` and `diffra eval`.
+
+To produce the payloads locally, after running the gated set:
+
+```bash
+dotnet run scripts/BenchmarkDiffraPayload.cs -- BenchmarkDotNet.Artifacts/gate/results diffra-payload
+```
+
+It exits 1 when there is nothing to emit: no export, a failed case, or a case run without the memory
+diagnoser. An empty payload would read as every benchmark removed. `BenchmarkDiffraPayloadTests`
+covers the keys, units, string-encoded fractions and the methodology.
+
 ---
 
 ## 🔗 Related Documentation
