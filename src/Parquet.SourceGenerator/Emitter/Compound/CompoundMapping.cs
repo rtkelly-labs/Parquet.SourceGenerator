@@ -8,8 +8,8 @@ namespace Parquet.SourceGenerator.Emitter.Compound;
 /// <summary>
 /// Compound write extraction and read reconstruction for the v6 emitter (issue #176 M2).
 /// The definition-ladder conventions implemented here are the ones verified against
-/// Parquet.Net 6.1.0 and PyArrow in docs/guides/nested-types.md §1-2. v6-only by design; the classic backend's
-/// equivalent lands in M5 on the 4.x conventions (docs/guides/nested-types.md §3).
+/// Parquet.Net 6.1.0 and PyArrow in docs/15 §1-2. v6-only by design; the classic backend's
+/// equivalent lands in M5 on the 4.x conventions (docs/15 §3).
 /// </summary>
 internal static class CompoundMapping
 {
@@ -87,9 +87,7 @@ internal static class CompoundMapping
         model.IsValueType ? $"in {itemExpr}" : itemExpr;
 
     private static string ItemParameter(TargetClassModel model) =>
-        model.IsValueType
-            ? $"in {EmittedText.Ident(model.ClassName)} item"
-            : $"{EmittedText.Ident(model.ClassName)} item";
+        model.IsValueType ? $"in {model.ClassName} item" : $"{model.ClassName} item";
 
     /// <summary>
     /// Emits one <c>ExtractCompound_N</c> / <c>ExtractList_N</c> helper per compound or list leaf
@@ -208,7 +206,7 @@ internal static class CompoundMapping
     {
         int n = col.Slot;
         string cv = $"cv_{n}";
-        builder.AppendLine($"{p}var {cv} = el_{n}.{EmittedText.Ident(col.Leaf.Name)};");
+        builder.AppendLine($"{p}var {cv} = el_{n}.{col.Leaf.Name};");
         string conv = GetCompoundLeafWriteExpression(col.Leaf, cv);
         if (col.Leaf.IsNullable)
         {
@@ -277,7 +275,7 @@ internal static class CompoundMapping
 
     /// <summary>
     /// Row-level list/array extraction (M3a): foreach keeps every collection shape uniform —
-    /// the empty-list marker is emitted when the loop body never ran (docs/guides/nested-types.md §1.2: one entry
+    /// the empty-list marker is emitted when the loop body never ran (docs/15 §1.2: one entry
     /// per row at minimum, markers are not phantom slots).
     /// </summary>
     private static void EmitListExtraction(
@@ -498,15 +496,8 @@ internal static class CompoundMapping
         builder.AppendLine(
             $"{indent}        if (dv_{n} == {col.MaxDef}) {{ if (vc_{n} >= entries_{n}) {{ throw new global::System.IO.InvalidDataException(\"Definition levels in column '{col.Leaf.Name}' exceeded values count (\" + entries_{n} + \").\"); }} bk_{n}.Add({GetCompoundLeafReadExpression(col.Leaf, $"buffer_{n}[vc_{n}++]")}); }}"
         );
-        // A nullable array element keeps an unannotated List<T[]>, where only `null!` compiles cleanly;
-        // every other nullable element has an annotated list and takes a plain `null`.
         if (col.Leaf.IsNullable)
-        {
-            string nullLiteral = listType.EndsWith("?>", StringComparison.Ordinal)
-                ? "null"
-                : "null!";
-            builder.AppendLine($"{indent}        else bk_{n}.Add({nullLiteral});");
-        }
+            builder.AppendLine($"{indent}        else bk_{n}.Add(null!);");
         builder.AppendLine($"{indent}    }}");
         builder.AppendLine($"{indent}}}");
         builder.AppendLine(
@@ -540,21 +531,6 @@ internal static class CompoundMapping
         );
         foreach (LeafColumn g in group)
             builder.AppendLine($"{indent}int vc_{g.Slot} = 0;");
-        // Sibling leaves of one list element carry identical level streams, so their declared
-        // num_values must match the anchor's. Each is sized and validated on its own, and the walk
-        // below indexes every sibling's levels with the anchor's position; a shorter sibling would be
-        // read past what was written into its rented array, stale pooled levels included (#365).
-        foreach (LeafColumn g in group)
-        {
-            if (g.Slot == a)
-            {
-                continue;
-            }
-
-            builder.AppendLine(
-                $"{indent}if (entries_{g.Slot} != entries_{a}) throw new global::System.IO.InvalidDataException(\"Column '{g.Leaf.Name}' declares \" + entries_{g.Slot} + \" values but sibling column '{anchor.Leaf.Name}' declares \" + entries_{a} + \"; sibling leaves of one list element must carry identical level streams.\");"
-            );
-        }
         builder.AppendLine($"{indent}for (int p_{a} = 0; p_{a} < entries_{a}; p_{a}++)");
         builder.AppendLine($"{indent}{{");
         builder.AppendLine(
@@ -586,7 +562,7 @@ internal static class CompoundMapping
             string read = GetCompoundLeafReadExpression(g.Leaf, $"buffer_{g.Slot}[vc_{g.Slot}++]");
             string absent = g.Leaf.IsNullable ? "null!" : NonNullAbsentLiteral(g.Leaf);
             builder.AppendLine(
-                $"{indent}                {EmittedText.Ident(g.Leaf.Name)} = defLevels_{g.Slot}[p_{a}] >= {g.MaxDef} ? {read} : {absent},"
+                $"{indent}                {g.Leaf.Name} = defLevels_{g.Slot}[p_{a}] >= {g.MaxDef} ? {read} : {absent},"
             );
         }
         builder.AppendLine($"{indent}            }});");
@@ -601,7 +577,7 @@ internal static class CompoundMapping
 
     /// <summary>
     /// The value a non-nullable leaf takes when its definition level says the value is absent.
-    /// A Guid spells it <c>Guid.Empty</c> (MA0067); every other type keeps <c>default</c>.
+    /// A Guid spells it <c>Guid.Empty</c> (S4581); every other type keeps <c>default</c>.
     /// </summary>
     private static string NonNullAbsentLiteral(PropertyModel leaf) =>
         leaf.Kind == PropertyKind.Guid ? "global::System.Guid.Empty" : "default";
@@ -764,7 +740,7 @@ internal static class CompoundMapping
                 || leafCol.Leaf.Kind == PropertyKind.ByteArray;
             string absent = nullableish ? "null!" : NonNullAbsentLiteral(leafCol.Leaf);
             builder.AppendLine(
-                $"{p}    {EmittedText.Ident(leafCol.Leaf.Name)} = defLevels_{leafCol.Slot}[ri_{node.Id}] >= {leafCol.MaxDef} ? {expr} : {absent},"
+                $"{p}    {leafCol.Leaf.Name} = defLevels_{leafCol.Slot}[ri_{node.Id}] >= {leafCol.MaxDef} ? {expr} : {absent},"
             );
         }
         builder.AppendLine($"{p}}};");
@@ -800,9 +776,7 @@ internal static class CompoundMapping
                 string tail = listCol.ListMemberIsArray
                     ? $" is {{ }} ln_{listCol.Slot} ? ln_{listCol.Slot}.ToArray() : null{lb}"
                     : lb;
-                builder.AppendLine(
-                    $"{prefix}{EmittedText.Ident(prop.Name)} = lane_{listCol.Slot}[{indexVar}]{tail},"
-                );
+                builder.AppendLine($"{prefix}{prop.Name} = lane_{listCol.Slot}[{indexVar}]{tail},");
                 continue;
             }
             int nodeId = plan.RootNodeByProperty[p];
@@ -814,14 +788,12 @@ internal static class CompoundMapping
                 {
                     LeafColumn pp = node.PresenceLeaf!;
                     builder.AppendLine(
-                        $"{prefix}{EmittedText.Ident(prop.Name)} = defLevels_{pp.Slot}[{indexVar}] >= {node.PresenceThreshold} ? {node.ArrayVar}[{indexVar}] : null,"
+                        $"{prefix}{prop.Name} = defLevels_{pp.Slot}[{indexVar}] >= {node.PresenceThreshold} ? {node.ArrayVar}[{indexVar}] : null,"
                     );
                 }
                 else
                 {
-                    builder.AppendLine(
-                        $"{prefix}{EmittedText.Ident(prop.Name)} = {node.ArrayVar}[{indexVar}]{bang},"
-                    );
+                    builder.AppendLine($"{prefix}{prop.Name} = {node.ArrayVar}[{indexVar}]{bang},");
                 }
                 continue;
             }
@@ -831,7 +803,7 @@ internal static class CompoundMapping
                 prop,
                 $"{bufferPrefix}{slot}[{indexVar}]"
             );
-            builder.AppendLine($"{prefix}{EmittedText.Ident(prop.Name)} = {readExpr},");
+            builder.AppendLine($"{prefix}{prop.Name} = {readExpr},");
         }
     }
 
@@ -859,7 +831,7 @@ internal static class CompoundMapping
         string targetSlot = string.IsNullOrEmpty(startOffsetVar)
             ? $"{targetArrayVar}[{indexVar}]"
             : $"{targetArrayVar}[{startOffsetVar} + {indexVar}]";
-        builder.AppendLine($"{indent}    {targetSlot} = new {EmittedText.Ident(model.ClassName)}");
+        builder.AppendLine($"{indent}    {targetSlot} = new {model.ClassName}");
         builder.AppendLine($"{indent}    {{");
         EmitRootMemberAssignments(builder, model, indexVar, indent + "        ", bufferPrefix);
         builder.AppendLine($"{indent}    }};");

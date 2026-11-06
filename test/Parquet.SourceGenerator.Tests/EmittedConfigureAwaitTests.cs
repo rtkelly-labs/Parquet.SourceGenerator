@@ -130,7 +130,7 @@ public class EmittedConfigureAwaitTests
         {
             using var stream = new MemoryStream();
             items
-                .WriteParquetAsync(stream, new ParquetSerializerOptions { RowGroupSize = 5 })
+                .WriteParquetBatchedAsync(stream, new ParquetSerializerOptions { RowGroupSize = 5 })
                 .GetAwaiter()
                 .GetResult();
 

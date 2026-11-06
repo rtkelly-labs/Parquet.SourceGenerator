@@ -150,7 +150,10 @@ internal static class ArrowMappingComponent
                         "ArrowDecimalExact({ARR}, {I}, "
                         + scale.ToString(System.Globalization.CultureInfo.InvariantCulture)
                         + ", "
-                        + EmittedText.Literal(prop.ParquetColumnName)
+                        + Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(
+                            prop.ParquetColumnName,
+                            quote: true
+                        )
                         + ")",
                 };
             }

@@ -33,7 +33,7 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\..\src\Parquet.SourceGenerator.Runtime\Parquet.SourceGenerator.Runtime.csproj" />
+        <ProjectReference Include="..\..\src\Parquet.SourceGenerator.Attributes\Parquet.SourceGenerator.Attributes.csproj" />
         <!--
       ReferenceOutputAssembly stays "true" here, unlike every other consumer in the repository.
       This project unit-tests the generator's internals directly (CodeEmitter, TargetParser,
@@ -66,7 +66,7 @@
     </ItemGroup>
 
     <!--
-    The signature-only API renderer (docs/architecture/api-governance.md) is shared with the
+    The signature-only API renderer (docs/17-GENERATED-API-BASELINES.md) is shared with the
     ApiGates project rather than duplicated: GoldenCorpus uses it to derive each golden model's
     .api.txt, and the policy tests read that in memory.
   -->
@@ -87,10 +87,6 @@
         <Compile
             Include="..\..\tools\Parquet.SourceGenerator.ApiGates\ApiLedger.cs"
             Link="ApiLedger.cs"
-        />
-        <Compile
-            Include="..\..\tools\Parquet.SourceGenerator.ApiGates\GeneratedApiBudgetGate.cs"
-            Link="GeneratedApiBudgetGate.cs"
         />
         <AdditionalFiles Include="BannedSymbols.txt" />
     </ItemGroup>

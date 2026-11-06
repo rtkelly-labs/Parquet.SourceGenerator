@@ -43,7 +43,10 @@ public class ColumnBatchAggregationBenchmark
             .ToList();
 
         using var stream = new MemoryStream();
-        data.WriteParquetAsync(stream, new ParquetSerializerOptions { RowGroupSize = 20_000 })
+        data.WriteParquetBatchedAsync(
+                stream,
+                new ParquetSerializerOptions { RowGroupSize = 20_000 }
+            )
             .GetAwaiter()
             .GetResult();
         _parquetBytes = stream.ToArray();
@@ -105,10 +108,14 @@ public class ColumnBatchAggregationBenchmark
         using var stream = new MemoryStream(_parquetBytes);
         double sum = 0;
         long sumB = 0;
-        await foreach (ScaleEventBatch batch in ScaleEventParquet.From(stream).AsBatches())
+        await foreach (
+            ScaleEventParquetExtensions.ColumnBatch batch in ScaleEventParquet
+                .From(stream)
+                .Batches()
+        )
         {
-            ReadOnlySpan<double> a = batch.ValA.Span;
-            ReadOnlySpan<long> b = batch.ValB.Span;
+            ReadOnlySpan<double> a = batch.ValASpan;
+            ReadOnlySpan<long> b = batch.ValBSpan;
             for (int i = 0; i < a.Length; i++)
             {
                 sum += a[i];
@@ -128,10 +135,14 @@ public class ColumnBatchAggregationBenchmark
         using var stream = new MemoryStream(_parquetBytes);
         double sum = 0;
         long sumB = 0;
-        await foreach (ScaleEventBatch batch in ScaleEventParquet.From(stream).AsBatches())
+        await foreach (
+            ScaleEventParquetExtensions.ColumnBatch batch in ScaleEventParquet
+                .From(stream)
+                .Batches()
+        )
         {
-            sum += SumVectorized(batch.ValA.Span);
-            sumB += SumVectorized(batch.ValB.Span);
+            sum += SumVectorized(batch.ValASpan);
+            sumB += SumVectorized(batch.ValBSpan);
         }
         return sum + sumB;
     }

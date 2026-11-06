@@ -21,9 +21,12 @@ internal static class CompoundSchema
         if (prop.Kind == PropertyKind.List)
         {
             // M3a: row-level lists standard 3-level. ListField synthesizes the optional
-            // group + repeated list wrapper with no nullability knobs (docs/guides/nested-types.md §2.4
+            // group + repeated list wrapper with no nullability knobs (docs/15 §2.4
             // semantics for groups apply to the list group too).
-            string listName = EmittedText.Literal(prop.ParquetColumnName);
+            string listName = Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(
+                prop.ParquetColumnName,
+                quote: true
+            );
             PropertyModel element = prop.Element!;
             string itemField =
                 element.Kind == PropertyKind.Struct
@@ -35,9 +38,12 @@ internal static class CompoundSchema
         if (prop.Kind != PropertyKind.Struct)
             return SchemaComponent.GetFieldCreationExpression(prop);
 
-        // Parquet.Net 6's StructField is always an optional group (docs/guides/nested-types.md §2.4) — the
+        // Parquet.Net 6's StructField is always an optional group (docs/15 §2.4) — the
         // definition ladder in CompoundMapping counts that rung unconditionally.
-        string name = EmittedText.Literal(prop.ParquetColumnName);
+        string name = Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(
+            prop.ParquetColumnName,
+            quote: true
+        );
         string inner = indent + "    ";
         var sb = new StringBuilder();
         sb.Append($"{indent}new global::Parquet.Schema.StructField(\n");
@@ -59,7 +65,7 @@ internal static class CompoundSchema
         );
         builder.AppendLine("    /// </summary>");
         builder.AppendLine(
-            "    internal static readonly global::Parquet.Schema.ParquetSchema Schema = new global::Parquet.Schema.ParquetSchema("
+            "    public static readonly global::Parquet.Schema.ParquetSchema Schema = new global::Parquet.Schema.ParquetSchema("
         );
 
         for (int i = 0; i < model.Properties.Length; i++)

@@ -46,7 +46,6 @@ public sealed class SerializerOptionsTests
 
         options.MaxDictionaryEntries.ShouldBe(1_000_000);
         options.MaxStringLengthBytes.ShouldBe(1_048_576);
-        options.MaxAllocationBytes.ShouldBe(256L * 1024 * 1024);
     }
 
     [Fact]
@@ -181,18 +180,6 @@ public sealed class SerializerOptionsTests
                     .AsAsyncEnumerable()
             ) { }
         });
-
-        // #358: the columnar batch reader sits behind the same guarded stream as every other path.
-        var batchException = await Should.ThrowAsync<InvalidDataException>(async () =>
-        {
-            await foreach (
-                var _ in CompressibleRecordParquet
-                    .From(new MemoryStream(bytes))
-                    .WithOptions(options)
-                    .AsBatches()
-            ) { }
-        });
-        batchException.Message.ShouldContain("exceeding maximum allowed 1");
     }
 
     [Fact]

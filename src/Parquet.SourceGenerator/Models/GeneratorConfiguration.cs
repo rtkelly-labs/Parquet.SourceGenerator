@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Diagnostics;
@@ -6,49 +8,93 @@ using Parquet.SourceGenerator.Diagnostics;
 
 namespace Parquet.SourceGenerator.Models;
 
+internal enum GeneratorFeatureLevel
+{
+    Level1Flat = 1,
+    Level2CompoundPreview = 2,
+    Level3ModernCSharp = 3,
+}
+
 /// <summary>
 /// Value-equatable project configuration carried through the incremental pipeline.
 /// </summary>
 internal sealed record GeneratorConfiguration(
-    bool FlatOnly,
+    GeneratorFeatureLevel FeatureLevel,
     string GeneratorVersion,
     DiagnosticInfo? ConfigurationDiagnostic = null
 )
 {
+    private const string OptionsAttributeName =
+        "Parquet.SourceGenerator.ParquetGeneratorOptionsAttribute";
+
     public static GeneratorConfiguration Default { get; } =
-        new(FlatOnly: false, GetGeneratorVersion());
+        new(GeneratorFeatureLevel.Level2CompoundPreview, GetGeneratorVersion());
 
-    public static GeneratorConfiguration From(AnalyzerConfigOptionsProvider optionsProvider)
+    public static GeneratorConfiguration From(
+        Compilation compilation,
+        AnalyzerConfigOptionsProvider optionsProvider
+    )
     {
-        bool flatOnly = false;
-
         if (
-            optionsProvider.GlobalOptions.TryGetValue(
-                "build_property.ParquetGeneratorFlatOnly",
-                out string? flatOnlyProp
-            ) && !string.IsNullOrWhiteSpace(flatOnlyProp)
-        )
-        {
-            if (bool.TryParse(flatOnlyProp, out bool parsedBool))
-            {
-                flatOnly = parsedBool;
-            }
-        }
-        else if (
             optionsProvider.GlobalOptions.TryGetValue(
                 "build_property.ParquetGeneratorFeatureLevel",
                 out string? featureLevel
             ) && !string.IsNullOrWhiteSpace(featureLevel)
         )
         {
-            if (string.Equals(featureLevel, "Level1Flat", StringComparison.OrdinalIgnoreCase))
+            if (
+                Enum.TryParse(featureLevel, ignoreCase: true, out GeneratorFeatureLevel parsed)
+                && Enum.IsDefined(typeof(GeneratorFeatureLevel), parsed)
+            )
             {
-                flatOnly = true;
+                return new GeneratorConfiguration(parsed, GetGeneratorVersion());
+            }
+
+            return Invalid(featureLevel);
+        }
+
+        AttributeData? assemblyOptions = compilation
+            .Assembly.GetAttributes()
+            .FirstOrDefault(attribute =>
+                attribute.AttributeClass?.ToDisplayString() == OptionsAttributeName
+            );
+        if (assemblyOptions is not null)
+        {
+            foreach (
+                KeyValuePair<string, TypedConstant> namedArgument in assemblyOptions.NamedArguments
+            )
+            {
+                if (namedArgument.Key == "FeatureLevel")
+                {
+                    if (
+                        namedArgument.Value.Value is int value
+                        && Enum.IsDefined(typeof(GeneratorFeatureLevel), value)
+                    )
+                    {
+                        return new GeneratorConfiguration(
+                            (GeneratorFeatureLevel)value,
+                            GetGeneratorVersion()
+                        );
+                    }
+
+                    return Invalid(namedArgument.Value.Value?.ToString() ?? "<missing>");
+                }
             }
         }
 
-        return new GeneratorConfiguration(flatOnly, GetGeneratorVersion());
+        return Default;
     }
+
+    private static GeneratorConfiguration Invalid(string featureLevel) =>
+        new(
+            GeneratorFeatureLevel.Level2CompoundPreview,
+            GetGeneratorVersion(),
+            new DiagnosticInfo(
+                DiagnosticDescriptors.InvalidFeatureLevel,
+                Location.None,
+                new[] { featureLevel }
+            )
+        );
 
     private static string GetGeneratorVersion()
     {

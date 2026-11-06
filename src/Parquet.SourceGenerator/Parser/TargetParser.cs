@@ -20,12 +20,6 @@ internal sealed record TargetParserResult(
 );
 
 /// <summary>
-/// A target parsed under both dials: the compound one the feature level normally selects, and the
-/// flat one <c>Level1Flat</c> selects. Value-equatable, so it can be the pipeline's cached value.
-/// </summary>
-internal sealed record TargetParseSet(TargetParserResult Compound, TargetParserResult Flat);
-
-/// <summary>
 /// Extracts semantic models from Roslyn syntax contexts for decorated target types and validates compiler rules.
 /// </summary>
 internal static class TargetParser
@@ -147,147 +141,6 @@ internal static class TargetParser
         return GetTargetModelCore(typeSymbol, syntax, apiLevel, compoundKinds);
     }
 
-    /// <summary>
-    /// Pipeline entry point (#368). Resolves the declared type and parses it only when
-    /// <paramref name="context"/> is the declaration that carries the type's first
-    /// <c>[ParquetSerializable]</c>; returns <c>null</c> for every other attributed declaration.
-    /// </summary>
-    /// <remarks>
-    /// Roslyn calls the transform once per partial part, and every part resolves to the same
-    /// symbol, whose attributes are the union across parts. Parsing from each part produced several
-    /// identical models, so <c>AddSource</c> saw the same hint name twice, threw, and took the whole
-    /// generator down; it also reported every diagnostic once per part. Admitting only the
-    /// declaration the attribute was written on gives exactly one element per type without holding
-    /// a symbol in the pipeline, and works at the Roslyn 4.0.1 floor.
-    /// </remarks>
-    public static TargetParserResult? GetPrimaryTargetModel(
-        GeneratorSyntaxContext context,
-        ParquetApiLevel apiLevel,
-        CompoundKinds compoundKinds
-    ) =>
-        TryGetPrimaryTarget(
-            context,
-            out INamedTypeSymbol? typeSymbol,
-            out TypeDeclarationSyntax? declaration
-        )
-            ? GetTargetModelCore(typeSymbol!, declaration, apiLevel, compoundKinds)
-            : null;
-
-    /// <summary>
-    /// Pipeline entry point (#395). Parses the declaration under the compound dial the feature
-    /// level normally selects and, only when it matters, under the flat dial <c>Level1Flat</c>
-    /// selects, returning models only so the incremental cache compares values.
-    /// </summary>
-    /// <remarks>
-    /// The transform cannot see the feature level (it lives in the analyzer-config provider), and
-    /// the pipeline used to cache the <see cref="GeneratorSyntaxContext"/> to parse after combining
-    /// with it. A context holds a <see cref="SemanticModel"/>, which roots the compilation, and has
-    /// no value equality, so that retained a compilation per target and let nothing downstream
-    /// compare as unchanged. Parsing here under both dials keeps the feature-level choice in the
-    /// pipeline without caching a syntax object.
-    /// </remarks>
-    public static TargetParseSet? GetTargetParseSet(
-        GeneratorSyntaxContext context,
-        ParquetApiLevel apiLevel,
-        CompoundKinds compoundKinds
-    )
-    {
-        if (
-            !TryGetPrimaryTarget(
-                context,
-                out INamedTypeSymbol? typeSymbol,
-                out TypeDeclarationSyntax? declaration
-            )
-        )
-        {
-            return null;
-        }
-
-        TargetParserResult compound = GetTargetModelCore(
-            typeSymbol!,
-            declaration,
-            apiLevel,
-            compoundKinds
-        );
-
-        // The flat dial only differs from the compound dial when a member is compound, so a valid
-        // model with no compound member needs no second parse. A failed parse might have failed
-        // before reaching its members, so it is parsed again rather than assumed equal.
-        bool needsFlat =
-            compoundKinds != CompoundKinds.None
-            && (compound.Model is null || HasCompoundMember(compound.Model));
-        TargetParserResult flat = needsFlat
-            ? GetTargetModelCore(typeSymbol!, declaration, apiLevel, CompoundKinds.None)
-            : compound;
-        return new TargetParseSet(compound, flat);
-    }
-
-    private static bool HasCompoundMember(TargetClassModel model)
-    {
-        for (int i = 0; i < model.Properties.Length; i++)
-        {
-            if (
-                model.Properties[i].Kind
-                is PropertyKind.Struct
-                    or PropertyKind.List
-                    or PropertyKind.Map
-            )
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /// <summary>
-    /// Single-dial form of <see cref="GetPrimaryTargetModel(GeneratorSyntaxContext, ParquetApiLevel, CompoundKinds)"/>
-    /// for the legacy generator, which emits no compound members.
-    /// </summary>
-    public static TargetParserResult? GetPrimaryTargetModel(
-        GeneratorSyntaxContext context,
-        ParquetApiLevel apiLevel
-    ) => GetPrimaryTargetModel(context, apiLevel, CompoundKinds.None);
-
-    private static bool TryGetPrimaryTarget(
-        GeneratorSyntaxContext context,
-        out INamedTypeSymbol? typeSymbol,
-        out TypeDeclarationSyntax? declaration
-    )
-    {
-        typeSymbol = null;
-        declaration = null;
-        if (context.Node is not TypeDeclarationSyntax typeDeclaration)
-            return false;
-
-        if (context.SemanticModel.GetDeclaredSymbol(typeDeclaration) is not INamedTypeSymbol symbol)
-            return false;
-
-        AttributeData? serializable = symbol
-            .GetAttributes()
-            .FirstOrDefault(a => a.AttributeClass?.ToDisplayString() == AttributeFullName);
-        if (serializable is null)
-            return false;
-
-        // ApplicationSyntaxReference is the attribute's own syntax: attribute -> attribute list ->
-        // the declaration it decorates. It is null only for metadata symbols, which cannot be a
-        // syntax context here, so a null reference falls back to admitting this declaration.
-        SyntaxNode? owner = serializable.ApplicationSyntaxReference?.GetSyntax().Parent?.Parent;
-        if (
-            owner is not null
-            && (
-                owner.SyntaxTree != typeDeclaration.SyntaxTree || owner.Span != typeDeclaration.Span
-            )
-        )
-        {
-            return false;
-        }
-
-        typeSymbol = symbol;
-        declaration = typeDeclaration;
-        return true;
-    }
-
     private static TargetParserResult GetTargetModelCore(
         INamedTypeSymbol typeSymbol,
         TypeDeclarationSyntax? typeDeclaration,
@@ -309,8 +162,6 @@ internal static class TargetParser
             typeDeclaration,
             diagnostics
         );
-
-        bool unsupportedShape = ReportUnsupportedShape(typeSymbol, typeDeclaration, diagnostics);
 
         string namespaceName = typeSymbol.ContainingNamespace.IsGlobalNamespace
             ? string.Empty
@@ -341,9 +192,6 @@ internal static class TargetParser
         var sink = new MemberSink();
 
         CollectMembers(typeSymbol, scope, sink);
-
-        // Rule PARQ024: a field ID names one column of the whole schema, nested leaves included.
-        ReportDuplicateFieldIds(sink.Properties, className, fallbackLocation, diagnostics);
 
         // Rule PARQ003: Warning if no public serializable properties found. Suppressed when a
         // member was rejected above — "this type has no serializable members" is misleading when the
@@ -386,7 +234,6 @@ internal static class TargetParser
         // neither collides nor causes another target to be suppressed.
         bool nameCollides =
             !isGeneric
-            && !unsupportedShape
             && !nestedUnreachable
             && ReportGeneratedNameCollision(
                 typeSymbol,
@@ -402,10 +249,9 @@ internal static class TargetParser
             && !rejectedAnyMember
             && !nestedUnreachable
             && !isGeneric
-            && !unsupportedShape
             && !nameCollides;
 
-        bool hasSingleInstanceField = ComputeHasSingleInstanceField(typeSymbol, orderedProperties);
+        bool hasSingleInstanceField = ComputeHasSingleInstanceField(typeSymbol);
 
         TargetClassModel? model = canEmit
             ? new TargetClassModel(
@@ -468,9 +314,6 @@ internal static class TargetParser
                     candidate.ContainingType is not null
                     && !IsReachableFromGeneratedCode(candidate.DeclaredAccessibility)
                 )
-                || (candidate.IsAbstract && !candidate.IsStatic)
-                || candidate.IsRefLikeType
-                || IsFileLocal(candidate)
                 || candidate
                     .GetAttributes()
                     .All(a => a.AttributeClass?.ToDisplayString() != AttributeFullName)
@@ -580,81 +423,6 @@ internal static class TargetParser
     }
 
     /// <summary>
-    /// Rules PARQ020 (abstract), PARQ021 (ref struct) and PARQ022 (file-local): declaration shapes
-    /// the emitted code cannot express, each of which used to pass every check and then fail to
-    /// compile inside the generated file (#402). Returns whether any applied, which suppresses
-    /// emission like the other declaration rules.
-    /// </summary>
-    private static bool ReportUnsupportedShape(
-        INamedTypeSymbol typeSymbol,
-        TypeDeclarationSyntax? typeDeclaration,
-        List<DiagnosticInfo> diagnostics
-    )
-    {
-        Location location = typeDeclaration?.Identifier.GetLocation() ?? Location.None;
-        var arguments = new[] { typeSymbol.Name };
-        bool unsupported = false;
-
-        // A static class is also IsAbstract; it has no instance constructor and PARQ008 names it.
-        if (typeSymbol.IsAbstract && !typeSymbol.IsStatic)
-        {
-            diagnostics.Add(
-                new DiagnosticInfo(
-                    DiagnosticDescriptors.AbstractTypeNotSupported,
-                    location,
-                    arguments
-                )
-            );
-            unsupported = true;
-        }
-
-        if (typeSymbol.IsRefLikeType)
-        {
-            diagnostics.Add(
-                new DiagnosticInfo(DiagnosticDescriptors.RefStructNotSupported, location, arguments)
-            );
-            unsupported = true;
-        }
-
-        if (IsFileLocal(typeSymbol))
-        {
-            diagnostics.Add(
-                new DiagnosticInfo(
-                    DiagnosticDescriptors.FileLocalTypeNotSupported,
-                    location,
-                    arguments
-                )
-            );
-            unsupported = true;
-        }
-
-        return unsupported;
-    }
-
-    /// <summary>
-    /// Whether the type is declared <c>file</c>, or inside a type that is. <c>ISymbol.IsFileLocal</c>
-    /// needs Roslyn 4.4 and the generator keeps its 4.0.1 floor; the compiler gives a file-local
-    /// type the metadata name <c>&lt;FileName&gt;F{n}__Name</c>, which no source identifier can.
-    /// </summary>
-    private static bool IsFileLocal(INamedTypeSymbol typeSymbol)
-    {
-        for (
-            INamedTypeSymbol? current = typeSymbol;
-            current is not null;
-            current = current.ContainingType
-        )
-        {
-            if (
-                current.MetadataName.StartsWith("<", StringComparison.Ordinal)
-                && current.MetadataName.Contains(">F")
-            )
-                return true;
-        }
-
-        return false;
-    }
-
-    /// <summary>
     /// Whether the read path can construct this type: value types always have an accessible
     /// parameterless constructor; reference types need one declared (or defaulted).
     /// </summary>
@@ -667,14 +435,9 @@ internal static class TargetParser
     /// <summary>
     /// Whether an unmanaged struct is a single-instance-field wrapper — the shape the emitter
     /// can copy field-for-field. Explicit layout or a custom Size alters the memory picture and
-    /// disqualifies it. The single field must also back
-    /// the single serialized member (#389), or the reinterpreting cast would write the field's value
-    /// where the member's was meant.
+    /// disqualifies it.
     /// </summary>
-    private static bool ComputeHasSingleInstanceField(
-        INamedTypeSymbol typeSymbol,
-        List<PropertyModel> serialized
-    )
+    private static bool ComputeHasSingleInstanceField(INamedTypeSymbol typeSymbol)
     {
         if (!typeSymbol.IsValueType || !typeSymbol.IsUnmanagedType)
             return false;
@@ -705,40 +468,8 @@ internal static class TargetParser
                 );
             });
 
-        if (instanceFields.Count != 1 || hasExplicitOrCustomSizeLayout || serialized.Count != 1)
-            return false;
-
-        // The cast reinterprets the struct's bytes as the field's, so the one serialized member
-        // must BE that field: either the field itself, or the auto-property whose compiler
-        // backing field it is (AssociatedSymbol is non-null exactly for those). A computed
-        // property over a differently-meaning field has no associated symbol and is rejected, as
-        // is a property whose type differs from the field's.
-        IFieldSymbol field = instanceFields[0];
-        ISymbol member = field.AssociatedSymbol ?? field;
-        // C# 14 'field' lets a property keep a synthesized backing field and still compute through
-        // it, so the accessors must be automatically implemented too.
-        if (member is IPropertySymbol property && !IsAutoImplemented(property))
-            return false;
-
-        return string.Equals(member.Name, serialized[0].Name, StringComparison.Ordinal)
-            && SymbolEqualityComparer.Default.Equals(
-                field.Type,
-                (member as IPropertySymbol)?.Type ?? field.Type
-            );
+        return instanceFields.Count == 1 && !hasExplicitOrCustomSizeLayout;
     }
-
-    private static bool IsAutoImplemented(IPropertySymbol property) =>
-        IsBodyless(property.GetMethod) && IsBodyless(property.SetMethod);
-
-    // A positional record's accessors are synthesized (their syntax is the parameter); written ones
-    // are bodiless only for `get;` / `set;` / `init;`.
-    private static bool IsBodyless(IMethodSymbol? accessor) =>
-        accessor is null
-        || accessor.DeclaringSyntaxReferences.All(reference =>
-            reference.GetSyntax()
-                is not AccessorDeclarationSyntax { Body: not null }
-                    and not AccessorDeclarationSyntax { ExpressionBody: not null }
-        );
 
     /// <summary>
     /// The per-target context <see cref="CollectMembers"/> reads: identical for every member of
@@ -777,8 +508,7 @@ internal static class TargetParser
         int Order,
         bool Deduplicate,
         ColumnEncoding Encoding,
-        bool IsSortKey,
-        int? FieldId
+        bool IsSortKey
     );
 
     /// <summary>
@@ -1059,21 +789,19 @@ internal static class TargetParser
             return;
         }
 
-        // Rules PARQ011 and PARQ023: what the 4.x/5.x API cannot represent or write.
-        if (
-            scope.ApiLevel == ParquetApiLevel.V4
-            && ClassicApiRejection(
-                member,
-                memberType,
-                underlyingType,
-                column,
-                scope.ClassName,
-                memberLocation
-            )
-                is DiagnosticInfo rejection
-        )
+        // Rule PARQ011: the type has a representation in Parquet.Net 6 but not in the 4.x/5.x
+        // API. Reported separately from PARQ006 because the answer is different: the member is
+        // fine, the backend is not, and the fix is to use the v6 package rather than to change
+        // the type.
+        if (scope.ApiLevel == ParquetApiLevel.V4 && !IsSupportedOnClassicApi(underlyingType))
         {
-            scope.Diagnostics.Add(rejection);
+            scope.Diagnostics.Add(
+                new DiagnosticInfo(
+                    DiagnosticDescriptors.TypeUnsupportedOnClassicApi,
+                    memberLocation,
+                    new[] { member.Name, memberType.ToDisplayString(), scope.ClassName }
+                )
+            );
             sink.RejectedAnyMember = true;
             return;
         }
@@ -1154,7 +882,6 @@ internal static class TargetParser
         int order = -1;
         bool deduplicate = false;
         ColumnEncoding encoding = ColumnEncoding.Default;
-        int? fieldId = null;
 
         if (columnAttr is not null)
         {
@@ -1180,8 +907,6 @@ internal static class TargetParser
                     deduplicate = dedupe;
                 else if (namedArg.Key == "Encoding" && namedArg.Value.Value is int encodingInt)
                     encoding = (ColumnEncoding)encodingInt;
-                else if (namedArg.Key == "FieldId" && namedArg.Value.Value is int id && id >= 0)
-                    fieldId = id;
             }
         }
 
@@ -1222,7 +947,7 @@ internal static class TargetParser
         // per eligible column whether or not anything looks them up.
         bool isSortKey = HasAttribute(member, SortKeyFullNames, SortKeyShortNames);
 
-        return new ColumnOptions(columnName, order, deduplicate, encoding, isSortKey, fieldId);
+        return new ColumnOptions(columnName, order, deduplicate, encoding, isSortKey);
     }
 
     private static (int? Precision, int? Scale) ReadDecimalOptions(
@@ -1275,29 +1000,6 @@ internal static class TargetParser
             return timestampAttr.ConstructorArguments[0].Value?.ToString();
 
         return null;
-    }
-
-    /// <summary>
-    /// <c>[ParquetTimestamp(..., AdjustedToUtc = false)]</c>: a local (wall-clock) timestamp. Absent
-    /// or true keeps the UTC-adjusted annotation every earlier release wrote.
-    /// </summary>
-    private static bool ReadTimestampAdjustedToUtc(ISymbol member)
-    {
-        AttributeData? timestampAttr = FindAttribute(
-            member,
-            TimestampFullNames,
-            TimestampShortNames
-        );
-        if (timestampAttr is null)
-            return true;
-
-        foreach (KeyValuePair<string, TypedConstant> namedArg in timestampAttr.NamedArguments)
-        {
-            if (namedArg.Key == "AdjustedToUtc" && namedArg.Value.Value is bool adjusted)
-                return adjusted;
-        }
-
-        return true;
     }
 
     private static (ITypeSymbol UnderlyingType, bool IsNullable) UnwrapNullable(
@@ -1438,8 +1140,6 @@ internal static class TargetParser
         )
         {
             IsSortKey = column.IsSortKey,
-            FieldId = column.FieldId,
-            TimestampAdjustedToUtc = ReadTimestampAdjustedToUtc(member),
         };
     }
 
@@ -1562,27 +1262,13 @@ internal static class TargetParser
         {
             string definition = generic.ConstructedFrom.ToDisplayString().Split('<')[0];
 
-            // The name match is by display string, so a user type declared into the framework
-            // namespace with another arity (a Dictionary<T>) would otherwise classify here and
-            // throw on TypeArguments[1] in BuildCompoundModel. Arity is part of the match (#417).
-            // A type the compiling assembly declares itself is never the framework collection,
-            // whatever its name and arity, so only metadata definitions qualify.
-            bool fromMetadata = generic.ConstructedFrom.DeclaringSyntaxReferences.IsEmpty;
-            if (
-                fromMetadata
-                && generic.TypeArguments.Length == 1
-                && Array.IndexOf(SupportedCollectionDefinitions, definition) >= 0
-            )
+            if (Array.IndexOf(SupportedCollectionDefinitions, definition) >= 0)
             {
                 kind = PropertyKind.List;
                 return true;
             }
 
-            if (
-                fromMetadata
-                && generic.TypeArguments.Length == 2
-                && Array.IndexOf(SupportedDictionaryDefinitions, definition) >= 0
-            )
+            if (Array.IndexOf(SupportedDictionaryDefinitions, definition) >= 0)
             {
                 kind = PropertyKind.Map;
                 return true;
@@ -2051,9 +1737,8 @@ internal static class TargetParser
     /// <c>GetMembers()</c> returns declared members only, so a type deriving from a base that
     /// carried columns silently lost every one of them — no diagnostic, just missing columns.
     /// <para>
-    /// Two deliberate choices. The walk skips every base type that is neither declared in source nor
-    /// Parquet-aware (see <see cref="ContributesColumns"/>), so a model deriving from a
-    /// framework type does not drag in <c>Exception.Data</c> and friends as
+    /// Two deliberate choices. The walk stops at the first base type not declared in source, so a
+    /// model deriving from a framework type does not drag in <c>Exception.Data</c> and friends as
     /// columns. And members are collected base-first, with a derived declaration replacing a
     /// shadowed base one *in the base's position* — so adding an <see langword="override"/> or <c>new</c>
     /// member changes which declaration is used without reordering the schema.
@@ -2069,44 +1754,26 @@ internal static class TargetParser
         )
         {
             chain.Add(current);
+
+            INamedTypeSymbol? next = current.BaseType;
+            if (next is null || next.DeclaringSyntaxReferences.IsEmpty)
+                break;
         }
 
         chain.Reverse();
 
-        var ordered = new List<ISymbol?>();
+        var ordered = new List<ISymbol>();
         var positionByName = new Dictionary<string, int>(StringComparer.Ordinal);
 
         foreach (INamedTypeSymbol type in chain)
         {
-            // An unannotated metadata base is skipped, not a stop: an annotated ancestor above it
-            // still contributes (#420). A skipped base adds no columns, but a member it declares
-            // still hides a same-named member of an ancestor, as it would at the call site; an
-            // override does not hide, it re-declares the ancestor's member.
-            bool contributes = ReferenceEquals(type, typeSymbol) || ContributesColumns(type);
-
             foreach (ISymbol member in type.GetMembers())
             {
                 if (member is not IPropertySymbol && member is not IFieldSymbol)
                     continue;
 
-                if (!contributes)
-                {
-                    if (
-                        !member.IsOverride
-                        && positionByName.TryGetValue(member.Name, out int hidden)
-                    )
-                    {
-                        ordered[hidden] = null;
-                        positionByName.Remove(member.Name);
-                    }
-
-                    continue;
-                }
-
                 if (positionByName.TryGetValue(member.Name, out int existing))
-                {
                     ordered[existing] = member;
-                }
                 else
                 {
                     positionByName[member.Name] = ordered.Count;
@@ -2115,53 +1782,8 @@ internal static class TargetParser
             }
         }
 
-        return ordered.Where(member => member is not null).Select(member => member!).ToList();
+        return ordered;
     }
-
-    /// <summary>
-    /// Whether a base type's members join the derived model. A base declared in source always
-    /// does. One read from metadata (a shared contracts project) does only when it is Parquet-aware:
-    /// it carries <c>[ParquetSerializable]</c> or a member annotated with one of the Parquet
-    /// attributes (#420). The old test, <c>DeclaringSyntaxReferences.IsEmpty</c>, meant "came from
-    /// metadata", so moving a base into its own project silently dropped its columns; what it
-    /// was written to keep out is framework types (<c>Exception.Data</c> and friends), which carry
-    /// no Parquet attribute.
-    /// </summary>
-    private static bool ContributesColumns(INamedTypeSymbol baseType)
-    {
-        if (!baseType.DeclaringSyntaxReferences.IsEmpty)
-            return true;
-
-        if (baseType.GetAttributes().Any(IsParquetAttribute))
-            return true;
-
-        foreach (ISymbol member in baseType.GetMembers())
-        {
-            if (
-                (member is IPropertySymbol || member is IFieldSymbol)
-                && member.GetAttributes().Any(IsParquetAttribute)
-            )
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    // The parser's own matchers, so every spelling it honours on a member (including the legacy
-    // Parquet.Attributes and Parquet.Serialization.Attributes namespaces) marks a base as aware.
-    // The Json attributes are not Parquet attributes and do not count.
-    private static bool IsParquetAttribute(AttributeData attribute) =>
-        attribute.AttributeClass?.ToDisplayString() == AttributeFullName
-        || MatchesAttributeName(attribute.AttributeClass, ColumnFullNames, ColumnShortNames)
-        || (
-            MatchesAttributeName(attribute.AttributeClass, IgnoreFullNames, IgnoreShortNames)
-            && attribute.AttributeClass?.Name.StartsWith("Json", StringComparison.Ordinal) != true
-        )
-        || MatchesAttributeName(attribute.AttributeClass, SortKeyFullNames, SortKeyShortNames)
-        || MatchesAttributeName(attribute.AttributeClass, DecimalFullNames, DecimalShortNames)
-        || MatchesAttributeName(attribute.AttributeClass, TimestampFullNames, TimestampShortNames);
 
     /// <summary>
     /// Types that pass straight through as a <see cref="PropertyKind.Primitive"/> <c>DataField</c>.
@@ -2210,98 +1832,6 @@ internal static class TargetParser
         "System.ReadOnlyMemory<byte>",
         "System.ReadOnlyMemory<char>",
     };
-
-    /// <summary>
-    /// Reports PARQ024 for each <c>[ParquetColumn(FieldId = n)]</c> value that more than one column
-    /// of the schema declares. Readers that resolve columns by ID (Apache Iceberg among them)
-    /// require IDs to be unique across the schema, so the walk covers struct children, list
-    /// elements and map values as well as top-level members.
-    /// </summary>
-    private static void ReportDuplicateFieldIds(
-        IEnumerable<PropertyModel> properties,
-        string className,
-        Location location,
-        List<DiagnosticInfo> diagnostics
-    )
-    {
-        var columnsById = new Dictionary<int, List<string>>();
-        var pending = new Stack<(PropertyModel Model, string Path)>(
-            properties.Select(p => (p, p.ParquetColumnName))
-        );
-        while (pending.Count > 0)
-        {
-            (PropertyModel model, string path) = pending.Pop();
-            if (model.FieldId is int id)
-            {
-                if (!columnsById.TryGetValue(id, out List<string>? columns))
-                    columnsById[id] = columns = [];
-                columns.Add(path);
-            }
-            foreach (PropertyModel child in model.Children)
-                pending.Push((child, path + "." + child.ParquetColumnName));
-            if (model.Element is { } element)
-                pending.Push((element, path + ".element"));
-            if (model.MapValue is { } value)
-                pending.Push((value, path + ".value"));
-        }
-
-        foreach (KeyValuePair<int, List<string>> entry in columnsById.OrderBy(e => e.Key))
-        {
-            if (entry.Value.Count < 2)
-                continue;
-            diagnostics.Add(
-                new DiagnosticInfo(
-                    DiagnosticDescriptors.DuplicateFieldId,
-                    location,
-                    new[]
-                    {
-                        entry.Key.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                        className,
-                        string.Join(", ", entry.Value.OrderBy(c => c, StringComparer.Ordinal)),
-                    }
-                )
-            );
-        }
-    }
-
-    /// <summary>
-    /// The diagnostic the classic (4.x/5.x) backend reports for a member it cannot carry, or null.
-    /// PARQ011: the type has a representation in Parquet.Net 6 but not in the 4.x/5.x API —
-    /// reported separately from PARQ006 because the member is fine and the backend is not, so the
-    /// fix is the v6 package rather than a different type. PARQ023: a column option the 4.x/5.x API
-    /// cannot write; dropping it would write the column without its field ID, or a local timestamp
-    /// annotated as UTC, with nothing to say so.
-    /// </summary>
-    private static DiagnosticInfo? ClassicApiRejection(
-        ISymbol member,
-        ITypeSymbol memberType,
-        ITypeSymbol underlyingType,
-        ColumnOptions column,
-        string className,
-        Location location
-    )
-    {
-        if (!IsSupportedOnClassicApi(underlyingType))
-        {
-            return new DiagnosticInfo(
-                DiagnosticDescriptors.TypeUnsupportedOnClassicApi,
-                location,
-                new[] { member.Name, memberType.ToDisplayString(), className }
-            );
-        }
-
-        string? option =
-            column.FieldId is not null ? "[ParquetColumn(FieldId = ...)]"
-            : !ReadTimestampAdjustedToUtc(member) ? "[ParquetTimestamp(..., AdjustedToUtc = false)]"
-            : null;
-        return option is null
-            ? null
-            : new DiagnosticInfo(
-                DiagnosticDescriptors.ColumnOptionUnsupportedOnClassicApi,
-                location,
-                new[] { member.Name, className, option }
-            );
-    }
 
     /// <summary>
     /// Whether a member type has a column representation in the Parquet.Net 4.x/5.x API.
@@ -2409,16 +1939,8 @@ internal static class TargetParser
         // `init` accessors surface as a SetMethod with IsInitOnly, which an object initializer can
         // use, so no special case is needed for them.
         if (member is IPropertySymbol property)
-        {
-            if (property.SetMethod is null)
-                return false;
-
-            // A property read from metadata belongs to another assembly, where an internal setter
-            // is out of reach of generated code (#420); only a public one is usable.
-            return property.ContainingType.DeclaringSyntaxReferences.IsEmpty
-                ? property.SetMethod.DeclaredAccessibility == Accessibility.Public
-                : IsReachableFromGeneratedCode(property.SetMethod.DeclaredAccessibility);
-        }
+            return property.SetMethod is not null
+                && IsReachableFromGeneratedCode(property.SetMethod.DeclaredAccessibility);
 
         if (member is IFieldSymbol field)
             return !field.IsReadOnly && !field.IsConst;

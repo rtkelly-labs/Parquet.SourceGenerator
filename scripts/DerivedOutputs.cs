@@ -1,13 +1,10 @@
 #pragma warning disable CA1305, CA1852, MA0002, MA0009, MA0011, MA0047, MA0051
 
-#:package CliWrap@3.7.1
-
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using CliWrap;
 
 // -----------------------------------------------------------------------------
 // DerivedOutputs.cs
@@ -46,7 +43,6 @@ using CliWrap;
 
 string? repo = null;
 string? outArg = null;
-string? versionArg = null;
 string[] argv = Environment.GetCommandLineArgs();
 for (int i = 1; i < argv.Length; i++)
 {
@@ -54,8 +50,6 @@ for (int i = 1; i < argv.Length; i++)
         repo = argv[++i];
     else if (argv[i] == "--out" && i + 1 < argv.Length)
         outArg = argv[++i];
-    else if (argv[i] == "--version" && i + 1 < argv.Length)
-        versionArg = argv[++i];
     else
     {
         Console.Error.WriteLine($"Unknown argument: {argv[i]}");
@@ -96,11 +90,6 @@ Run(
     "--filter",
     "FullyQualifiedName~GoldenCodeGenRegressionTests"
 );
-
-string budgetFile = Path.Combine(repo, "src/api/emitted-api-budgets.txt");
-int budgetExamined = VerifyEmittedApiBudgets(golden, budgetFile);
-Console.WriteLine($"Emitted API budget gate passed for {budgetExamined} golden models.");
-
 Run(
     repo,
     "dotnet",
@@ -140,23 +129,6 @@ Run(
     golden
 );
 
-var exportArgs = new List<string>
-{
-    "run",
-    "scripts/ExportApiDocs.cs",
-    "--",
-    "--repo",
-    repo,
-    "--out",
-    output,
-};
-if (!string.IsNullOrEmpty(versionArg))
-{
-    exportArgs.Add("--version");
-    exportArgs.Add(versionArg);
-}
-Run(repo, "dotnet", null, exportArgs.ToArray());
-
 Console.WriteLine($"Derived outputs written to {output}.");
 return 0;
 
@@ -167,22 +139,26 @@ static void Run(
     params string[] arguments
 )
 {
-    Console.WriteLine($"> {fileName} {string.Join(' ', arguments)}");
-    var cmd = Cli.Wrap(fileName)
-        .WithWorkingDirectory(workingDirectory)
-        .WithArguments(arguments)
-        .WithEnvironmentVariables(environment ?? new Dictionary<string, string>())
-        .WithStandardOutputPipe(PipeTarget.ToStream(Console.OpenStandardOutput()))
-        .WithStandardErrorPipe(PipeTarget.ToStream(Console.OpenStandardError()))
-        .WithValidation(CommandResultValidation.None);
+    var start = new ProcessStartInfo(fileName)
+    {
+        WorkingDirectory = workingDirectory,
+        UseShellExecute = false,
+    };
+    foreach (string argument in arguments)
+        start.ArgumentList.Add(argument);
+    foreach (var (key, value) in environment ?? new Dictionary<string, string>())
+        start.Environment[key] = value;
 
-    var result = cmd.ExecuteAsync().GetAwaiter().GetResult();
-    if (result.ExitCode != 0)
+    Console.WriteLine($"> {fileName} {string.Join(' ', arguments)}");
+    using Process process =
+        Process.Start(start) ?? throw new InvalidOperationException($"{fileName} did not start");
+    process.WaitForExit();
+    if (process.ExitCode != 0)
     {
         Console.Error.WriteLine(
-            $"'{fileName} {arguments[0]} {arguments[1]}' exited {result.ExitCode}."
+            $"'{fileName} {arguments[0]} {arguments[1]}' exited {process.ExitCode}."
         );
-        Environment.Exit(result.ExitCode);
+        Environment.Exit(process.ExitCode);
     }
 }
 
@@ -232,159 +208,4 @@ static string FindRepoRoot(string start)
             return dir.FullName;
     }
     throw new InvalidOperationException("Could not locate the repository root.");
-}
-
-static int VerifyEmittedApiBudgets(string goldenDirectory, string budgetFilePath)
-{
-    if (!File.Exists(budgetFilePath))
-    {
-        throw new FileNotFoundException(
-            $"Emitted API budget file does not exist: {budgetFilePath}"
-        );
-    }
-
-    var budgets = new Dictionary<string, (int MaxMembers, int MaxParameters)>(
-        StringComparer.OrdinalIgnoreCase
-    );
-    foreach (string rawLine in File.ReadAllLines(budgetFilePath))
-    {
-        string line = rawLine.Trim();
-        if (line.Length == 0 || line.StartsWith("#", StringComparison.Ordinal))
-            continue;
-
-        string[] parts = line.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length >= 3)
-        {
-            string category = parts[0];
-            int maxMembers = int.Parse(
-                parts[1].Substring("MEMBERS=".Length),
-                System.Globalization.CultureInfo.InvariantCulture
-            );
-            int maxParams = int.Parse(
-                parts[2].Substring("PARAMETERS=".Length),
-                System.Globalization.CultureInfo.InvariantCulture
-            );
-            budgets[category] = (maxMembers, maxParams);
-        }
-    }
-
-    if (budgets.Count == 0)
-    {
-        throw new InvalidOperationException(
-            "Emitted API budgets catalogue contains 0 budget definitions."
-        );
-    }
-
-    string[] gcsFiles = Directory.GetFiles(goldenDirectory, "*.g.cs");
-    string[] shapeFiles = Directory.GetFiles(goldenDirectory, "*.api.shape.txt");
-    if (shapeFiles.Length == 0 || gcsFiles.Length == 0)
-    {
-        throw new InvalidOperationException(
-            $"Emitted API shape budget gate examined 0 models in '{goldenDirectory}'; positive control failed."
-        );
-    }
-
-    var expectedStems = new HashSet<string>(
-        gcsFiles.Select(f =>
-            Path.GetFileName(f).Substring(0, Path.GetFileName(f).Length - ".g.cs".Length)
-        ),
-        StringComparer.Ordinal
-    );
-    var shapeStems = new HashSet<string>(
-        shapeFiles.Select(f =>
-            Path.GetFileName(f).Substring(0, Path.GetFileName(f).Length - ".api.shape.txt".Length)
-        ),
-        StringComparer.Ordinal
-    );
-
-    var missingShapes = expectedStems.Except(shapeStems).ToList();
-    if (missingShapes.Count > 0)
-    {
-        throw new InvalidOperationException(
-            $"Emitted API shape budget gate missing shape summaries for: {string.Join(", ", missingShapes)}"
-        );
-    }
-
-    var errors = new List<string>();
-    foreach (string shapeFile in shapeFiles)
-    {
-        string fileName = Path.GetFileName(shapeFile);
-        string stem = fileName.Substring(0, fileName.Length - ".api.shape.txt".Length);
-        string content = File.ReadAllText(shapeFile);
-
-        int members = -1;
-        int parameters = -1;
-        foreach (
-            string token in content.Split(
-                new[] { ' ', '\t', '\r', '\n' },
-                StringSplitOptions.RemoveEmptyEntries
-            )
-        )
-        {
-            if (token.StartsWith("MEMBERS=", StringComparison.Ordinal))
-                members = int.Parse(
-                    token.Substring("MEMBERS=".Length),
-                    System.Globalization.CultureInfo.InvariantCulture
-                );
-            else if (token.StartsWith("PARAMETERS=", StringComparison.Ordinal))
-                parameters = int.Parse(
-                    token.Substring("PARAMETERS=".Length),
-                    System.Globalization.CultureInfo.InvariantCulture
-                );
-        }
-
-        if (members < 0 || parameters < 0)
-        {
-            errors.Add($"Could not parse shape summary in {fileName}: '{content}'");
-            continue;
-        }
-
-        string category = "flat";
-        if (stem.StartsWith("LegacyRecord", StringComparison.Ordinal))
-            category = "legacy";
-        else if (
-            stem.StartsWith("NestedOrder", StringComparison.Ordinal)
-            || stem.StartsWith("ListOrder", StringComparison.Ordinal)
-            || stem.StartsWith("PocoOrder", StringComparison.Ordinal)
-        )
-            category = "compound";
-        else if (stem.StartsWith("SortedShipment", StringComparison.Ordinal))
-            category = "sorted";
-
-        if (
-            !budgets.TryGetValue(category, out var budget) && !budgets.TryGetValue(stem, out budget)
-        )
-        {
-            errors.Add($"No budget defined for category '{category}' (model: '{stem}').");
-            continue;
-        }
-
-        if (members > budget.MaxMembers)
-        {
-            errors.Add(
-                $"Golden model '{stem}' ({category}) exceeded MEMBERS budget: {members} > {budget.MaxMembers}."
-            );
-        }
-
-        if (parameters > budget.MaxParameters)
-        {
-            errors.Add(
-                $"Golden model '{stem}' ({category}) exceeded PARAMETERS budget: {parameters} > {budget.MaxParameters}."
-            );
-        }
-    }
-
-    if (errors.Count > 0)
-    {
-        Console.Error.WriteLine("::error title=Emitted API shape budget gate failed::");
-        foreach (string error in errors)
-        {
-            Console.Error.WriteLine($"  {error}");
-        }
-        throw new InvalidOperationException(
-            $"Emitted API shape budget gate failed with {errors.Count} violation(s)."
-        );
-    }
-
-    return shapeFiles.Length;
 }

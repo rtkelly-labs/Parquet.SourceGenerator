@@ -1,7 +1,5 @@
 # PARQUET.SOURCEGENERATOR
 
-Docs: start at [docs/index.md](docs/index.md), which links every guide, reference and architecture page.
-
 ## 🛑 Repository Conventions & Workflow Policy
 
 1. **Squash Merge Only**: All pull requests must be merged into `main` using **Squash and Merge** exclusively.
@@ -28,7 +26,7 @@ Docs: start at [docs/index.md](docs/index.md), which links every guide, referenc
     `.g.cs` and `.api.txt` from the emitter and posts their diff against the merge base as a sticky
     PR comment (`derived` job, `scripts/DerivedOutputs.cs`) — review that section. A ledger entry
     marked `**Unapproved-by-design:**` suppresses the build error for spikes and cannot merge to
-    `main`. Full rule: `docs/architecture/api-governance.md`.
+    `main`. Full rule: `docs/18-API-CHANGE-CONTRACT.md`.
 
 12. **Upstream Dependency Limitations**: Track package limitations and candidate upstream improvements in `UPSTREAM_DEPENDENCY_LIMITATIONS.md`, not in this file.
 
@@ -42,10 +40,9 @@ Docs: start at [docs/index.md](docs/index.md), which links every guide, referenc
     check). Any finding fails it and the baseline (`analysis/GeneratedCodeBaseline.props`) is empty.
     Fix the emitter; never add a baseline entry, `NoWarn` or an `.editorconfig` downgrade. Run it
     locally with `dotnet run scripts/GeneratedCodeAnalysis.cs` after publishing the golden outputs.
-    Gate details: `docs/internals/ci-gate-matrix.md`.
+    Full rule: `docs/50-GENERATED-CODE-ANALYSIS.md`.
 
-15. **CI gate matrix**: `docs/internals/ci-gate-matrix.md` records what each gate protects, where it
+15. **CI gate matrix**: `docs/51-CI-GATE-MATRIX.md` records what each gate protects, where it
     runs and whether a required check reaches it. A new CI job in `ci.yml` must be added to the
     `build` aggregate's `needs` and result check (`CiGateIntegrityTests` fails otherwise), and a
     new gate needs a positive control or an "examined N" assertion so it cannot pass on nothing.
-16. **Script Language Policy**: Automation scripts in `scripts/` MUST use the repository's approved language stack (C# `.cs` for .NET). Alien scripting runtimes (`.py`, `.sh`, `.ps1`) are strictly prohibited and gated by CI (with the sole exception of `scripts/generate_test_data.py` for cross-engine format generation).

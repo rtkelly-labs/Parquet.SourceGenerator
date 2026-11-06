@@ -582,7 +582,7 @@ public sealed class VersionAndSchemaEvolutionMatrixTests
 
         if (rowGroupSize is int size)
         {
-            await rows.WriteParquetAsync(
+            await rows.WriteParquetBatchedAsync(
                 stream,
                 new ParquetSerializerOptions { RowGroupSize = size }
             );

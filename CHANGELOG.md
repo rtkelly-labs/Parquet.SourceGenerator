@@ -8,68 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
-### Fixed
-
-- **Decimals read wrong on .NET 11.** Parquet.Net decodes INT32- and INT64-backed decimals through
-  `(decimal)Math.Pow(10, -scale)`, which was exact only while the runtime rounded `double` to
-  `decimal` conversions to 15 significant digits. .NET 11 keeps the `double`'s value, so 19.99 read
-  back as 19.990000000000000416125467383, and an 18-digit value at scale 10 by 36 units of its own
-  scale. Generated readers now restore those columns exactly through
-  `ParquetDecimalScale` (a no-op before .NET 11); fixed-length decimals were already exact. The
-  values keep the column's scale, as on earlier runtimes.
-
-## [0.1.0-alpha.1] - 2026-10-25
-
-First prerelease of 0.1, and the first published from `rtkelly-labs` through nuget.org trusted publishing. Changes since `0.0.3`:
-
-### Migrating from 0.0.x to 0.1
-
-The first release after `0.0.3` breaks the generated API on purpose (pre-1.0, no shims). This table is
-the migration list; each row's detail is in the entries below and in `docs/api/LEDGER.md`. Rows marked
-**pending** are in flight and will be finalised when they land; they are placeholders, not promises.
-
-| 0.0.x | 0.1 | Source |
-|:--|:--|:--|
-| `ReadParquetAsync(Stream)` / `(ReadOnlyMemory<byte>)` (returned a `List<T>`) | `<Model>Parquet.From(source).ToArrayAsync()` returns `T[]`; call `.ToList()` for a `List<T>` | #480, #489 |
-| `ReadParquetArrayAsync`, `ReadParquetStreamAsync` | `From(source).ToArrayAsync()`, `From(source).AsAsyncEnumerable()` | #480, #489 |
-| `ReadParquetParallelAsync`, `ReadParquetParallelArrayAsync` | `From(buffer).WithOptions(...).Parallel().ToArrayAsync()` (buffer source only) | #480, #489 |
-| `ReadParquetBatchesAsync` / `Batches()` | `From(source).AsBatches()` | #508, #576 |
-| `ToListAsync()` | `ToArrayAsync()` then `.ToList()` | #479 |
-| `<Model>ParquetStreamSource`, `...MemorySource`, `...FilteredSource`, `...ParallelSource` | one `<Model>ParquetReader` returned by both `From` overloads | #478 |
-| `<Model>ColumnarBatch` (write) and `ColumnBatch` (read, `x.AmountSpan`) | one `<Model>Batch` (`x.Amount.Span`; nullable columns are packed values plus definition levels) | #508, #576 |
-| row-group writers and columnar helpers, `RowGroupMetadata` constructor | internal | #481, #459 |
-| `Parquet.SourceGenerator.V5` (package id) | `Parquet.SourceGenerator.Legacy`; the classic generator keeps its flat reads | #494 |
-| `ReadParquetBy<Key>Async`, `ReadParquet<Key>RangeAsync`, `ParquetPruneStatistics` | `<Model>Parquet.From(stream).Where(m => m.<Key>.MayContain(...))` and `MayContainBetween(...)`; `ParquetPruneStatistics` internalized | #584 |
-| `ParquetColumnStatistics<T>` constructor and `FromRaw` | Hidden with `[EditorBrowsable(Never)]` | #586 |
-| `<Model>ParquetExtensions.Schema` | Internalized; backend-specific `ParquetSchema` hidden from consumer surface | #585 |
-| `WriteParquetBatchedAsync` | Folded into `WriteParquetAsync(stream, options)` (#512) | #512 |
-| `ParquetGeneratorFeatureLevel` and `ParquetGeneratorOptionsAttribute` | Removed; use `<ParquetGeneratorFlatOnly>true</ParquetGeneratorFlatOnly>` in MSBuild if flat-only behavior is required | #587 |
-| legacy backend parity (nested, Arrow, batches) and its migration table | **pending** (#604) | |
-| baseline: `PublicAPI.Unshipped.txt` promoted to `Shipped.txt` | 101 public package signatures across all 13 public types shipped for 0.1 | #592 |
+Changes since `0.0.4`; this section becomes the next release entry when one is cut.
 
 ### Added
-- **`[ParquetColumn(FieldId = n)]` writes a Parquet field ID** on the column's schema element (Parquet.Net 6
-  backend; the Legacy package reports `PARQ023`, since Parquet.Net 4.x/5.x has no field IDs). Apache Iceberg and other
-  readers that resolve columns by ID can then adopt generated files without a name mapping. Negative, the
-  default, writes none, so existing models are unchanged. An ID declared by two columns of one schema, nested
-  leaves included, is an error (`PARQ024`).
-- **`[ParquetTimestamp(Microseconds, AdjustedToUtc = false)]` writes a local timestamp**:
-  `TIMESTAMP(MICROS, isAdjustedToUTC=false)`, Iceberg's `timestamp` as opposed to `timestamptz`. It is emitted
-  through `DateTimeFormat.Timestamp`, because Parquet.Net ignores `isAdjustedToUTC` for `DateAndTimeMicros`
-  and writes that as the always-UTC `TIMESTAMP_MICROS` converted type. The default (`true`) keeps today's output. The Legacy package reports `PARQ023` for `false`:
-  Parquet.Net before 4.25 has no `DateTimeFormat.Timestamp`.
-- **`ParquetSerializerOptions.MaxAllocationBytes`, a byte budget for what a read allocates** (#361), default
-  256 MiB per row group. `MaxAllocationValues` bounds a count, so a file of about 1 KB declaring ten
-  million rows reserved roughly a gigabyte of pooled buffers before a page was read. The generated
-  readers (modern and classic) now multiply a row group's declared rows by the model's per-row buffer
-  size and throw `InvalidDataException` naming the option before renting; list columns are added to the row group's running total as their chunks are read. Raise it for files with genuinely larger row groups. In a parallel read it applies per worker.
-- **Diagnostics for abstract, `ref struct` and file-local targets (PARQ020, PARQ021, PARQ022).** Each shape passed every
-  declaration check and then failed to compile inside the generated file (`CS0144`, `CS0306`/`CS8345`, `CS9051`). Each
-  now reports one diagnostic at the declaration and emits nothing for the type; other targets are unaffected (#402).
 - **CI gate: every `src/` analyzer runs on the emitted code, and any finding fails** (`analysis/`,
   `scripts/GeneratedCodeAnalysis.cs`, `docs/50-GENERATED-CODE-ANALYSIS.md`, #553). The golden
   models' emitted source is compiled bare (no implicit usings) against both backends with
-  NetAnalyzers, Meziantou, Roslynator, the metric gates and the trim/AOT analyzers, with
+  NetAnalyzers, Meziantou, Sonar, Roslynator, the metric gates and the trim/AOT analyzers, with
   generated-code classification switched off. The baseline is empty. The `generated-analysis` job
   names each rule and count on failure, and a seeded-violation positive control keeps the gate from
   passing without examining the emitted files.
@@ -145,15 +90,6 @@ the migration list; each row's detail is in the entries below and in `docs/api/L
   number is known is vacuous or permanently red.
 
 ### Changed
-- **Behavioral test coverage:** remove attribute plumbing and redundant emitter-text checks;
-  compare every primitive, nullable and large-fixture value across both PyArrow format settings
-  and the C# producer; exercise column-contract edits through a reused Roslyn driver. The Windows
-  net472 package consumer and both cross-runtime handoffs now participate in required CI.
-- **Removed the SonarAnalyzer.CSharp analyzer (source-available license).** Its license grants use only for a
-  non-competitive purpose, which excludes AI tooling that ingests or interprets the analyzer's output,
-  and this repository has AI agents read and fix diagnostics. The remaining analyzers stay
-  (NetAnalyzers, Meziantou, Roslynator); the Sonar checks that had a counterpart are now enforced by
-  those, and `docs/55-SONAR-REMOVAL.md` maps every rule. No shipped package ever contained it.
 - **BREAKING: the emitted `{T}ColumnarBatch` is a `readonly struct` with get-only properties and a
   validating constructor (#550, part of #508 and #554).** It no longer exposes mutable public fields,
   so `RowCount` cannot drift from the column lanes. The constructor takes `rowCount` and one
@@ -173,13 +109,11 @@ the migration list; each row's detail is in the entries below and in `docs/api/L
   `scripts/DerivedOutputs.cs` for the pull request and compares it with its merge base's outputs,
   which each push to main publishes as a `derived-baseline-<sha>` artifact (regenerated in the job
   when missing). It uploads both trees as the `derived-outputs` artifact and posts the difference
-  as one sticky PR comment (`scripts/DerivedReport/`): a deterministic summary of the whole PR —
-  files by area, API catalogues, tests, CI and tooling touched, then what drifted in the derived
-  outputs — linking to the full diff and the head's state as self-contained HTML pages rendered
-  with Razor components and the official `HtmlRenderer`. The comment is updated on every run, and
-  says so when the head failed or the base was unavailable instead of leaving a stale diff; a base
-  that cannot be produced never fails the check. The required `build` check is now an aggregate of
-  the `test` job (the former `build`) and `derived`, so both block a merge. Each full release attaches its derived outputs as
+  as one sticky PR comment with the emitted public API first (`scripts/RenderDerivedDiff.cs`). The
+  comment is updated on every run, and says so when the head failed or the base was unavailable
+  instead of leaving a stale diff; a base that cannot be produced never fails the check. The
+  required `build` check is now an aggregate of the `test` job (the former `build`) and `derived`,
+  so both block a merge. Each full release attaches its derived outputs as
   `derived-outputs.tar.gz` and dispatches the docs site with the tag, so the API grid renders what
   that version shipped. The golden models now live in
   `GoldenCorpus`; `GoldenCodeGenRegressionTests` checks their invariants and publishes them to
@@ -222,45 +156,6 @@ the migration list; each row's detail is in the entries below and in `docs/api/L
   byte-identical.
 
 ### Removed
-- **BREAKING: one `<Model>Batch` for columnar read and write, and `Batches()` becomes `AsBatches()`
-  (#508, #507; tracker #505).** The write-side `<Model>ColumnarBatch` and the read-side nested
-  `<Model>ParquetExtensions.ColumnBatch` are replaced by one top-level `readonly struct
-  <Model>Batch` with get-only properties and a validating constructor. `<Model>ParquetReader.AsBatches(ct)`
-  returns `IAsyncEnumerable<<Model>Batch>`, and the columnar `<Model>Batch.WriteParquetAsync(stream, options, ct)`
-  takes the same type, so `await foreach (var batch in reader.AsBatches()) await batch.WriteParquetAsync(output);`
-  round-trips with no conversion. Layout (decided in #508, measured in #561): a nullable value
-  column is a packed lane of its non-null values (`ReadOnlyMemory<T>`) plus a definition-level lane
-  (`ReadOnlyMemory<int>`, one per row), the shape the writer consumes; string and byte-array
-  columns stay inline-nullable `ReadOnlyMemory<ReadOnlyMemory<char>?>` / `ReadOnlyMemory<ReadOnlyMemory<byte>?>`.
-  The read path decodes nullable value columns straight into that layout (`ReadRawAsync`), with no
-  expansion pass.
-
-  Ownership (#369, closed by this change; owner decision, stable for 0.1): a batch from `AsBatches()` is
-  borrowed, valid until the next `MoveNextAsync` or disposal. It carries a lease the iterator expires
-  before returning the pooled buffers, so a kept batch throws `ObjectDisposedException` from every lane
-  property (and from the fill methods and `WriteParquetAsync`) instead of reading recycled memory. A
-  batch you construct yourself never expires. Using a batch, or a lane taken from it, after the
-  enumerator advances is invalid. A `ReadOnlyMemory<T>` lane already copied out of a live batch is not
-  checked yet (lane-level checking: #580), the lanes of a borrowed batch are not guaranteed to be
-  array-backed (do not rely on `MemoryMarshal.TryGetArray` or `Pin` outliving the batch), and batches
-  are not thread-safe. To keep data, copy each lane with `.ToArray()` into the public constructor.
-  There is no owned, callback or ref-counted variant in 0.1.
-
-  | Before | After |
-  |:---|:---|
-  | `XParquet.From(s).Batches()` | `XParquet.From(s).AsBatches()` |
-  | `XParquetExtensions.ColumnBatch` (read item type) | `XBatch` |
-  | `XColumnarBatch` (write input type) | `XBatch` (same constructor and lanes) |
-  | `batch.AmountSpan` (`ReadOnlySpan<T>`) | `batch.Amount.Span` (`ReadOnlyMemory<T>` lane) |
-  | `batch.DiscountSpan` (`ReadOnlySpan<double?>` on a nullable column) | `batch.Discount` + `batch.DiscountDefinitionLevels` (packed + levels), or `batch.FillDiscountNullable(Span<double?>)` into a buffer you own |
-  | `batch.RegionSpan` (`ReadOnlySpan<string>`) | `batch.Region.Span` (`ReadOnlyMemory<char>` per row, `?` for nullable columns; `.ToString()` to materialise) |
-  | `batch.RowGroupIndex` | removed: count the batches |
-  | a model's `RowCount` column next to the batch row count | unchanged: the row count is `BatchRowCount` when a column is named `RowCount` |
-
-  `Fill<Column>Nullable` is an explicit, opt-in convenience (O(rows), caller-supplied buffer) and
-  not a cached `T?` property: the cached form allocated row-count-sized arrays per batch and was 2x
-  slower under Server GC in the #561 experiment. Rationale and the layout measurements:
-  `docs/12-BUFFER-REUSE-AND-EXTRACTION-STRATEGIES.md` section 7.
 - **BREAKING: the four public read state types collapse into one reader, and `ToListAsync` is
   gone (#478, #479).** `<Model>Parquet.From(Stream)` and `From(ReadOnlyMemory<byte>)` now both
   return a single `readonly struct <Model>ParquetReader`; `WithOptions`, `Where` and `Parallel`
@@ -327,124 +222,6 @@ the migration list; each row's detail is in the entries below and in `docs/api/L
   only for code that referenced the Attributes helpers directly.
 
 ### Fixed
-- **CI: the Apache conformance toolchain restore survives a flaky Maven Central.** A transient 404 from
-  repo1.maven.org for `parquet-cli-1.18.1-runtime.jar`, which is published and unchanged, failed CI on #692.
-  `scripts/VerifyApacheConformance.cs --restore` now tries the manifest's ordered `mirrors` (repo1.maven.org,
-  then repo.maven.apache.org) with retries and backoff, writes a jar only after it matches its pinned SHA-256
-  whichever mirror served it, and on failure prints one `::error::` per artifact naming every URL tried and its
-  status. The tools dir is cached in CI by manifest hash; the "already restored" check compared hex digests
-  case-sensitively and never matched, so it re-downloaded every jar on every run and now does not. The
-  script's numeric parsing is culture-invariant (#455).
-- **`DateOnly` is written as INT32 `DATE` again**, not INT96. INT96 round-tripped in .NET, but other readers
-  (pyarrow, Spark) saw a timestamp, and Apache Iceberg rejects INT96.
-- **Arrow scope is stated plainly** (#590). The READMEs, `docs/14`, `docs/19` and `docs/47` say that only Arrow
-  ingestion (`RecordBatch` to Parquet, when Apache.Arrow is referenced) ships; export to Arrow does not, and
-  `docs/19` no longer lists the closed #178 as open work.
-- **A base class moved into another project keeps contributing its columns.** The base-type walk stopped at any base
-  with no declaring syntax, which is every base read from metadata, so a shared base moved into a contracts project
-  silently dropped its inherited columns (same source, different schema, no diagnostic). A metadata base now
-  contributes when it is Parquet-aware (`[ParquetSerializable]` or a member with a Parquet attribute); framework bases
-  such as `Exception` still contribute nothing (#420).
-- **Hostile row counts and times fail with `InvalidDataException` on every read path** (#371). A row group count
-  above `int.MaxValue` reached a checked cast first on the streaming, batch and sorted-range reads and
-  surfaced as `OverflowException`; a `TIME_MICROS` value outside one day surfaced as
-  `ArgumentOutOfRangeException`, or, when the multiply wrapped, as a wrong time of day. The row count sum behind reads with no statistics to prune on had the same unchecked narrowing and is now checked too. All are
-  range-checked first and rejected with `InvalidDataException`. Unvalidated enum widening is left
-  as is (see the issue).
-- **The blittable zero-copy fast path requires the single field to back the single serialized member.** A one-field
-  struct whose property computed its value from a differently-meaning field (a unit-converting wrapper) took the
-  `MemoryMarshal.Cast` path for `List<T>` and `T[]` and wrote the field's bytes, while `IEnumerable<T>` wrote the
-  property value. Eligibility now needs the field to be the member itself or its auto-property backing field, with
-  the same type; anything else uses the per-element loop (#389).
-- **A user type shadowing a framework collection name with another arity no longer crashes the generator.** Compound
-  classification matched `System.Collections.Generic.List` and `Dictionary` by display name alone, so a `Dictionary<T>`
-  declared into that namespace classified as a map and the parser indexed past its type arguments (`CS8785`,
-  losing every generated type). Arity is now part of the match and the member is rejected with PARQ006 (#417).
-- **The columnar writer bounds a nullable column's packed lane by its definition levels** (#381). The batch
-  constructor checks lane shapes in O(1) and never counted the packed lane, so a lane shorter than the
-  rows marked present, or a level other than 0 or 1, reached Parquet.Net unchecked and was written as a
-  corrupt column chunk with no error. The writer now counts the present rows in the levels it is about
-  to write (it passes over them anyway), slices a longer lane to that count and rejects a shorter lane or
-  a bad level with an `InvalidOperationException` naming the column.
-- **A column chunk shorter than its row group is rejected instead of being read into stale pool data** (#382).
-  The read buffers are rented for the footer's `num_rows` and Parquet.Net fills only the chunk's own
-  `num_values`, so a file declaring more rows than a chunk holds left the buffer tail unwritten, and
-  pooled value-type buffers are returned uncleared. The emitted reader now compares each unrepeated
-  column chunk's `num_values` with the row count and throws `InvalidDataException` naming the column.
-- **The sorted range reader enforces `MaxAllocationValues` across row groups** (#387). It capped each row group
-  but not their sum, the one read path that did not. The emitted reader now accumulates the rows it scans
-  and throws `InvalidDataException` when the total exceeds the cap, as the other paths do.
-- **The nesting-depth limit is enforced during the schema walk, not after it** (#366). The emitted validation
-  computed a schema's full depth recursively and only then compared it with `MaxNestingDepth`, so the
-  walk was bounded by the stack, and a deep enough footer ended the process with a stack overflow (verified
-  at 300,000 nested lists) before the limit could fire. The walk now carries the depth and throws
-  `InvalidDataException` as soon as it passes the limit.
-- **The eager buffer return now has a test that pins the Parquet.Net behaviour it depends on** (#399). The
-  emitted writers return each column's pooled buffer as soon as its `WriteAsync` completes, which is only
-  safe if Parquet.Net has finished with the memory by then. `WriteCompletionContractTests` asserts that
-  (chunk bytes on the stream at completion, source overwritten afterwards leaves the file intact, and a
-  round trip under concurrent pool poisoning), and `docs/12` records the assumption and the fallback.
-- **A property or type named after a C# keyword no longer breaks the generated code** (#376). Roslyn drops
-  the `@` from a member declared `@event`, so the model held the bare keyword and the emitters wrote
-  `item.event`, `{ event = ... }` and `new class` into generated source (CS1001, CS1525). Every
-  emitted use of a model name as a standalone identifier now goes through `EmittedText.Ident`, which
-  adds `@` to reserved and contextual keywords, and the batch parameter names use it in place of a
-  hand-kept keyword list. Names glued into a longer identifier (`{Name}DefinitionLevels`) stay raw.
-- **A diagnostic in a cached model no longer pins its syntax tree.** `DiagnosticInfo` held a Roslyn `Location`, which
-  references the `SyntaxTree`, so every model with a diagnostic retained its tree for the driver's lifetime. It now
-  keeps path, span and line span as data, rebuilds the `Location` at report time, and holds its message arguments in
-  an `EquatableArray` (#398).
-- **A list shorter than the count captured at the start of a write throws instead of being read past its end** (#375). The write fast
-- **A collection whose `Count` disagrees with its items now throws instead of writing the wrong rows** (#388).
-  The enumerable fallback of the row-group writer (anything that is neither a `List<T>` nor an array)
-  filled buffers rented for `Count` rows, but rented arrays are longer than asked for, so a collection
-  yielding more items than it reported wrote them into the slack and lost them silently, and one
-  yielding fewer wrote stale pool data. The loop is now bounded by `count` and checked afterwards, and
-  throws `InvalidOperationException` either way.
-- **A list that shrinks during a write throws instead of being read past its end** (#375). The write fast
-  path walks the list's span with unchecked `Unsafe.Add`, sized by the count read at method entry. If
-  the list lost elements in between, the walk passed the end of the span it had taken (into slots of
-  removed items, or past the array when the list was cleared). The emitted code now detects a span
-  shorter than the captured count once, before the loop, and throws `InvalidOperationException`.
-- **A struct-in-list column whose sibling declares a different value count is rejected** (#365). The columns
-  under one `List<Struct>` are read by one walk driven by the first column's entry count, which indexed
-  every sibling's definition levels. Each column sizes and validates its own `num_values`, so a shorter
-  sibling was read past what was written, including stale levels left in its pooled array. The emitted
-  reader now compares each sibling's count with the anchor's and throws `InvalidDataException`.
-- **A file that omits an optional column under a list now fails with `InvalidDataException`** (#367). Schema
-  resolution reported the absent column as missing and returned the generator's own template field, and
-  the next statement of a list or struct leaf read that field's chunk metadata, which surfaced as a
-  `NullReferenceException`. Nested leaves are outside the missing-column envelope, so the emitted reader
-  now rejects the absence by name.
-- **The generator pipeline caches value-equatable models, not a syntax context.** The main generator cached
-  the `GeneratorSyntaxContext` itself, which retains a `SemanticModel` (and the compilation behind it) per
-  target and has no value equality, so nothing downstream could compare as unchanged. It now parses inside
-  the syntax transform, as the legacy generator already did (#395).
-- **A column name is escaped for wherever the emitter writes it** (#363, #364, #372). A
-  `[ParquetColumn]` name reached the `ColumnEncodingHints` string literal, an Arrow `// column`
-  comment and the zone-map XML doc comment unescaped, so a quote or newline in it broke the generated
-  file or, in the first two, injected statements into it. Every such site now goes through one
-  helper (`EmittedText.Literal`, `Comment`, `XmlDoc`). The columnar batch doc comment for a nullable
-  text column also wrote an unescaped `<char>`, a CS1570 warning wherever documentation is generated.
-- **The compiler diagnostics reference matches the code** (#428, #593). `docs/13` documents `PARQ012`
-  to `PARQ014`, lists all four conditions of `PARQ005` and describes `PARQ009` as the private-nested-type
-  rule it now is; the `PARQ001` - `PARQ099` range cited in `docs/01` and `docs/03` is gone. Both
-  generator projects now carry `AnalyzerReleases.Shipped.md` and `.Unshipped.md`, so a diagnostic id
-  added or removed without a release-tracking entry fails the build (RS2000 series).
-- **`AsBatches()` now enforces the decompression limits** (#358). The columnar batch reader was the
-  one read path that handed the caller's raw stream to `ParquetReader`, so `MaxDecompressedPageSize`
-  and `MaxDecompressionExpansionRatio` were silently ignored for it. It now reads through the same
-  guarded stream as every other path.
-- **A nullable value column next to a property named `<Column>DefinitionLevels` no longer emits a
-  duplicate batch member** (#384, part a). Every derived batch member name (row count, definition
-  levels, fill method, private plumbing) is now claimed against the model's own property names and
-  moved aside on a clash (`ValueDefinitionLevels` becomes `ValueDefinitionLevels_`). Part b (the
-  parameter list) was already handled.
-- **A second partial part carrying any attribute no longer takes the whole generator down.** The syntax
-  provider returned one element per attributed declaration, so a partial type split across files
-  produced two identical models, a second `AddSource` with the same hint name (`CS8785`, losing every
-  generated serializer) and every diagnostic twice. Both generators now admit only the declaration
-  that carries `[ParquetSerializable]`, one element per type (#368).
 - **Emitted read and write methods are bounded by column shape, not column count.** The per-column dictionary guard, all-null bypass, list-leaf sizing, list lanes, struct reconstruction, compound extraction and pooled-buffer returns are now shared or per-column `private static` helpers called once per column, clearing CA1502 and CA1505 in the generated output with no public API change (#552, part of #554).
 - **Emitted code braces multi-statement blocks under `if`** in the compound list readers, clearing S2681
   in the generated output (#551, part of #554).
@@ -501,23 +278,11 @@ the migration list; each row's detail is in the entries below and in `docs/api/L
   co-location does not disable either mechanism. The #281 merge landed the combined golden
   and the convergence-constraint comments but not this test — the correctness floor the
   actual footer-read convergence will need.
-- **The decompression guard fails closed on a page header it cannot parse, and reads the header the way Parquet.Net does.** The guard parsed three i32 fields in one fixed order and silently skipped validation for any other legal Thrift encoding (reordered fields, a `crc` field, long-form field ids, a nested struct ahead of the sizes), so a page in that encoding bypassed `MaxDecompressedPageSize` and `MaxDecompressionExpansionRatio`. It now reads the header by field id to the stop byte, refuses a field type Parquet.Net would decode differently, and throws `InvalidDataException` for an unparseable header, an unsupported page type, a missing size or a page extending past the end of the stream. Seeks inside the page it last validated are not treated as new headers (#359).
-- **The decompression guard validates a page header reached by reading on from the previous page, not only one reached by a seek.** Parquet.Net 4.x (the legacy backend) seeks once to the start of a column chunk and then reads its pages one after another, so the limits bounded the first page of each chunk and nothing after it. The guard now validates the header at the end of the page it last validated when a read starts there, and shortens a read that would run across that point so the next read starts on it (#360).
-- **The decompression guard no longer stops validating silently.** An I/O failure while it read a page header was swallowed and the read carried on with no limit applied, with nothing an operator could observe. It now reaches the caller as the I/O error it is; every other way the guard cannot validate a page already throws `InvalidDataException` (#463, with #359 and #360).
-- **The legacy read path bounds file-declared row and value counts like the modern one** (#362). `ReadParquetArrayAsync` narrowed each row group's 64-bit `num_rows` to `int` unchecked and never applied `MaxAllocationValues`, so a count past `int.MaxValue` threw `OverflowException` from the array allocation, a count of exactly 2^32 truncated to zero and returned an empty array without an error, and a count larger than the column it described indexed past the end of the column (`IndexOutOfRangeException`). Each row group's count and the running total are now checked in 64 bits against `MaxAllocationValues` before anything is narrowed or allocated, a column's declared value count is checked before Parquet.Net allocates for it, and a column that supplies fewer values than its row group declares rows is refused; every case throws `InvalidDataException` with the modern path's messages.
 
 ---
 
-### Carried over from the entry that was headed `[0.0.4] - 2026-09-11`
+## [0.0.4] - 2026-09-11
 
-> `0.0.4` was never tagged or released: the tags and GitHub releases stop at `v0.0.3`. These changes are
-> unreleased and ship with the next release, so the heading is folded into this section (#594). It used
-> to be a version heading, which `scripts/ParseChangelog.cs --release` would have picked as the version
-> to publish.
->
-> **Superseded.** Statements in this carried-over block that the flat read methods remain, that they ship
-> alongside the builder, or that use `ToListAsync` describe the unreleased 0.0.4 state, not 0.1: the flat
-> reads and `ToListAsync` are removed in 0.1, and the migration table above is the guidance that applies.
 This release introduces the generated read builder (`{T}Parquet.From(...)`) and keeps every
 existing flat read method working as a forwarder. Both surfaces ship together while the compatibility
 window remains open. `docs/19-PUBLIC-API-SURFACE.md` decision D3 retains the flat methods through
@@ -525,7 +290,7 @@ the `0.1.0` window; document 41 records the later removal gate. Callers can adop
 the flat methods are not yet marked
 `[Obsolete]` because the two surfaces are still being validated against each other.
 
-#### Added
+### Added
 - **Generated read builder (`{T}Parquet.From(...)`)**: reads are now expressed as a chain rather
   than a cross-product of method names — `PersonParquet.From(stream).ToListAsync(ct)`,
   `PersonParquet.From(bytes).Parallel().ToArrayAsync(ct)`,
@@ -607,7 +372,7 @@ the flat methods are not yet marked
   supported-schema and corrupted-file coverage. The envelope these test is written down in the
   compatibility docs.
 
-#### Changed
+### Changed
 - **Breaking (pre-1.0), #218 — every configuration option now has a single home.** The duplicated
   positional parameters are removed from the generated API; `ParquetSerializerOptions` is the only
   place either setting lives:
@@ -636,17 +401,17 @@ the flat methods are not yet marked
 - Generated public API baselines are emitted as signature-only `*.api.txt` files beside the golden
   `.g.cs` files, so an API change is reviewable separately from a body change.
 
-#### Performance
+### Performance
 - All-null nullable chunks are detected and bypassed instead of being decoded value by value.
 - Write-side extraction loops drop their bounds checks via `MemoryMarshal` and `Unsafe.Add`.
 - Null bitmap construction for nullable column extraction is branchless.
 
-#### Fixed
+### Fixed
 - The benchmark headline table is regenerated through a pull request rather than pushed directly
   to protected `main`, and is written without a UTF-8 BOM.
 - CI builds pull requests that are not based on `main`.
 
-#### Known gaps
+### Known gaps
 - Nested collections, `DateTimeOffset` and positional records are unsupported. They are now
   rejected at compile time (`PARQ006`/`PARQ008`) rather than failing at runtime.
 - `ReadParquetParallelAsync(Stream)` reads row groups sequentially — a single `ParquetReader`
@@ -661,7 +426,6 @@ the flat methods are not yet marked
 - IronCompress ships no `win-x86` native binary, so 32-bit .NET Framework applications fail at
   runtime on any compressed write.
 - See [docs/07-KNOWN-LIMITATIONS.md](docs/07-KNOWN-LIMITATIONS.md) for the full audit.
-- **The decompression guard checks the footer before Parquet.Net parses it** (#374). Parquet.Net sizes the lists and byte arrays it allocates for the footer from counts and lengths inside it before it reads an element, so a footer a few bytes long that claimed twenty million row groups cost 160 MB before any generated limit ran, and a stored footer length near `int.MaxValue` wrapped in Parquet.Net's 32-bit arithmetic. When Parquet.Net seeks to the footer length the guard now checks the stored length (it must be positive and fit in the stream, otherwise `InvalidDataException` rather than an `IOException` or `OverflowException`) and walks the footer once without building anything, refusing any list count or byte length larger than the bytes that remain, and a row group count above `MaxRowGroupCount`. A footer that mis-declares the compact type of some other field can still hide a count from the walk; closing that needs the bounds inside Parquet.Net's own reader (see `UPSTREAM_DEPENDENCY_LIMITATIONS.md`).
 
 ---
 

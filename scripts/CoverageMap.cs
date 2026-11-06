@@ -22,10 +22,10 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 //
 // Usage:
 //   dotnet run scripts/CoverageMap.cs             # compare the checked-in map
-//   dotnet run scripts/CoverageMap.cs -- --update # refresh docs/internals/coverage-envelope.md
+//   dotnet run scripts/CoverageMap.cs -- --update # refresh docs/28-COVERAGE-MAP.md
 // -----------------------------------------------------------------------------
 
-const string OutputPath = "docs/internals/coverage-envelope.md";
+const string OutputPath = "docs/28-COVERAGE-MAP.md";
 
 string repoRoot = FindRepositoryRoot();
 Directory.SetCurrentDirectory(repoRoot);
@@ -376,12 +376,8 @@ static int RiskRank(string risk) =>
     : risk.StartsWith("Medium", StringComparison.Ordinal) ? 2
     : 3;
 
-// Evidence paths are repo-relative; links resolve from the output file's folder.
-static string FormatEvidence(IReadOnlyList<string> paths)
-{
-    string toRoot = string.Concat(Enumerable.Repeat("../", OutputPath.Count(c => c == '/')));
-    return string.Join("<br>", paths.Select(path => $"[`{path}`]({toRoot}{path})"));
-}
+static string FormatEvidence(IReadOnlyList<string> paths) =>
+    string.Join("<br>", paths.Select(path => $"[`{path}`](../{path})"));
 
 static string FormatDial(IReadOnlySet<string> kinds) =>
     kinds.Count == 0

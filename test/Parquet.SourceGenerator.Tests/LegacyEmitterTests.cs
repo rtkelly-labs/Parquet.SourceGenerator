@@ -26,7 +26,7 @@ public class LegacyEmitterTests
         code.ShouldContain("namespace TestNamespace;");
         code.ShouldContain("public static partial class TestModelParquetLegacyExtensions");
         code.ShouldContain(
-            "internal static readonly global::Parquet.Schema.ParquetSchema Schema = new global::Parquet.Schema.ParquetSchema("
+            "public static readonly global::Parquet.Schema.ParquetSchema Schema = new global::Parquet.Schema.ParquetSchema("
         );
         code.ShouldContain("new global::Parquet.Data.DataColumn(_field_0, colArray_0)");
         code.ShouldContain("rgWriter.WriteColumnAsync(col_0, cancellationToken)");
@@ -123,10 +123,9 @@ public class LegacyEmitterTests
             "writer.CompressionLevel = global::System.IO.Compression.CompressionLevel.Fastest;"
         );
 
-        // Both the single-row-group fast path and the multi-row-group chunked path must call it,
-        // so the chunked path honours compression just like the fast path.
-        CountOccurrences(code, "ApplyCompression(singleWriter, options);").ShouldBe(1);
-        CountOccurrences(code, "ApplyCompression(writer, options);").ShouldBe(1);
+        // Both WriteParquetAsync and WriteParquetBatchedAsync must call it, or the batched path
+        // quietly keeps the default while the simple path honours the option.
+        CountOccurrences(code, "ApplyCompression(writer, options);").ShouldBe(2);
     }
 
     /// <summary>
@@ -167,18 +166,6 @@ public class LegacyEmitterTests
 
         code.ShouldContain("global::Parquet.ParquetReader.CreateAsync(");
         code.ShouldContain("BuildFormatOptions()");
-    }
-
-    [Fact]
-    public void LegacyReaderChecksTheByteBudgetBeforeReadingAColumnGroup()
-    {
-        string code = Emit(
-            Prop("Id", "id", "int", LegacyModels::PropertyKind.Primitive, false),
-            Prop("Name", "name", "string", LegacyModels::PropertyKind.Primitive, true)
-        );
-
-        code.ShouldContain("CheckAllocationBudget(0, groupRows, 40, options);");
-        code.ShouldContain("options.MaxAllocationBytes");
     }
 
     [Fact]
@@ -234,7 +221,7 @@ public class LegacyEmitterTests
             .ShouldBe(1);
 
         // Row counts come from row-group metadata, so the file is not walked twice just to total them.
-        code.ShouldContain("long rowCount = reader.RowGroups[r].RowCount;");
+        code.ShouldContain("totalRows += (int)reader.RowGroups[r].RowCount;");
     }
 
     /// <summary>
@@ -315,39 +302,13 @@ public class LegacyEmitterTests
     }
 
     [Fact]
-    public void LegacyReadBoundsFileDeclaredCountsBeforeNarrowingOrAllocating()
-    {
-        string code = Emit(
-            Prop("Id", "id", "int", LegacyModels::PropertyKind.Primitive, isNullable: false),
-            Prop("Name", "name", "string", LegacyModels::PropertyKind.Primitive, isNullable: true)
-        );
-
-        // Row counts are summed in 64 bits and checked against MaxAllocationValues first.
-        code.ShouldContain("int totalRows = CountRows(reader, options);");
-        code.ShouldContain("long rowCount = reader.RowGroups[r].RowCount;");
-        code.ShouldContain("if (rowCount < 0 || rowCount > options.MaxAllocationValues)");
-        code.ShouldContain("int groupRows = checked((int)rgReader.RowCount);");
-        code.ShouldNotContain("totalRows += (int)");
-
-        // A column's declared value count is checked before Parquet.Net reads it, and its length
-        // before it is indexed. The behaviour is pinned by test/PackageConsumptionLegacy.
-        code.ShouldContain(
-            "ValidateColumnValueCount(rgReader, field_0, options, ref allocatedBytes, 4);"
-        );
-        code.ShouldContain("ValidateColumnLength(data_0.Length, field_0.Name, groupRows);");
-        code.ShouldContain(
-            "if (!missing_1) ValidateColumnLength(data_1.Length, field_1.Name, groupRows);"
-        );
-    }
-
-    [Fact]
     public void LegacyCodeEmitterEmitsAllSupportedTypesCorrectly()
     {
         string code = Emit(AllSupportedLegacyProperties());
 
         code.ShouldContain("var colArray_10 = new global::System.Guid[count];");
         code.ShouldContain("var colArray_11 = new global::System.Guid?[count];");
-        code.ShouldContain("new global::Parquet.SourceGenerator.StringDeduplicator(512);");
+        code.ShouldContain("struct StringDeduplicator");
         code.ShouldContain("ReadColumnAsync");
         code.ShouldContain("WriteColumnAsync");
     }

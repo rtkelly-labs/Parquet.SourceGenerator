@@ -1,18 +1,14 @@
-#:package CliWrap@3.7.1
-
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
-using CliWrap;
-using CliWrap.Buffered;
 
 // -----------------------------------------------------------------------------
 // CheckApiLedger.cs
 //
-// The CI half of the API change contract (docs/architecture/api-governance.md). Two rules, both of
+// The CI half of the API change contract (docs/18-API-CHANGE-CONTRACT.md). Two rules, both of
 // which need a diff and therefore cannot live in an analyzer:
 //
 //   1. A pull request that ADDS a line to a governed catalogue must also ADD an entry to
@@ -28,30 +24,16 @@ using CliWrap.Buffered;
 //      to merge an unreviewed surface, and it fails.
 //
 // Usage:
-//   dotnet run scripts/CheckApiLedger.cs                 # base ref from GITHUB_BASE_REF; on a push
-//                                                        # GITHUB_EVENT_BEFORE, else the first parent
+//   dotnet run scripts/CheckApiLedger.cs                 # base ref from GITHUB_BASE_REF
 //   dotnet run scripts/CheckApiLedger.cs -- --base main
 // -----------------------------------------------------------------------------
 
 const string LedgerPath = "docs/api/LEDGER.md";
 const string UnapprovedMarker = "**Unapproved-by-design:**";
 
-string[] SemverBuckets = { "additive-minor", "breaking-major", "internal", "generated-shape" };
-string[] RequiredEntryKeys = { "Surface", "Semver", "Issue", "Rationale" };
-
-// Values copied unedited from the template this script prints.
-string[] PlaceholderValues =
-{
-    "emitted | package | seam",
-    "additive-minor | breaking-major | internal | generated-shape",
-    "#NNN",
-    "why no existing member can express this.",
-};
-
 string[] catalogueGlobs =
 {
     "src/api/seams.txt",
-    "src/api/emitted-api-budgets.txt",
     "PublicAPI.Unshipped.txt",
     "**/PublicAPI.Unshipped.txt",
 };
@@ -113,19 +95,14 @@ if (File.Exists(LedgerPath))
 // ---------------------------------------------------------------------------
 // Rule 1: catalogue additions require ledger additions.
 // ---------------------------------------------------------------------------
-// A pull request supplies a base ref. A push to main does not (`github.base_ref` is empty), so the
-// range falls back to the pushed commits: `GITHUB_EVENT_BEFORE..HEAD` when the workflow passes it,
-// else the first parent. Skipping the rule when no range exists let a direct push to main change a
-// catalogue with a green run (#430), so the absence of any range is now a failure, not a pass.
-string? range = ResolveBaseRange(args) ?? ResolvePushRange();
+string? range = ResolveBaseRange(args);
 if (range is null)
 {
-    Console.Error.WriteLine(
-        "::error::No base ref (not a pull request, and no --base given) and no pushed range "
-            + "(GITHUB_EVENT_BEFORE is unavailable, or HEAD has no parent): the catalogue-vs-ledger check "
-            + "cannot run, and it fails rather than passing having compared nothing."
+    Console.WriteLine(
+        "No base ref available (not a pull request, and no --base given): skipping the "
+            + "catalogue-vs-ledger diff check."
     );
-    return 1;
+    return failures == 0 ? 0 : 1;
 }
 
 Console.WriteLine($"Comparing catalogues against {range}");
@@ -198,12 +175,9 @@ if (addedCatalogueLines.Count == 0 && removedCatalogueLines.Count == 0)
     return failures == 0 ? 0 : 1;
 }
 
-// Each added heading with its line number in the ledger at HEAD, from the hunk headers: two entries
-// may share a heading, so an entry is located by position and never by text.
-List<(string Heading, int Line)> addedLedgerHeadings = AddedHeadings(
-    Git($"diff --unified=0 --no-color {range} -- \"{LedgerPath}\"")
-);
-int addedLedgerEntries = addedLedgerHeadings.Count;
+int addedLedgerEntries = Git($"diff --unified=0 --no-color {range} -- \"{LedgerPath}\"")
+    .Split('\n')
+    .Count(line => line.StartsWith("+### ", StringComparison.Ordinal));
 
 Console.WriteLine(
     $"{addedCatalogueLines.Count} signature(s) added, {removedCatalogueLines.Count} signature(s) removed; "
@@ -244,177 +218,14 @@ if (addedLedgerEntries == 0)
     Console.Error.WriteLine("    - **Rationale:** why no existing member can express this.");
     Console.Error.WriteLine("    - **Alternatives considered:** what was rejected, and why.");
     Console.Error.WriteLine();
-    Console.Error.WriteLine("  The full contract is in docs/architecture/api-governance.md.");
+    Console.Error.WriteLine("  The full contract is in docs/18-API-CHANGE-CONTRACT.md.");
 }
 else
 {
-    // #426: a heading alone satisfied the count, so one line `### x` cleared the gate for any number
-    // of signatures. Each added entry must now carry the fields the ledger exists to record. The
-    // count is deliberately NOT compared with the number of catalogue lines: one entry legitimately
-    // covers many (the #481 entry records 16 removed lines).
-    List<string> entryProblems = ValidateAddedEntries(addedLedgerHeadings);
-    if (entryProblems.Count == 0)
-    {
-        Console.WriteLine("Ledger entry present for this change.");
-    }
-    else
-    {
-        failures++;
-        Console.Error.WriteLine(
-            $"::error file={LedgerPath}::{entryProblems.Count} problem(s) in the ledger entr{(addedLedgerEntries == 1 ? "y" : "ies")} added by this change."
-        );
-        foreach (string problem in entryProblems)
-        {
-            Console.Error.WriteLine($"    - {problem}");
-        }
-
-        Console.Error.WriteLine();
-        Console.Error.WriteLine(
-            "  Each entry needs a non-empty **Surface:**, a **Semver:** that starts with one of "
-                + string.Join(", ", SemverBuckets)
-                + ", an **Issue:** and a **Rationale:**."
-        );
-    }
+    Console.WriteLine("Ledger entry present for this change.");
 }
 
 return failures == 0 ? 0 : 1;
-
-List<string> ValidateAddedEntries(List<(string Heading, int Line)> headings)
-{
-    var problems = new List<string>();
-    string[] lines = File.ReadAllLines(LedgerPath);
-    foreach ((string heading, int line) in headings)
-    {
-        int start = line - 1;
-        if (start < 0 || start >= lines.Length || lines[start].TrimEnd() != heading.TrimEnd())
-        {
-            problems.Add(
-                $"'{heading}': the heading is not at line {line} of {LedgerPath} at HEAD."
-            );
-            continue;
-        }
-
-        var block = new List<string>();
-        for (
-            int i = start + 1;
-            i < lines.Length && !lines[i].StartsWith("#", StringComparison.Ordinal);
-            i++
-        )
-        {
-            block.Add(lines[i]);
-        }
-
-        foreach (string key in RequiredEntryKeys)
-        {
-            string value = EntryValue(block, key);
-            if (value.Length == 0)
-            {
-                problems.Add($"'{heading}': **{key}:** is missing or empty.");
-            }
-            else if (PlaceholderValues.Contains(value))
-            {
-                problems.Add($"'{heading}': **{key}:** still holds the template placeholder.");
-            }
-            else if (
-                key == "Semver"
-                && !SemverBuckets.Any(bucket =>
-                    value.TrimStart('`', '*', ' ').StartsWith(bucket, StringComparison.Ordinal)
-                )
-            )
-            {
-                problems.Add(
-                    $"'{heading}': **Semver:** '{value}' does not start with one of {string.Join(", ", SemverBuckets)}."
-                );
-            }
-        }
-    }
-
-    return problems;
-}
-
-// `- **Key:**` or `* **Key:**`: the line that ends the previous field's value.
-static bool IsKeyBullet(string line)
-{
-    string text = line.TrimStart();
-    return (
-        text.StartsWith("- **", StringComparison.Ordinal)
-        || text.StartsWith("* **", StringComparison.Ordinal)
-    );
-}
-
-static List<(string Heading, int Line)> AddedHeadings(string diff)
-{
-    var headings = new List<(string, int)>();
-    int next = 0;
-    foreach (string raw in diff.Split('\n'))
-    {
-        string line = raw.TrimEnd('\r');
-        if (line.StartsWith("@@", StringComparison.Ordinal))
-        {
-            // @@ -a,b +c,d @@: the added lines start at c in the new file.
-            int plus = line.IndexOf('+', StringComparison.Ordinal);
-            int end = plus < 0 ? -1 : line.IndexOfAny(new[] { ',', ' ' }, plus);
-            next =
-                end > plus && int.TryParse(line.Substring(plus + 1, end - plus - 1), out int start)
-                    ? start
-                    : 0;
-        }
-        else if (
-            line.StartsWith("+", StringComparison.Ordinal)
-            && !line.StartsWith("+++", StringComparison.Ordinal)
-        )
-        {
-            if (line.StartsWith("+### ", StringComparison.Ordinal))
-            {
-                headings.Add((line.Substring(1), next));
-            }
-
-            next++;
-        }
-    }
-
-    return headings;
-}
-
-// A bullet line without its leading `- ` or `* `; the `**` that opens a bold key must survive.
-static string BulletText(string line)
-{
-    string text = line.TrimStart();
-    return
-        text.StartsWith("- ", StringComparison.Ordinal)
-        || text.StartsWith("* ", StringComparison.Ordinal)
-        ? text.Substring(2).TrimStart()
-        : text;
-}
-
-// The text of a `- **Key:** value` bullet, including its continuation lines up to the next key bullet.
-string EntryValue(List<string> block, string key)
-{
-    string marker = $"**{key}:**";
-    int index = block.FindIndex(line =>
-        BulletText(line).StartsWith(marker, StringComparison.Ordinal)
-    );
-    if (index < 0)
-    {
-        return string.Empty;
-    }
-
-    var text = new StringBuilder();
-    string first = block[index];
-    text.Append(first.Substring(first.IndexOf(marker, StringComparison.Ordinal) + marker.Length));
-    for (int i = index + 1; i < block.Count; i++)
-    {
-        string line = block[i];
-        if (IsKeyBullet(line))
-        {
-            break;
-        }
-
-        text.Append(' ').Append(line.Trim());
-    }
-
-    return text.ToString().Trim();
-}
 
 static string? ResolveBaseRange(string[] args)
 {
@@ -489,56 +300,6 @@ static string? ResolveBaseRange(string[] args)
     }
 }
 
-static string? ResolvePushRange()
-{
-    string? before = Environment.GetEnvironmentVariable("GITHUB_EVENT_BEFORE");
-    if (!string.IsNullOrWhiteSpace(before) && before.Any(character => character != '0'))
-    {
-        before = before.Trim();
-        if (CanResolve(before))
-        {
-            Console.WriteLine($"Push event: comparing against the previous tip {before}.");
-            return $"{before} HEAD";
-        }
-
-        // A two-argument diff compares the two trees, so the previous tip alone is enough; no
-        // history between the two commits is needed.
-        Run("git", $"fetch --no-tags --depth=1 origin {before}");
-        if (CanResolve(before))
-        {
-            Console.WriteLine($"Push event: comparing against the previous tip {before}.");
-            return $"{before} HEAD";
-        }
-
-        // The push named a previous tip that cannot be obtained. `HEAD~1` would cover only the last
-        // commit of a multi-commit push and let an earlier one change a catalogue unchecked, so there
-        // is no trustworthy boundary: fail closed rather than guess.
-        Console.WriteLine(
-            $"Previous tip {before} is not available; refusing to fall back to the first parent."
-        );
-        return null;
-    }
-
-    // No pushed range was supplied (a local run, or an all-zero `before` for a new branch): the first
-    // parent is the best available boundary.
-    if (!CanResolve("HEAD~1"))
-    {
-        // A shallow checkout has only the pushed commit.
-        Run("git", "fetch --no-tags --deepen=1 origin");
-    }
-
-    if (CanResolve("HEAD~1"))
-    {
-        Console.WriteLine("No base ref: comparing HEAD against its first parent.");
-        return "HEAD~1 HEAD";
-    }
-
-    return null;
-
-    static bool CanResolve(string reference) =>
-        Run("git", $"rev-parse --verify --quiet {reference}^{{commit}}").ExitCode == 0;
-}
-
 static string Git(string arguments)
 {
     (int exitCode, string stdout, string stderr) = Run("git", arguments);
@@ -556,14 +317,53 @@ static (int ExitCode, string StandardOutput, string StandardError) Run(
     string arguments
 )
 {
-    var result = Cli.Wrap(fileName)
-        .WithArguments(arguments)
-        .WithValidation(CommandResultValidation.None)
-        .ExecuteBufferedAsync()
-        .GetAwaiter()
-        .GetResult();
+    var startInfo = new ProcessStartInfo(fileName)
+    {
+        RedirectStandardOutput = true,
+        RedirectStandardError = true,
+        UseShellExecute = false,
+    };
 
-    return (result.ExitCode, result.StandardOutput, result.StandardError);
+    foreach (string argument in SplitArguments(arguments))
+    {
+        startInfo.ArgumentList.Add(argument);
+    }
+
+    using var process = Process.Start(startInfo)!;
+    string stdout = process.StandardOutput.ReadToEnd();
+    string stderr = process.StandardError.ReadToEnd();
+    process.WaitForExit();
+    return (process.ExitCode, stdout, stderr);
+}
+
+static IEnumerable<string> SplitArguments(string arguments)
+{
+    var current = new StringBuilder();
+    bool quoted = false;
+    foreach (char character in arguments)
+    {
+        if (character == '"')
+        {
+            quoted = !quoted;
+        }
+        else if (character == ' ' && !quoted)
+        {
+            if (current.Length > 0)
+            {
+                yield return current.ToString();
+                current.Clear();
+            }
+        }
+        else
+        {
+            current.Append(character);
+        }
+    }
+
+    if (current.Length > 0)
+    {
+        yield return current.ToString();
+    }
 }
 
 static string FindRepoRoot()

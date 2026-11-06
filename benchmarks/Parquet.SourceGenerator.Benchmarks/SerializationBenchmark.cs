@@ -5,8 +5,6 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using BenchmarkDotNet.Attributes;
-using BenchmarkDotNet.Configs;
-using BenchmarkDotNet.Exporters.Json;
 using BenchmarkDotNet.Jobs;
 using BenchmarkDotNet.Running;
 using Parquet.Serialization;
@@ -99,7 +97,7 @@ public class ScalingSerializationBenchmark
     public async Task SourceGeneratorWriteBatchedAsync()
     {
         using var stream = new MemoryStream();
-        await _data.WriteParquetAsync(
+        await _data.WriteParquetBatchedAsync(
             stream,
             new ParquetSerializerOptions { RowGroupSize = 20_000 }
         );
@@ -135,7 +133,10 @@ public class ScalingDeserializationBenchmark
             .ToList();
 
         using var stream = new MemoryStream();
-        data.WriteParquetAsync(stream, new ParquetSerializerOptions { RowGroupSize = 20_000 })
+        data.WriteParquetBatchedAsync(
+                stream,
+                new ParquetSerializerOptions { RowGroupSize = 20_000 }
+            )
             .GetAwaiter()
             .GetResult();
         _parquetBytes = stream.ToArray();
@@ -344,13 +345,6 @@ internal static class Program
             benchmarkArgs.Add(args[i]);
         }
 
-        // The regression gate (tools/BenchmarkSummaryGenerator --baseline) reads the compressed JSON
-        // export: it carries the benchmark type and the full parameter set, and exact allocated
-        // bytes, none of which the CSV column order or its rounded units can give it reliably.
-        IConfig config = DefaultConfig.Instance.AddExporter(JsonExporter.FullCompressed);
-
-        BenchmarkSwitcher
-            .FromAssembly(typeof(Program).Assembly)
-            .Run(benchmarkArgs.ToArray(), config);
+        BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(benchmarkArgs.ToArray());
     }
 }

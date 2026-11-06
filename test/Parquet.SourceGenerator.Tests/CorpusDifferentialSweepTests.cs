@@ -61,7 +61,7 @@ public partial record CorpusTimeSpanRecord
 #endregion
 
 /// <summary>
-/// Broad-corpus differential sweep against reference oracles (issue #286, docs/architecture/adrs/0002-peer-study-protobuf.md §2.2).
+/// Broad-corpus differential sweep against reference oracles (issue #286, docs/27 §2.2).
 ///
 /// Sweeps across compiled model contracts in the test suite to verify:
 /// 1. Bidirectional differential equivalence against Parquet.Net's reflection serializer (ParquetSerializer)
@@ -72,7 +72,7 @@ public partial record CorpusTimeSpanRecord
 ///    verified across all PSG reader modes (Sequential, Parallel, Streaming, Memory).
 /// 4. Deep round-trip fidelity and multi-reader mode convergence (Sequential, Parallel, Streaming, Memory)
 ///    for compound nested structs and lists (where ParquetSerializer is disqualified due to known interior null defects,
-///    per docs/guides/nested-types.md).
+///    per docs/15 §2.6).
 /// </summary>
 public sealed class CorpusDifferentialSweepTests
 {
@@ -312,13 +312,8 @@ public sealed class CorpusDifferentialSweepTests
         for (int i = 0; i < records.Count; i++)
         {
             readViaReflection[i].Id.ShouldBe(records[i].Id);
-            // ParquetSerializer is the reference here; see ParquetNetDecimalReference for .NET 11.
-            ParquetNetDecimalReference
-                .Exact(readViaReflection[i].Amount, 4)
-                .ShouldBe(records[i].Amount);
-            ParquetNetDecimalReference
-                .Exact(readViaReflection[i].OptionalFee, 2)
-                .ShouldBe(records[i].OptionalFee);
+            readViaReflection[i].Amount.ShouldBe(records[i].Amount);
+            readViaReflection[i].OptionalFee.ShouldBe(records[i].OptionalFee);
         }
 
         // 2. ParquetSerializer Write -> PSG Read
@@ -662,7 +657,10 @@ public sealed class CorpusDifferentialSweepTests
         };
 
         using var ms = new MemoryStream();
-        await records.WriteParquetAsync(ms, new ParquetSerializerOptions { RowGroupSize = 2 });
+        await records.WriteParquetBatchedAsync(
+            ms,
+            new ParquetSerializerOptions { RowGroupSize = 2 }
+        );
 
         // 1. Sequential Reader
         ms.Position = 0;

@@ -125,22 +125,9 @@ internal sealed record PropertyModel(
 
     /// <summary>
     /// Struct members: whether the nested C# type is a value type. Every Parquet group is
-    /// optional (docs/guides/nested-types.md §2.4) so the definition-level ladder counts the rung either way, but
+    /// optional (docs/15 §2.4) so the definition-level ladder counts the rung either way, but
     /// the write extraction emits the ancestor null test only for reference types — a struct
     /// member can never be null at runtime.
     /// </summary>
     public bool CompoundIsValueType { get; init; }
-
-    /// <summary>
-    /// The Parquet field ID from <c>[ParquetColumn(FieldId = n)]</c>, written to the schema element's
-    /// <c>field_id</c> (what Iceberg resolves columns by); null when the member sets none. Off the
-    /// positional list for the same reason as <see cref="IsSortKey"/>.
-    /// </summary>
-    public int? FieldId { get; init; }
-
-    /// <summary>
-    /// The <c>isAdjustedToUTC</c> flag of a microsecond timestamp column; false only when the member
-    /// asks for <c>[ParquetTimestamp(Microseconds, AdjustedToUtc = false)]</c>.
-    /// </summary>
-    public bool TimestampAdjustedToUtc { get; init; } = true;
 }

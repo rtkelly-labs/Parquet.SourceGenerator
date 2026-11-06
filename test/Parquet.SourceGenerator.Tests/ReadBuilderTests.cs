@@ -36,7 +36,7 @@ public sealed class ReadBuilderTests
     {
         using var stream = new MemoryStream();
         await Rows(count)
-            .WriteParquetAsync(
+            .WriteParquetBatchedAsync(
                 stream,
                 new ParquetSerializerOptions { RowGroupSize = RowsPerGroup }
             );
@@ -60,7 +60,7 @@ public sealed class ReadBuilderTests
 
         using var forBatches = new MemoryStream(bytes);
         int batchedRows = 0;
-        await foreach (var batch in BuilderOrderParquet.From(forBatches).AsBatches())
+        await foreach (var batch in BuilderOrderParquet.From(forBatches).Batches())
         {
             batchedRows += batch.RowCount;
         }
@@ -162,7 +162,7 @@ public sealed class ReadBuilderTests
         // The removed flat methods grew `predicate` on the stream overloads of ReadParquetAsync
         // and ReadParquetArrayAsync but never on the buffer ones, so buffer + List and buffer +
         // array were the two cells of the grid where pushdown was simply unavailable (defect 3 in
-        // docs/guides/reading-parquet.md). The builder routes those through the streaming core that does accept a
+        // docs/19). The builder routes those through the streaming core that does accept a
         // predicate, so the same filter is reachable from every source.
         byte[] bytes = await WriteAsync(200);
 
@@ -268,7 +268,7 @@ public sealed class ReadBuilderTests
         reader
             .GetMethod("AsAsyncEnumerable")!
             .ReturnType.ShouldBe(typeof(IAsyncEnumerable<BuilderOrder>));
-        reader.GetMethod("AsBatches").ShouldNotBeNull();
+        reader.GetMethod("Batches").ShouldNotBeNull();
     }
 
     [Fact]
@@ -312,7 +312,7 @@ public sealed class ReadBuilderTests
             .ShouldBeEmpty();
     }
 
-    // ── Combinations the #217 state types made unrepresentable (#478, docs/vision.md §3) ──────────
+    // ── Combinations the #217 state types made unrepresentable (#478, docs/47 §4.2) ──────────
     //
     // Rule: the call that completes an unsupported combination throws NotSupportedException.
     // Parallel() and Where() know the source and existing state, so they throw themselves; a
@@ -347,14 +347,14 @@ public sealed class ReadBuilderTests
     }
 
     [Fact]
-    public async Task ParallelThenAsBatchesThrowsAsync()
+    public async Task ParallelThenBatchesThrowsAsync()
     {
         byte[] bytes = await WriteAsync(10);
         BuilderOrderParquetReader reader = BuilderOrderParquet
             .From(new ReadOnlyMemory<byte>(bytes))
             .Parallel();
 
-        var ex = Should.Throw<NotSupportedException>(() => reader.AsBatches());
+        var ex = Should.Throw<NotSupportedException>(() => reader.Batches());
         ex.Message.ShouldContain("Parallel()");
     }
 
@@ -383,22 +383,22 @@ public sealed class ReadBuilderTests
     }
 
     [Fact]
-    public async Task WhereThenAsBatchesThrowsRatherThanIgnoringThePredicateAsync()
+    public async Task WhereThenBatchesThrowsRatherThanIgnoringThePredicateAsync()
     {
-        // The #217 filtered source had no AsBatches(); the column-batch reader takes no predicate,
+        // The #217 filtered source had no Batches(); the column-batch reader takes no predicate,
         // so running it would silently return unpruned row groups.
         byte[] bytes = await WriteAsync(10);
         using var stream = new MemoryStream(bytes);
 
         var ex = Should.Throw<NotSupportedException>(() =>
-            BuilderOrderParquet.From(stream).Where(m => m.Id.Min >= 100).AsBatches()
+            BuilderOrderParquet.From(stream).Where(m => m.Id.Min >= 100).Batches()
         );
         ex.Message.ShouldContain("Where()");
         Should.Throw<NotSupportedException>(() =>
             BuilderOrderParquet
                 .From(new ReadOnlyMemory<byte>(bytes))
                 .Where(m => m.Id.Min >= 100)
-                .AsBatches()
+                .Batches()
         );
     }
 

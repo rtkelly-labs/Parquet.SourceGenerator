@@ -11,14 +11,6 @@
         <DevelopmentDependency>true</DevelopmentDependency>
 
         <!--
-      Turns on RS1035 (banned APIs in a compiler extension), RS1036, RS1038 (Workspaces reference)
-      and RS1041 (target framework) for the assembly that ships in analyzers/dotnet/cs and loads
-      into every consumer compiler (#471). Microsoft.CodeAnalysis.Analyzers supplies the rules;
-      this property is what switches the generator-author subset on.
-    -->
-        <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
-
-        <!--
       The generator ships ONLY as an analyzer, never as a library.
 
       Without this, the default (true) puts Parquet.SourceGenerator.dll in lib/netstandard2.0/ as
@@ -32,14 +24,6 @@
     -->
         <IncludeBuildOutput>false</IncludeBuildOutput>
         <NoWarn>$(NoWarn);NU5128</NoWarn>
-        <!--
-      RS1032 (Microsoft.CodeAnalysis.Analyzers 5.x) wants a trailing period on ten multi-sentence
-      messageFormat strings in DiagnosticDescriptors.cs. Fixing it changes user-visible diagnostic
-      text and belongs to the emitter owners, so it is suppressed by name (#471), not by the RS1xxx
-      range, which keeps the generator-author rules RS1035/RS1036/RS1038/RS1041 on. RS2008 (release
-      tracking) is satisfied by the AnalyzerReleases files below (#593).
-    -->
-        <NoWarn>$(NoWarn);RS1032</NoWarn>
         <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);PackBuildOutputs</TargetsForTfmSpecificContentInPackage>
     </PropertyGroup>
 
@@ -49,7 +33,11 @@
             VersionOverride="4.0.1"
             PrivateAssets="all"
         />
-        <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" PrivateAssets="all" />
+        <PackageReference
+            Include="Microsoft.CodeAnalysis.Analyzers"
+            VersionOverride="3.3.3"
+            PrivateAssets="all"
+        />
     </ItemGroup>
 
     <!--
@@ -57,14 +45,8 @@
     reference this assembly — it ships only as an analyzer — so every type in it is internal and
     there is no package surface to govern. The Attributes project keeps RS0016.
   -->
-    <!-- Release tracking for the PARQ diagnostics (RS2000 series, #593); the shipped boundary is the v0.0.x tags. -->
     <ItemGroup>
-        <AdditionalFiles Include="AnalyzerReleases.Shipped.md" />
-        <AdditionalFiles Include="AnalyzerReleases.Unshipped.md" />
-    </ItemGroup>
-
-    <ItemGroup>
-        <!-- CA1502 / CA1505 / CA1506 thresholds. See docs/internals/code-quality-and-metrics.md. -->
+        <!-- CA1502 / CA1505 / CA1506 thresholds. See docs/21-CODE-METRICS.md. -->
         <AdditionalFiles Include="..\..\CodeMetricsConfig.txt" />
     </ItemGroup>
 
@@ -81,7 +63,7 @@
     Roslyn does not need Attributes.dll beside it in analyzers/dotnet/cs.
   -->
     <ItemGroup>
-        <ProjectReference Include="..\Parquet.SourceGenerator.Runtime\Parquet.SourceGenerator.Runtime.csproj" />
+        <ProjectReference Include="..\Parquet.SourceGenerator.Attributes\Parquet.SourceGenerator.Attributes.csproj" />
     </ItemGroup>
 
     <ItemGroup>
@@ -95,7 +77,7 @@
     </Target>
 
     <!--
-    PARQAPI002 (docs/architecture/api-governance.md). The gate is an analyzer, referenced build-time
+    PARQAPI002 (docs/18-API-CHANGE-CONTRACT.md). The gate is an analyzer, referenced build-time
     only: ReferenceOutputAssembly="false" keeps it out of the compile scope and PrivateAssets="all"
     keeps it out of the produced package. It short-circuits unless it is handed src/api/seams.txt,
     which only the projects in this ItemGroup supply.

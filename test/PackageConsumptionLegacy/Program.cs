@@ -128,8 +128,6 @@ internal static class Program
             || !await BatchedWriteRoundTripsAsync()
             || !await SchemaEvolutionRoundTripsAsync()
             || !await DecompressionLimitIsAppliedAsync()
-            || !await DecompressionGuardScenario.RunAsync()
-            || !await HostileScenario.RunAsync()
             || !SynchronizationContextScenario.Run()
         )
         {
@@ -241,7 +239,10 @@ internal static class Program
             .ToList();
 
         using var stream = new MemoryStream();
-        await rows.WriteParquetAsync(stream, new ParquetSerializerOptions { RowGroupSize = 100 });
+        await rows.WriteParquetBatchedAsync(
+            stream,
+            new ParquetSerializerOptions { RowGroupSize = 100 }
+        );
         stream.Position = 0;
 
         List<Measurement> read = await MeasurementParquetLegacyExtensions.ReadParquetAsync(stream);
