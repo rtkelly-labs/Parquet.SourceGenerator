@@ -1,7 +1,5 @@
 #pragma warning disable CA1305, MA0009, MA0011, MA0023, MA0047, CA1852
 
-#:package CliWrap@3.7.1
-
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -10,8 +8,6 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
-using CliWrap;
-using CliWrap.Buffered;
 
 // -----------------------------------------------------------------------------
 // InterrogateIL.cs
@@ -681,17 +677,24 @@ static (int exitCode, string stdout, string stderr) RunDotnet(string arguments)
         dotnetHost = "dotnet";
     }
 
-    var env = new Dictionary<string, string?>
+    var psi = new ProcessStartInfo
     {
-        ["MSBUILDDISABLENODEREUSE"] = "1",
-        ["DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER"] = "1",
-        ["DOTNET_BUILD_SERVER_DISABLE"] = "1",
+        FileName = dotnetHost,
+        Arguments = arguments,
+        RedirectStandardOutput = true,
+        RedirectStandardError = true,
+        UseShellExecute = false,
+        CreateNoWindow = true,
     };
+
+    psi.Environment["MSBUILDDISABLENODEREUSE"] = "1";
+    psi.Environment["DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER"] = "1";
+    psi.Environment["DOTNET_BUILD_SERVER_DISABLE"] = "1";
 
     if (Directory.Exists(homeDotnetDir))
     {
-        env["DOTNET_ROOT"] = homeDotnetDir;
-        env["PATH"] =
+        psi.Environment["DOTNET_ROOT"] = homeDotnetDir;
+        psi.Environment["PATH"] =
             Path.Combine(homeDotnetDir, "tools")
             + Path.PathSeparator
             + homeDotnetDir
@@ -699,15 +702,14 @@ static (int exitCode, string stdout, string stderr) RunDotnet(string arguments)
             + Environment.GetEnvironmentVariable("PATH");
     }
 
-    var result = Cli.Wrap(dotnetHost)
-        .WithArguments(arguments)
-        .WithEnvironmentVariables(env)
-        .WithValidation(CommandResultValidation.None)
-        .ExecuteBufferedAsync()
-        .GetAwaiter()
-        .GetResult();
+    using var process = Process.Start(psi)!;
+    Task<string> stdoutTask = process.StandardOutput.ReadToEndAsync();
+    Task<string> stderrTask = process.StandardError.ReadToEndAsync();
+    process.WaitForExit();
+    string stdout = stdoutTask.GetAwaiter().GetResult();
+    string stderr = stderrTask.GetAwaiter().GetResult();
 
-    return (result.ExitCode, result.StandardOutput, result.StandardError);
+    return (process.ExitCode, stdout, stderr);
 }
 
 sealed record TypeIlReport(

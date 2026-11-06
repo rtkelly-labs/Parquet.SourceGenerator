@@ -25,7 +25,9 @@ public sealed class BackendCompatibilityPolicyTests
     {
         "static ClassicExtensions.ReadParquetArrayAsync(System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<T[]>",
         "static ClassicExtensions.ReadParquetAsync(System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task<System.Collections.Generic.List<T>>",
-        "static ClassicExtensions.WriteParquetAsync(this System.Collections.Generic.IEnumerable<T> items, System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task",
+        "static ClassicExtensions.WriteParquetAsync(this System.Collections.Generic.IReadOnlyList<T> items, System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task",
+        "static ClassicExtensions.WriteParquetBatchedAsync(this System.Collections.Generic.IEnumerable<T> items, System.IO.Stream stream, Parquet.SourceGenerator.ParquetSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default) -> System.Threading.Tasks.Task",
+        "static readonly ClassicExtensions.Schema -> Parquet.Schema.ParquetSchema",
     };
 
     [Fact]
@@ -43,7 +45,7 @@ public sealed class BackendCompatibilityPolicyTests
                 .ShouldBeEmpty(
                     $"The classic backend API of {emission.FileName} contains a signature "
                         + "outside the declared core surface. A new member or overload requires an "
-                        + "explicit compatibility-policy decision in docs/reference/compatibility-matrix.md."
+                        + "explicit compatibility-policy decision in docs/14-COMPATIBILITY-MATRIX.md."
                 );
 
             foreach (string required in ClassicCoreSignatures)
@@ -83,7 +85,7 @@ public sealed class BackendCompatibilityPolicyTests
 
         lines.ShouldContain(line => line.Contains("Where(", StringComparison.Ordinal));
         lines.ShouldContain(line => line.Contains("Parallel()", StringComparison.Ordinal));
-        lines.ShouldContain(line => line.Contains("AsBatches(", StringComparison.Ordinal));
+        lines.ShouldContain(line => line.Contains("ColumnBatch", StringComparison.Ordinal));
         lines.ShouldContain(line => line.Contains("AsAsyncEnumerable(", StringComparison.Ordinal));
     }
 

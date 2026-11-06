@@ -12,8 +12,8 @@ using Xunit;
 namespace Parquet.SourceGenerator.Tests;
 
 /// <summary>
-/// Emitted async iterators validate arguments when called, not on the first MoveNextAsync (MA0050),
-/// and the parallel readers cancel their linked source with CancelAsync (CA1849) (#548).
+/// Emitted async iterators validate arguments when called, not on the first MoveNextAsync (S4456),
+/// and the parallel readers cancel their linked source with CancelAsync (S6966) (#548).
 /// </summary>
 public sealed class AsyncIteratorContractTests
 {
@@ -30,7 +30,10 @@ public sealed class AsyncIteratorContractTests
             .Range(1, 5)
             .Select(i => new ColumnBatchOrder { OrderId = i, Region = "emea" })
             .ToList();
-        await rows.WriteParquetAsync(stream, new ParquetSerializerOptions { RowGroupSize = 2 });
+        await rows.WriteParquetBatchedAsync(
+            stream,
+            new ParquetSerializerOptions { RowGroupSize = 2 }
+        );
         stream.Position = 0;
         return stream;
     }
@@ -73,7 +76,7 @@ public sealed class AsyncIteratorContractTests
     }
 
     [Fact]
-    public async Task AsBatchesStillObserveWithCancellationTokenAsync()
+    public async Task BatchesStillObserveWithCancellationTokenAsync()
     {
         using MemoryStream stream = await WriteSampleAsync();
         using var cts = new CancellationTokenSource();
@@ -82,7 +85,7 @@ public sealed class AsyncIteratorContractTests
         await Should.ThrowAsync<OperationCanceledException>(async () =>
         {
             await foreach (
-                ColumnBatchOrderBatch _ in ColumnBatchOrderParquetExtensions
+                ColumnBatchOrderParquetExtensions.ColumnBatch _ in ColumnBatchOrderParquetExtensions
                     .ReadBatchesCoreAsync(stream)
                     .WithCancellation(cts.Token)
             )

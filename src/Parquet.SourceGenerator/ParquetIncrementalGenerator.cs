@@ -21,29 +21,24 @@ internal sealed class ParquetIncrementalGenerator : IIncrementalGenerator
     {
         // 1. Read project policy as value-equatable state, then parse decorated target nodes with
         // the feature level's compound-shape allowance.
-        IncrementalValueProvider<GeneratorConfiguration> configuration =
-            context.AnalyzerConfigOptionsProvider.Select(
-                static (options, _) => GeneratorConfiguration.From(options)
-            );
-        // The transform parses and returns models, never the syntax context: a context holds a
-        // SemanticModel, which roots the compilation, and has no value equality, so caching it
-        // retained a compilation per target and left nothing downstream able to compare as
-        // unchanged (#395). Only the declaration that carries [ParquetSerializable] yields a
-        // result (#368), so a partial type split across files is one element, not one per part.
-        IncrementalValuesProvider<TargetParseSet> parses = context
-            .SyntaxProvider.CreateSyntaxProvider(
+        IncrementalValueProvider<GeneratorConfiguration> configuration = context
+            .CompilationProvider.Combine(context.AnalyzerConfigOptionsProvider)
+            .Select(static (pair, _) => GeneratorConfiguration.From(pair.Left, pair.Right));
+        IncrementalValuesProvider<GeneratorSyntaxContext> targetNodes =
+            context.SyntaxProvider.CreateSyntaxProvider(
                 predicate: static (s, _) => IsTargetSyntax(s),
-                transform: static (ctx, _) =>
-                    TargetParser.GetTargetParseSet(
-                        ctx,
-                        ParquetApiLevel.V6,
-                        CompoundKindsFor(GeneratorConfiguration.Default.FlatOnly)
-                    )
-            )
-            .Where(static parse => parse is not null)!;
-        IncrementalValuesProvider<TargetParserResult> targets = parses
+                transform: static (ctx, _) => ctx
+            );
+        IncrementalValuesProvider<TargetParserResult> targets = targetNodes
             .Combine(configuration)
-            .Select(static (pair, _) => pair.Right.FlatOnly ? pair.Left.Flat : pair.Left.Compound);
+            .Select(
+                static (pair, _) =>
+                    TargetParser.GetTargetModel(
+                        pair.Left,
+                        ParquetApiLevel.V6,
+                        compoundKinds: CompoundKindsFor(pair.Right.FeatureLevel)
+                    )
+            );
 
         context.RegisterSourceOutput(
             configuration,
@@ -159,8 +154,8 @@ internal sealed class ParquetIncrementalGenerator : IIncrementalGenerator
             || node is StructDeclarationSyntax { AttributeLists.Count: > 0 };
     }
 
-    private static Parser.CompoundKinds CompoundKindsFor(bool flatOnly) =>
-        flatOnly
+    private static Parser.CompoundKinds CompoundKindsFor(GeneratorFeatureLevel featureLevel) =>
+        featureLevel == GeneratorFeatureLevel.Level1Flat
             ? Parser.CompoundKinds.None
             : Parser.CompoundKinds.Struct | Parser.CompoundKinds.List;
 }

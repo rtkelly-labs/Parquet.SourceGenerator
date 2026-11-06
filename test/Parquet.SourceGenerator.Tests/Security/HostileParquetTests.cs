@@ -100,7 +100,7 @@ public class HostileParquetTests
             .ToList();
 
         using var ms = new MemoryStream();
-        await items.WriteParquetAsync(ms, new ParquetSerializerOptions { RowGroupSize = 2 });
+        await items.WriteParquetBatchedAsync(ms, new ParquetSerializerOptions { RowGroupSize = 2 });
 
         var hostileOptions = new ParquetSerializerOptions
         {
@@ -745,7 +745,7 @@ public class HostileParquetTests
         );
     }
 
-    internal static async Task<byte[]> RewriteColumnMetadataAsync(
+    private static async Task<byte[]> RewriteColumnMetadataAsync(
         byte[] bytes,
         Action<FileMetaData, int> mutate
     )

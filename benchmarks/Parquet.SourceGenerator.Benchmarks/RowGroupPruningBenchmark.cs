@@ -70,7 +70,10 @@ public class RowGroupPruningBenchmark
             .ToList();
 
         using var stream = new MemoryStream();
-        rows.WriteParquetAsync(stream, new ParquetSerializerOptions { RowGroupSize = RowGroupSize })
+        rows.WriteParquetBatchedAsync(
+                stream,
+                new ParquetSerializerOptions { RowGroupSize = RowGroupSize }
+            )
             .GetAwaiter()
             .GetResult();
         _parquet = stream.ToArray();

@@ -154,7 +154,7 @@ public sealed class BenchmarkDatasetsIntegrationTests
     );
 
     [Fact]
-    public async Task ToArrayAsyncDeserializesTpchLineitemDatasetAsync()
+    public async Task ToArrayAsyncDeserializesTpchLineitemDataset()
     {
         string filePath = Path.Combine(BenchmarkDataRoot, "tpch_lineitem_sf001.parquet");
         System.IO.File.Exists(filePath).ShouldBeTrue($"File not found: {filePath}");
@@ -189,7 +189,7 @@ public sealed class BenchmarkDatasetsIntegrationTests
     }
 
     [Fact]
-    public async Task ToArrayAsyncDeserializesAdultCensusIncomeDatasetAsync()
+    public async Task ToArrayAsyncDeserializesAdultCensusIncomeDataset()
     {
         string filePath = Path.Combine(BenchmarkDataRoot, "adult_census_income.parquet");
         System.IO.File.Exists(filePath).ShouldBeTrue($"File not found: {filePath}");
@@ -218,7 +218,7 @@ public sealed class BenchmarkDatasetsIntegrationTests
     }
 
     [Fact]
-    public async Task ToArrayAsyncDeserializesDiamondsDatasetAsync()
+    public async Task ToArrayAsyncDeserializesDiamondsDataset()
     {
         string filePath = Path.Combine(BenchmarkDataRoot, "diamonds.parquet");
         System.IO.File.Exists(filePath).ShouldBeTrue($"File not found: {filePath}");
@@ -288,7 +288,7 @@ public sealed class BenchmarkDatasetsIntegrationTests
         var original = await AdultCensusRecordParquet.From(stream).ToArrayAsync();
 
         using var outputStream = new MemoryStream();
-        await original.WriteParquetAsync(
+        await original.WriteParquetBatchedAsync(
             outputStream,
             new ParquetSerializerOptions { RowGroupSize = 5_000 }
         );
@@ -329,16 +329,10 @@ public sealed class BenchmarkDatasetsIntegrationTests
             refRecords[i].PartKey.ShouldBe(sgRecords[i].PartKey);
             refRecords[i].SuppKey.ShouldBe(sgRecords[i].SuppKey);
             refRecords[i].LineNumber.ShouldBe(sgRecords[i].LineNumber);
-            ParquetNetDecimalReference
-                .Exact(refRecords[i].Quantity, 2)
-                .ShouldBe(sgRecords[i].Quantity);
-            ParquetNetDecimalReference
-                .Exact(refRecords[i].ExtendedPrice, 2)
-                .ShouldBe(sgRecords[i].ExtendedPrice);
-            ParquetNetDecimalReference
-                .Exact(refRecords[i].Discount, 2)
-                .ShouldBe(sgRecords[i].Discount);
-            ParquetNetDecimalReference.Exact(refRecords[i].Tax, 2).ShouldBe(sgRecords[i].Tax);
+            refRecords[i].Quantity.ShouldBe(sgRecords[i].Quantity);
+            refRecords[i].ExtendedPrice.ShouldBe(sgRecords[i].ExtendedPrice);
+            refRecords[i].Discount.ShouldBe(sgRecords[i].Discount);
+            refRecords[i].Tax.ShouldBe(sgRecords[i].Tax);
             refRecords[i].ReturnFlag.ShouldBe(sgRecords[i].ReturnFlag);
             refRecords[i].LineStatus.ShouldBe(sgRecords[i].LineStatus);
             refRecords[i].ShipDate.ShouldBe(sgRecords[i].ShipDate);

@@ -1,6 +1,4 @@
 using System.Text;
-using Parquet.SourceGenerator.Emitter.Columnar;
-using Parquet.SourceGenerator.Emitter.Components;
 using Parquet.SourceGenerator.Models;
 
 namespace Parquet.SourceGenerator.Emitter;
@@ -10,7 +8,7 @@ namespace Parquet.SourceGenerator.Emitter;
 /// <para>
 /// Reads used to encode source, shape and execution into method names, with pushdown appended as a
 /// parameter to some cells and not others. Naming a cross-product does not scale; expressing each
-/// axis as a member does. See <c>docs/guides/reading-parquet.md</c>.
+/// axis as a member does. See <c>docs/19-PUBLIC-API-SURFACE.md</c>.
 /// </para>
 /// <para>
 /// The first builder pass (#217) was <b>type-state</b>: four public structs (stream, memory,
@@ -18,7 +16,7 @@ namespace Parquet.SourceGenerator.Emitter;
 /// method-name cross-product and replaced it with a public state-type cross-product. #478 collapses
 /// the four into one public <c>readonly struct &lt;Model&gt;ParquetReader</c> whose state — source
 /// kind, options, predicate and the parallel flag — is private
-/// (<c>docs/vision.md</c> §3).
+/// (<c>docs/47-0.1-CONTRACT-AND-DESIGN-GOALS.md</c> §4.2).
 /// </para>
 /// <para>
 /// Combinations the separate types made unrepresentable are now callable, so each one has defined
@@ -26,7 +24,7 @@ namespace Parquet.SourceGenerator.Emitter;
 /// unsupported combination throws <c>NotSupportedException</c></b>. <c>Parallel()</c> on a stream
 /// source or a filtered reader throws in <c>Parallel()</c>; <c>Where()</c> on a parallel reader
 /// throws in <c>Where()</c>; a streaming or batch terminal on a parallel reader, and
-/// <c>AsBatches()</c> on a filtered reader, throw at that terminal. A reader value therefore never
+/// <c>Batches()</c> on a filtered reader, throw at that terminal. A reader value therefore never
 /// holds a state that no terminal can execute.
 /// </para>
 /// <para>
@@ -55,7 +53,7 @@ internal static class ReadBuilderComponent
     public static void Emit(StringBuilder builder, TargetClassModel model)
     {
         bool pruning = RowGroupPruningComponent.IsEnabled(model);
-        bool batches = ColumnarBatchComponent.IsSupported(model);
+        bool batches = ColumnBatchComponent.Supports(model);
 
         EmitEntryPoint(builder, model, pruning);
         builder.AppendLine();
@@ -175,7 +173,7 @@ internal static class ReadBuilderComponent
             "    /// <summary>Materializes every surviving row into an array.</summary>"
         );
         builder.AppendLine(
-            $"    public global::System.Threading.Tasks.Task<{EmittedText.Ident(model.ClassName)}[]> ToArrayAsync({Ct} cancellationToken = default)"
+            $"    public global::System.Threading.Tasks.Task<{model.ClassName}[]> ToArrayAsync({Ct} cancellationToken = default)"
         );
         builder.AppendLine("    {");
         builder.AppendLine("        if (_parallel)");
@@ -207,7 +205,7 @@ internal static class ReadBuilderComponent
             "    /// <exception cref=\"System.NotSupportedException\">The reader is <c>Parallel()</c>: streaming is sequential by definition.</exception>"
         );
         builder.AppendLine(
-            $"    public global::System.Collections.Generic.IAsyncEnumerable<{EmittedText.Ident(model.ClassName)}> AsAsyncEnumerable({Ct} cancellationToken = default)"
+            $"    public global::System.Collections.Generic.IAsyncEnumerable<{model.ClassName}> AsAsyncEnumerable({Ct} cancellationToken = default)"
         );
         builder.AppendLine("    {");
         builder.AppendLine("        if (_parallel)");
@@ -226,7 +224,7 @@ internal static class ReadBuilderComponent
 
         if (batches)
         {
-            EmitBatches(builder, model, ext, pruning);
+            EmitBatches(builder, ext, pruning);
         }
 
         if (pruning)
@@ -247,7 +245,9 @@ internal static class ReadBuilderComponent
         );
         builder.AppendLine($"    public {name} Where({pred} predicate)");
         builder.AppendLine("    {");
-        builder.AppendLine("        global::System.ArgumentNullException.ThrowIfNull(predicate);");
+        builder.AppendLine(
+            "        if (predicate is null) throw new global::System.ArgumentNullException(nameof(predicate));"
+        );
         builder.AppendLine("        if (_parallel)");
         builder.AppendLine(
             $"            throw new {NotSupported}(\"Where() cannot be combined with Parallel(): no parallel reader accepts a row-group predicate yet (#222). Drop Parallel() to filter sequentially.\");"
@@ -307,33 +307,27 @@ internal static class ReadBuilderComponent
         builder.AppendLine();
     }
 
-    private static void EmitBatches(
-        StringBuilder builder,
-        TargetClassModel model,
-        string ext,
-        bool pruning
-    )
+    private static void EmitBatches(StringBuilder builder, string ext, bool pruning)
     {
-        string batchType = ColumnarBatchComponent.BatchTypeName(model);
         builder.AppendLine(
-            "    /// <summary>Streams columnar batches, one per row group (#147, #508). Each batch is borrowed: it is valid until the next <c>MoveNextAsync</c> and throws after that.</summary>"
+            "    /// <summary>Streams struct-of-arrays column batches, one per row group (#147).</summary>"
         );
         builder.AppendLine(
             $"    /// <exception cref=\"System.NotSupportedException\">The reader is <c>Parallel()</c>{(pruning ? ", or has a <c>Where()</c> predicate" : string.Empty)}.</exception>"
         );
         builder.AppendLine(
-            $"    public global::System.Collections.Generic.IAsyncEnumerable<{batchType}> AsBatches({Ct} cancellationToken = default)"
+            $"    public global::System.Collections.Generic.IAsyncEnumerable<{ext}.ColumnBatch> Batches({Ct} cancellationToken = default)"
         );
         builder.AppendLine("    {");
         builder.AppendLine("        if (_parallel)");
         builder.AppendLine(
-            $"            throw new {NotSupported}(\"AsBatches() cannot follow Parallel(): there is no parallel column-batch reader and batch streaming is sequential by definition. Drop Parallel().\");"
+            $"            throw new {NotSupported}(\"Batches() cannot follow Parallel(): there is no parallel column-batch reader and batch streaming is sequential by definition. Drop Parallel().\");"
         );
         if (pruning)
         {
             builder.AppendLine("        if (_predicate is not null)");
             builder.AppendLine(
-                $"            throw new {NotSupported}(\"AsBatches() cannot follow Where(): the column-batch reader does not accept a row-group predicate. Use AsAsyncEnumerable() or ToArrayAsync() to filter.\");"
+                $"            throw new {NotSupported}(\"Batches() cannot follow Where(): the column-batch reader does not accept a row-group predicate. Use AsAsyncEnumerable() or ToArrayAsync() to filter.\");"
             );
         }
         builder.AppendLine("        return _stream is not null");
@@ -350,7 +344,7 @@ internal static class ReadBuilderComponent
     /// <summary>
     /// Buffer + predicate + array. The buffer array core takes no predicate, so this routes through
     /// the streaming core that does and collects — the same rows by the same pruning — rather than
-    /// leaving the cell unavailable (defect 3 in docs/guides/reading-parquet.md). Unchanged from the #217 filtered source.
+    /// leaving the cell unavailable (defect 3 in docs/19). Unchanged from the #217 filtered source.
     /// </summary>
     private static void EmitCollectFilteredBuffer(
         StringBuilder builder,
@@ -360,11 +354,11 @@ internal static class ReadBuilderComponent
     )
     {
         builder.AppendLine(
-            $"    private static async global::System.Threading.Tasks.Task<{EmittedText.Ident(model.ClassName)}[]> CollectFilteredBufferAsync({Memory} bytes, {Options}? options, {pred} predicate, {Ct} cancellationToken)"
+            $"    private static async global::System.Threading.Tasks.Task<{model.ClassName}[]> CollectFilteredBufferAsync({Memory} bytes, {Options}? options, {pred} predicate, {Ct} cancellationToken)"
         );
         builder.AppendLine("    {");
         builder.AppendLine(
-            $"        var results = new global::System.Collections.Generic.List<{EmittedText.Ident(model.ClassName)}>();"
+            $"        var results = new global::System.Collections.Generic.List<{model.ClassName}>();"
         );
         // The IAsyncEnumerable ConfigureAwait overload is an extension in System.Threading.Tasks and
         // the emitted file carries no usings, so it is called as a static method. Skipping it would

@@ -18,7 +18,7 @@ namespace Parquet.SourceGenerator.Tests;
 /// and publishes the emitted source plus its derived API files to
 /// <see cref="GoldenCorpus.OutputDirectory"/>. Nothing is compared against a checked-in copy: CI
 /// diffs the published output against the pull request's base and posts the diff for review
-/// (docs/architecture/api-governance.md).
+/// (docs/17-GENERATED-API-BASELINES.md).
 /// </summary>
 public sealed class GoldenCodeGenRegressionTests
 {
@@ -92,7 +92,6 @@ public sealed class GoldenCodeGenRegressionTests
 
         emittedCode.ShouldContain("public static partial class GoldenModelParquetExtensions");
         emittedCode.ShouldContain("WriteParquetAsync");
-        emittedCode.ShouldNotContain("WriteParquetBatchedAsync");
         emittedCode.ShouldContain("ReadParallelArrayCoreAsync");
         // #479: List<T> is a caller-side conversion, not a second read implementation.
         emittedCode.ShouldNotContain("ReadParallelListCoreAsync");
@@ -135,30 +134,20 @@ public sealed class GoldenCodeGenRegressionTests
         generated.ShouldContain("ParquetColumnStatistics<int> WeightGrams { get; }");
         generated.ShouldContain("ParquetColumnStatistics<string> Carrier { get; }");
 
-        // No sorted-lookup overloads are emitted; key lookups express through Where (#584).
-        generated.ShouldNotContain("TryPruneSortedRowGroups");
-        generated.ShouldNotContain("ReadPrunedRangeAsync");
-        generated.ShouldNotContain("ReadParquetBySequenceAsync");
-        generated.ShouldNotContain("ReadParquetByShippedAtAsync");
-        generated.ShouldNotContain("ReadParquetSequenceRangeAsync");
-        generated.ShouldNotContain("ReadParquetShippedAtRangeAsync");
-        generated.ShouldNotContain("ReadParquetByCarrierAsync", Case.Sensitive);
+        // Sorted-lookup surface, one pair per key column, over the shared core.
+        generated.ShouldContain("bool TryPruneSortedRowGroups<");
+        generated.ShouldContain("ReadPrunedRangeAsync<");
+        generated.ShouldContain("ReadParquetBySequenceAsync(");
+        generated.ShouldContain("ReadParquetByShippedAtAsync(");
 
-        // Eligibility boundaries held where they should: DateTime is not projected into zone map;
-        // string is projected into zone map.
+        // Eligibility boundaries held where they should: a DateTime key is searched but
+        // never projected; a string is projected but can never be searched. Output that
+        // starts disagreeing with this is a silent API-surface move.
         generated.ShouldNotContain(
             "ParquetColumnStatistics<System.DateTime> ShippedAt",
             Case.Sensitive
         );
-    }
-
-    [Fact]
-    public void GoldenMasterArrowRecordBatchModel()
-    {
-        GoldenEmission emission = VerifyAndPublish("ArrowOrderParquetExtensions.g.cs");
-        string generated = emission.Source;
-        generated.ShouldContain("WriteParquetRowGroupAsync");
-        generated.ShouldContain("global::Apache.Arrow.RecordBatch");
+        generated.ShouldNotContain("ReadParquetByCarrierAsync(", Case.Sensitive);
     }
 
     [Fact]

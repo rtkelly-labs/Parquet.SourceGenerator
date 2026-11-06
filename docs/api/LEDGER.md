@@ -4,7 +4,7 @@ Every line added to a governed catalogue — an emitted-API `*.api.txt`, `src/ap
 `PublicAPI.Unshipped.txt` — needs an entry here classifying its semver impact. Newest first.
 
 The rule, the three surfaces and the author process are in
-[API Governance & Change Contract](../architecture/api-governance.md). The buckets are `additive-minor`,
+[18 - API Change Contract](../18-API-CHANGE-CONTRACT.md). The buckets are `additive-minor`,
 `breaking-major`, `internal` and `generated-shape`.
 
 > **Everything dated before 2026-09-10 was catalogued retrospectively.** The single
@@ -15,323 +15,6 @@ The rule, the three surfaces and the author process are in
 > is then exactly the set of entries dated on or after 2026-09-10, which *were* reviewed.
 
 <!-- Add new entries directly below this line, newest first. -->
-
-### 2026-10-28 — `ParquetDecimalScale`: exact integer-backed decimals on .NET 11
-
-- **Surface:** package
-- **Semver:** additive-minor
-- **Issue:** not filed
-- **Change:** Added `ParquetDecimalScale` (`[EditorBrowsable(Never)]`) to
-  `Parquet.SourceGenerator.Runtime` with `RestoreIntegerScaled(Span<decimal>, int)` and
-  `RestoreIntegerScaled(Span<decimal?>, int)`. Generated readers call it after reading a decimal
-  column whose chunk is INT32- or INT64-backed.
-- **Rationale:** Parquet.Net decodes those decimals as `unscaled * (decimal)Math.Pow(10, -scale)`.
-  From .NET 11 the `double` to `decimal` conversion no longer rounds to 15 significant digits, so
-  the factor carries the `double`'s error and every value is off (19.99 reads as
-  19.990000000000000416125467383), sometimes by whole units of the column's scale. The helper
-  divides by the same factor, rounds to the unscaled integer and rescales exactly. It is a no-op
-  where the factor is already exact, which is every runtime before .NET 11. Public because emitted
-  code in consumer assemblies calls it; hidden like `StringDeduplicator`. Detail in
-  UPSTREAM_DEPENDENCY_LIMITATIONS.md.
-
-### 2026-10-28 — `ParquetDecimalScale` test entry points
-
-- **Surface:** seam
-- **Semver:** internal
-- **Issue:** not filed
-- **Rationale:** `TryGetCorrection` and `Restore(Span<decimal>, int, decimal)` take the factor as
-  an argument so `ParquetDecimalScaleTests` can drive the .NET 11 arithmetic on any runtime; before
-  .NET 11 the public entry points do nothing.
-
-### 2026-10-27 — Consolidate footer start helper into ParquetDecompressionGuardStream (#723)
-
-- **Surface:** package
-- **Semver:** additive-minor
-- **Issue:** [#723](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/723)
-- **Change:** Added `GetFooterStartAsync(Stream stream, CancellationToken cancellationToken = default)` static method to `ParquetDecompressionGuardStream` in `Parquet.SourceGenerator.Runtime`.
-- **Rationale:** Previously, ~55 lines of footer length reading and boundary validation were emitted into every generated model extension class. Centralizing this helper in `ParquetDecompressionGuardStream` eliminates duplicated boilerplate across all emitted models while maintaining full compatibility.
-
-### 2026-10-27 — Hoist StringDeduplicator into Runtime package (#721)
-
-- **Surface:** package
-- **Semver:** additive-minor
-- **Issue:** [#721](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/721)
-- **Change:** Added `StringDeduplicator` struct to `Parquet.SourceGenerator.Runtime`. It provides an L1 open-addressed hash table for string deduplication with SIMD-accelerated comparison and BCL `string.GetHashCode(ReadOnlySpan<char>, StringComparison.Ordinal)` hashing on modern runtimes with FNV-1a fallback on netstandard2.0. Marked `[EditorBrowsable(EditorBrowsableState.Never)]`.
-- **Rationale:** Previously, ~350 lines of string deduplicator struct, open-addressing table, and scalar char-by-char comparison loops were emitted into every generated class with string properties. Compiling this in `Parquet.SourceGenerator.Runtime` eliminates code duplication across models, drops emitted ELOC by ~200 lines per string model, and accelerates deduplication using SIMD `SequenceEqual` and BCL hashing.
-
-
-### 2026-10-26 — Hoist DecompressionGuardStream into Runtime package (#720)
-
-- **Surface:** package
-- **Semver:** additive-minor
-- **Issue:** [#720](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/720)
-- **Change:** Added `ParquetDecompressionGuardStream` to `Parquet.SourceGenerator.Runtime`. It provides a seekable read wrapper that validates Thrift compact-protocol page headers and file metadata footer counts before allocating or decompressing hostile pages. Marked `[EditorBrowsable(EditorBrowsableState.Never)]`.
-- **Rationale:** Previously, ~675 lines of Thrift compact-protocol parsing and decompression stream guarding were emitted into every generated file/class. Compiling this once into `Parquet.SourceGenerator.Runtime` eliminates hundreds of duplicated lines per generated model, drops emitted ELOC by ~600 lines per model, and accelerates compilation without changing safety guarantees.
-
-
-### 2026-10-26 — Rename and transition Parquet.SourceGenerator.Attributes to Parquet.SourceGenerator.Runtime (#725)
-
-- **Surface:** package
-- **Semver:** additive-minor
-- **Issue:** [#725](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/725)
-- **Change:** Renamed package and assembly `Parquet.SourceGenerator.Attributes` to `Parquet.SourceGenerator.Runtime` while retaining the `Parquet.SourceGenerator` root namespace.
-- **Rationale:** The companion package is not merely an attribute annotation library; it contains runtime execution logic (`VectorizedColumnTransforms`, `NullableColumnExtractor`, `ParquetSerializerOptions`) and provides the foundation for hoisting common runtime utilities (`DecompressionGuardStream`, `StringDeduplicator`, `FormatOptionsMapper`). Transitioning the assembly name to `Parquet.SourceGenerator.Runtime` accurately represents the runtime engine while keeping consumer namespaces unchanged.
-
-### 2026-10-23 — Iceberg-ready columns: field IDs, local timestamps, INT32 dates
-
-- **Surface:** package
-- **Semver:** additive-minor
-- **Issue:** not yet filed — proposed from the Apache Iceberg interop study (iceberg-dotnet `docs/parquet-sourcegenerator.md`)
-- **Change:** Added `ParquetColumnAttribute.FieldId` (default -1, no ID written) and
-  `ParquetTimestampAttribute.AdjustedToUtc` (default true, today's annotation). The emitter writes
-  `DataField.FieldId` and `isAdjustedToUTC: false` only when a member sets them, so the output for
-  existing models does not change. The Legacy (4.x/5.x) backend rejects both with the new `PARQ023`. Separately, `DateOnly` columns are written as INT32 DATE again
-  (main had regressed to INT96).
-- **Rationale:** Apache Iceberg resolves Parquet columns by field ID and distinguishes `timestamp`
-  (local) from `timestamptz` (UTC-adjusted). Without these, generated files can join an Iceberg table
-  only through a name mapping, and only as `timestamptz`. INT96 is deprecated in Parquet and
-  rejected by Iceberg, and pyarrow reads an INT96 "date" as a datetime.
-- **Alternatives considered:** *a separate `[ParquetFieldId(n)]` attribute*, rejected: the ID is a property of
-  the column binding, which `[ParquetColumn]` already owns, and a second attribute would allow two sources of
-  one column's identity. *An opt-in `Iceberg` profile that switches all three together*, deferred: each change
-  stands alone, and the profile (diagnostics for INT96, `TimeSpan` and unsigned members) can be layered on later.
-  *Writing local timestamps through `DateAndTimeMicros, isAdjustedToUTC: false`*, rejected after measuring:
-  Parquet.Net 6.1 drops the flag for that format.
-
-### 2026-10-07 — Promote `PublicAPI.Unshipped.txt` to `PublicAPI.Shipped.txt` (0.1 baseline) (#592)
-
-- **Surface:** package
-- **Semver:** additive-minor
-- **Issue:** [#592](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/592), part of tracker [#477](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/477), [#583](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/583)
-- **Change:** Promoted all 57 entries from `src/Parquet.SourceGenerator.Attributes/PublicAPI.Unshipped.txt` to `PublicAPI.Shipped.txt`, establishing the frozen 0.1 baseline of 101 public package signatures across all 13 public types. `PublicAPI.Unshipped.txt` is now empty (retaining `#nullable enable`).
-- **Rationale:** Prior to 0.1, new attributes, enums, options, and statistics members resided in `PublicAPI.Unshipped.txt` where evolutionary changes and trims could occur without breaking-change violations against a shipped baseline. With all 0.1 API contractions, trims (#584–#587), and classifications (#482, #589) completed, the entire public surface of `Parquet.SourceGenerator.Attributes` is formally shipped. Any subsequent modification to a member in `PublicAPI.Shipped.txt` will now be enforced as `breaking-major` under docs/18.
-
-### 2026-10-06 — Emitted consumer API shape budget gate (#588)
-
-- **Surface:** generated-shape
-- **Semver:** generated-shape
-- **Issue:** [#588](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/588), completing the second half
-  of [#459](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/459), tracker [#477](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/477)
-- **Change:** Introduced `src/api/emitted-api-budgets.txt` containing checked-in ceiling budgets for emitted
-  consumer API shapes (flat/sorted <= 40 members, <= 36 parameters; compound <= 20 members, <= 20 parameters;
-  legacy <= 10 members, <= 15 parameters). Governed by `scripts/DerivedOutputs.cs`, unit-tested by
-  `GeneratedApiBudgetGateTests`, and added to governed catalogues in `scripts/CheckApiLedger.cs`.
-- **Rationale:** Retirement of `PARQAPI001` left the emitted consumer surface without a regression gate on member
-  or parameter count growth. Hard ceilings per model category prevent silent bloat while allowing normal internal
-  emitter refactoring. Raising any budget requires a ledger entry, and the gate fails closed if 0 models are examined.
-
-### 2026-10-06 — Apache Arrow ingestion golden model and stability classification (#589, #482, #583)
-
-- **Surface:** generated-shape
-- **Semver:** additive-minor
-- **Issue:** [#589](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/589), [#482](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/482),
-  [#583](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/583), tracker [#477](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/477)
-- **Change:** Added golden model `ArrowOrder` to `GoldenCorpus`, exposing the conditionally emitted
-  `WriteParquetRowGroupAsync(ParquetWriter, RecordBatch, ...)` in derived `.api.txt` and shape summaries
-  (33 members, 32 parameters). Formally classified Arrow RecordBatch ingestion as **Optional Integration**
-  (stable for 0.1, modern backend only), removing legacy "(Experimental)" tags from documentation. Recorded
-  decision that taking `ParquetWriter` is the correct contract for row-group streaming pipelines.
-- **Rationale:** Previously, no golden model referenced `Apache.Arrow`, leaving the emitted bridge invisible to
-  API review diffs and shape measurements. Adding `ArrowOrder` brings the overload under API review and budget
-  governance. Arrow batches represent individual Parquet row groups in caller-managed streaming pipelines, so
-  accepting `ParquetWriter` matches caller lifecycle and compression control requirements.
-
-### 2026-10-05 — Fold `WriteParquetBatchedAsync` into `WriteParquetAsync` (#512)
-
-- **Surface:** generated-shape
-- **Semver:** breaking-major
-- **Issue:** [#512](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/512), part of tracker
-  [#477](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/477), [#505](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/505)
-- **Change:** `WriteParquetBatchedAsync` is removed from code generation on both modern and legacy emitters.
-  The row-writing overload `WriteParquetAsync(this IEnumerable<T> items, Stream stream, ParquetSerializerOptions? options = null, CancellationToken cancellationToken = default)`
-  widens from `IReadOnlyCollection<T>` (modern) / `IReadOnlyList<T>` (legacy) to `IEnumerable<T>`. When the collection size is within
-  `options.RowGroupSize` (default: 50,000), it writes a single row group via the direct fast path; when the sequence
-  exceeds `RowGroupSize` or is an unbuffered `IEnumerable<T>`, it chunks into row groups of `RowGroupSize`.
-- **Rationale:** Once `AsBatches()` and `<Model>Batch` exist, the term "batch" refers specifically to columnar chunks.
-  `WriteParquetBatchedAsync` used the same word for writing row-group-partitioned `IEnumerable<T>` rows, causing ambiguity
-  beside `batch.WriteParquetAsync`. Furthermore, chunking is already controlled by `ParquetSerializerOptions.RowGroupSize`,
-  and `WriteParquetAsync(IAsyncEnumerable<T>)` already chunks using that setting. Folding `WriteParquetBatchedAsync` into
-  `WriteParquetAsync` removes an extra public member (-1 emitted method per model across both backends) and satisfies the
-  invariant that no public write member uses "batch" unless it takes `<Model>Batch`.
-
-### 2026-10-05 — Internalize sorted-key reads and `ParquetPruneStatistics`, express key lookups through `Where` (#584)
-
-- **Surface:** unshipped
-- **Semver:** breaking-major
-- **Issue:** [#584](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/584), part of tracker
-  [#477](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/477)
-- **Change:** `ParquetPruneStatistics` changed from `public` to `internal` (removing 16 entries from
-  `PublicAPI.Unshipped.txt`). `ReadParquetBy{Key}Async` and `ReadParquet{Key}RangeAsync` emitted on
-  `<Model>ParquetExtensions` are removed. Key point-lookups and range queries are expressed using the
-  fluent `<Model>Parquet.From(...).Where(meta => meta.<Key>.MayContain(...))` and `MayContainBetween(...)`
-  grammar.
-- **Rationale:** The emitted `ReadParquetBy*` and `ReadParquet*RangeAsync` methods were the last remaining
-  `Stream`-only and `List<T>`-returning reads, taking custom statistics parameters where the rest of the
-  read surface accepts options and tokens. Row-group zone-map pushdown is already uniformly available via
-  `.Where(...)` over `<Model>RowGroupMetadata` using `MayContain*` helpers, which operates over the footer
-  statistics without decompressing skipped row groups. Internalizing `ParquetPruneStatistics` and removing
-  the sorted read overloads contracts the public API surface (-16 package API lines, -4 emitted members per
-  sorted model) while unifying all row-group filtering under the fluent reader.
-
-### 2026-10-05 — Collapse `ParquetGeneratorFeatureLevel` and `ParquetGeneratorOptionsAttribute` to `ParquetGeneratorFlatOnly` (#587)
-
-- **Surface:** unshipped
-- **Semver:** breaking-major
-- **Issue:** [#587](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/587), part of tracker
-  [#477](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/477)
-- **Change:** Removed `ParquetGeneratorFeatureLevel` enum (3 values: `Level1Flat`, `Level2CompoundPreview`,
-  `Level3ModernCSharp`) and `ParquetGeneratorOptionsAttribute` from `Parquet.SourceGenerator.Attributes`.
-  Replaced with the MSBuild property `<ParquetGeneratorFlatOnly>true</ParquetGeneratorFlatOnly>`. Retired
-  diagnostic `PARQ015`.
-- **Rationale:** The feature-level enum and assembly attribute were redundant mechanisms to spell a single
-  binary behavior toggle: only `Level1Flat` ever altered emitter behavior (by disabling compound types).
-  `Level2CompoundPreview` was an unnecessary preview label for default supported functionality, and
-  `Level3ModernCSharp` was unused. Collapsing this to a single MSBuild boolean property removes 8 unshipped
-  API lines, eliminates the assembly attribute scan, and avoids confusing multi-tiered feature levels.
-
-### 2026-10-05 — Hide `ParquetColumnStatistics<T>` constructor and `FromRaw` with `[EditorBrowsable(Never)]` (#586)
-
-- **Surface:** unshipped
-- **Semver:** breaking-major
-- **Issue:** [#586](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/586), part of tracker
-  [#477](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/477)
-- **Change:** `ParquetColumnStatistics(bool, T, bool, T, long?, long?)` constructor, the static class
-  `ParquetColumnStatistics`, and its `FromRaw<T>(object?, object?, long?, long?)` projection helper are
-  annotated with `[EditorBrowsable(EditorBrowsableState.Never)]`.
-- **Rationale:** `ParquetColumnStatistics<T>` is a shared runtime type whose query surface (`Min`, `Max`,
-  `NullCount`, `DistinctCount`, `HasMinMax`, `IsKnownNonNull`, `MayContain*`) is designed for row-group
-  filtering expressions in `.Where(...)`. Generated reader code calls `FromRaw<T>` from the consumer
-  assembly as row groups are inspected, and `FromRaw<T>` invokes the constructor in the attributes assembly.
-  `[EditorBrowsable(EditorBrowsableState.Never)]` hides these members from IntelliSense without preventing direct
-  calls, preserving the required cross-assembly plumbing without introducing redundant per-assembly emitted helper types.
-- **Classification of Equality:** `ParquetColumnStatistics<T>` is a `readonly struct` and retains
-  `IEquatable<ParquetColumnStatistics<T>>`, `Equals`, `GetHashCode`, `==`, and `!=` for standard .NET
-  value-type semantics and CA1815 compliance.
-
-### 2026-10-05 — Internalize `ParquetSchema Schema` field across emitted extensions (#585)
-
-- **Surface:** emitted
-- **Semver:** breaking-major
-- **Issue:** [#585](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/585), part of tracker
-  [#477](https://github.com/rtkelly-labs/Parquet.SourceGenerator/issues/477)
-- **Change:** `public static readonly global::Parquet.Schema.ParquetSchema Schema` on generated
-  `<Model>ParquetExtensions` is now `internal static readonly`.
-- **Rationale:** `ParquetSchema` is an external dependency type that differs per backend (Parquet.Net 6
-  vs 4.25), so exposing it on the public contract leaked the backend package choice into consumer API
-  surfaces. Internalizing the field hides the backend dependency while keeping the schema definition
-  accessible for intra-assembly deserialization and internal helpers.
-
-### 2026-10-03 — `ParquetSerializerOptions.MaxAllocationBytes`, a byte budget for what a read allocates (#361)
-
-- **Surface:** unshipped
-- **Semver:** additive-minor
-- **Issue:** [#361](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/361), part of tracker
-  [#477](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/477)
-- **Change:** adds `long MaxAllocationBytes { get; set; }` to `ParquetSerializerOptions`, default
-  268,435,456 (256 MiB). The generated readers (modern and classic) multiply a row group's declared
-  row count by the model's per-row buffer size and throw `InvalidDataException`, naming the option,
-  before renting; repeated columns are checked as their chunks are read and added to the row group's running total.
-- **Rationale:** `MaxAllocationValues` bounds a count, which is the same number for a `bool` and a
-  `Guid` column and applies per column, so a roughly 1 KB file declaring ten million rows reserved
-  about a gigabyte for a nine column model before any page was read. The issue's other proposal,
-  rejecting a column whose `num_values` could not be encoded in its `total_uncompressed_size`, was
-  not taken: RLE, dictionary, all-null and delta encodings legitimately carry millions of values in a
-  few bytes (UPSTREAM_DEPENDENCY_LIMITATIONS.md). The only sound bound is the one the caller chooses.
-- **Default:** 256 MiB per row group admits any realistic group (a million rows of a ten column model
-  is about 100 MiB) and refuses the ten million rows a hostile footer can declare. A file with larger
-  row groups raises the option; the error message says which.
-- **Alternatives considered:** *dividing the budget across parallel workers* — not done: the budget is
-  per row group and per worker, documented on the option, because the split would change a limit a
-  caller sets for one read depending on the host's core count. *A hard-coded limit* — rejected: a
-  legitimately large file must be readable.
-
-### 2026-10-02 — `{T}ColumnarBatch` and the nested `ColumnBatch` become one top-level `{T}Batch` (#508)
-
-- **Surface:** emitted
-- **Semver:** breaking-major
-- **Issue:** [#508](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/508), part of tracker
-  [#505](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/505); ownership model
-  [#369](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/369) (partly)
-- **Change:** for each flat model, `public readonly struct {T}ColumnarBatch` (write input) and
-  `{T}ParquetExtensions.ColumnBatch` (read item type, `ReadOnlySpan<T>` accessors named
-  `<Column>Span`, plus `RowGroupIndex`) are removed. `public readonly struct {T}Batch` replaces both,
-  at namespace scope. It keeps the write-side shape: a validating public constructor `{T}Batch(int
-  rowCount, <one ReadOnlyMemory<…> per column, plus a ReadOnlyMemory<int> definition-levels lane after
-  each nullable value column>)`, a get-only `RowCount` and one get-only `ReadOnlyMemory<…>` property
-  per column (`<Column>DefinitionLevels` for the levels). The columnar `WriteParquetAsync(this
-  {T}Batch batch, Stream, ParquetSerializerOptions?, CancellationToken)` now takes it, and the reader's
-  `AsBatches()` yields it. Read-side consumers move from `ReadOnlySpan<T> x = batch.AmountSpan` to
-  `batch.Amount.Span`; a nullable value column reads as packed values plus levels instead of
-  `ReadOnlySpan<T?>`; text and binary columns read as inline-nullable `ReadOnlyMemory<char>` /
-  `ReadOnlyMemory<byte>` per row instead of `string` / `byte[]`; `RowGroupIndex` is gone.
-- **Rationale:** one name had meant two unrelated types, so what a reader yielded could not be handed
-  to the columnar writer, and the near-identical names hid it. Layout A (packed values plus
-  definition levels, inline-nullable text and binary) was chosen from the #561 experiment: cheapest
-  to write, read and store for numerics, and storing strings packed cost 28-280 us per column. See
-  [12](../architecture/memory-and-performance.md) §7.
-- **Ownership:** a batch from `AsBatches()` is borrowed (valid until the next `MoveNextAsync`) and
-  carries a lease the iterator expires before returning the pooled buffers; a kept batch throws
-  `ObjectDisposedException` from every lane property, the fill methods and `WriteParquetAsync`. A
-  batch a caller constructs never expires. This is lease/token validation from #369's candidate
-  list, and the owner chose it as the stable 0.1 contract: using a batch or a lane after the
-  enumerator advances is invalid; a `ReadOnlyMemory<T>` lane already copied out of a live batch is
-  not checked yet (lane-level checking is #580, additive, no API change); lanes of a borrowed batch
-  are not guaranteed to be array-backed; batches are not thread-safe; to keep data, copy each lane
-  with `.ToArray()` into the public constructor. No escape method and no owned, callback or
-  ref-counted variant in 0.1; an owned-batch terminal, `ToOwned()` and a callback form can be added
-  later without a break.
-- **Alternatives considered:** *`T?` spans for nullable columns (layout B)* — rejected: costs a
-  transpose on write and doubles the width of small types. *A cached `T?` accessor (layout C)* —
-  rejected: it allocated large arrays and was 2x slower under Server GC in the experiment; replaced
-  by the explicit `Fill<Column>Nullable` method below. *Packed storage for strings* — rejected: the
-  writer takes `ReadOnlyMemory<ReadOnlyMemory<char>?>` and packing costs 28-280 us per column.
-  *Keep two types and add a converter* — rejected: that is the surface this entry removes.
-  *Callback-scoped borrowing* (`Func<Batch, ValueTask>`) — not chosen: it gives up the `await
-  foreach` shape and needs the lease anyway; not in 0.1 (can be added later without a break).
-  *Reference counting* — rejected: the most surface for the same hole.
-- **Fixes folded in:** #384 part a (a derived `<Column>DefinitionLevels` member no longer collides
-  with a property of that name; it becomes `<Column>DefinitionLevels_`) and #550/#562's
-  readonly-struct shape carries over.
-- **Note:** pre-1.0 break; `0.0.x` permits it without a major bump.
-
-### 2026-10-02 — added `{T}Batch.Fill<Column>Nullable(Span<T?> destination)` for each nullable value column (#508)
-
-- **Surface:** emitted
-- **Semver:** additive-minor
-- **Issue:** [#508](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/508)
-- **Change:** one `public void Fill<Column>Nullable(System.Span<T?> destination)` per nullable
-  value column of a flat model, where `T` is the column's wire element type (the one its packed lane
-  uses). It expands the packed values and definition levels into the caller's buffer, null where the
-  row is null. It throws `ArgumentException` if the buffer is shorter than the row count and
-  `InvalidOperationException` if the levels mark more rows present than the packed lane holds.
-- **Rationale:** the packed layout is the cheapest to produce and consume, but a caller sometimes
-  wants a row-aligned `T?` view. An explicit method makes the cost visible (an O(rows) pass and a
-  buffer the caller owns); no existing member can express that without a cached property.
-- **Alternatives considered:** *a cached `T?` property per column* — rejected: per-batch large
-  allocations, 2x slower under Server GC (#561). *A `T?` span returned from a rented buffer* —
-  rejected: it would hand the caller a second borrowed buffer to track. *Nothing, let callers write
-  the loop* — rejected: the loop is easy to get wrong (the packed index only advances on present
-  rows) and every consumer would carry a copy.
-- **Open:** classification of this member and of `AsBatches()` under #482 (stable / optional /
-  preview) is the owner's call.
-
-### 2026-10-02 — renamed `{T}ParquetReader.Batches(CancellationToken)` to `AsBatches(CancellationToken)` (#507)
-
-- **Surface:** emitted
-- **Semver:** breaking-major
-- **Issue:** [#507](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/507), part of tracker
-  [#505](https://github.com/rtkelly13/Parquet.SourceGenerator/issues/505)
-- **Change:** `Batches(CancellationToken cancellationToken = default) ->
-  IAsyncEnumerable<{T}ParquetExtensions.ColumnBatch>` is now `AsBatches(CancellationToken
-  cancellationToken = default) -> IAsyncEnumerable<{T}Batch>`. The `NotSupportedException` rules
-  (after `Parallel()`, after `Where(...)`) are unchanged, with the method name in the message updated.
-- **Rationale:** "batch" is the columnar industry term (Arrow `RecordBatch`, Spark `ColumnarBatch`,
-  pyarrow `iter_batches`), and `As…` marks a view or stream where `To…` marks an owned result
-  (`ToArrayAsync`); a batch is a borrowed view, so `As` is the accurate prefix.
-- **Alternatives considered:** `…Iterator`, `AsColumnBatches`, `AsColumns`, `AsRecordBatches`
-  (reserved for real Arrow `RecordBatch` output); reasons in #507.
-- **Note:** pre-1.0 break; `0.0.x` permits it without a major bump. Landed with the #508 entry above
-  as the single breaking change #505 asks for.
 
 ### 2026-10-01 — `{T}ColumnarBatch` becomes a `readonly struct` with get-only properties and a validating constructor (#550)
 
@@ -370,7 +53,7 @@ The rule, the three surfaces and the author process are in
   the types that carried them. The stable terminals are `ToArrayAsync(CancellationToken)` and
   `AsAsyncEnumerable(CancellationToken)`; `Batches(CancellationToken)` is unchanged (#369).
 - **Rationale:** `List<T>` versus `T[]` is a collection preference, not a storage-engine capability
-  ([47](https://github.com/rtkelly-labs/Parquet.SourceGenerator/blob/e4d46b90cee76d9b3cee0b0fd0452aa386415ef1/docs/47-0.1-CONTRACT-AND-DESIGN-GOALS.md) §4.2). The array terminal already pre-sizes from the
+  ([47](../47-0.1-CONTRACT-AND-DESIGN-GOALS.md) §4.2). The array terminal already pre-sizes from the
   footer row counts, so a caller who wants a list pays one copy (`.ToList()` /
   `new List<T>(array)`), which is what the memory and parallel `ToListAsync` paths already did
   internally. The stream `ToListAsync` was a second full materialising body per model that
@@ -398,7 +81,7 @@ The rule, the three surfaces and the author process are in
   cancellationToken = default) -> IAsyncEnumerable<T>` and `Batches(CancellationToken
   cancellationToken = default) -> IAsyncEnumerable<{T}ParquetExtensions.ColumnBatch>` (flat models).
 - **Semantics chosen for the combinations the old types made unrepresentable** (the choice
-  [47](https://github.com/rtkelly-labs/Parquet.SourceGenerator/blob/e4d46b90cee76d9b3cee0b0fd0452aa386415ef1/docs/47-0.1-CONTRACT-AND-DESIGN-GOALS.md) §4.2 asks this entry to record). Rule: *the call that
+  [47](../47-0.1-CONTRACT-AND-DESIGN-GOALS.md) §4.2 asks this entry to record). Rule: *the call that
   completes an unsupported combination throws `NotSupportedException`*; nothing is silently
   degraded. `Parallel()` throws on a stream source (message names `From(ReadOnlyMemory<byte>)`) and
   on a reader with a predicate; `Where()` throws on a parallel reader and on a reader that already
@@ -430,8 +113,8 @@ The rule, the three surfaces and the author process are in
   options, predicate and a parallel flag — and `static {T}Parquet.From(Stream stream)` and
   `static {T}Parquet.From(ReadOnlyMemory<byte> parquetBytes)` both return it (return-type change on
   two lines per model). Catalogue effect per golden model, from `.api.shape.txt`: `OrderEvent` and
-  `ScalarMetric` 65 → 48 members, 48 → 34 parameters; `ListOrder`, `NestedOrder`, `PocoOrder`
-  35 → 19 members, 31 → 18 parameters; `SortedShipment` 58 → 41 members, 64 → 50 parameters.
+  `ScalarMetric` 64 → 47 members, 37 → 23 parameters; `ListOrder`, `NestedOrder`, `PocoOrder`
+  35 → 19 members, 31 → 18 parameters; `SortedShipment` 57 → 40 members, 59 → 45 parameters.
   Legacy (`LegacyRecord` 6 / 14) unchanged — it has no builder (#246). The figures include the
   #479 `ToListAsync` removal.
 - **Rationale:** the #217 builder removed the method-name cross-product and replaced it with a
@@ -488,14 +171,14 @@ The rule, the three surfaces and the author process are in
     (`OrderEvent` both, `SortedShipment` text; 3 lines).
   - Classic emitter: `WriteRowGroupAsync(this ParquetWriter writer, IReadOnlyList<T> items, CancellationToken)`
     on `LegacyRecordParquetLegacyExtensions` (1 line). `BackendCompatibilityPolicyTests` and
-    [14](../reference/compatibility-matrix.md) drop row-group write from the classic core surface.
+    [14](../14-COMPATIBILITY-MATRIX.md) drop row-group write from the classic core surface.
 - **Rationale:** the rule applied member by member was *does this describe user intent or an
   implementation strategy?* Each of these is the strategy the intent-level writers are built from:
   `items.WriteParquetAsync(stream, …)`, `asyncItems.WriteParquetAsync(stream, …)`,
   `items.WriteParquetBatchedAsync(stream, …)` and `{T}ColumnarBatch.WriteParquetAsync(stream, …)`
   all remain public and cover writing a collection, a stream of rows, and caller-owned column
   buffers. The positional `WriteParquetRowGroupColumnarAsync` in particular is defect 8 of
-  [19](https://github.com/rtkelly-labs/Parquet.SourceGenerator/blob/e4d46b90cee76d9b3cee0b0fd0452aa386415ef1/docs/19-PUBLIC-API-SURFACE.md): adding a property silently re-means every later argument.
+  [19](../19-PUBLIC-API-SURFACE.md): adding a property silently re-means every later argument.
   The `ParquetWriter`-taking overloads also leaked Parquet.Net's writer type into the 0.1 contract.
   Because generated code is emitted into the consumer's own assembly, `internal` keeps every one of
   these callable by the model's owning project — only downstream assemblies lose them.
@@ -526,7 +209,7 @@ The rule, the three surfaces and the author process are in
 - **Rationale:** Removed from every modern model; the builder already expresses this cell as
   `<Model>Parquet.From(source).ToListAsync(ct)`, with `.WithOptions(options)` and `.Where(predicate)` as members. The builder's stream and memory terminals already delegated here; the bodies stay as the `internal` `ReadListCoreAsync`, outside the contract.
   Keeping both surfaces into `0.1.0` would make the first stable contract the widest one; see
-  [docs/48](https://github.com/rtkelly-labs/Parquet.SourceGenerator/blob/e4d46b90cee76d9b3cee0b0fd0452aa386415ef1/docs/48-FLAT-READ-REMOVAL-480.md), which supersedes docs/41. Measured across the six modern
+  [docs/48](../48-FLAT-READ-REMOVAL-480.md), which supersedes docs/41. Measured across the six modern
   golden models, #480 removes 66 members and 222 parameter slots in total. The legacy emitter keeps
   its flat reads (#246 declared subset).
 - **Alternatives considered:** keep as forwarders through `0.1.0` (docs/41) — rejected by the #477
@@ -542,7 +225,7 @@ The rule, the three surfaces and the author process are in
 - **Rationale:** Removed from every modern model; the builder already expresses this cell as
   `<Model>Parquet.From(source).ToArrayAsync(ct)`. The bodies stay as the `internal` `ReadArrayCoreAsync`.
   Keeping both surfaces into `0.1.0` would make the first stable contract the widest one; see
-  [docs/48](https://github.com/rtkelly-labs/Parquet.SourceGenerator/blob/e4d46b90cee76d9b3cee0b0fd0452aa386415ef1/docs/48-FLAT-READ-REMOVAL-480.md), which supersedes docs/41. Measured across the six modern
+  [docs/48](../48-FLAT-READ-REMOVAL-480.md), which supersedes docs/41. Measured across the six modern
   golden models, #480 removes 66 members and 222 parameter slots in total. The legacy emitter keeps
   its flat reads (#246 declared subset).
 - **Alternatives considered:** keep as forwarders through `0.1.0` (docs/41) — rejected by the #477
@@ -558,7 +241,7 @@ The rule, the three surfaces and the author process are in
 - **Rationale:** Removed from every modern model; the builder already expresses this cell as
   `<Model>Parquet.From(source).AsAsyncEnumerable(ct)`; the name also carried defect 1 of docs/19 ("Stream" denoting both source and shape). The bodies stay as the `internal` `ReadEnumerableCoreAsync`.
   Keeping both surfaces into `0.1.0` would make the first stable contract the widest one; see
-  [docs/48](https://github.com/rtkelly-labs/Parquet.SourceGenerator/blob/e4d46b90cee76d9b3cee0b0fd0452aa386415ef1/docs/48-FLAT-READ-REMOVAL-480.md), which supersedes docs/41. Measured across the six modern
+  [docs/48](../48-FLAT-READ-REMOVAL-480.md), which supersedes docs/41. Measured across the six modern
   golden models, #480 removes 66 members and 222 parameter slots in total. The legacy emitter keeps
   its flat reads (#246 declared subset).
 - **Alternatives considered:** keep as forwarders through `0.1.0` (docs/41) — rejected by the #477
@@ -574,7 +257,7 @@ The rule, the three surfaces and the author process are in
 - **Rationale:** Removed from every modern model; the builder already expresses this cell as
   `<Model>Parquet.From(source).Batches(ct)`, unchanged (batch read ownership is #369). Flat models only. The bodies stay as the `internal` `ReadBatchesCoreAsync`.
   Keeping both surfaces into `0.1.0` would make the first stable contract the widest one; see
-  [docs/48](https://github.com/rtkelly-labs/Parquet.SourceGenerator/blob/e4d46b90cee76d9b3cee0b0fd0452aa386415ef1/docs/48-FLAT-READ-REMOVAL-480.md), which supersedes docs/41. Measured across the six modern
+  [docs/48](../48-FLAT-READ-REMOVAL-480.md), which supersedes docs/41. Measured across the six modern
   golden models, #480 removes 66 members and 222 parameter slots in total. The legacy emitter keeps
   its flat reads (#246 declared subset).
 - **Alternatives considered:** keep as forwarders through `0.1.0` (docs/41) — rejected by the #477
@@ -590,7 +273,7 @@ The rule, the three surfaces and the author process are in
 - **Rationale:** Removed from every modern model; the builder already expresses this cell as
   `<Model>Parquet.From(bytes).Parallel().ToListAsync(ct)`. The memory body stays as the `internal` `ReadParallelListCoreAsync`. The `Stream` overload is deleted with its body: it read sequentially (defect 5 of docs/19), nothing delegated to it, and the builder already states the same fact by offering no `Parallel()` on the stream source.
   Keeping both surfaces into `0.1.0` would make the first stable contract the widest one; see
-  [docs/48](https://github.com/rtkelly-labs/Parquet.SourceGenerator/blob/e4d46b90cee76d9b3cee0b0fd0452aa386415ef1/docs/48-FLAT-READ-REMOVAL-480.md), which supersedes docs/41. Measured across the six modern
+  [docs/48](../48-FLAT-READ-REMOVAL-480.md), which supersedes docs/41. Measured across the six modern
   golden models, #480 removes 66 members and 222 parameter slots in total. The legacy emitter keeps
   its flat reads (#246 declared subset).
 - **Alternatives considered:** keep as forwarders through `0.1.0` (docs/41) — rejected by the #477
@@ -606,7 +289,7 @@ The rule, the three surfaces and the author process are in
 - **Rationale:** Removed from every modern model; the builder already expresses this cell as
   `<Model>Parquet.From(bytes).Parallel().ToArrayAsync(ct)`. The memory body stays as the `internal` `ReadParallelArrayCoreAsync`; the sequential `Stream` overload is deleted, as for `ReadParquetParallelAsync`.
   Keeping both surfaces into `0.1.0` would make the first stable contract the widest one; see
-  [docs/48](https://github.com/rtkelly-labs/Parquet.SourceGenerator/blob/e4d46b90cee76d9b3cee0b0fd0452aa386415ef1/docs/48-FLAT-READ-REMOVAL-480.md), which supersedes docs/41. Measured across the six modern
+  [docs/48](../48-FLAT-READ-REMOVAL-480.md), which supersedes docs/41. Measured across the six modern
   golden models, #480 removes 66 members and 222 parameter slots in total. The legacy emitter keeps
   its flat reads (#246 declared subset).
 - **Alternatives considered:** keep as forwarders through `0.1.0` (docs/41) — rejected by the #477
@@ -740,11 +423,11 @@ The rule, the three surfaces and the author process are in
   execution into method names — twelve members for a four-axis grid, heading for forty-five once
   #146, #148 and #178 land. Each axis becomes a member instead, so a new axis adds members linearly
   rather than multiplying names. The full argument is in
-  [docs/19](https://github.com/rtkelly-labs/Parquet.SourceGenerator/blob/e4d46b90cee76d9b3cee0b0fd0452aa386415ef1/docs/19-PUBLIC-API-SURFACE.md) decision D2.
+  [docs/19](../19-PUBLIC-API-SURFACE.md) decision D2.
 
   Purely additive: no existing member changes or is removed. The flat `Read*` methods remain and are
   what the builders delegate to through the `0.1.0` compatibility window, per docs/19 decision D3.
-  Remove them only after the later removal gate in [document 41](https://github.com/rtkelly-labs/Parquet.SourceGenerator/blob/e4d46b90cee76d9b3cee0b0fd0452aa386415ef1/docs/41-FLAT-READ-FREEZE-SCOPE-262.md).
+  Remove them only after the later removal gate in [document 41](../41-FLAT-READ-FREEZE-SCOPE-262.md).
 
   The structs are type-state rather than one builder validating at runtime, so the grid's four empty
   cells are absent members rather than members that throw: no `Parallel()` on a stream source, no
@@ -781,7 +464,7 @@ The rule, the three surfaces and the author process are in
   for the same concept is the discoverability defect #216 catalogues, not a fix for it.
 - **Note:** pre-1.0 break. `0.0.x` permits it without a major bump; the bucket records that the
   call was made deliberately. The rule it applies is
-  [19 - Public API Surface](https://github.com/rtkelly-labs/Parquet.SourceGenerator/blob/e4d46b90cee76d9b3cee0b0fd0452aa386415ef1/docs/19-PUBLIC-API-SURFACE.md).
+  [19 - Public API Surface](../19-PUBLIC-API-SURFACE.md).
 
 ### 2026-09-10 — `WriteParquetBatchedAsync(...)` / `WriteParquetAsync(IAsyncEnumerable<T>, ...)`: `rowGroupSize` parameter removed
 

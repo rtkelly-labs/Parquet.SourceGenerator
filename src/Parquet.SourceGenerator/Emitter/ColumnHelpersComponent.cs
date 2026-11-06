@@ -1,7 +1,6 @@
 using System;
 using System.Linq;
 using System.Text;
-using Parquet.SourceGenerator.Emitter.Components;
 using Parquet.SourceGenerator.Emitter.Compound;
 using Parquet.SourceGenerator.Models;
 
@@ -70,38 +69,12 @@ internal static class ColumnHelpersComponent
         CompoundMapping.EmitReadHelpers(builder, model);
         CompoundMapping.EmitWriteHelpers(builder, model);
 
-        if (!PropertyMappingComponent.IsSingleFieldBlittableStruct(model))
-        {
-            builder.AppendLine();
-            EmitThrowIfSourceShorter(builder);
-        }
-
-        builder.AppendLine();
-        AllocationBudgetComponent.EmitHelper(builder);
-
         LeafColumn[] columns = EmissionPlan.For(model).Columns;
-
-        builder.AppendLine();
-        EmitReadRowCount(builder);
-
-        if (!RowGroupPruningComponent.IsEnabled(model))
-        {
-            builder.AppendLine();
-            EmitSumRowGroupRows(builder);
-        }
-
-        if (columns.Any(c => c.Leaf.Kind == PropertyKind.TimeOnly))
-        {
-            builder.AppendLine();
-            PropertyMappingComponent.EmitReadTimeOnlyHelper(builder);
-        }
         if (columns.Length == 0)
             return;
 
         builder.AppendLine();
         EmitValidateDictionaryEntryLimit(builder);
-        builder.AppendLine();
-        EmitValidateChunkValueCount(builder);
 
         if (AnyNullable(columns, NullableReadShape.Struct))
         {
@@ -119,12 +92,6 @@ internal static class ColumnHelpersComponent
             EmitReadNullableByteArrayColumn(builder);
         }
 
-        if (columns.Any(c => c.IsListLeaf || c.IsCompound))
-        {
-            builder.AppendLine();
-            EmitRequireNestedLeafPresent(builder);
-        }
-
         if (columns.Any(c => c.IsListLeaf))
         {
             builder.AppendLine();
@@ -137,174 +104,15 @@ internal static class ColumnHelpersComponent
             EmitValidatePackedStringLengths(builder);
         }
 
-        if (columns.Any(c => c.Leaf.Kind == PropertyKind.Decimal))
-        {
-            builder.AppendLine();
-            EmitIntegerDecimalScale(builder);
-        }
-
         builder.AppendLine();
         EmitReturnPooledArray(builder);
     }
-
-    /// <summary>
-    /// The list fast path of the row-group writer walks a span without bounds checks, sized by the
-    /// count read at method entry. This is the one comparison that makes a shrunken list an
-    /// exception instead of a read past its backing array (#375). It is a helper so the unchecked
-    /// loop function carries no branch of its own, and it exists only where that loop does.
-    /// </summary>
-    private static void EmitThrowIfSourceShorter(StringBuilder builder) =>
-        AppendLines(
-            builder,
-            "#if NET6_0_OR_GREATER",
-            "    private static void ThrowIfSourceShorter(int length, int count)",
-            "    {",
-            "        if (length < count)",
-            "        {",
-            "            throw new global::System.InvalidOperationException(\"Collection was modified during serialization.\");",
-            "        }",
-            "    }",
-            "#endif"
-        );
-
-    /// <summary>
-    /// Fails a read whose file lacks an optional column under a list or struct: schema resolution
-    /// reports it as missing and hands back the generator's own template field, which the row group
-    /// has no chunk for (#367).
-    /// </summary>
-    private static void EmitRequireNestedLeafPresent(StringBuilder builder) =>
-        AppendLines(
-            builder,
-            "    private static void RequireNestedLeafPresent(bool missing, string columnName)",
-            "    {",
-            "        if (missing)",
-            "        {",
-            "            throw new global::System.IO.InvalidDataException($\"Column '{columnName}' is missing from the Parquet file; a column under a list or struct must be present.\");",
-            "        }",
-            "    }"
-        );
-
-    /// <summary>
-    /// Narrows a row group's 64-bit row count with the range check done in <c>long</c> first, so a
-    /// footer value above <c>int.MaxValue</c> is an <c>InvalidDataException</c> and not the
-    /// <c>OverflowException</c> a checked cast raises before the limit is consulted (#371).
-    /// </summary>
-    private static void EmitReadRowCount(StringBuilder builder) =>
-        AppendLines(
-            builder,
-            "    private static int ReadRowCount(long rowCount, int rowGroup, global::Parquet.SourceGenerator.ParquetSerializerOptions options)",
-            "    {",
-            "        if (rowCount < 0 || rowCount > options.MaxAllocationValues)",
-            "        {",
-            "            throw new global::System.IO.InvalidDataException($\"Row group {rowGroup} row count {rowCount} is invalid or exceeds maximum allowed {options.MaxAllocationValues}.\");",
-            "        }",
-            "",
-            "        return (int)rowCount;",
-            "    }"
-        );
-
-    /// <summary>
-    /// Sums the row groups' 64-bit row counts for a read with no statistics to prune on, checking each
-    /// and the total against <c>MaxAllocationValues</c> before narrowing to the <c>int</c> that sizes
-    /// the result (#371). The pruned branch of the selection pass does the same inline.
-    /// </summary>
-    private static void EmitSumRowGroupRows(StringBuilder builder) =>
-        AppendLines(
-            builder,
-            "    private static int SumRowGroupRows(global::Parquet.ParquetReader reader, global::Parquet.SourceGenerator.ParquetSerializerOptions options)",
-            "    {",
-            "        long total = 0;",
-            "        for (int r = 0; r < reader.RowGroups.Count; r++)",
-            "        {",
-            "            long rowCount = reader.RowGroups[r].RowCount;",
-            "            if (rowCount < 0 || rowCount > options.MaxAllocationValues)",
-            "            {",
-            "                throw new global::System.IO.InvalidDataException($\"Row group {r} row count {rowCount} is invalid or exceeds maximum allowed {options.MaxAllocationValues}.\");",
-            "            }",
-            "",
-            "            total += rowCount;",
-            "            if (total > options.MaxAllocationValues)",
-            "            {",
-            "                throw new global::System.IO.InvalidDataException($\"Total row count {total} exceeds maximum allowed {options.MaxAllocationValues}.\");",
-            "            }",
-            "        }",
-            "",
-            "        return (int)total;",
-            "    }"
-        );
-
-    /// <summary>
-    /// The statement that restores a decimal column after its read: the decoded values pass through
-    /// <c>ParquetDecimalScale</c> with the scale <c>IntegerDecimalScale</c> reports, which is 0 (a
-    /// no-op) unless the chunk is INT32- or INT64-backed. One call per decimal read, no branch.
-    /// </summary>
-    public static string RestoreDecimalStatement(
-        string elementType,
-        string bufName,
-        string count,
-        string fieldAccess,
-        string missingArg,
-        string indent
-    ) =>
-        $"{indent}global::Parquet.SourceGenerator.ParquetDecimalScale.RestoreIntegerScaled(new global::System.Span<{elementType}>({bufName}, 0, {count}), IntegerDecimalScale(groupReader, {fieldAccess}{missingArg}));";
-
-    /// <summary>
-    /// Parquet.Net decodes INT32- and INT64-backed decimals through <c>(decimal)Math.Pow(10, -scale)</c>,
-    /// which from .NET 11 leaves the <c>double</c>'s error in every value; fixed-length and
-    /// byte-array decimals decode exactly and must not be touched. This reports which case a chunk
-    /// is, with the scale from the file, which is the one Parquet.Net decoded with.
-    /// </summary>
-    private static void EmitIntegerDecimalScale(StringBuilder builder) =>
-        AppendLines(
-            builder,
-            "    private static int IntegerDecimalScale(",
-            "        global::Parquet.ParquetRowGroupReader groupReader,",
-            "        global::Parquet.Schema.DataField field,",
-            "        bool missing = false)",
-            "    {",
-            "        var decimalField = field as global::Parquet.Schema.DecimalDataField;",
-            "        if (missing || decimalField == null)",
-            "        {",
-            "            return 0;",
-            "        }",
-            "        var type = groupReader.GetMetadata(field).MetaData.Type;",
-            "        return type == global::Parquet.Meta.Type.INT32 || type == global::Parquet.Meta.Type.INT64 ? decimalField.Scale : 0;",
-            "    }"
-        );
 
     private static void AppendLines(StringBuilder builder, params string[] lines)
     {
         foreach (string line in lines)
             builder.AppendLine(line);
     }
-
-    /// <summary>
-    /// Rejects a column chunk whose value count differs from the row group's declared row count. The
-    /// read buffers are rented for <c>rowCount</c> and Parquet.Net fills only the chunk's own
-    /// <c>num_values</c>, so a footer that declares more rows would leave the tail of a pooled buffer
-    /// unwritten and, for value types, uncleared (#382). Repeated columns are excluded by the caller.
-    /// </summary>
-    private static void EmitValidateChunkValueCount(StringBuilder builder) =>
-        AppendLines(
-            builder,
-            "    private static void ValidateChunkValueCount(",
-            "        global::Parquet.ParquetRowGroupReader groupReader,",
-            "        global::Parquet.Schema.DataField field,",
-            "        int rowCount,",
-            "        string columnName,",
-            "        bool missing = false)",
-            "    {",
-            "        if (missing)",
-            "        {",
-            "            return;",
-            "        }",
-            "        long numValues = groupReader.GetMetadata(field).MetaData.NumValues;",
-            "        if (numValues != rowCount)",
-            "        {",
-            "            throw new global::System.IO.InvalidDataException($\"Column '{columnName}' holds {numValues} values but its row group declares {rowCount} rows.\");",
-            "        }",
-            "    }"
-        );
 
     private static void EmitValidateDictionaryEntryLimit(StringBuilder builder) =>
         AppendLines(
@@ -376,7 +184,7 @@ internal static class ColumnHelpersComponent
             "        string?[] buffer,",
             "        int rowCount,",
             "        bool deduplicateStrings,",
-            "        global::Parquet.SourceGenerator.StringDeduplicator deduplicator,",
+            "        StringDeduplicator deduplicator,",
             "        int maxStringLengthBytes,",
             "        global::System.Threading.CancellationToken cancellationToken)",
             "    {",
@@ -426,14 +234,13 @@ internal static class ColumnHelpersComponent
         AppendLines(
             builder,
             "    // Entries run ahead of rowCount for multi-element lists: size from the column",
-            "    // metadata and re-rent on growth (docs/guides/nested-types.md §2.3: the values buffer must cover",
+            "    // metadata and re-rent on growth (docs/15 section 2.3: the values buffer must cover",
             "    // NumValues, the packed lane follows inside it).",
             "    private static int PrepareListLeafBuffers<T>(",
             "        global::Parquet.ParquetRowGroupReader groupReader,",
             "        global::Parquet.Schema.DataField field,",
             "        string columnName,",
             "        global::Parquet.SourceGenerator.ParquetSerializerOptions options,",
-            "        ref long allocatedBytes,",
             "        ref T[] buffer,",
             "        ref int[] defLevels,",
             "        ref int[] repLevels)",
@@ -445,7 +252,6 @@ internal static class ColumnHelpersComponent
             "        }",
             "        if (entries > defLevels.Length)",
             "        {",
-            "            allocatedBytes = CheckAllocationBudget(allocatedBytes, entries - defLevels.Length, 24, options);",
             "            var newDefLevels = global::System.Buffers.ArrayPool<int>.Shared.Rent(entries);",
             "            global::System.Buffers.ArrayPool<int>.Shared.Return(defLevels, clearArray: false);",
             "            defLevels = newDefLevels;",

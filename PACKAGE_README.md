@@ -9,11 +9,11 @@ dotnet add package Parquet.SourceGenerator
 dotnet add package Parquet.Net
 ```
 
-`Parquet.SourceGenerator.Runtime` is automatically included as a dependency. `Parquet.Net` must be referenced directly by your project.
+`Parquet.SourceGenerator.Attributes` is automatically included as a dependency. `Parquet.Net` must be referenced directly by your project.
 
 ## 📖 Quick Start Example
 
-```csharp compile-file
+```csharp
 using System;
 using Parquet.SourceGenerator;
 
@@ -35,16 +35,9 @@ public partial record UserEvent
 }
 ```
 
-<!-- readme-compile-members
-static List<UserEvent> events = new();
-static Stream stream = Stream.Null;
-static List<UserEvent> GetEvents() => events;
-static async IAsyncEnumerable<UserEvent> GetAsyncEventStream() { await Task.CompletedTask; yield break; }
--->
-
 ### Writing Parquet Files
 
-```csharp compile
+```csharp
 List<UserEvent> events = GetEvents();
 using var stream = File.Create("events.parquet");
 
@@ -52,7 +45,7 @@ using var stream = File.Create("events.parquet");
 await events.WriteParquetAsync(stream);
 
 // Chunked row-group streaming write
-await events.WriteParquetAsync(
+await events.WriteParquetBatchedAsync(
     stream,
     new ParquetSerializerOptions { RowGroupSize = 10_000 });
 
@@ -65,7 +58,7 @@ await eventStream.WriteParquetAsync(
 
 ### Reading Parquet Files (Sequential & Parallel)
 
-```csharp compile
+```csharp
 using var stream = File.OpenRead("events.parquet");
 
 // Sequential read
@@ -90,7 +83,7 @@ UserEvent[] parallelEvents = await UserEventParquet
 
 ### Custom Configuration (`ParquetSerializerOptions`)
 
-```csharp compile
+```csharp
 var options = new ParquetSerializerOptions
 {
     RowGroupSize = 25_000,
@@ -98,7 +91,7 @@ var options = new ParquetSerializerOptions
     CompressionMethod = ParquetCompressionMethod.Zstd
 };
 
-await events.WriteParquetAsync(stream, options: options);
+await events.WriteParquetBatchedAsync(stream, options: options);
 ```
 
 Compression options: `None`, `Snappy` (default), `Gzip`, `Lz4`, `Brotli`, `Zstd`.
@@ -159,8 +152,6 @@ Fixed public datasets tracked under Git LFS with full cryptographic SHA-256 data
 | **`PARQ004`** | **Warning** | Non-public property decorated with `[ParquetColumn]` will be ignored. |
 | **`PARQ005`** | **Error** | Invalid `[ParquetDecimal]` precision or scale parameters. |
 
-The remaining rules (`PARQ006` to `PARQ016`: unsupported types, assignability, constructors, nested-type accessibility, generics, cyclic or too-deep compound types, sort keys, feature level and name collisions) are catalogued in the [Compiler Diagnostics Reference](https://github.com/rtkelly13/Parquet.SourceGenerator/blob/main/docs/13-COMPILER-DIAGNOSTICS.md).
-
 ## 🚀 Native AOT & Cold-Start Performance
 
 Under Native AOT, cold invocations (CLI tools, serverless Lambda functions, batch workers) run **7.2× faster** with **72% less memory**:
@@ -178,13 +169,14 @@ To enable Native AOT:
 </PropertyGroup>
 ```
 
-Flat-only schemas can be enforced project-wide with `<ParquetGeneratorFlatOnly>true</ParquetGeneratorFlatOnly>` in MSBuild.
+Feature output can be pinned project-wide with `ParquetGeneratorFeatureLevel` in MSBuild or with
+`[assembly: ParquetGeneratorOptions(FeatureLevel = ...)]`; see the feature-level documentation.
 
 ## Compatibility
 
 The V5/classic generator is a declared core subset for Parquet.Net 4.x/5.x: flat read/write,
 batched write, row-group write, and schema. The modern v6 generator additionally provides builder,
-filtering, parallel, streaming, column-batch, and Arrow `RecordBatch` ingestion surfaces (Arrow export is not shipped). The compatibility
+filtering, parallel, streaming, column-batch, and experimental Arrow surfaces. The compatibility
 matrix documents the supported model and file envelope.
 
 ## 🔗 Links & Resources

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Parquet.SourceGenerator.Emitter.Components;
 using Parquet.SourceGenerator.Models;
 
 namespace Parquet.SourceGenerator.Emitter.Compound;
@@ -37,7 +36,7 @@ internal sealed class LeafColumn
 
     /// <summary>
     /// def == MaxDef ⇔ the leaf carries a value. Every struct ancestor contributes one rung
-    /// (groups are optional regardless of the C# annotation — docs/guides/nested-types.md §2.4) and the leaf's own
+    /// (groups are optional regardless of the C# annotation — docs/15 §2.4) and the leaf's own
     /// optionality another.
     /// </summary>
     public int MaxDef { get; set; }
@@ -199,7 +198,7 @@ internal sealed class EmissionPlan
                             RootPropertyIndex = root,
                             SchemaPath = [],
                             MaxDef = 2 + (element.IsNullable ? 1 : 0),
-                            MemberChain = [EmittedText.Ident(prop.Name)],
+                            MemberChain = [prop.Name],
                             StepKinds = [ChainStepKind.List],
                             StepDefBase = [0],
                             StepHasNullTest = [true],
@@ -208,7 +207,7 @@ internal sealed class EmissionPlan
                             ListPresenceRung = 1,
                             ListElementRung = 2,
                             MemberAnnotatedNullable = prop.IsNullable,
-                            ListMemberName = EmittedText.Ident(prop.Name),
+                            ListMemberName = prop.Name,
                             ListMemberIsArray = prop.TypeName.EndsWith(
                                 "[]",
                                 StringComparison.Ordinal
@@ -219,7 +218,7 @@ internal sealed class EmissionPlan
                 }
 
                 // M3b stack 2: List<POCO> — one lane column per element leaf. The element
-                // struct group (always optional per docs/guides/nested-types.md §2.4) contributes the rung at
+                // struct group (always optional per docs/15 §2.4) contributes the rung at
                 // StepDefBase[1]; an element-null entry carries that def.
                 for (int c = 0; c < element.Children.Length; c++)
                 {
@@ -232,11 +231,7 @@ internal sealed class EmissionPlan
                             RootPropertyIndex = root,
                             SchemaPath = [c],
                             MaxDef = 3 + (child.IsNullable ? 1 : 0),
-                            MemberChain =
-                            [
-                                EmittedText.Ident(prop.Name),
-                                EmittedText.Ident(child.Name),
-                            ],
+                            MemberChain = [prop.Name, child.Name],
                             StepKinds = [ChainStepKind.List, ChainStepKind.Struct],
                             StepDefBase = [0, 2],
                             StepHasNullTest = [true, true],
@@ -246,7 +241,7 @@ internal sealed class EmissionPlan
                             ListPresenceRung = 1,
                             ListElementRung = 2,
                             MemberAnnotatedNullable = prop.IsNullable,
-                            ListMemberName = EmittedText.Ident(prop.Name),
+                            ListMemberName = prop.Name,
                             ListMemberIsArray = prop.TypeName.EndsWith(
                                 "[]",
                                 StringComparison.Ordinal
@@ -268,7 +263,7 @@ internal sealed class EmissionPlan
                         RootPropertyIndex = root,
                         SchemaPath = [],
                         MaxDef = prop.IsNullable ? 1 : 0,
-                        MemberChain = [EmittedText.Ident(prop.Name)],
+                        MemberChain = [prop.Name],
                     }
                 );
                 continue;
@@ -279,7 +274,7 @@ internal sealed class EmissionPlan
                 Id = nodes.Count,
                 ClrType = prop.TypeName.TrimEnd('?'),
                 IsValueType = prop.CompoundIsValueType,
-                MemberName = EmittedText.Ident(prop.Name),
+                MemberName = prop.Name,
                 ParentId = -1,
                 Depth = 0,
                 MemberAnnotatedNullable = prop.IsNullable,
@@ -295,7 +290,7 @@ internal sealed class EmissionPlan
                 depth: 0,
                 valueTypes: [prop.CompoundIsValueType],
                 nullableValueSteps: [prop.IsNullable && prop.CompoundIsValueType],
-                memberPrefix: [EmittedText.Ident(prop.Name)],
+                memberPrefix: [prop.Name],
                 columns,
                 nodes
             );
@@ -327,7 +322,7 @@ internal sealed class EmissionPlan
         {
             PropertyModel child = structProp.Children[c];
             int[] childPath = [.. schemaPrefix, c];
-            string[] chain = [.. memberPrefix, EmittedText.Ident(child.Name)];
+            string[] chain = [.. memberPrefix, child.Name];
 
             if (child.Kind == PropertyKind.Struct)
             {
@@ -336,7 +331,7 @@ internal sealed class EmissionPlan
                     Id = nodes.Count,
                     ClrType = child.TypeName.TrimEnd('?'),
                     IsValueType = child.CompoundIsValueType,
-                    MemberName = EmittedText.Ident(child.Name),
+                    MemberName = child.Name,
                     MemberAnnotatedNullable = child.IsNullable,
                     ParentId = node.Id,
                     // This node occupies ancestor position `depth + 1` in every
@@ -360,7 +355,7 @@ internal sealed class EmissionPlan
                 continue;
             }
 
-            // Leaf. Rungs: one per ancestor struct (all optional groups, docs/guides/nested-types.md §2.4) plus
+            // Leaf. Rungs: one per ancestor struct (all optional groups, docs/15 §2.4) plus
             // the leaf's own optionality. Presence threshold for ancestor k: the def a row
             // carries when that ancestor exists and everything below it is absent.
             int ancestors = childPath.Length;

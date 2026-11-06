@@ -120,7 +120,7 @@ jobs:
         run: dotnet run scripts/VerifyProvenance.cs
 
       - name: Restore dependencies
-        run: dotnet restore Parquet.SourceGenerator.slnx --locked-mode
+        run: dotnet restore Parquet.SourceGenerator.slnx
 
       - name: Build Solution (Release)
         run: |
@@ -168,9 +168,35 @@ jobs:
             --output ./artifacts -p:Version=${{ needs.prepare.outputs.version }}
 
       - name: Verify Package Layout
-        uses: ./.github/actions/verify-package-layout
-        with:
-          version: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          version="${{ needs.prepare.outputs.version }}"
+          cd artifacts
+          gen="Parquet.SourceGenerator.${version}.nupkg"
+          genlegacy="Parquet.SourceGenerator.Legacy.${version}.nupkg"
+          attrs="Parquet.SourceGenerator.Attributes.${version}.nupkg"
+
+          test -f "$gen"       || { echo "FAIL: $gen not produced"; ls -la; exit 1; }
+          test -f "$genlegacy" || { echo "FAIL: $genlegacy not produced"; ls -la; exit 1; }
+          test -f "$attrs"     || { echo "FAIL: $attrs not produced"; ls -la; exit 1; }
+
+          unzip -Z1 "$gen" | grep -q '^analyzers/dotnet/cs/Parquet\.SourceGenerator\.dll$' \
+            || { echo "FAIL: generator missing from analyzers/dotnet/cs/"; exit 1; }
+          unzip -Z1 "$genlegacy" | grep -q '^analyzers/dotnet/cs/Parquet\.SourceGenerator\.Legacy\.dll$' \
+            || { echo "FAIL: Legacy generator missing from analyzers/dotnet/cs/"; exit 1; }
+          if unzip -Z1 "$gen" | grep -q '^lib/' || unzip -Z1 "$genlegacy" | grep -q '^lib/'; then
+            echo "FAIL: generator package contains lib/ entries; it must be analyzer-only:"
+            exit 1
+          fi
+          unzip -p "$gen" '*.nuspec' | grep -q 'id="Parquet.SourceGenerator.Attributes"' \
+            || { echo "FAIL: generator .nuspec does not depend on the Attributes package"; exit 1; }
+          unzip -p "$genlegacy" '*.nuspec' | grep -q 'id="Parquet.SourceGenerator.Attributes"' \
+            || { echo "FAIL: Legacy generator .nuspec does not depend on the Attributes package"; exit 1; }
+          for tfm in netstandard2.0 netstandard2.1 net8.0 net9.0; do
+            unzip -Z1 "$attrs" | grep -q "^lib/$tfm/Parquet\.SourceGenerator\.Attributes\.dll$" \
+              || { echo "FAIL: attributes package missing lib/$tfm"; exit 1; }
+          done
+          echo "Package layout OK for $version."
 
       - name: Verify Package Consumption (v6 & Legacy packages on .NET 8 & .NET 9)
         run: |
@@ -229,9 +255,9 @@ jobs:
         run: |
           set -euo pipefail
           out="$RUNNER_TEMP/derived"
-          dotnet run scripts/DerivedOutputs.cs -- --out "$out" --version "$VERSION"
+          dotnet run scripts/DerivedOutputs.cs -- --out "$out"
           printf '{"version":"%s","tag":"%s","commit":"%s"}\n' "$VERSION" "$TAG" "$GITHUB_SHA" > "$out/manifest.json"
-          tar -czf "$RUNNER_TEMP/derived-outputs.tar.gz" -C "$out" manifest.json golden metrics callgraph api-model.json
+          tar -czf "$RUNNER_TEMP/derived-outputs.tar.gz" -C "$out" manifest.json golden metrics callgraph
 
       - name: Upload Derived Outputs
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7

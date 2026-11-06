@@ -71,7 +71,7 @@ internal readonly struct EquatableArray<T> : IEquatable<EquatableArray<T>>, IEnu
         int hashCode = 17;
         foreach (T item in _array)
         {
-            hashCode = unchecked((hashCode * 31) + EqualityComparer<T>.Default.GetHashCode(item));
+            hashCode = unchecked((hashCode * 31) + item.GetHashCode());
         }
         return hashCode;
     }
