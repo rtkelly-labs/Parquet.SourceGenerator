@@ -1,161 +1,59 @@
 # Contributing to Parquet.SourceGenerator
 
-Thank you for your interest in contributing to **Parquet.SourceGenerator**! This guide outlines development setup, building, testing, benchmarking, and submitting pull requests.
+Thank you for your interest in contributing to **Parquet.SourceGenerator**! We welcome bug reports, feature suggestions, documentation improvements, and code contributions.
 
 ---
 
-## 🛠️ Development Setup
+## Code of Conduct
 
-### Prerequisites
-- [.NET 8.0 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) or higher
-- Python 3.11+ with [`uv`](https://github.com/astral-sh/uv) (for PyArrow cross-engine test dataset generation)
-
-### Clone
-```bash
-git clone https://github.com/rtkelly13/Parquet.SourceGenerator.git
-cd Parquet.SourceGenerator
-```
+All contributors and maintainers are expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md) in all interactions.
 
 ---
 
-## 🧪 Building & Testing
+## Development Workflow
 
-### 1. Build Solution
-```bash
-dotnet build Parquet.SourceGenerator.slnx --configuration Release
-```
+We follow a strict, modern GitHub workflow across our repositories:
 
-### Changing a dependency
+1. **Fork or Branch**:
+   - Create a feature or bugfix branch using clear naming:
+     - `feat/<feature-name>`
+     - `fix/<bug-description>`
+     - `docs/<doc-update>`
+     - `chore/<maintenance-task>`
 
-Every project in the solution except the two Native AOT ones carries a committed `packages.lock.json`, and CI restores in locked mode, so a changed dependency graph fails the build instead of resolving silently (#394). After editing `Directory.Packages.props` or a `PackageReference`, run `dotnet restore Parquet.SourceGenerator.slnx --force-evaluate` and commit the changed lock files with the change. Dependabot's NuGet pull requests need the same step: its updater writes only the `netstandard2.0` section of the multi-targeted `src/Parquet.SourceGenerator.Runtime/packages.lock.json`, so they fail the locked restore with `NU1004`. Check out the Dependabot branch, run the command above, and push the regenerated lock files to it:
+2. **Linear History & Rebase**:
+   - We enforce a strictly linear history on `main`.
+   - Before opening a PR or marking it ready for review, rebase your branch on latest `main`:
+     ```bash
+     git fetch origin
+     git rebase origin/main
+     ```
 
-```bash
-git fetch origin <dependabot-branch> && git switch <dependabot-branch>
-dotnet restore Parquet.SourceGenerator.slnx --force-evaluate
-dotnet restore Parquet.SourceGenerator.slnx --locked-mode   # must now pass
-git commit -am "build(deps): regenerate NuGet lock files" && git push
-```
+3. **Code Quality & Testing**:
+   - Ensure your code passes all local linting, type checks, and automated tests.
+   - For Python projects:
+     ```bash
+     uv run ruff check .
+     uv run ruff format --check .
+     uv run pyright
+     uv run pytest
+     ```
+   - For TypeScript/Node projects:
+     ```bash
+     pnpm lint
+     pnpm typecheck
+     pnpm test
+     ```
 
-Pushing to the branch stops Dependabot rebasing that pull request on its own; comment `@dependabot rebase` (then regenerate again) if it falls behind `main`.
-
-### 2. Run Test Suite
-```bash
-dotnet test Parquet.SourceGenerator.slnx --configuration Release
-```
-
-### 3. Run Test Suite with Code Coverage
-```bash
-dotnet test --collect:"XPlat Code Coverage" Parquet.SourceGenerator.slnx
-```
-
-### 4. Run the AOT sample
-```bash
-dotnet run --project samples/Parquet.SourceGenerator.SampleAot/Parquet.SourceGenerator.SampleAot.csproj --configuration Release
-```
-
-This exercises the generated code, but it does **not** verify Native AOT: `PublishAot` has no
-effect on `dotnet run`, which executes under CoreCLR.
-
-### 5. Verify Native AOT properly
-
-Putting the AOT compiler through it needs a publish with a runtime identifier, plus the native
-toolchain (`clang`, `zlib`) on your machine:
-
-```bash
-dotnet publish test/Parquet.SourceGenerator.AotTest/Parquet.SourceGenerator.AotTest.csproj \
-  --configuration Release -r linux-x64 -o ./aot-out
-./aot-out/Parquet.SourceGenerator.AotTest
-```
-
-`AotTest` round-trips a Parquet stream through the generated serializer and throws on mismatch, so
-the native binary exiting `0` is the actual result. CI runs exactly this on every pull request, for
-`linux-x64`; other runtime identifiers are untested.
-
-Expect `IL2104` and `IL3053` warnings against `Parquet.dll` during the publish. They come from
-Parquet.Net, not from generated code, and are not currently treated as errors — the generated code
-is reflection-free but the library beneath it is not. If you add a step that trips new IL warnings
-attributed to *this* repo's assemblies, that is a real regression worth chasing.
+4. **Pull Requests**:
+   - Fill out the PR template completely with linked issues and verification steps.
+   - All pull requests are merged exclusively via **Squash and Merge**.
 
 ---
 
-## 📊 Running Benchmarks
+## Reporting Issues
 
-Wall-clock benchmarks are not gated in CI (BenchmarkDotNet timings on shared runners are too noisy
-to gate merges on). A small, allocation-only set is: the weekly `benchmarks.yml` regression gate
-compares allocated bytes against `benchmarks/baseline.json` (see [docs/reference/benchmarks.md](docs/reference/benchmarks.md)).
-It is not a PR check. Run the suite locally when working on performance:
+- **Bug Reports**: Please use the [Bug Report](.github/ISSUE_TEMPLATE/bug_report.yml) form. Provide exact reproduction steps and system versions.
+- **Feature Requests**: Please use the [Feature Request](.github/ISSUE_TEMPLATE/feature_request.yml) form.
 
-```bash
-dotnet run -c Release --project benchmarks/Parquet.SourceGenerator.Benchmarks/Parquet.SourceGenerator.Benchmarks.csproj -- --filter "*"
-```
-
-If you publish numbers anywhere, include the machine and runtime they came from.
-
----
-
-## 📥 Submitting Pull Requests
-
-1. **Create a Feature Branch**: `git checkout -b feat/your-feature-name`
-2. **Code Style**: CSharpier is the only C# formatter (`dotnet csharpier format .`, checked in CI
-   via `dotnet csharpier check .`). Do not run `dotnet format` on C# — its Roslyn formatter
-   conflicts with CSharpier and `IDE0055` is disabled in `.editorconfig` by design.
-3. **Tests**: The suite must pass cleanly (`dotnet test`).
-4. **Derived outputs**: emitted golden source and API, code metrics, duplication and call-graph
-   edges are generated, not committed (`dotnet run scripts/DerivedOutputs.cs` writes them to the
-   gitignored `artifacts/`). CI posts their diff against the merge base as one comment on the pull
-   request; check its "Emitted public API" section shows only the changes you intend
-   ([docs/17](https://github.com/rtkelly-labs/Parquet.SourceGenerator/blob/e4d46b90cee76d9b3cee0b0fd0452aa386415ef1/docs/17-GENERATED-API-BASELINES.md), [API governance](docs/architecture/api-governance.md)).
-5. **PR Title**: Must follow Conventional Commits — CI validates it (`feat:`, `fix:`, `perf:`,
-   `docs:`, `style:`, `refactor:`, `test:`, `chore:`, `ci:`, `build:`).
-6. **Commit Message**: Use Conventional Commit messages too.
-
-### Stacked pull requests
-
-Dependent work lands as a GitHub native stack: the bottom pull request targets `main`, each one
-above targets the branch of the one below, and every layer has its own green CI.
-
-- **Link** an existing chain by labelling its bottom pull request `stack:link`. The `stack`
-  workflow walks the chain upward and runs `gh stack link` (or dispatch it with explicit numbers).
-  Locally: `gh stack link <bottom> ... <top>`.
-- **Keep layers linear.** Edit the layer that owns a change, then `gh stack rebase --upstack`.
-- **Merge** with `gh stack merge <top> --squash --yes`. `gh pr merge` and auto-merge are refused
-  for stacked pull requests.
-
----
-
-## 🚀 Releasing
-
-`CHANGELOG.md` is the release authority. There is deliberately no version input on the release
-workflow: a version that is not cut in the changelog cannot be published.
-
-To release:
-
-1. **Cut the release in a PR**: move everything under `[Unreleased]` into a new heading directly
-   below it — `## [x.y.z] - YYYY-MM-DD` (valid SemVer 2.0.0, ISO date required) — and leave a
-   fresh, empty `## [Unreleased]` on top. CI validates this structure via
-   `dotnet run scripts/ParseChangelog.cs`.
-2. **Merge** the PR to `main`, then trigger **Actions → Release & Publish NuGet → Run workflow**.
-   Optionally tick **dry run** to build, pack and verify without publishing anything.
-3. The workflow then, in order:
-   - parses the first cut version section — the source of both the version and the release
-     notes — and refuses to continue if its `v<version>` tag already exists;
-   - builds with that version and runs the full verification battery (tests, samples, native
-     AOT, package layout, package consumption on .NET 8/9/472);
-   - publishes to NuGet.org via Trusted Publishing (the `publish` job deploys to the `release`
-     environment; required reviewers are an org-only feature and GitHub forbids approving your
-     own deployment anyway, so on a solo project the real brake is the manual dispatch plus the
-     full verification battery in the `build` job — nothing publishes that was not built and
-     consumed from these packages);
-   - for **full releases**, creates the GitHub release `v<version>` with the changelog section
-     as its body and the `.nupkg` files attached; **prereleases** (e.g. `0.1.0-rc.1`) go to
-     NuGet.org only, with no tag and no GitHub release.
-
-```bash
-gh workflow run release.yml            # real release, version read from CHANGELOG.md
-gh workflow run release.yml -f dry_run=true   # rehearsal
-```
-
----
-
-## 📄 License
-By contributing to **Parquet.SourceGenerator**, you agree that your contributions will be licensed under the [MIT License](LICENSE).
+Thank you for helping make Parquet.SourceGenerator better!

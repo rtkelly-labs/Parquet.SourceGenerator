@@ -1,39 +1,60 @@
-name: 🐛 Bug Report
+name: Bug Report
 description: Create a report to help us improve Parquet.SourceGenerator
-title: "[Bug]: "
-labels: ["bug"]
+title: "bug: "
+labels: ["type: bug"]
 body:
   - type: markdown
     attributes:
-      value: Thanks for taking the time to fill out this bug report!
+      value: |
+        Thanks for taking the time to fill out this bug report!
   - type: textarea
     id: description
     attributes:
-      label: Description
-      description: Describe the bug concisely.
+      label: Bug Description
+      description: A clear and concise description of what the bug is.
+      placeholder: Tell us what you see vs what you expected to see.
     validations:
       required: true
   - type: textarea
     id: reproduction
     attributes:
-      label: Minimal Reproduction Code
-      description: Provide a minimal C# code snippet decorated with [ParquetSerializable] that reproduces the issue.
-      render: csharp
+      label: Steps To Reproduce
+      description: Steps to reproduce the behavior.
+      placeholder: |
+        1. In this environment...
+        2. With these inputs...
+        3. Run command '...'
+        4. See error
+    validations:
+      required: true
+  - type: textarea
+    id: minimal-sample
+    attributes:
+      label: Minimal Reproducible Code / Config
+      description: Provide a minimal code snippet or configuration reproducing the issue.
+      render: shell
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      options:
+        - macOS
+        - Linux (Ubuntu / Debian)
+        - Windows 11 / 10
+        - Other
     validations:
       required: true
   - type: input
-    id: dotnet-version
+    id: runtime-version
     attributes:
-      label: .NET SDK Version
-      description: e.g., .NET 8.0.416
+      label: Runtime & Toolchain Versions
+      description: e.g., Python 3.13 / Node 22 / .NET 10 / pnpm 12 / uv 0.6
+      placeholder: e.g. Python 3.13, uv 0.6
     validations:
-      required: true
-  - type: dropdown
-    id: aot
+      required: false
+  - type: textarea
+    id: logs
     attributes:
-      label: Is Native AOT enabled?
-      options:
-        - "No (JIT)"
-        - "Yes (PublishAot=true)"
-    validations:
-      required: true
+      label: Relevant Log Output
+      description: Please copy and paste any relevant terminal output, stack traces, or logs.
+      render: shell
