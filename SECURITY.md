@@ -11,8 +11,8 @@ If you discover a potential security vulnerability in **Parquet.SourceGenerator*
 privately rather than opening a public issue.
 
 ### How to Report
-- Use [GitHub Private Vulnerability Reporting](https://github.com/rtkelly13/Parquet.SourceGenerator/security/advisories/new)
-  on this repository.
+- Use [GitHub Private Vulnerability Reporting](https://github.com/rtkelly-labs/Parquet.SourceGenerator/security/advisories/new)
+  on this repository, or email the maintainer directly at <94ryan.kelly@gmail.com>.
 - Include steps to reproduce, sample C# code, or a minimal reproduction repository if possible.
 
 ### What to Expect

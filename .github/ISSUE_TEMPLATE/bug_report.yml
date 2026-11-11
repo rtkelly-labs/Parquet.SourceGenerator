@@ -1,7 +1,7 @@
 name: 🐛 Bug Report
 description: Create a report to help us improve Parquet.SourceGenerator
 title: "[Bug]: "
-labels: ["bug"]
+labels: ["type: bug"]
 body:
   - type: markdown
     attributes:
@@ -25,7 +25,19 @@ body:
     id: dotnet-version
     attributes:
       label: .NET SDK Version
-      description: e.g., .NET 8.0.416
+      description: e.g., .NET 8.0.416 / .NET 9.0.100
+      placeholder: e.g. .NET 8.0.416
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      options:
+        - macOS
+        - Linux (Ubuntu / Debian)
+        - Windows 11 / 10
+        - Other
     validations:
       required: true
   - type: dropdown
@@ -37,3 +49,9 @@ body:
         - "Yes (PublishAot=true)"
     validations:
       required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Log Output
+      description: Please copy and paste any relevant terminal output, stack traces, or compiler diagnostics.
+      render: shell

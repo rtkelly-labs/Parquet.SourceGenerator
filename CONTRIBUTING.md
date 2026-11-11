@@ -4,11 +4,17 @@ Thank you for your interest in contributing to **Parquet.SourceGenerator**! This
 
 ---
 
+## Code of Conduct
+
+All contributors and maintainers are expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md) in all interactions.
+
+---
+
 ## 🛠️ Development Setup
 
 ### Prerequisites
 - [.NET 8.0 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) or higher
-- Python 3.11+ with [`uv`](https://github.com/astral-sh/uv) (for PyArrow cross-engine test dataset generation)
+- Python 3.11+ (for PyArrow cross-engine test dataset generation via `scripts/generate_test_data.py`)
 
 ### Clone
 ```bash
@@ -96,18 +102,19 @@ If you publish numbers anywhere, include the machine and runtime they came from.
 ## 📥 Submitting Pull Requests
 
 1. **Create a Feature Branch**: `git checkout -b feat/your-feature-name`
-2. **Code Style**: CSharpier is the only C# formatter (`dotnet csharpier format .`, checked in CI
+2. **Linear History & Rebase**: We enforce a strictly linear history on `main`. Rebase feature branches onto latest `main`; pull requests are merged exclusively via **Squash and Merge**.
+3. **Code Style**: CSharpier is the only C# formatter (`dotnet csharpier format .`, checked in CI
    via `dotnet csharpier check .`). Do not run `dotnet format` on C# — its Roslyn formatter
    conflicts with CSharpier and `IDE0055` is disabled in `.editorconfig` by design.
-3. **Tests**: The suite must pass cleanly (`dotnet test`).
-4. **Derived outputs**: emitted golden source and API, code metrics, duplication and call-graph
+4. **Tests**: The suite must pass cleanly (`dotnet test`).
+5. **Derived outputs**: emitted golden source and API, code metrics, duplication and call-graph
    edges are generated, not committed (`dotnet run scripts/DerivedOutputs.cs` writes them to the
    gitignored `artifacts/`). CI posts their diff against the merge base as one comment on the pull
    request; check its "Emitted public API" section shows only the changes you intend
    ([docs/17](https://github.com/rtkelly-labs/Parquet.SourceGenerator/blob/e4d46b90cee76d9b3cee0b0fd0452aa386415ef1/docs/17-GENERATED-API-BASELINES.md), [API governance](docs/architecture/api-governance.md)).
-5. **PR Title**: Must follow Conventional Commits — CI validates it (`feat:`, `fix:`, `perf:`,
+6. **PR Title**: Must follow Conventional Commits — CI validates it (`feat:`, `fix:`, `perf:`,
    `docs:`, `style:`, `refactor:`, `test:`, `chore:`, `ci:`, `build:`).
-6. **Commit Message**: Use Conventional Commit messages too.
+7. **Commit Message**: Use Conventional Commit messages too.
 
 ### Stacked pull requests
 

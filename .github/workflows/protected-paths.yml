@@ -16,6 +16,7 @@ name: Protected Paths
 on:
   pull_request_target:
     types: [opened, synchronize, reopened, edited]
+  merge_group:
 
 permissions:
   contents: read
@@ -26,7 +27,12 @@ jobs:
     name: protected-paths
     runs-on: ubuntu-latest
     steps:
+      - name: Pass trivially in merge queue
+        if: github.event_name == 'merge_group'
+        run: echo "Merge group execution; protected paths were verified during PR review."
+
       - name: Checkout the protected-path list (base branch)
+        if: github.event_name != 'merge_group'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           sparse-checkout: .github/protected-paths.txt
@@ -34,6 +40,7 @@ jobs:
           persist-credentials: false
 
       - name: Check changed paths
+        if: github.event_name != 'merge_group'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
