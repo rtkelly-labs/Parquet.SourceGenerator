@@ -8,6 +8,7 @@ on:
   # off `pr-title` alone, having never been built or tested. The repository's own workflow policy
   # (AGENTS.md) expects stacked, rebased branches, so the filter and the workflow were in conflict.
   pull_request:
+  merge_group:
 
 permissions:
   contents: read
