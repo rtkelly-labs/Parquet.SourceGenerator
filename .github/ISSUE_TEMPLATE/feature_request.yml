@@ -1,26 +1,25 @@
-name: Feature Request
-description: Suggest an idea or capability for Parquet.SourceGenerator
-title: "feat: "
+name: 🚀 Feature Request
+description: Suggest an idea or enhancement for Parquet.SourceGenerator
+title: "[Feature]: "
 labels: ["type: feature"]
 body:
   - type: markdown
     attributes:
-      value: |
-        Thank you for suggesting a feature or improvement for Parquet.SourceGenerator!
+      value: Thank you for suggesting a feature or improvement for Parquet.SourceGenerator!
   - type: textarea
     id: problem
     attributes:
       label: Problem Statement
       description: Is your feature request related to a problem or limitation?
-      placeholder: A clear and concise description of the problem (e.g. I'm always frustrated when...)
+      placeholder: A clear and concise description of the problem.
     validations:
       required: true
   - type: textarea
     id: proposed-solution
     attributes:
-      label: Proposed Solution / API
+      label: Proposed Solution
       description: Describe the solution or new capability you would like to see.
-      placeholder: Detail the proposed workflow, CLI syntax, function signature, or UI.
+      placeholder: Detail the proposed syntax, attribute usage, or API behavior.
     validations:
       required: true
   - type: textarea
