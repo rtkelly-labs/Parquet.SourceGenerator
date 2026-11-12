@@ -1,0 +1,27 @@
+# Diffra project file for this repository (https://github.com/rtkelly-labs/Diffra).
+# Shadow only: nothing reads it to decide a build. The shadow steps in CI emit payloads in the
+# shapes it declares, and docs/internals/diffra-shadow-payloads.md records where they do not fit.
+schema: https://diffra.dev/schemas/project-v1.schema.json
+scope: parquet-sourcegenerator
+
+dimensions:
+  # One test run per suite: the core tests, the ABI matrix and the external-interop tests.
+  suite: { values: [core, abi, external] }
+  os: { observed: true }
+  arch: { observed: true }
+
+metrics:
+  tests:
+    type: diffra/test-results@1
+    from:
+      trx: "test/*/TestResults/ci-*.trx"
+    required: true
+    fields:
+      results:
+        stratify: [suite, os, arch]
+        check:
+          fail: { tag: [error] }
+        versus:
+          fail: { transition: [{ from: success, to: error }] }
+          needs-review: { transition: [{ from: success, to: skipped }] }
+        keys: { added: pass, removed: needs-review }

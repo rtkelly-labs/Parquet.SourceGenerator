@@ -112,6 +112,7 @@ The documentation is organized into four distinct sections:
 
 7. **[CI Gate Matrix & Branch Protection](./internals/ci-gate-matrix.md)**
    - Exhaustive audit of all GitHub Actions workflows, branch protection rulesets, and aggregate `build` job wiring.
+   - [Diffra shadow payloads](./internals/diffra-shadow-payloads.md): CI outputs emitted in Diffra's standard shapes, gating nothing.
 
 8. **[Code Quality & Complexity Ratchets](./internals/code-quality-and-metrics.md)**
    - Roslyn complexity gates (`CA1502`, `CA1505`, `CA1506`) and emitted code static analysis.
