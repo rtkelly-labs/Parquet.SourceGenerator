@@ -1,6 +1,0 @@
-{
-  "id": "parquet-sourcegenerator.benchmarks.allocations",
-  "version": "1.0.0",
-  "warnAboveAbsoluteIncrease": "256",
-  "failAboveAbsoluteIncrease": "1024"
-}

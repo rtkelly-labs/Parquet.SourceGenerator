@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Shouldly;
@@ -10,11 +11,12 @@ namespace Parquet.SourceGenerator.Tests;
 
 /// <summary>
 /// Drives <c>scripts/BenchmarkDiffraPayload.cs</c>, the shadow step that turns the regression
-/// gate's BenchmarkDotNet export into Diffra metrics payloads.
+/// gate's BenchmarkDotNet export into a Diffra <c>diffra/benchmark@1</c> payload and a collection
+/// document, and <c>scripts/JsonSchemaCheck.cs</c>, which checks both against the vendored schemas.
 /// </summary>
 /// <remarks>
-/// The payload is only useful if its keys, units and methodology never drift without the
-/// benchmark changing, and if a run that measured nothing produces no payload rather than an
+/// The payload is only useful if its keys, units, stratum and methodology never drift without
+/// the benchmark changing, and if a run that measured nothing produces no payload rather than an
 /// empty one (which Diffra would read as every benchmark removed).
 /// </remarks>
 [Trait("Category", "Integration")]
@@ -28,6 +30,8 @@ public sealed class BenchmarkDiffraPayloadTests : IDisposable
           "ProcessorName": "AMD EPYC 9V74"
         }
         """;
+
+    private const string Commit = "0123456789abcdef0123456789abcdef01234567";
 
     private const string Write10k = """
         {
@@ -85,69 +89,164 @@ public sealed class BenchmarkDiffraPayloadTests : IDisposable
     }
 
     [Fact]
-    public async Task AGatedRunBecomesThreePayloadsWithStableKeysAndUnitsAsync()
+    public async Task AShortCommitIsAUsageErrorAsync()
     {
         WriteExport("WriteBenchmarks", Write10k);
+
+        ScriptResult result = await RunAsync(
+            "scripts/BenchmarkDiffraPayload.cs",
+            ResultsDirectory,
+            OutputDirectory,
+            "--commit",
+            "0123456"
+        );
+
+        result.ExitCode.ShouldBe(2, result.ToString());
+        Directory.Exists(OutputDirectory).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task AGatedRunBecomesOnePayloadThatFitsTheSchemaAsync()
+    {
+        // A benchmark without parameters keeps the bare Type.Method key the baseline uses.
+        WriteExport(
+            "WriteBenchmarks",
+            Write10k
+                + """
+                ,
+                {
+                  "Type": "TransposeBenchmarks",
+                  "Method": "TransposeOnly",
+                  "Parameters": "",
+                  "Statistics": { "Mean": 12.04 },
+                  "Memory": {
+                    "Gen0Collections": 0,
+                    "Gen1Collections": 0,
+                    "Gen2Collections": 0,
+                    "TotalOperations": 4096,
+                    "BytesAllocatedPerOperation": 0
+                  }
+                }
+                """
+        );
 
         ScriptResult result = await RunAsync();
 
         result.ExitCode.ShouldBe(0, result.ToString());
-        result.Stdout.ShouldContain("Examined 1 benchmark case(s) from 1 file(s)");
+        result.Stdout.ShouldContain("Examined 2 benchmark case(s) from 1 file(s)");
 
         const string Key = "WriteBenchmarks.WriteAsync(Count=10000)";
+        const string Bare = "TransposeBenchmarks.TransposeOnly";
+        const string Methodology =
+            "diffra/benchmark@1;parquet-sourcegenerator.prototype.benchmarkdotnet@0.1.0;benchmarkdotnet-json-full@0.14";
+        string payloadPath = Path.Combine(OutputDirectory, "benchmarks.json");
+        string collectionPath = Path.Combine(OutputDirectory, "collection.json");
 
-        using (JsonDocument allocations = ReadPayload("allocations.json"))
+        using (JsonDocument payload = ReadPayload("benchmarks.json"))
         {
-            JsonElement root = allocations.RootElement;
-            root.GetProperty("scope")
-                .GetString()
-                .ShouldBe("parquet-sourcegenerator/benchmarks/regression-gate");
-            string methodology = root.GetProperty("methodology").GetString()!;
-            methodology.ShouldStartWith("benchmarkdotnet-0.14.0;net8.0;");
-            methodology.ShouldEndWith("-x64;allocated-bytes-per-op-v1");
-            methodology.ShouldNotContain("EPYC");
+            JsonElement root = payload.RootElement;
+            root.GetProperty("scope").GetString().ShouldBe("parquet-sourcegenerator");
 
-            JsonElement allocated = root.GetProperty("metrics")
-                .GetProperty(Key)
-                .GetProperty("allocatedBytes");
-            allocated.GetProperty("value").ValueKind.ShouldBe(JsonValueKind.Number);
-            allocated.GetProperty("value").GetInt64().ShouldBe(1_135_142);
-            allocated.GetProperty("unit").GetString().ShouldBe("bytes");
-        }
+            // The methodology names the converter and the export format, nothing about the host.
+            root.GetProperty("methodology").GetString().ShouldBe(Methodology);
 
-        using (JsonDocument gc = ReadPayload("gc.json"))
-        {
-            // The gen0 budget follows the CPU cache, so GC counts compare per processor model.
-            gc.RootElement.GetProperty("methodology")
-                .GetString()
-                .ShouldEndWith(";AMD EPYC 9V74;gc-collections-per-1000-ops-v1");
-            JsonElement metrics = gc.RootElement.GetProperty("metrics").GetProperty(Key);
+            // The host is the stratum. The runtime patch is left out.
+            JsonElement stratum = root.GetProperty("stratum");
+            stratum.GetProperty("runtime").GetString().ShouldBe("net8.0");
+            stratum.GetProperty("arch").GetString().ShouldBe("x64");
+            stratum.GetProperty("cpu").GetString().ShouldBe("AMD EPYC 9V74");
+            stratum.GetProperty("os").GetString().ShouldBeOneOf("linux", "macos", "windows");
 
-            // Normalised per 1000 operations, and a string because Diffra's canonical JSON
-            // accepts only integer number tokens.
-            JsonElement gen0 = metrics.GetProperty("gen0CollectionsPer1000Ops");
+            root.GetProperty("plan")
+                .GetProperty("benchmarks")
+                .GetProperty("keys")
+                .GetArrayLength()
+                .ShouldBe(2);
+
+            JsonElement fields = root.GetProperty("metrics").GetProperty("benchmarks");
+
+            // Every value is a canonical decimal string: no trailing zero, no trailing point.
+            JsonElement allocated = fields.GetProperty("allocatedBytes").GetProperty(Key);
+            allocated.GetProperty("value").GetString().ShouldBe("1135142");
+            allocated.GetProperty("unit").GetString().ShouldBe("B");
+
+            // GC counts are normalised per 1000 operations.
+            JsonElement gen0 = fields.GetProperty("gen0PerKOps").GetProperty(Key);
             gen0.GetProperty("value").GetString().ShouldBe("146.484375");
             gen0.GetProperty("unit").GetString().ShouldBe("count/1000-ops");
-            metrics
-                .GetProperty("gen2CollectionsPer1000Ops")
+            fields
+                .GetProperty("gen1PerKOps")
+                .GetProperty(Key)
                 .GetProperty("value")
                 .GetString()
-                .ShouldBe("0.0");
+                .ShouldBe("9.765625");
+            fields
+                .GetProperty("gen2PerKOps")
+                .GetProperty(Key)
+                .GetProperty("value")
+                .GetString()
+                .ShouldBe("0");
+
+            JsonElement mean = fields.GetProperty("meanTime").GetProperty(Key);
+            mean.GetProperty("value").GetString().ShouldBe("239597");
+            mean.GetProperty("unit").GetString().ShouldBe("ns");
+
+            fields
+                .GetProperty("meanTime")
+                .GetProperty(Bare)
+                .GetProperty("value")
+                .GetString()
+                .ShouldBe("12");
+            fields
+                .GetProperty("allocatedBytes")
+                .GetProperty(Bare)
+                .GetProperty("value")
+                .GetString()
+                .ShouldBe("0");
         }
 
-        using (JsonDocument time = ReadPayload("time.json"))
+        using (JsonDocument collection = ReadPayload("collection.json"))
         {
-            // Time compares only on the same processor model.
-            time.RootElement.GetProperty("methodology")
-                .GetString()
-                .ShouldEndWith(";AMD EPYC 9V74;mean-ns-per-op-v1");
-            JsonElement mean = time
-                .RootElement.GetProperty("metrics")
-                .GetProperty(Key)
-                .GetProperty("meanNanoseconds");
-            mean.GetProperty("value").GetString().ShouldBe("239597.0");
-            mean.GetProperty("unit").GetString().ShouldBe("ns");
+            JsonElement root = collection.RootElement;
+            root.GetProperty("status").GetString().ShouldBe("complete");
+            root.GetProperty("subject").GetProperty("commit").GetString().ShouldBe(Commit);
+
+            // One entry per field, all pointing at the one payload.
+            JsonElement metrics = root.GetProperty("metrics");
+            metrics.GetArrayLength().ShouldBe(5);
+            string evidenceId =
+                "sha256:"
+                + Convert.ToHexString(SHA256.HashData(System.IO.File.ReadAllBytes(payloadPath)));
+            foreach (JsonElement metric in metrics.EnumerateArray())
+            {
+                metric.GetProperty("metric").GetString().ShouldBe("benchmarks");
+                metric.GetProperty("methodology").GetString().ShouldBe(Methodology);
+                JsonElement entry = metric.GetProperty("strata")[0];
+                entry.GetProperty("status").GetString().ShouldBe("collected");
+                entry
+                    .GetProperty("evidenceId")
+                    .GetString()
+                    .ShouldBe(evidenceId, StringCompareShould.IgnoreCase);
+
+                // Allocations compare across processors; GC counts and time only within one.
+                bool perProcessor = metric.GetProperty("field").GetString() != "allocatedBytes";
+                entry.GetProperty("stratum").TryGetProperty("cpu", out _).ShouldBe(perProcessor);
+            }
         }
+
+        ScriptResult valid = await CheckAsync(payloadPath, collectionPath);
+        valid.ExitCode.ShouldBe(0, valid.ToString());
+        valid.Stdout.ShouldContain("Examined 2 document(s); 0 invalid.");
+
+        // Negative control: the pre-standard value format, with a trailing zero.
+        string text = System.IO.File.ReadAllText(payloadPath);
+        string broken = text.Replace("\"239597\"", "\"239597.0\"", StringComparison.Ordinal);
+        broken.ShouldNotBe(text);
+        System.IO.File.WriteAllText(payloadPath, broken);
+
+        ScriptResult invalid = await CheckAsync(payloadPath, collectionPath);
+        invalid.ExitCode.ShouldBe(1, invalid.ToString());
+        invalid.Stdout.ShouldContain("Examined 2 document(s); 1 invalid.");
     }
 
     private void WriteExport(string name, string benchmark)
@@ -162,7 +261,27 @@ public sealed class BenchmarkDiffraPayloadTests : IDisposable
     private JsonDocument ReadPayload(string fileName) =>
         JsonDocument.Parse(System.IO.File.ReadAllText(Path.Combine(OutputDirectory, fileName)));
 
-    private async Task<ScriptResult> RunAsync()
+    private Task<ScriptResult> RunAsync() =>
+        RunAsync(
+            "scripts/BenchmarkDiffraPayload.cs",
+            ResultsDirectory,
+            OutputDirectory,
+            "--commit",
+            Commit
+        );
+
+    private static Task<ScriptResult> CheckAsync(string payload, string collection) =>
+        RunAsync(
+            "scripts/JsonSchemaCheck.cs",
+            "--schema",
+            "diffra/schemas/benchmark-payload.schema.json",
+            payload,
+            "--schema",
+            "diffra/schemas/collection-v1.schema.json",
+            collection
+        );
+
+    private static async Task<ScriptResult> RunAsync(string script, params string[] arguments)
     {
         string homeDotnetDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
@@ -180,10 +299,12 @@ public sealed class BenchmarkDiffraPayloadTests : IDisposable
             CreateNoWindow = true,
         };
         psi.ArgumentList.Add("run");
-        psi.ArgumentList.Add("scripts/BenchmarkDiffraPayload.cs");
+        psi.ArgumentList.Add(script);
         psi.ArgumentList.Add("--");
-        psi.ArgumentList.Add(ResultsDirectory);
-        psi.ArgumentList.Add(OutputDirectory);
+        foreach (string argument in arguments)
+        {
+            psi.ArgumentList.Add(argument);
+        }
 
         psi.Environment["MSBUILDDISABLENODEREUSE"] = "1";
         psi.Environment["DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER"] = "1";

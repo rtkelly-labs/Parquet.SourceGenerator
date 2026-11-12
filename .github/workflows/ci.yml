@@ -253,6 +253,38 @@ jobs:
       - name: Verify Required Test Execution
         run: dotnet run scripts/VerifyRequiredTestExecution.cs
 
+      # Shadow, gates nothing (docs/internals/diffra-shadow-payloads.md): the TRX reports above in
+      # Diffra's test-results shape, checked against the schemas vendored under diffra/schemas/.
+      # It runs after a failed test step too, because a failed run is the data the error and
+      # missing-report shapes need.
+      - name: Emit Diffra test-results payloads (shadow)
+        if: always() && hashFiles('test/*/TestResults/ci-*.trx') != ''
+        continue-on-error: true
+        env:
+          SUBJECT_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/diffra-test-results"
+          dotnet run scripts/TestResultsDiffraPayload.cs -- "$out" \
+            --commit "$SUBJECT_COMMIT" \
+            --input core=test/Parquet.SourceGenerator.Tests/TestResults/ci-core.trx \
+            --input abi=test/Parquet.SourceGenerator.AbiMatrix/TestResults/ci-core.trx \
+            --input external=test/Parquet.SourceGenerator.Tests/TestResults/ci-external.trx
+          cat "$out/summary.md" >> "$GITHUB_STEP_SUMMARY"
+          echo "TRX reports in the workspace:"
+          find test -name '*.trx' -print
+          dotnet run scripts/JsonSchemaCheck.cs -- \
+            --schema diffra/schemas/test-results-payload.schema.json "$out"/test-results.*.json \
+            --schema diffra/schemas/collection-v1.schema.json "$out/collection.json"
+
+      - name: Upload Diffra test-results payloads
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: diffra-test-results
+          path: ${{ runner.temp }}/diffra-test-results/
+          if-no-files-found: ignore
+
       - name: Generate Code Coverage Summary & Evaluate Gate
         run: |
           dotnet run scripts/CoverageSummary.cs -- --output-markdown coverage-summary.md --min-line 85.0 --min-branch 70.0
