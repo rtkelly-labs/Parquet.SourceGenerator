@@ -32,7 +32,7 @@ var options = new EvaluationOptions { OutputFormat = OutputFormat.List };
 
 // Positive control: a validator that accepts everything would pass every payload.
 JsonSchema control = JsonSchema.FromText(
-    """{ "type": "object", "required": ["a"], "additionalProperties": false }"""
+    """{ "type": "object", "required": ["a"], "properties": { "a": {} }, "additionalProperties": false }"""
 );
 if (
     !control.Evaluate(JsonNode.Parse("""{ "a": 1 }"""), options).IsValid

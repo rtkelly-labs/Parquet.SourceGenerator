@@ -6,56 +6,87 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 // -----------------------------------------------------------------------------
 // BenchmarkDiffraPayload.cs
 //
-// Turns the regression gate's BenchmarkDotNet results into Diffra metrics payloads
-// ({ scope, methodology, metrics }), the input to `diffra collect`. It runs in shadow:
-// the allocation gate in tools/BenchmarkSummaryGenerator stays the one that decides the
-// job, and these files are uploaded beside it so the baseline -> budget logic can move to
-// Diffra's standard shape once its CLI ships. docs/reference/benchmarks.md has the design.
+// Turns the regression gate's BenchmarkDotNet results into Diffra's `diffra/benchmark@1`
+// payload shape and a `collection-v1` document. It runs in shadow: the allocation gate in
+// tools/BenchmarkSummaryGenerator stays the one that decides the job, and these files are
+// uploaded beside it so the baseline -> budget logic can move to Diffra's standard shape once
+// its CLI ships. docs/reference/benchmarks.md has the design; diffra.project.yml declares the
+// metric and holds the budgets; the schemas are vendored under diffra/schemas/.
 //
-// Three payloads, not one, because a Diffra rules file is one flat set of thresholds
-// applied to every measurement in the Delta it evaluates. Allocations, GC counts and time
-// need different budgets (benchmarks/diffra/*.rules.json), so each gets its own file:
+//   benchmarks.json   { scope, methodology, stratum, plan, metrics.benchmarks.<field>.<case> }
+//   collection.json   every field x stratum as collected
 //
-//   allocations.json  /<benchmark>/allocatedBytes                bytes per operation
-//   gc.json           /<benchmark>/gen{0,1,2}CollectionsPer1000Ops count per 1000 operations
-//   time.json         /<benchmark>/meanNanoseconds               ns per operation
+// One payload holds five fields, each a map from benchmark case to { value, unit }:
 //
-// <benchmark> is Type.Method(Parameters), the identity benchmarks/baseline.json and
+//   allocatedBytes                    B per operation
+//   gen0PerKOps gen1PerKOps gen2PerKOps   count per 1000 operations
+//   meanTime                          ns per operation
+//
+// A case is Type.Method(Parameters), the identity benchmarks/baseline.json and
 // RegressionCheck already use, so a key never changes unless the benchmark does.
 //
 // GC counts are normalised per 1000 operations (BenchmarkDotNet's own Gen0Collects metric)
 // because the raw counts scale with TotalOperations, which BenchmarkDotNet picks from the
 // runner's speed: the same code ran 1024 operations on one runner and 2048 on a faster one.
 //
-// The methodology string carries everything that changes what a number means: the
-// BenchmarkDotNet version, the runtime major.minor, the OS and the architecture, and for
-// GC counts and time the processor. The runtime sizes its gen0 budget from the CPU cache, so
-// the same code ran 2 to 5 times fewer gen0 collections on a Xeon than on an EPYC. Diffra
-// compares two payloads only when scope and methodology match exactly, so an Arm64
-// baseline against an X64 run is `incompatible`, not a 6% "change".
+// Everything that changes what a number means is in the stratum: the runtime major.minor,
+// the OS, the architecture and the processor. The runtime sizes its gen0 budget from the CPU
+// cache, so the same code ran 2 to 5 times fewer gen0 collections on a Xeon than on an EPYC;
+// the project file therefore compares GC counts and time per processor, and allocations
+// across processors. The methodology names only the converter and the BenchmarkDotNet
+// major.minor.
 //
-// Usage: dotnet run scripts/BenchmarkDiffraPayload.cs -- <results-dir> <output-dir> [--scope <scope>]
-// Exit codes: 0 written, 1 nothing to emit or unreadable results, 2 usage.
+// Usage: dotnet run scripts/BenchmarkDiffraPayload.cs -- <results-dir> <output-dir> --commit <sha>
+//            [--project <diffra.project.yml>] [--repository <owner/name>]
+// Exit codes: 0 written, 1 nothing to emit or unreadable results or project file, 2 usage.
 // -----------------------------------------------------------------------------
 
-const string DefaultScope = "parquet-sourcegenerator/benchmarks/regression-gate";
-const string MethodologyVersion = "v1";
+const string StandardType = "diffra/benchmark@1";
+const string Converter = "parquet-sourcegenerator.prototype.benchmarkdotnet@0.1.0";
+const string CollectionSchema = "https://diffra.dev/schemas/collection-v1.schema.json";
+const string ProducerId = "parquet-sourcegenerator.benchmark-diffra-payload";
+const string ProducerVersion = "0.1.0";
 
 string? resultsDirectory = null;
 string? outputDirectory = null;
-string scope = DefaultScope;
+string? commit = null;
+string projectPath = "diffra.project.yml";
+string repository = Environment.GetEnvironmentVariable("GITHUB_REPOSITORY")
+    is { Length: > 0 } fromEnvironment
+    ? fromEnvironment
+    : "rtkelly-labs/Parquet.SourceGenerator";
 
 for (int i = 0; i < args.Length; i++)
 {
-    if (args[i] == "--scope" && i + 1 < args.Length)
+    if (args[i] is "--commit" or "--project" or "--repository")
     {
-        scope = args[++i];
+        if (i + 1 >= args.Length)
+        {
+            return Usage($"{args[i]} needs a value.");
+        }
+
+        string option = args[i];
+        string value = args[++i];
+        if (option == "--commit")
+        {
+            commit = value;
+        }
+        else if (option == "--project")
+        {
+            projectPath = value;
+        }
+        else
+        {
+            repository = value;
+        }
     }
     else if (args[i].StartsWith("--", StringComparison.Ordinal))
     {
@@ -75,10 +106,37 @@ for (int i = 0; i < args.Length; i++)
     }
 }
 
-if (resultsDirectory is null || outputDirectory is null || scope.Length == 0)
+if (resultsDirectory is null || outputDirectory is null)
 {
     return Usage("A results directory and an output directory are required.");
 }
+
+if (commit is null || !Regex.IsMatch(commit, "^[0-9a-f]{40}$"))
+{
+    return Usage("--commit takes the full 40-character commit SHA.");
+}
+
+if (!File.Exists(projectPath))
+{
+    Console.Error.WriteLine($"The project file '{projectPath}' does not exist.");
+    return 1;
+}
+
+byte[] projectBytes = File.ReadAllBytes(projectPath);
+Match scopeLine = Regex.Match(
+    Encoding.UTF8.GetString(projectBytes),
+    @"^scope:\s*(?<scope>[a-z0-9][a-z0-9._/-]*)\s*$",
+    RegexOptions.Multiline
+);
+if (!scopeLine.Success)
+{
+    Console.Error.WriteLine($"The project file '{projectPath}' declares no scope.");
+    return 1;
+}
+
+string scope = scopeLine.Groups["scope"].Value;
+string projectRelativePath = Path.GetRelativePath(Directory.GetCurrentDirectory(), projectPath)
+    .Replace('\\', '/');
 
 string[] files = Directory.Exists(resultsDirectory)
     ? Directory
@@ -96,30 +154,26 @@ if (files.Length == 0)
 }
 
 var cases = new SortedDictionary<string, Case>(StringComparer.Ordinal);
-string? environment = null;
-string? processor = null;
+Host? environment = null;
 
 foreach (string file in files)
 {
     using JsonDocument document = JsonDocument.Parse(File.ReadAllText(file));
     JsonElement root = document.RootElement;
 
-    JsonElement host = root.GetProperty("HostEnvironmentInfo");
-    string fileEnvironment = Methodology(host);
-    string fileProcessor = Text(host, "ProcessorName");
+    Host fileEnvironment = ReadHost(root.GetProperty("HostEnvironmentInfo"));
 
     // One payload describes one run on one machine. Results stitched from two would carry a
-    // methodology that is true of neither.
-    if (environment is not null && (environment != fileEnvironment || processor != fileProcessor))
+    // stratum that is true of neither.
+    if (environment is not null && environment != fileEnvironment)
     {
         Console.Error.WriteLine(
-            $"'{Path.GetFileName(file)}' was produced by '{fileEnvironment}' on '{fileProcessor}', but earlier files by '{environment}' on '{processor}'."
+            $"'{Path.GetFileName(file)}' was produced by '{fileEnvironment}', but earlier files by '{environment}'."
         );
         return 1;
     }
 
     environment = fileEnvironment;
-    processor = fileProcessor;
 
     foreach (JsonElement benchmark in root.GetProperty("Benchmarks").EnumerateArray())
     {
@@ -187,41 +241,45 @@ if (cases.Count == 0)
     return 1;
 }
 
-string outputPath = outputDirectory;
-Directory.CreateDirectory(outputPath);
+Host host = environment!;
+if (host.Processor.Length == 0 || host.Runtime.Length == 0 || host.Architecture.Length == 0)
+{
+    Console.Error.WriteLine(
+        $"The results do not name their runtime, architecture and processor: '{host}'."
+    );
+    return 1;
+}
 
-Write(
-    "allocations.json",
-    $"{environment};allocated-bytes-per-op-{MethodologyVersion}",
-    c => [("allocatedBytes", Value.Integer(c.AllocatedBytes, "bytes"))]
-);
-Write(
-    "gc.json",
-    $"{environment};{processor};gc-collections-per-1000-ops-{MethodologyVersion}",
-    c =>
-        [
-            ("gen0CollectionsPer1000Ops", Value.Fraction(c.Gen0PerThousand, "count/1000-ops")),
-            ("gen1CollectionsPer1000Ops", Value.Fraction(c.Gen1PerThousand, "count/1000-ops")),
-            ("gen2CollectionsPer1000Ops", Value.Fraction(c.Gen2PerThousand, "count/1000-ops")),
-        ]
-);
+string methodology = $"{StandardType};{Converter};benchmarkdotnet-json-full@{host.BenchmarkDotNet}";
 
-// Time is only comparable on the same processor model: the gate's runners span at least
-// three EPYC generations and the same code ran up to 2.1x apart across them. With the
-// processor in the methodology a cross-model comparison is `incompatible`, never a trend.
-Write(
-    "time.json",
-    $"{environment};{processor};mean-ns-per-op-{MethodologyVersion}",
-    c => [("meanNanoseconds", Value.Fraction(c.MeanNanoseconds, "ns"))]
-);
+// The fields, in the order the project file declares them. Allocations compare across
+// processors; GC counts and time only within one.
+(string Name, string Unit, bool PerProcessor, Func<Case, string> Value)[] fields =
+[
+    ("allocatedBytes", "B", false, c => c.AllocatedBytes.ToString(CultureInfo.InvariantCulture)),
+    ("gen0PerKOps", "count/1000-ops", true, c => Canonical(c.Gen0PerThousand)),
+    ("gen1PerKOps", "count/1000-ops", true, c => Canonical(c.Gen1PerThousand)),
+    ("gen2PerKOps", "count/1000-ops", true, c => Canonical(c.Gen2PerThousand)),
+    ("meanTime", "ns", true, c => Canonical(c.MeanNanoseconds)),
+];
+
+byte[] payload = WritePayload();
+string evidenceId = Digest(payload);
+string collectionId = Digest(WriteCollection(id: null));
+byte[] collection = WriteCollection(collectionId);
+
+Directory.CreateDirectory(outputDirectory);
+File.WriteAllBytes(Path.Combine(outputDirectory, "benchmarks.json"), payload);
+File.WriteAllBytes(Path.Combine(outputDirectory, "collection.json"), collection);
 
 Console.WriteLine(
-    $"Examined {cases.Count} benchmark case(s) from {files.Length} file(s); wrote allocations.json, gc.json and time.json to '{outputPath}'."
+    $"Examined {cases.Count} benchmark case(s) from {files.Length} file(s); wrote benchmarks.json and collection.json to '{outputDirectory}'."
 );
-Console.WriteLine($"Methodology: {environment}");
+Console.WriteLine($"Methodology: {methodology}");
+Console.WriteLine($"Stratum: {host}");
 return 0;
 
-void Write(string fileName, string methodology, Func<Case, (string Name, Value Value)[]> measures)
+byte[] WritePayload()
 {
     using var stream = new MemoryStream();
     using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))
@@ -229,25 +287,32 @@ void Write(string fileName, string methodology, Func<Case, (string Name, Value V
         writer.WriteStartObject();
         writer.WriteString("scope", scope);
         writer.WriteString("methodology", methodology);
-        writer.WriteStartObject("metrics");
-        foreach ((string key, Case measured) in cases)
-        {
-            writer.WriteStartObject(key);
-            foreach ((string name, Value value) in measures(measured))
-            {
-                writer.WriteStartObject(name);
-                if (value.Number is { } number)
-                {
-                    writer.WriteNumber("value", number);
-                }
-                else
-                {
-                    // Diffra's canonical JSON accepts only integer number tokens, so anything
-                    // that can carry a fraction is a decimal string.
-                    writer.WriteString("value", value.Text);
-                }
+        writer.WritePropertyName("stratum");
+        WriteStratum(writer, withProcessor: true);
 
-                writer.WriteString("unit", value.Unit);
+        writer.WriteStartObject("plan");
+        writer.WriteStartObject("benchmarks");
+        writer.WriteStartArray("keys");
+        foreach (string key in cases.Keys)
+        {
+            writer.WriteStringValue(key);
+        }
+
+        writer.WriteEndArray();
+        writer.WriteEndObject();
+        writer.WriteEndObject();
+
+        writer.WriteStartObject("metrics");
+        writer.WriteStartObject("benchmarks");
+        foreach ((string name, string unit, _, Func<Case, string> value) in fields)
+        {
+            writer.WriteStartObject(name);
+            foreach ((string key, Case measured) in cases)
+            {
+                // Every value is a decimal string: Diffra's canonical JSON has no fractions.
+                writer.WriteStartObject(key);
+                writer.WriteString("value", value(measured));
+                writer.WriteString("unit", unit);
                 writer.WriteEndObject();
             }
 
@@ -256,37 +321,135 @@ void Write(string fileName, string methodology, Func<Case, (string Name, Value V
 
         writer.WriteEndObject();
         writer.WriteEndObject();
+        writer.WriteEndObject();
     }
 
-    File.WriteAllText(
-        Path.Combine(outputPath, fileName),
-        Encoding.UTF8.GetString(stream.ToArray()) + "\n"
-    );
+    stream.WriteByte((byte)'\n');
+    return stream.ToArray();
 }
+
+byte[] WriteCollection(string? id)
+{
+    using var stream = new MemoryStream();
+    using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))
+    {
+        writer.WriteStartObject();
+        writer.WriteString("schema", CollectionSchema);
+        if (id is not null)
+        {
+            // The id is the SHA-256 of this document written without the id.
+            writer.WriteString("id", id);
+        }
+
+        // A run with a failed case writes nothing (see above), so what is written is complete.
+        writer.WriteString("status", "complete");
+
+        writer.WriteStartObject("subject");
+        writer.WriteString("kind", "git-repository");
+        writer.WriteString("id", $"repo:{repository}");
+        writer.WriteString("commit", commit);
+        writer.WriteString("repository", $"https://github.com/{repository}");
+        writer.WriteEndObject();
+
+        writer.WriteStartObject("project");
+        writer.WriteString("scope", scope);
+        writer.WriteString("digest", Digest(projectBytes));
+        writer.WriteStartObject("loadedFrom");
+        writer.WriteString("role", "subject");
+        writer.WriteString("commit", commit);
+        writer.WriteString("path", projectRelativePath);
+        writer.WriteEndObject();
+        writer.WriteEndObject();
+
+        writer.WriteStartArray("metrics");
+        foreach ((string name, _, bool perProcessor, _) in fields)
+        {
+            writer.WriteStartObject();
+            writer.WriteString("metric", "benchmarks");
+            writer.WriteString("field", name);
+            writer.WriteString("type", StandardType);
+            writer.WriteBoolean("required", true);
+            writer.WriteString("methodology", methodology);
+            writer.WriteStartArray("strata");
+            writer.WriteStartObject();
+            writer.WritePropertyName("stratum");
+            WriteStratum(writer, perProcessor);
+            writer.WriteString("status", "collected");
+            writer.WriteString("evidenceId", evidenceId);
+            writer.WriteStartObject("keys");
+            foreach (string key in cases.Keys)
+            {
+                writer.WriteString(key, "collected");
+            }
+
+            writer.WriteEndObject();
+            writer.WriteEndObject();
+            writer.WriteEndArray();
+            writer.WriteEndObject();
+        }
+
+        writer.WriteEndArray();
+
+        writer.WriteStartObject("provenance");
+        writer.WriteString("producerId", ProducerId);
+        writer.WriteString("producerVersion", ProducerVersion);
+        writer.WriteString("source", $"git:{commit}");
+        writer.WriteEndObject();
+        writer.WriteEndObject();
+    }
+
+    stream.WriteByte((byte)'\n');
+    return stream.ToArray();
+}
+
+void WriteStratum(Utf8JsonWriter writer, bool withProcessor)
+{
+    writer.WriteStartObject();
+    writer.WriteString("arch", host.Architecture);
+    if (withProcessor)
+    {
+        writer.WriteString("cpu", host.Processor);
+    }
+
+    writer.WriteString("os", host.Os);
+    writer.WriteString("runtime", host.Runtime);
+    writer.WriteEndObject();
+}
+
+// Diffra's canonical decimal: no exponent, no trailing zero, no trailing point.
+static string Canonical(decimal value) => value.ToString("0.######", CultureInfo.InvariantCulture);
+
+static string Digest(byte[] bytes) =>
+    "sha256:" + Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
 
 static decimal PerThousand(long collections, long operations) =>
     Math.Round(collections * 1000m / operations, 6, MidpointRounding.AwayFromZero);
 
-static string Methodology(JsonElement host)
+static Host ReadHost(JsonElement info)
 {
-    string benchmarkDotNet = Text(host, "BenchmarkDotNetVersion");
-    string runtime = Text(host, "RuntimeVersion"); // ".NET 8.0.33 (8.0.3326.52219)"
-    string architecture = Text(host, "Architecture").ToLowerInvariant();
+    // "0.14.0" -> "0.14": the export format follows the minor version.
+    string[] benchmarkDotNet = Text(info, "BenchmarkDotNetVersion").Split('.');
+    string runtime = Text(info, "RuntimeVersion"); // ".NET 8.0.33 (8.0.3326.52219)"
 
     // The runtime patch is left out on purpose: the gate's runner moved from 8.0.31 to 8.0.33
-    // over five weeks, and a methodology that changed with every patch would never compare.
+    // over five weeks, and a stratum that changed with every patch would never compare.
     string[] version = runtime.Replace(".NET ", "", StringComparison.Ordinal).Split('.', ' ');
-    string framework = version.Length >= 2 ? $"net{version[0]}.{version[1]}" : runtime;
 
     // BenchmarkDotNet records the OS as free text ("Ubuntu 24.04.5 LTS (Noble Numbat)"); the
     // family is what changes allocation sizes, and this script runs on the same machine.
     string os =
         OperatingSystem.IsLinux() ? "linux"
-        : OperatingSystem.IsMacOS() ? "osx"
+        : OperatingSystem.IsMacOS() ? "macos"
         : OperatingSystem.IsWindows() ? "windows"
         : RuntimeInformation.OSDescription;
 
-    return $"benchmarkdotnet-{benchmarkDotNet};{framework};{os}-{architecture}";
+    return new Host(
+        benchmarkDotNet.Length >= 2 ? $"{benchmarkDotNet[0]}.{benchmarkDotNet[1]}" : "unknown",
+        version.Length >= 2 ? $"net{version[0]}.{version[1]}" : runtime,
+        os,
+        Text(info, "Architecture").ToLowerInvariant(),
+        Text(info, "ProcessorName").Trim()
+    );
 }
 
 static string Text(JsonElement element, string name) =>
@@ -298,7 +461,7 @@ static int Usage(string message)
 {
     Console.Error.WriteLine(message);
     Console.Error.WriteLine(
-        "Usage: dotnet run scripts/BenchmarkDiffraPayload.cs -- <results-dir> <output-dir> [--scope <scope>]"
+        "Usage: dotnet run scripts/BenchmarkDiffraPayload.cs -- <results-dir> <output-dir> --commit <sha> [--project <diffra.project.yml>] [--repository <owner/name>]"
     );
     return 2;
 }
@@ -311,10 +474,10 @@ internal sealed record Case(
     decimal MeanNanoseconds
 );
 
-internal sealed record Value(long? Number, string Text, string Unit)
-{
-    public static Value Integer(long value, string unit) => new(value, string.Empty, unit);
-
-    public static Value Fraction(decimal value, string unit) =>
-        new(null, value.ToString("0.0#####", CultureInfo.InvariantCulture), unit);
-}
+internal sealed record Host(
+    string BenchmarkDotNet,
+    string Runtime,
+    string Os,
+    string Architecture,
+    string Processor
+);

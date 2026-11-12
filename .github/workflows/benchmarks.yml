@@ -417,25 +417,31 @@ jobs:
           exit $status
 
       # Shadow evidence for Diffra (docs/reference/benchmarks.md, "Diffra evidence"). The same
-      # results, rewritten as three Diffra metrics payloads (allocations, GC counts, time) for the
-      # budgets in benchmarks/diffra/*.rules.json. It decides nothing: the step above is the
-      # gate, this one runs whatever it concluded (and on an update_baseline dispatch, where its
-      # payloads are the Diffra baseline candidate), and a failure here cannot fail the job.
-      - name: Emit Diffra metrics payloads (shadow)
+      # results, rewritten as one `diffra/benchmark@1` payload and a collection document for the
+      # budgets in diffra.project.yml, then checked against the schemas in diffra/schemas/. It
+      # decides nothing: the step above is the gate, this one runs whatever it concluded (and on
+      # an update_baseline dispatch, where its payload is the Diffra baseline candidate), and a
+      # failure here cannot fail the job.
+      - name: Emit Diffra benchmark payload (shadow)
         if: always() && steps.gated-run.outcome == 'success'
         continue-on-error: true
         run: |
           set -euo pipefail
-          dotnet run scripts/BenchmarkDiffraPayload.cs -- BenchmarkDotNet.Artifacts/gate/results diffra-payload
+          dotnet run scripts/BenchmarkDiffraPayload.cs -- \
+            BenchmarkDotNet.Artifacts/gate/results diffra-payload --commit "$(git rev-parse HEAD)"
           {
-            echo "### Diffra payloads (shadow, not gating)"
+            echo "### Diffra benchmark payload (shadow, not gating)"
             echo
-            echo "Written to the \`benchmark-diffra-payload\` artifact; budgets in \`benchmarks/diffra/\`."
+            echo "Written to the \`benchmark-diffra-payload\` artifact; budgets in \`diffra.project.yml\`."
             echo
-            for payload in diffra-payload/*.json; do
-              echo "- \`$(basename "$payload")\`: $(jq '[.metrics[] | keys[]] | length' "$payload") measurement(s), methodology \`$(jq -r .methodology "$payload")\`"
-            done
+            echo "- methodology \`$(jq -r .methodology diffra-payload/benchmarks.json)\`"
+            echo "- stratum \`$(jq -c .stratum diffra-payload/benchmarks.json)\`"
+            echo "- $(jq '.plan.benchmarks.keys | length' diffra-payload/benchmarks.json) case(s), $(jq '.metrics.benchmarks | keys | length' diffra-payload/benchmarks.json) field(s)"
+            echo "- collection \`$(jq -r .status diffra-payload/collection.json)\`"
           } >> "$GITHUB_STEP_SUMMARY"
+          dotnet run scripts/JsonSchemaCheck.cs -- \
+            --schema diffra/schemas/benchmark-payload.schema.json diffra-payload/benchmarks.json \
+            --schema diffra/schemas/collection-v1.schema.json diffra-payload/collection.json
 
       - name: Upload Diffra payloads
         if: always() && steps.gated-run.outcome == 'success'

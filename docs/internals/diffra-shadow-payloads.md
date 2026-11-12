@@ -14,6 +14,7 @@ The benchmark payloads are described in [the benchmarks reference](../reference/
 |---|---|
 | `diffra.project.yml` | The project file: scope, dimensions and the declared metrics. |
 | `diffra/schemas/` | The schemas the payloads are checked against, vendored so that no step or test fetches one. Its README records each file's source. |
+| `scripts/BenchmarkDiffraPayload.cs` | Converts the regression gate's BenchmarkDotNet export to one `diffra/benchmark@1` payload and a `collection-v1` document. |
 | `scripts/TestResultsDiffraPayload.cs` | Converts TRX reports to `diffra/test-results@1` payloads and a `collection-v1` document. |
 | `scripts/JsonSchemaCheck.cs` | Validates JSON documents against a JSON Schema file. It carries its own positive control. |
 
@@ -84,6 +85,14 @@ prototype:
 - **Failures are all `exception`.** TRX does not separate an assertion from any other exception,
   so the `assertion` kind is never produced.
 - **Nothing collected cannot be written.** `collection-v1` requires one collected stratum.
+- **Benchmark keys need a parameter list.** Diffra's example schema for a benchmark key requires
+  `Type.Method(...)`. A benchmark without parameters is `Type.Method` in `benchmarks/baseline.json`,
+  so the copy here makes the parentheses optional.
+- **Thresholds combine with "and" only.** The earlier GC budget warned when either the absolute or
+  the relative increase was passed. A project file can only require both.
+- **One payload, several strata.** The benchmark payload carries the processor in its stratum, but
+  `allocatedBytes` is stratified without it, so the collection document names the same payload
+  under two different strata.
 
 ## Running it locally
 

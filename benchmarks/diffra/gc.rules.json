@@ -1,8 +1,0 @@
-{
-  "id": "parquet-sourcegenerator.benchmarks.gc-collections",
-  "version": "1.0.0",
-  "warnAboveAbsoluteIncrease": "20",
-  "failAboveAbsoluteIncrease": "30",
-  "warnAboveRelativeIncrease": "0.35",
-  "failAboveRelativeIncrease": "0.50"
-}
