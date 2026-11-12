@@ -213,7 +213,7 @@ An earlier version of this step wrote three payloads (`allocations.json`, `gc.js
 with a rules file each, and put the host in the methodology string. The standard type replaces all
 of that with one payload and one project file. Two things did not carry over exactly: the old GC
 rule warned when *either* the absolute or the relative threshold was passed, while a project file
-can only require *both*; and a benchmark without parameters has the key `Type.Method`, which
+can only require *both*, which is looser for a large count; and a benchmark without parameters has the key `Type.Method`, which
 Diffra's example schema for benchmark keys rejects because it requires a parameter list.
 [Diffra shadow payloads](../internals/diffra-shadow-payloads.md) lists these with the other misfits.
 
@@ -231,8 +231,9 @@ Diffra's example schema for benchmark keys rejects because it requires a paramet
   the 2026-11-01 EPYC run, on unchanged code, moved five cases by 1 to 152 B: within the warn budget.
 - *GC counts.* Gen0 per 1000 operations varied by 0 to 9%. Gen1 and gen2 vary more: up to 28%
   (19.5 collections per 1000 operations absolute) and 17% respectively on the 10,000-row columnar
-  write. The budget sits just above that. A gen2 count that goes from zero to anything is
-  `needs-review`, which is intended. GC counts are not portable across CPUs: on the Xeon runner the
+  write. The budget sits just above that. Under the earlier rules a gen2 count that
+  went from zero to anything was `needs-review`, which was intended; with both thresholds required,
+  Diffra's example says a rise from zero needs review only once it passes the absolute floor. GC counts are not portable across CPUs: on the Xeon runner the
   same code ran 50 to 80% fewer gen0 collections than on EPYC (the runtime sizes the gen0 budget
   from the CPU cache), so, like time, GC counts compare only within one processor model.
 - *Time.* The same code ran 1.7 to 2.1× apart across CPU models, and up to about 10% apart on the

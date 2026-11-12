@@ -20,8 +20,9 @@ The benchmark payloads are described in [the benchmarks reference](../reference/
 
 ## Test results
 
-The `test` job writes three TRX reports, the same three that
-`scripts/VerifyRequiredTestExecution.cs` reads. The step `Emit Diffra test-results payloads
+The step reads three TRX reports from the `test` job, the same three that
+`scripts/VerifyRequiredTestExecution.cs` reads. (The job also writes a fourth, the ABI matrix
+project's `ci-external.trx`, which holds no test and is not read.) The step `Emit Diffra test-results payloads
 (shadow)` converts each to one payload, with the report as the `suite` stratum:
 
 | Suite | Report |
@@ -89,7 +90,9 @@ prototype:
   `Type.Method(...)`. A benchmark without parameters is `Type.Method` in `benchmarks/baseline.json`,
   so the copy here makes the parentheses optional.
 - **Thresholds combine with "and" only.** The earlier GC budget warned when either the absolute or
-  the relative increase was passed. A project file can only require both.
+  the relative increase was passed. A project file can only require both, so the budgets are
+  looser than before for a large count. What a relative threshold does from a count of zero is
+  not specified: Diffra's example says such a rise needs review once the absolute floor is met.
 - **One payload, several strata.** The benchmark payload carries the processor in its stratum, but
   `allocatedBytes` is stratified without it, so the collection document names the same payload
   under two different strata.
