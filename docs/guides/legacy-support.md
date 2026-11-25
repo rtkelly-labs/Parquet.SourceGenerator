@@ -37,7 +37,7 @@ upstream change that would remove it are recorded in
 
 1. **One surface.** For every capability both backends support, the legacy backend emits the same
    type names, member names, signatures and semantics as the modern backend. That includes the
-   `NotSupportedException` combinations recorded under [Vision & Design Tenets](../vision.md §3).
+   `NotSupportedException` combinations recorded under [Vision & Design Tenets](../vision.md) §3.
 2. **Differences are listed, not implied.** A member missing from the legacy surface must appear
    in the parity allowlist with a reason and a tracking issue. Each entry is either **temporary**
    (a gap to close; the allowlist can only shrink, and an entry that no longer differs fails the

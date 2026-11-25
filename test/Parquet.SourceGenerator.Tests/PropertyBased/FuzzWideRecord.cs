@@ -81,6 +81,18 @@ public partial class FuzzWideRecord
     [ParquetDecimal(9, 2)]
     public decimal? OptMoney { get; set; }
 
+    // Scale 1 on INT64: the coarsest factor Parquet.Net derives from a double, so the largest error
+    // relative to the value on .NET 11 (ParquetDecimalScale).
+    [ParquetColumn("dec_coarse")]
+    [ParquetDecimal(18, 1)]
+    public decimal DecCoarse { get; set; }
+
+    // Precision above 18 is stored as a fixed-length byte array and decoded exactly; with up to 28
+    // digits unscaled it is the case a wrongly applied restore would corrupt.
+    [ParquetColumn("opt_dec_wide")]
+    [ParquetDecimal(28, 10)]
+    public decimal? OptDecWide { get; set; }
+
     [ParquetColumn("ts_millis")]
     public DateTime TsMillis { get; set; }
 
