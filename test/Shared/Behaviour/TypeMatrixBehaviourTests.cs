@@ -144,19 +144,22 @@ public sealed class TypeMatrixBehaviourTests
         rows[1].Bytes = [];
         rows[TypeMatrixData.RowGroupSize + 1].BytesOpt = [];
 
-        Task<RoundTrip<TypeMatrixRow>> roundTrip = RoundTripAsync(rows);
+        // The write must succeed on every backend; only the read is the documented failure.
+        byte[] bytes = await WriteAsync(rows);
 
         if (BehaviourDriver.IsKnownFailure(KnownFailures.EmptyBinaryValue))
         {
-            await Should.ThrowAsync<Exception>(
-                roundTrip,
+            using var input = new MemoryStream(bytes, writable: false);
+            await Should.ThrowAsync<IndexOutOfRangeException>(
+                BehaviourDriver.ReadTypeMatrixAsync(input, null),
                 $"{BehaviourDriver.Backend()} lists '{KnownFailures.EmptyBinaryValue}' as a known "
-                    + "failure but the round trip now succeeds: remove it from the driver's list."
+                    + "failure (the reader throws IndexOutOfRangeException), but the read now "
+                    + "succeeds or fails differently: update the driver's list."
             );
             return;
         }
 
-        RoundTrip<TypeMatrixRow> result = await roundTrip;
+        RoundTrip<TypeMatrixRow> result = await ReadAsync(rows, bytes);
         AssertColumn("bytes", rows, result.Read, "empty binary value");
         AssertColumn("bytes_opt", rows, result.Read, "empty binary value");
     }
@@ -201,13 +204,22 @@ public sealed class TypeMatrixBehaviourTests
         return data;
     }
 
-    private static async Task<RoundTrip<TypeMatrixRow>> RoundTripAsync(List<TypeMatrixRow> rows)
+    private static async Task<RoundTrip<TypeMatrixRow>> RoundTripAsync(List<TypeMatrixRow> rows) =>
+        await ReadAsync(rows, await WriteAsync(rows));
+
+    private static async Task<byte[]> WriteAsync(List<TypeMatrixRow> rows)
     {
         var options = new ParquetSerializerOptions { RowGroupSize = TypeMatrixData.RowGroupSize };
         using var stream = new MemoryStream();
         await BehaviourDriver.WriteAsync(rows, stream, options);
-        byte[] bytes = stream.ToArray();
+        return stream.ToArray();
+    }
 
+    private static async Task<RoundTrip<TypeMatrixRow>> ReadAsync(
+        List<TypeMatrixRow> rows,
+        byte[] bytes
+    )
+    {
         using var input = new MemoryStream(bytes, writable: false);
         TypeMatrixRow[] read = await BehaviourDriver.ReadTypeMatrixAsync(input, null);
         return new RoundTrip<TypeMatrixRow>(rows, bytes, read);
