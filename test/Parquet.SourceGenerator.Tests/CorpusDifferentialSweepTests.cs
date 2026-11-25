@@ -312,8 +312,13 @@ public sealed class CorpusDifferentialSweepTests
         for (int i = 0; i < records.Count; i++)
         {
             readViaReflection[i].Id.ShouldBe(records[i].Id);
-            readViaReflection[i].Amount.ShouldBe(records[i].Amount);
-            readViaReflection[i].OptionalFee.ShouldBe(records[i].OptionalFee);
+            // ParquetSerializer is the reference here; see ParquetNetDecimalReference for .NET 11.
+            ParquetNetDecimalReference
+                .Exact(readViaReflection[i].Amount, 4)
+                .ShouldBe(records[i].Amount);
+            ParquetNetDecimalReference
+                .Exact(readViaReflection[i].OptionalFee, 2)
+                .ShouldBe(records[i].OptionalFee);
         }
 
         // 2. ParquetSerializer Write -> PSG Read
