@@ -570,7 +570,10 @@ public sealed class LegacyHostileInputTests
             }
         });
 
-        Task finished = await Task.WhenAny(read, Task.Delay(ReadTimeout));
+        // Cancel the timer once the read wins, so it does not outlive the read (CA2027).
+        using var delayCts = new CancellationTokenSource();
+        Task finished = await Task.WhenAny(read, Task.Delay(ReadTimeout, delayCts.Token));
+        delayCts.Cancel();
         return finished == read ? await read : new ReadOutcome(null, null, timedOut: true);
     }
 
