@@ -308,7 +308,13 @@ public sealed class CorruptedParquetTests
             CancellationToken.None
         );
 
-        Task finished = await Task.WhenAny(read, Task.Delay(ReadTimeout + TimeSpan.FromSeconds(5)));
+        // Cancel the timer once the read wins, so it does not outlive the read (CA2027).
+        using var delayCts = new CancellationTokenSource();
+        Task finished = await Task.WhenAny(
+            read,
+            Task.Delay(ReadTimeout + TimeSpan.FromSeconds(5), delayCts.Token)
+        );
+        delayCts.Cancel();
         if (finished != read)
         {
             return new ReadOutcome(null, null, TimedOut: true, 0);

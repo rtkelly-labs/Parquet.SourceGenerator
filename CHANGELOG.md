@@ -17,6 +17,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   scale. Generated readers now restore those columns exactly through
   `ParquetDecimalScale` (a no-op before .NET 11); fixed-length decimals were already exact. The
   values keep the column's scale, as on earlier runtimes.
+- **The nightly mutation sweep finishes and reports the whole generator** (#668). It failed every night: the
+  checkout did not fetch the Git LFS benchmark datasets, so 12 dataset tests failed Stryker's initial run, and one
+  run over all 9358 generator mutants timed out at 100 minutes before writing any report. The checkout now fetches
+  LFS objects, a partition job checks the datasets are real Parquet files, and Stryker stops when its initial run has
+  a failing test. The sweep is split into the partitions of `stryker-partitions.json`, one job each, and
+  `scripts/MutationSummary.cs` merges their reports. The merge fails the run when a partition has no report, tested
+  nothing, or tested a mutant another partition also tested, so an incomplete sweep is never published as a score.
+  The summary also read Stryker's report with the wrong property names, so it would have reported 0 mutants.
+  Each partition caps the managed heap of its processes at 3 GiB, so a runaway mutant fails its own test host
+  instead of taking down the runner. Still report-only: there is no floor.
 
 ## [0.1.0-alpha.1] - 2026-10-25
 
