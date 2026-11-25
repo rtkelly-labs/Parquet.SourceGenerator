@@ -182,17 +182,38 @@ public static class FuzzValues
             fraction += rng.Next(0, 10) * unit;
         }
 
+        // Built digit by digit, never through (decimal)double: that conversion changed in .NET 11
+        // (ParquetDecimalScale), and a generator that used it produced different cases from the
+        // same seed on different runtimes. The digit count is drawn first, so one-digit and
+        // full-precision integer parts are equally likely rather than almost always full width.
         decimal integer = profile switch
         {
             FuzzValueProfile.Constant => 1m,
             FuzzValueProfile.Boundary => rng.Pick([0m, maxInteger, 1m]),
-            _ => Math.Truncate((decimal)(rng.NextDouble()) * maxInteger),
+            _ => NextDigits(rng, rng.Next(0, Math.Min(integerDigits, 18) + 1)),
         };
+
+        if (profile == FuzzValueProfile.Boundary && scale > 0 && rng.Chance(0.3))
+        {
+            // All nines: the largest unscaled value the declaration allows.
+            fraction = 1m - unit;
+        }
 
         decimal value =
             profile == FuzzValueProfile.Boundary && rng.Chance(0.4) ? integer : integer + fraction;
 
         return rng.Chance(0.5) ? -value : value;
+    }
+
+    private static decimal NextDigits(FuzzRandom rng, int digits)
+    {
+        decimal value = 0m;
+        for (int i = 0; i < digits; i++)
+        {
+            value = (value * 10m) + rng.Next(0, 10);
+        }
+
+        return value;
     }
 
     public static DateTime NextDateTime(FuzzRandom rng, FuzzValueProfile profile) =>
@@ -474,6 +495,22 @@ public static class FuzzColumns
                 (rng, profile, row) => FuzzValues.NextDecimal(rng, profile, 9, 2),
                 (r, v) => r.OptMoney = (decimal?)v,
                 r => r.OptMoney,
+                Identity
+            ),
+            Column(
+                "dec_coarse",
+                typeof(decimal),
+                (rng, profile, row) => FuzzValues.NextDecimal(rng, profile, 18, 1),
+                (r, v) => r.DecCoarse = (decimal)v!,
+                r => r.DecCoarse,
+                Identity
+            ),
+            OptionalColumn(
+                "opt_dec_wide",
+                typeof(decimal),
+                (rng, profile, row) => FuzzValues.NextDecimal(rng, profile, 28, 10),
+                (r, v) => r.OptDecWide = (decimal?)v,
+                r => r.OptDecWide,
                 Identity
             ),
             Column(

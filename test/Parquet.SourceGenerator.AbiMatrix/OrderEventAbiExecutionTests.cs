@@ -53,7 +53,13 @@ public sealed class OrderEventAbiExecutionTests
             actual[i].Id.ShouldBe(expected[i].Id);
             actual[i].Name.ShouldBe(expected[i].Name);
             actual[i].Score.ShouldBe(expected[i].Score);
-            actual[i].Price.ShouldBe(expected[i].Price);
+            // The frozen v1.0 code predates the .NET 11 decimal correction (ParquetDecimalScale),
+            // so on .NET 11 it returns Parquet.Net's inexact decimal(18,4) values. This test is
+            // about linkage, so it applies the correction current generated code applies;
+            // regenerating with the current package is what fixes the values for a consumer.
+            decimal[] price = [actual[i].Price];
+            ParquetDecimalScale.RestoreIntegerScaled(price, 4);
+            price[0].ShouldBe(expected[i].Price);
             actual[i].CreatedAt.ShouldBe(expected[i].CreatedAt);
             actual[i].Duration.ShouldBe(expected[i].Duration);
             actual[i].CorrelationId.ShouldBe(expected[i].CorrelationId);
