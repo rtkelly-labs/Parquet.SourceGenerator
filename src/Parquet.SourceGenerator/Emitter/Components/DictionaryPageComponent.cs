@@ -16,18 +16,25 @@ internal static class DictionaryPageComponent
         builder.AppendLine("        global::System.IO.Stream stream,");
         builder.AppendLine("        global::Parquet.Schema.DataField field)");
         builder.AppendLine("    {");
-        builder.AppendLine("        var metadata = groupReader.GetMetadata(field);");
+        // The chunk's first page is where Parquet.Net starts reading it: the lowest non-zero page
+        // offset the footer records. Neither Parquet.Net 4.25 nor 6 records a dictionary page
+        // offset (the data page offset is the dictionary page), and file_offset is not consulted:
+        // writers disagree on what it points at and Parquet.Net ignores it.
+        builder.AppendLine("        var metadata = groupReader.GetMetadata(field)?.MetaData;");
+        builder.AppendLine("        if (metadata is null || !stream.CanSeek) return null;");
+        builder.AppendLine("        long offset = metadata.DataPageOffset;");
         builder.AppendLine(
-            "        long? offset = metadata?.MetaData?.DictionaryPageOffset ?? metadata?.FileOffset;"
+            "        if (metadata.DictionaryPageOffset is long dictionaryOffset && dictionaryOffset != 0 && dictionaryOffset < offset) offset = dictionaryOffset;"
         );
         builder.AppendLine(
-            "        if (!offset.HasValue || offset.Value < 0 || !stream.CanSeek) return null;"
+            "        if (metadata.IndexPageOffset is long indexOffset && indexOffset != 0 && indexOffset < offset) offset = indexOffset;"
         );
+        builder.AppendLine("        if (offset < 0) return null;");
         builder.AppendLine();
         builder.AppendLine("        long savedPosition = stream.Position;");
         builder.AppendLine("        try");
         builder.AppendLine("        {");
-        builder.AppendLine("            stream.Position = offset.Value;");
+        builder.AppendLine("            stream.Position = offset;");
         builder.AppendLine("            return ReadDictionaryPageHeader(stream);");
         builder.AppendLine("        }");
         builder.AppendLine("        finally");
