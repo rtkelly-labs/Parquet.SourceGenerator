@@ -36,6 +36,13 @@
         "dotnet-stryker"
       ],
       "rollForward": false
+    },
+    "paket": {
+      "version": "11.0.1",
+      "commands": [
+        "paket"
+      ],
+      "rollForward": false
     }
   }
 }

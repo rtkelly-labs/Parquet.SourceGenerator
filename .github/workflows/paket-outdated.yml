@@ -1,0 +1,110 @@
+name: Paket Outdated Report
+
+# Dependabot and Renovate do not read Paket, so for the Paket-managed projects (ADR 0004,
+# docs/architecture/adrs/0004-paket-pilot.md) this weekly report is what says an update exists. It
+# keeps ONE tracking issue, found by the `paket-outdated` label: opened or updated while
+# scripts/PaketOutdated.cs finds a newer version inside the ranges in paket.dependencies (what
+# `dotnet tool run paket update` would take), closed once it finds none. Its second section lists
+# declared packages (the transitive floors included) whose newest version is outside their range,
+# for information only; taking one is a deliberate edit of paket.dependencies. The script reads
+# Paket.Core's API, so no `paket outdated` output is parsed.
+#
+# Two jobs, so the one holding `issues: write` runs no repository code: `outdated` runs the script
+# with a read-only token and hands its report over as a job output; `report` only calls the API.
+on:
+  schedule:
+    # Mondays 05:17 UTC, clear of the Monday fuzz run (03:00) and the Sunday benchmarks.
+    - cron: '17 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  outdated:
+    name: paket-outdated
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      outdated: ${{ steps.report.outputs.outdated }}
+      report: ${{ steps.report.outputs.report }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      # Paket.Core 11 targets net10.0.
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Run the Paket outdated report
+        id: report
+        run: |
+          set -euo pipefail
+          # A failing run exits non-zero and writes no verdict, so it fails the job; it must not
+          # read as "nothing outdated".
+          dotnet run scripts/PaketOutdated.cs -- --root . --out "$RUNNER_TEMP/report.md" --verdict "$RUNNER_TEMP/verdict.txt"
+          outdated=$(cat "$RUNNER_TEMP/verdict.txt")
+          case "$outdated" in
+            true|false) ;;
+            *) echo "::error::unexpected verdict '$outdated'"; exit 1 ;;
+          esac
+          cat "$RUNNER_TEMP/report.md" >> "$GITHUB_STEP_SUMMARY"
+          delimiter="EOF_$(openssl rand -hex 16)"
+          {
+            echo "outdated=$outdated"
+            echo "report<<$delimiter"
+            cat "$RUNNER_TEMP/report.md"
+            echo "$delimiter"
+          } >> "$GITHUB_OUTPUT"
+
+  report:
+    name: paket-outdated-issue
+    needs: [outdated]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Open, update or close the tracking issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          OUTDATED: ${{ needs.outdated.outputs.outdated }}
+          REPORT: ${{ needs.outdated.outputs.report }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          label="paket-outdated"
+          title="Paket: outdated packages"
+          gh label create "$label" --color 0E8A16 --description "Weekly paket outdated report (ADR 0004)" >/dev/null 2>&1 || true
+          existing=$(gh issue list --state open --label "$label" --json number --jq '.[0].number // empty')
+          {
+            echo "Weekly Paket outdated report (scripts/PaketOutdated.cs) for the Paket-managed projects ([run]($RUN_URL)). This issue is updated in place each week and closed by the workflow once nothing inside the ranges is outdated. See docs/architecture/adrs/0004-paket-pilot.md."
+            echo
+            printf '%s\n' "$REPORT"
+          } > "$RUNNER_TEMP/body.md"
+          if [ "$OUTDATED" = "true" ]; then
+            if [ -n "$existing" ]; then
+              gh issue edit "$existing" --body-file "$RUNNER_TEMP/body.md"
+            else
+              gh issue create --title "$title" --label "$label" --body-file "$RUNNER_TEMP/body.md"
+            fi
+          elif [ "$OUTDATED" = "false" ]; then
+            if [ -n "$existing" ]; then
+              gh issue edit "$existing" --body-file "$RUNNER_TEMP/body.md"
+              gh issue close "$existing" --comment "Nothing inside the ranges in paket.dependencies is outdated as of [this run]($RUN_URL)."
+            fi
+          else
+            echo "::error::unexpected verdict '$OUTDATED' from the outdated job"
+            exit 1
+          fi
