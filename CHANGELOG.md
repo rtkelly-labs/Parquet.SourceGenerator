@@ -9,6 +9,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Fixed
+
+- **Decimals read wrong on .NET 11.** Parquet.Net decodes INT32- and INT64-backed decimals through
+  `(decimal)Math.Pow(10, -scale)`, which was exact only while the runtime rounded `double` to
+  `decimal` conversions to 15 significant digits. .NET 11 keeps the `double`'s value, so 19.99 read
+  back as 19.990000000000000416125467383, and an 18-digit value at scale 10 by 36 units of its own
+  scale. Generated readers now restore those columns exactly through
+  `ParquetDecimalScale` (a no-op before .NET 11); fixed-length decimals were already exact. The
+  values keep the column's scale, as on earlier runtimes.
 - **The nightly mutation sweep finishes and reports the whole generator** (#668). It failed every night: the
   checkout did not fetch the Git LFS benchmark datasets, so 12 dataset tests failed Stryker's initial run, and one
   run over all 9358 generator mutants timed out at 100 minutes before writing any report. The checkout now fetches
@@ -135,7 +143,7 @@ the migration list; each row's detail is in the entries below and in `docs/api/L
   call-site count rides in the baseline header.
 - **Mutation testing for the behavioural suite** (`stryker-config.json`,
   `.github/workflows/mutation.yml`, `scripts/MutationSummary.cs`,
-  `docs/internals/mutation-testing.md`, layer 4 of #251). Stryker.NET runs nightly and answers the
+  `docs/26-MUTATION-TESTING.md`, layer 4 of #251). Stryker.NET runs nightly and answers the
   question coverage cannot: would a test notice if a line were *wrong*? The defining decision
   is what it leaves out — the golden-file, API-baseline, metrics-baseline and IL-shape suites
   are excluded, because they assert the *text/shape* of emitted output and would "kill" every
@@ -329,6 +337,14 @@ the migration list; each row's detail is in the entries below and in `docs/api/L
   only for code that referenced the Attributes helpers directly.
 
 ### Fixed
+- **CI: the Apache conformance toolchain restore survives a flaky Maven Central.** A transient 404 from
+  repo1.maven.org for `parquet-cli-1.18.1-runtime.jar`, which is published and unchanged, failed CI on #692.
+  `scripts/VerifyApacheConformance.cs --restore` now tries the manifest's ordered `mirrors` (repo1.maven.org,
+  then repo.maven.apache.org) with retries and backoff, writes a jar only after it matches its pinned SHA-256
+  whichever mirror served it, and on failure prints one `::error::` per artifact naming every URL tried and its
+  status. The tools dir is cached in CI by manifest hash; the "already restored" check compared hex digests
+  case-sensitively and never matched, so it re-downloaded every jar on every run and now does not. The
+  script's numeric parsing is culture-invariant (#455).
 - **`DateOnly` is written as INT32 `DATE` again**, not INT96. INT96 round-tripped in .NET, but other readers
   (pyarrow, Spark) saw a timestamp, and Apache Iceberg rejects INT96.
 - **Arrow scope is stated plainly** (#590). The READMEs, `docs/14`, `docs/19` and `docs/47` say that only Arrow

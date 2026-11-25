@@ -13,3 +13,5 @@ static Parquet.SourceGenerator.Emitter.CodeEmitter.EmitResolveFieldLine(Parquet.
 static Parquet.SourceGenerator.Emitter.CodeEmitter.GetBranchlessNonNullExpression(Parquet.SourceGenerator.Models.PropertyModel prop, string valVar) -> string
 static Parquet.SourceGenerator.Emitter.CodeEmitter.EmitSource(Parquet.SourceGenerator.Models.TargetClassModel model, Parquet.SourceGenerator.Models.GeneratorConfiguration configuration) -> string
 static Parquet.SourceGenerator.Legacy.Emitter.LegacyCodeEmitter.EmitSource(Parquet.SourceGenerator.Models.TargetClassModel model, Parquet.SourceGenerator.Models.GeneratorConfiguration configuration) -> string
+static Parquet.SourceGenerator.ParquetDecimalScale.Restore(System.Span<decimal> values, int scale, decimal factor) -> void
+static Parquet.SourceGenerator.ParquetDecimalScale.TryGetCorrection(int scale, out decimal factor) -> bool
