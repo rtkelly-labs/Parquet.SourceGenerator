@@ -24,6 +24,8 @@
         <PackageVersion Include="Apache.Arrow" Version="23.0.0" />
         <PackageVersion Include="System.Memory" Version="4.6.3" />
         <PackageVersion Include="Microsoft.Bcl.AsyncInterfaces" Version="8.0.0" />
+        <!-- Builds the net472 target of the legacy test project on runners without the targeting pack. -->
+        <PackageVersion Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" />
 
         <!-- Test Framework & Coverage Dependencies -->
         <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />

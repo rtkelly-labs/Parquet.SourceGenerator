@@ -494,6 +494,67 @@ public sealed class CiGateIntegrityTests
     }
 
     [Fact]
+    public void TheLegacyTestSuiteRunsOnBothRuntimesAndTheRequiredSuiteGateNamesIt()
+    {
+        // #597: the legacy backend's executed suite. The `test` job reaches its net8.0 leg through
+        // the solution (so the project must stay in it), the Windows job runs its net472 leg, and
+        // the required-suite gate must read both reports, or a run that lost the project, its
+        // net472 target or every test would pass on nothing.
+        string root = FindRepositoryRoot();
+        const string project =
+            "test/Parquet.SourceGenerator.Legacy.Tests/Parquet.SourceGenerator.Legacy.Tests.csproj";
+
+        Read(root, "Parquet.SourceGenerator.slnx").ShouldContain($"Path=\"{project}\"");
+        IOFile
+            .Exists(Path.Combine(root, "test", "Shared", "Behaviour", "BehaviourDriver.cs"))
+            .ShouldBeTrue();
+
+        string ci = Read(root, ".github", "workflows", "ci.yml");
+        JobBlock(ci, "test")
+            .ShouldContain(
+                "dotnet test Parquet.SourceGenerator.slnx --configuration Release --no-build"
+            );
+
+        string windows = JobBlock(ci, "net472-consumer");
+        Regex
+            .IsMatch(
+                windows,
+                @"^\s+dotnet test test/Parquet\.SourceGenerator\.Legacy\.Tests/Parquet\.SourceGenerator\.Legacy\.Tests\.csproj\s*\\\n\s*--framework net472\b",
+                Options,
+                RegexTimeout
+            )
+            .ShouldBeTrue("net472-consumer must `dotnet test` the legacy suite on net472");
+        windows.ShouldContain("LogFileName=ci-net472.trx");
+        Regex
+            .IsMatch(
+                windows,
+                @"^\s+run:\s+dotnet run scripts/VerifyRequiredTestExecution\.cs -- --net472\s*$",
+                Options,
+                RegexTimeout
+            )
+            .ShouldBeTrue("net472-consumer must verify the net472 report");
+        windows
+            .IndexOf("--net472", StringComparison.Ordinal)
+            .ShouldBeGreaterThan(windows.IndexOf("ci-net472.trx", StringComparison.Ordinal));
+
+        string gate = Read(root, "scripts", "VerifyRequiredTestExecution.cs");
+        gate.ShouldContain("\"test/Parquet.SourceGenerator.Legacy.Tests/TestResults/\"");
+        gate.ShouldContain("Path.Combine(LegacyResults, CoreReport), legacySuites");
+        gate.ShouldContain("Path.Combine(LegacyResults, Net472Report), legacySuites");
+        foreach (
+            string suite in new[]
+            {
+                "Parquet.SourceGenerator.Behaviour.TypeMatrixBehaviourTests",
+                "Parquet.SourceGenerator.Behaviour.CodecBehaviourTests",
+                "Parquet.SourceGenerator.Legacy.Tests.Hostile.LegacyHostileInputTests",
+            }
+        )
+        {
+            gate.ShouldContain($"\"{suite}\"");
+        }
+    }
+
+    [Fact]
     public void TheProtectedPathsCheckRunsTheBaseBranchAndNeverChecksOutThePullRequest()
     {
         string root = FindRepositoryRoot();

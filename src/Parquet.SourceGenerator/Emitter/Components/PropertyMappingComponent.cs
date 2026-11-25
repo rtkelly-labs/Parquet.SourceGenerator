@@ -1,3 +1,4 @@
+using System;
 using System.Text;
 using Parquet.SourceGenerator.Models;
 
@@ -88,7 +89,8 @@ internal static class PropertyMappingComponent
         string rowCountVar = "rowCount",
         string indexVar = "i",
         string bufferPrefix = "buffer_",
-        string indent = "                "
+        string indent = "                ",
+        Func<PropertyModel, string, string?>? readOverride = null
     )
     {
         if (IsSingleFieldBlittableStruct(model))
@@ -139,7 +141,8 @@ internal static class PropertyMappingComponent
                 startOffsetVar,
                 indexVar,
                 bufferPrefix: bufferPrefix,
-                indent: indent + "    "
+                indent: indent + "    ",
+                readOverride: readOverride
             );
             builder.AppendLine($"{indent}}}");
         }
@@ -258,7 +261,8 @@ internal static class PropertyMappingComponent
         string targetArray,
         string offsetExpr,
         string indexVar,
-        string bufferPrefix = "buffer_"
+        string bufferPrefix = "buffer_",
+        Func<PropertyModel, string, string?>? readOverride = null
     )
     {
         string targetSlot = string.IsNullOrEmpty(offsetExpr)
@@ -273,7 +277,9 @@ internal static class PropertyMappingComponent
             for (int i = 0; i < model.Properties.Length; i++)
             {
                 PropertyModel prop = model.Properties[i];
-                string readExpr = GetReadExpression(prop, $"{bufferPrefix}{i}[{indexVar}]");
+                string value = $"{bufferPrefix}{i}[{indexVar}]";
+                string readExpr =
+                    readOverride?.Invoke(prop, value) ?? GetReadExpression(prop, value);
                 writer.Line($"{EmittedText.Ident(prop.Name)} = {readExpr},");
             }
         }
@@ -288,7 +294,8 @@ internal static class PropertyMappingComponent
         string offsetExpr,
         string indexVar,
         string bufferPrefix = "buffer_",
-        string indent = "                "
+        string indent = "                ",
+        Func<PropertyModel, string, string?>? readOverride = null
     ) =>
         EmitObjectMaterialization(
             new IndentedWriter(builder) { IndentLevel = indent.Length / 4 },
@@ -296,7 +303,8 @@ internal static class PropertyMappingComponent
             targetArray,
             offsetExpr,
             indexVar,
-            bufferPrefix
+            bufferPrefix,
+            readOverride
         );
 
     /// <summary>
@@ -309,17 +317,17 @@ internal static class PropertyMappingComponent
         string itemVar = "item",
         string indexVar = "i",
         string bufferPrefix = "buffer_",
-        bool useMemoryForTextAndBinary = true
+        bool useMemoryForTextAndBinary = true,
+        Func<PropertyModel, string, string?>? writeOverride = null
     )
     {
         for (int p = 0; p < model.Properties.Length; p++)
         {
             PropertyModel prop = model.Properties[p];
-            string writeExpr = GetWriteExpression(
-                prop,
-                $"{itemVar}.{EmittedText.Ident(prop.Name)}",
-                useMemoryForTextAndBinary
-            );
+            string member = $"{itemVar}.{EmittedText.Ident(prop.Name)}";
+            string writeExpr =
+                writeOverride?.Invoke(prop, member)
+                ?? GetWriteExpression(prop, member, useMemoryForTextAndBinary);
             writer.Line($"{bufferPrefix}{p}[{indexVar}] = {writeExpr};");
         }
     }
@@ -331,7 +339,8 @@ internal static class PropertyMappingComponent
         string indexVar = "i",
         string bufferPrefix = "buffer_",
         string indent = "                    ",
-        bool useMemoryForTextAndBinary = true
+        bool useMemoryForTextAndBinary = true,
+        Func<PropertyModel, string, string?>? writeOverride = null
     ) =>
         EmitPropertyAssignments(
             new IndentedWriter(builder) { IndentLevel = indent.Length / 4 },
@@ -339,16 +348,16 @@ internal static class PropertyMappingComponent
             itemVar,
             indexVar,
             bufferPrefix,
-            useMemoryForTextAndBinary
+            useMemoryForTextAndBinary,
+            writeOverride
         );
 
     /// <summary>
     /// Emits <c>ReadTimeOnly</c>, which builds a <c>TimeOnly</c> from a file-controlled
     /// <c>TIME_MICROS</c> value. Unchecked, an out-of-range value throws
     /// <c>ArgumentOutOfRangeException</c>, and one that wraps on the multiply yields a wrong time of day
-    /// with no error (#371). The classic backend does not map
-    /// <c>TimeOnly</c> columns (its read buffer is a <c>TimeOnly[]</c>, which this expression cannot index),
-    /// so only the modern emitter emits it.
+    /// with no error (#371). The classic backend's column is a <c>TimeSpan[]</c> and it emits its
+    /// own check (<c>LegacyCodeEmitter</c>), so only the modern emitter emits this one.
     /// </summary>
     public static void EmitReadTimeOnlyHelper(StringBuilder builder)
     {
